@@ -1,5 +1,10 @@
 # Directory Update Log
 
+## 2026-10-06 (CP-0003 .env role overrides)
+* **Creation**: [CP-0003](changes/cp-0003-env-file-role-overrides.md) — `LLM_ROLE_<ROLE>` honored from `apps/api/.env`.
+* **Update**: [LLM gateway](architecture/llm-gateway.md) — override sources and LG-07.
+* **Update**: [Local runbook](build/runbook-local.md) — "Running without some keys" (no Deepgram, OpenRouter only, no LLM key).
+
 ## 2026-10-06 (CP-0002 spec enforcement)
 * **Creation**: [CP-0002](changes/cp-0002-spec-enforcement-and-onboarding.md) — CI gate, PR-level rules, acceptance ratchet, setup script, README.
 * **Update**: [SDD workflow](process/sdd-workflow.md) — guardrails restated as hooks / CI / branch protection; log, lifecycle and coverage-ratchet rules; test-only changes exempt from spec-first; SDD-01 refined, SDD-05…09 added.

@@ -104,8 +104,9 @@ class Gateway:
         self.providers: dict[str, dict[str, Any]] = cfg.get("providers", {})
         self.models: dict[str, dict[str, Any]] = cfg.get("models", {})
         self.roles: dict[str, dict[str, Any]] = cfg.get("roles", {})
-        for role in ROLES:  # LG-06: env override per role
-            env = os.environ.get(f"LLM_ROLE_{role.upper()}")
+        settings = get_settings()
+        for role in ROLES:  # LG-06/LG-07: real env var wins, then apps/api/.env
+            env = os.environ.get(f"LLM_ROLE_{role.upper()}") or getattr(settings, f"llm_role_{role}", None)
             if env:
                 self.roles.setdefault(role, {})["model"] = env
         self._clients: dict[str, openai.AsyncOpenAI] = {}

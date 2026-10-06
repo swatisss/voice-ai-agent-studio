@@ -38,7 +38,7 @@ roles:
 
 * A **model ref** is `<provider>:<model id>`. Any OpenRouter model may be used by adding it under `models`.
 * Agents may override `realtime` via `config.models.realtime` ([/data/agent-config.md](/data/agent-config.md)). `GET /api/models` lists selectable refs.
-* Env `LLM_ROLE_<ROLE>` (e.g. `LLM_ROLE_REALTIME=openrouter:openai/gpt-oss-120b`) overrides a role at deploy time.
+* Env `LLM_ROLE_<ROLE>` (e.g. `LLM_ROLE_REALTIME=openrouter:openai/gpt-oss-120b`) overrides a role's primary model at deploy time. It is read from a real environment variable or, failing that, from a line in `apps/api/.env`. The role's fallbacks stay as configured; a provider with no API key is skipped.
 
 # Interface (`voiceai.llm.gateway`)
 
@@ -74,4 +74,5 @@ A `fake` provider (in-memory, scripted responses) implements the same interface 
 - **LG-03** — Given an agent override `openrouter:openai/gpt-oss-120b`, when the runtime calls `realtime`, then that model ref is used.
 - **LG-04** — Given `complete_json` with a schema and a first response that fails validation, then exactly one retry is made and a valid object is returned or a `LLMJsonError` raised.
 - **LG-05** — Given usage of 1,000,000 input and 1,000,000 output tokens on `groq:openai/gpt-oss-120b`, then `usage_cost` returns 0.75.
-- **LG-06** — Given `LLM_ROLE_JUDGE=groq:openai/gpt-oss-20b`, when the gateway loads, then the judge role uses that model.
+- **LG-06** — Given `LLM_ROLE_JUDGE=groq:openai/gpt-oss-20b` as an environment variable, when the gateway loads, then the judge role uses that model.
+- **LG-07** — Given the same setting only as a line in `apps/api/.env` (not in the process environment), then the judge role uses that model; given both with different values, the environment variable wins.

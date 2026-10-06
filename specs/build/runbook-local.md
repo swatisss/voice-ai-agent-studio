@@ -34,6 +34,26 @@ npm run dev                                 # http://localhost:3000 (talks to :8
 
 Single-origin mode (what Cloud Run runs): `npm run build` in `apps/web`, then `uv run voiceai serve` serves the exported site at http://localhost:8000.
 
+# Running without some keys
+
+| You have | Do this | What works |
+|---|---|---|
+| Groq key, **no Deepgram** | Put `GROQ_API_KEY` in `apps/api/.env`; use the **Type** tab on Test call | Everything except the microphone: resolve, escalate, console, insights, evaluation, dashboard |
+| OpenRouter key only | Put `OPENROUTER_API_KEY` and the five `LLM_ROLE_*` lines (below) in `apps/api/.env` | Same as above |
+| No LLM key | `LLM_FAKE=1 EMBEDDINGS_PROVIDER=hash` | UI and plumbing only: the agent answers with a canned placeholder, so the demo acts do not work |
+
+OpenRouter-only role lines (the simulator's fallback is Groq-only, so all five are needed):
+
+```
+LLM_ROLE_REALTIME=openrouter:openai/gpt-oss-120b
+LLM_ROLE_ANALYSIS=openrouter:openai/gpt-oss-120b
+LLM_ROLE_DRAFTING=openrouter:openai/gpt-oss-120b
+LLM_ROLE_SIMULATOR=openrouter:openai/gpt-oss-20b
+LLM_ROLE_JUDGE=openrouter:openai/gpt-oss-120b
+```
+
+Without `DEEPGRAM_API_KEY` the Talk tab refuses the voice socket (close code 4500) and shows a toast; the API stays healthy. The refused voice call row stays `active` in the Calls list. Add the key later with no other change.
+
 # Checks
 
 ```bash

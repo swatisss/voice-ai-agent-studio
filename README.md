@@ -38,7 +38,7 @@ uv run --project apps/api voiceai serve   # http://localhost:8000  (first start 
 
 Open <http://localhost:8000>, pick a tenant, and follow the three-act script in [`specs/product/demo-script.md`](specs/product/demo-script.md): *resolve* a claim question, *escalate* an appeal with a packet, *learn* the "add a newborn" gap and ship the fix. Use a headset for voice; the **Type** tab is a full fallback.
 
-No keys yet? `LLM_FAKE=1 EMBEDDINGS_PROVIDER=hash uv run --project apps/api voiceai serve` runs everything with a scripted fake LLM (UI and plumbing only).
+**No Deepgram key yet?** Set only `GROQ_API_KEY` and use the **Type** tab on *Test call*: everything works except the microphone. OpenRouter-only and no-LLM-key setups are in [`specs/build/runbook-local.md`](specs/build/runbook-local.md#running-without-some-keys). `LLM_FAKE=1 EMBEDDINGS_PROVIDER=hash uv run --project apps/api voiceai serve` runs the app with a scripted fake LLM (UI and plumbing only).
 
 Deploying to GCP Cloud Run: [`specs/build/runbook-gcp.md`](specs/build/runbook-gcp.md).
 

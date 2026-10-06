@@ -87,3 +87,14 @@ def test_role_env_override(monkeypatch):
     """Covers: LG-06"""
     monkeypatch.setenv("LLM_ROLE_JUDGE", "groq:openai/gpt-oss-20b")
     assert gw.Gateway().role_model("judge") == "groq:openai/gpt-oss-20b"
+
+
+def test_role_override_from_dotenv_settings(monkeypatch):
+    """Covers: LG-07"""
+    from voiceai.config import Settings
+
+    monkeypatch.delenv("LLM_ROLE_JUDGE", raising=False)
+    monkeypatch.setattr(gw, "get_settings", lambda: Settings(llm_role_judge="openrouter:openai/gpt-oss-20b"))
+    assert gw.Gateway().role_model("judge") == "openrouter:openai/gpt-oss-20b"
+    monkeypatch.setenv("LLM_ROLE_JUDGE", "groq:openai/gpt-oss-120b")  # the environment variable wins
+    assert gw.Gateway().role_model("judge") == "groq:openai/gpt-oss-120b"

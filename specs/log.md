@@ -1,5 +1,8 @@
 # Directory Update Log
 
+## 2026-10-06 (close-out)
+* **Update**: [CP-0001](changes/cp-0001-initial-platform.md) set to `implemented`; open items are the live-key spikes S1–S3 in [spikes](verification/spikes.md).
+
 ## 2026-10-06 (web + infra, CP-0001 T18–T22)
 * **Update**: [Deployment](architecture/deployment.md) — static handler maps Next.js 16 segment prefetch paths (`__next.a.b.__PAGE__.txt` → `__next.a/b/__PAGE__.txt`).
 * **Update**: [Design system](ui/design-system.md) — component list matches the built components.

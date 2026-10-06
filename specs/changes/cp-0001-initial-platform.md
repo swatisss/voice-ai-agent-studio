@@ -3,7 +3,7 @@ type: Change Proposal
 title: CP-0001 Initial platform build
 description: Build the v1 platform - builder, voice and text test calls, escalation with groundwork packets, fleet learning with eval-gated fixes - for the healthcare & insurance demo.
 status: stable
-cp_state: accepted
+cp_state: implemented
 tags: [platform, v1]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

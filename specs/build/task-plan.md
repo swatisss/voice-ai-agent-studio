@@ -28,8 +28,8 @@ Work top to bottom; each task ends green (`spec_check`, tests, web build where r
 | T15 | Proposal edit/approve/reject → new version | [/architecture/fleet-learning.md](/architecture/fleet-learning.md) | FL-06, FL-07 | done |
 | T16 | Dashboard summary endpoint | [/ui/dashboard.md](/ui/dashboard.md) | MT-04, UI-03 | done |
 | T17 | Voice pipeline and WebSocket endpoint | [/architecture/voice-pipeline.md](/architecture/voice-pipeline.md), [/api/voice-protocol.md](/api/voice-protocol.md) | VO-01…06 | done |
-| T18 | Web: shell, design system components, API client, SSE hook | [/ui/app-shell.md](/ui/app-shell.md), [/ui/design-system.md](/ui/design-system.md) | UI-01, UI-02 | todo |
-| T19 | Web: dashboard, agents list and builder, calls explorer and detail | [/ui/dashboard.md](/ui/dashboard.md), [/ui/agent-builder.md](/ui/agent-builder.md), [/ui/calls.md](/ui/calls.md) | UI-03…07, UI-11 | todo |
-| T20 | Web: test call (text + voice client) | [/ui/test-call.md](/ui/test-call.md) | UI-08…10 | todo |
-| T21 | Web: agent console and insights | [/ui/agent-console.md](/ui/agent-console.md), [/ui/insights.md](/ui/insights.md) | UI-12…17 | todo |
-| T22 | Static web serving, Dockerfile, Cloud Run script | [/architecture/deployment.md](/architecture/deployment.md), [/build/runbook-gcp.md](/build/runbook-gcp.md) | DEP-02, DEP-03 | todo |
+| T18 | Web: shell, design system components, API client, SSE hook | [/ui/app-shell.md](/ui/app-shell.md), [/ui/design-system.md](/ui/design-system.md) | UI-01, UI-02 | done |
+| T19 | Web: dashboard, agents list and builder, calls explorer and detail | [/ui/dashboard.md](/ui/dashboard.md), [/ui/agent-builder.md](/ui/agent-builder.md), [/ui/calls.md](/ui/calls.md) | UI-03…07, UI-11 | done |
+| T20 | Web: test call (text + voice client) | [/ui/test-call.md](/ui/test-call.md) | UI-08…10 | done |
+| T21 | Web: agent console and insights | [/ui/agent-console.md](/ui/agent-console.md), [/ui/insights.md](/ui/insights.md) | UI-12…17 | done |
+| T22 | Static web serving, Dockerfile, Cloud Run script | [/architecture/deployment.md](/architecture/deployment.md), [/build/runbook-gcp.md](/build/runbook-gcp.md) | DEP-02, DEP-03 | done |

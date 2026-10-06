@@ -24,3 +24,6 @@ apps/web/next-env.d.ts
 Thumbs.db
 .vscode/
 .idea/
+
+# local preview config (machine-specific)
+.claude/launch.json

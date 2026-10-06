@@ -49,3 +49,17 @@ Pipecat 1.12 API facts the voice code depends on (verified against the installed
 * `PipelineTask(pipeline, params=PipelineParams(audio_in_sample_rate, audio_out_sample_rate))`, `PipelineRunner(handle_sigint=False).run(task)`; `task.queue_frame(EndFrame())` ends gracefully.
 
 Still unverified (needs live keys, see S1): VO-01 greeting audio and VO-03 barge-in behavior end to end.
+
+# Embedding thresholds (measured 2026-10-06, `BAAI/bge-small-en-v1.5`)
+
+| Check | Score | Verdict |
+|---|---|---|
+| "how do I replace my lost insurance card" → Member ID cards | 0.736 | answer (≥ 0.60) |
+| "what is my copay for urgent care on silver" → Copays by plan | 0.785 | answer |
+| "how do I add my newborn baby to my plan" | < 0.60 | **no answer** — the planted gap works |
+| "quantum physics lecture" | < 0.60 | no answer |
+| New newborn phrasings vs newborn centroid | 0.883–0.887 | joins cluster (≥ 0.80) |
+| Prior-auth phrasing vs prior-auth centroid | 0.945 | joins cluster |
+| Cross-topic similarities | 0.53–0.63 | separate clusters |
+
+Seeding with fastembed takes ~45 s on a laptop CPU (first run also downloads ~70 MB).

@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/.next
+apps/web/out
+**/.venv
+**/__pycache__
+**/.pytest_cache
+apps/api/data
+apps/api/.cache
+**/.env
+.claude

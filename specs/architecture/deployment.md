@@ -13,6 +13,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Web dev server: `npm run dev` on `http://localhost:3000`, calling the API at `NEXT_PUBLIC_API_BASE=http://localhost:8000` (CORS allows `localhost:3000`).
 * Web production build: `npm run build` exports static files to `apps/web/out/`; the API serves them at `/` when `WEB_DIST_DIR` points there (default `../web/out` relative to `apps/api`).
 * Mic access works on `localhost` without HTTPS.
+* Next.js 16 static exports request prefetch segments as `dir/__next.a.b.__PAGE__.txt` but write them as `dir/__next.a/b/__PAGE__.txt`; the API's static handler maps the former to the latter (any other static host needs the same rewrite).
 * Seeding: `uv run voiceai seed --reset`. The app also seeds automatically on first start when the DB is empty (`AUTO_SEED=1`, default).
 
 # GCP (Cloud Run)

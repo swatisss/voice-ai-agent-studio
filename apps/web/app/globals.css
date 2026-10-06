@@ -1,0 +1,73 @@
+/* Spec: /ui/design-system.md (Tokens) */
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --border: #e3e6ea;
+  --text: #14181f;
+  --muted: #5f6b7a;
+  --accent: #0f766e;
+  --accent-soft: #e6f4f2;
+  --ok: #15803d;
+  --ok-soft: #e8f6ec;
+  --warn: #b45309;
+  --warn-soft: #fdf3e5;
+  --bad: #b91c1c;
+  --bad-soft: #fdecec;
+  --info: #4338ca;
+  --info-soft: #eef0fd;
+  --neutral-soft: #eef0f3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216;
+    --panel: #171b21;
+    --border: #2a3038;
+    --text: #e8ebef;
+    --muted: #9aa5b1;
+    --accent: #2dd4bf;
+    --accent-soft: #10302c;
+    --ok: #4ade80;
+    --ok-soft: #12291a;
+    --warn: #fbbf24;
+    --warn-soft: #2e2410;
+    --bad: #f87171;
+    --bad-soft: #351616;
+    --info: #a5b4fc;
+    --info-soft: #1d2140;
+    --neutral-soft: #222831;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-line: var(--border);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-neutral-soft: var(--neutral-soft);
+}
+
+html, body { background: var(--bg); color: var(--text); }
+body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.prose-md h1 { font-size: 1.15rem; font-weight: 600; margin: 0.5rem 0; }
+.prose-md h2 { font-size: 1rem; font-weight: 600; margin: 0.75rem 0 0.25rem; }
+.prose-md p, .prose-md li { line-height: 1.6; }
+.prose-md ul { list-style: disc; padding-left: 1.25rem; }
+@keyframes flash { from { background: var(--accent-soft); } to { background: transparent; } }
+.flash { animation: flash 2s ease-out; }
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: 0 0 0 18px transparent; } }
+.speaking { animation: pulse-ring 1.2s ease-out infinite; }

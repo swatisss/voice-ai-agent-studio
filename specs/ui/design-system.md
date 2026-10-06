@@ -30,7 +30,7 @@ Dark mode follows `prefers-color-scheme`. Font: system UI stack; monospace for I
 
 # Components (in `apps/web/components/ui/`)
 
-`Button` (primary/secondary/ghost/danger, loading state), `Card`, `Badge` (tone: ok/warn/bad/info/neutral), `Tabs`, `Input`, `Textarea`, `Select`, `Field` (label + hint + error), `Table`, `Stat` (label, value, delta), `EmptyState`, `Spinner`, `Toast` (top-right, 4 s), `JsonView` (collapsible, monospace), `Modal` (in-flow overlay).
+`Button` (primary/secondary/ghost/danger, loading state), `Card`, `Badge` (tone: ok/warn/bad/info/neutral/accent), `Tabs`, `Input`, `Textarea`, `Select`, `Field` (label + hint + error), `Stat` (label, value, sub-label), `EmptyState`, `Spinner`, `Toast` (top-right, 4 s), `JsonView` (collapsible, monospace), `Modal` (centered overlay). Tables are plain styled `<table>` elements. Shared domain components live next to them: `Transcript`/`ActivityList`, `PacketCard`, `ClusterLabel`.
 
 # Copy rules
 

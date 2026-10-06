@@ -29,6 +29,16 @@ def test_static_web_and_api_404(tmp_path, monkeypatch):
     get_settings.cache_clear()
 
 
+def test_next_segment_mapping():
+    """Covers: DEP-02"""
+    from voiceai.main import next_segment_path
+
+    assert next_segment_path("insights/__next.insights.__PAGE__.txt") == "insights/__next.insights/__PAGE__.txt"
+    assert next_segment_path("insights/cluster/__next.insights.cluster.__PAGE__.txt") == "insights/cluster/__next.insights/cluster/__PAGE__.txt"
+    assert next_segment_path("__next._tree.txt") is None
+    assert next_segment_path("agents/index.html") is None
+
+
 async def test_containment_rate(client, seeded):
     """Covers: UI-03"""
     t = (await client.get("/api/dashboard/summary", headers={"X-Tenant-Id": "evergreen-members"})).json()["totals"]

@@ -5,6 +5,7 @@ Spec: /architecture/system-overview.md, /architecture/deployment.md, /decisions/
 from __future__ import annotations
 
 import logging
+import posixpath
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -12,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # register job handlers
 import voiceai.learning.analyze  # noqa: F401
@@ -27,6 +29,35 @@ from voiceai.routes import agents, calls, console, dashboard, insights, knowledg
 from voiceai.runtime import app_ref, escalation
 
 log = logging.getLogger("voiceai")
+
+
+def next_segment_path(path: str) -> str | None:
+    """Next.js 16 static export requests `dir/__next.a.b.__PAGE__.txt` but writes `dir/__next.a/b/__PAGE__.txt`."""
+    directory, base = posixpath.split(path)
+    if not (base.startswith("__next.") and base.endswith(".txt")) or base in ("__next._tree.txt", "__next._full.txt"):
+        return None
+    parts = base[len("__next."):-len(".txt")].split(".")
+    if len(parts) < 2:
+        return None
+    return posixpath.join(directory, "__next." + parts[0], *parts[1:-1], parts[-1] + ".txt")
+
+
+class WebFiles(StaticFiles):
+    async def get_response(self, path: str, scope):  # noqa: ANN001, ANN201
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            response = None
+        if response is not None and response.status_code != 404:
+            return response
+        alt = next_segment_path(path)
+        if alt:
+            return await super().get_response(alt, scope)
+        if response is None:
+            raise StarletteHTTPException(404)
+        return response
 
 
 @asynccontextmanager
@@ -68,7 +99,7 @@ def create_app() -> FastAPI:
 
     web = settings.web_dist_dir
     if web.exists():
-        app.mount("/", StaticFiles(directory=web, html=True), name="web")
+        app.mount("/", WebFiles(directory=web, html=True), name="web")
     return app
 
 

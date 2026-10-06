@@ -1,0 +1,8 @@
+#!/bin/sh
+# Spec lint before every commit. Spec: /process/sdd-workflow.md (Guardrails)
+. "$(dirname "$0")/find-python.sh"
+if [ -z "$PY" ]; then
+  echo "spec_check: no working Python found; skipping (install Python 3.12)"
+  exit 0
+fi
+exec $PY scripts/spec_check.py --quiet

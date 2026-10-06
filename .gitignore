@@ -1,0 +1,26 @@
+# secrets
+.env
+*.env.local
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+apps/api/data/
+apps/api/.cache/
+*.db
+*.db-journal
+
+# web
+node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+*.tsbuildinfo
+
+# os / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

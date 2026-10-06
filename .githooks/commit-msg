@@ -1,0 +1,9 @@
+#!/bin/sh
+# Spec-first rule: commits touching apps/ must touch specs/ or say [no-spec].
+# Spec: /process/sdd-workflow.md (SDD-01)
+. "$(dirname "$0")/find-python.sh"
+if [ -z "$PY" ]; then
+  echo "spec_check: no working Python found; skipping spec-first rule"
+  exit 0
+fi
+exec $PY scripts/spec_check.py --skip-lint --commit-msg-file "$1"

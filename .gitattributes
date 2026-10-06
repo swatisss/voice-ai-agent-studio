@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.pdf binary
+*.zip binary
+.githooks/* text eol=lf
+*.sh text eol=lf

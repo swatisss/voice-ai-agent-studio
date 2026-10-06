@@ -29,16 +29,25 @@ The demo domain is **Evergreen Health**, a fictional health insurer. All data is
 Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js LTS (24.x), Git. Keys: `GROQ_API_KEY` (agent), `DEEPGRAM_API_KEY` (voice), optional `OPENROUTER_API_KEY`.
 
 ```bash
-python scripts/setup.py --install      # hooks, apps/api/.env, uv sync, npm ci   (Windows: py -3 scripts/setup.py --install)
+python scripts/setup.py --install      # once: hooks, apps/api/.env, uv sync, npm ci   (Windows: py -3 scripts/setup.py --install)
 # edit apps/api/.env and add your keys
 
-npm --prefix apps/web run build        # static web export
-uv run --project apps/api voiceai serve   # http://localhost:8000  (first start seeds demo data, ~45 s)
+python scripts/dev.py                  # the whole stack from one terminal (Windows: py -3 scripts/dev.py)
 ```
 
-Open <http://localhost:8000>, pick a tenant, and follow the three-act script in [`specs/product/demo-script.md`](specs/product/demo-script.md): *resolve* a claim question, *escalate* an appeal with a packet, *learn* the "add a newborn" gap and ship the fix. Use a headset for voice; the **Type** tab is a full fallback.
+`dev.py` starts the web app (<http://localhost:3000>, hot reload) and the API (<http://localhost:8000>, auto-reload) together, checks tools, dependencies, keys and ports first, interleaves both services' logs with `[web]` / `[api]` prefixes, prints `READY - open …` when both answer (the first API start seeds the demo data, about a minute), and **Ctrl+C stops everything**.
 
-**No Deepgram key yet?** Set only `GROQ_API_KEY` and use the **Type** tab on *Test call*: everything works except the microphone. OpenRouter-only and no-LLM-key setups are in [`specs/build/runbook-local.md`](specs/build/runbook-local.md#running-without-some-keys). `LLM_FAKE=1 EMBEDDINGS_PROVIDER=hash uv run --project apps/api voiceai serve` runs the app with a scripted fake LLM (UI and plumbing only).
+| Command | What it does |
+|---|---|
+| `python scripts/dev.py` | Dev mode: web `:3000` + API `:8000`, both auto-reloading |
+| `python scripts/dev.py --single-origin` | Builds the web export, then serves everything from the API on `:8000` (what Cloud Run runs; best for demos) |
+| `python scripts/dev.py --fake` | No LLM keys: scripted fake LLM, hash embeddings, **separate** database (`apps/api/data/fake.db`); UI and plumbing only |
+| `python scripts/dev.py --check` | Pre-flight checks only (missing tools or dependencies, busy ports, missing keys) |
+| `--api-port N`, `--web-port N`, `--no-reload`, `--install` | Change ports, disable API reload, or run `setup.py --install` first |
+
+Open the web URL, pick a tenant, and follow the three-act script in [`specs/product/demo-script.md`](specs/product/demo-script.md): *resolve* a claim question, *escalate* an appeal with a packet, *learn* the "add a newborn" gap and ship the fix. Use a headset for voice; the **Type** tab is a full fallback.
+
+**No Deepgram key yet?** Set only `GROQ_API_KEY` and use the **Type** tab on *Test call*: everything works except the microphone (the launcher prints a warning, not an error). OpenRouter-only and no-LLM-key setups are in [`specs/build/runbook-local.md`](specs/build/runbook-local.md#running-without-some-keys); the launcher reference is [`specs/build/dev-launcher.md`](specs/build/dev-launcher.md).
 
 Deploying to GCP Cloud Run: [`specs/build/runbook-gcp.md`](specs/build/runbook-gcp.md).
 
@@ -251,7 +260,8 @@ apps/web/              Next.js 16 static-export UI                   .github/   
 | Spec lint (strict, as CI) | `python scripts/spec_check.py --ci --base origin/main` |
 | Backend tests | `cd apps/api && uv run pytest` |
 | Web build / dev server | `cd apps/web && npm run build` · `npm run dev` (port 3000) |
-| Run API + built web | `uv run --project apps/api voiceai serve` (port 8000) |
+| Run web + API together | `python scripts/dev.py` (`--single-origin` for the production-like shape) |
+| Run only the API (serves a built web) | `uv run --project apps/api voiceai serve` (port 8000) |
 | Reset demo data | `uv run --project apps/api voiceai seed --reset` |
 | Chat with an agent in the terminal | `uv run --project apps/api voiceai chat --agent <id>` |
 | Switch an LLM role | `LLM_ROLE_REALTIME=openrouter:openai/gpt-oss-120b` or edit `apps/api/config/models.yaml` |
@@ -264,6 +274,8 @@ apps/web/              Next.js 16 static-export UI                   .github/   
 | `uv` not found after `winget install` | Open a new terminal, or `py -m uv …` |
 | Commit rejected: "spec-first rule" | Update the governing spec and `specs/log.md` in the same commit, or add `[no-spec]` if behavior is unchanged |
 | CI: "stable acceptance IDs with no test" | Add a test with `Covers: ID`, or keep the spec `status: draft` until implemented |
+| `dev.py`: "port 8000 is already in use" | Another server is running. Stop it, or `--api-port 8001` (and `--web-port` for the web app) |
+| `dev.py`: "dependencies are not installed" | `python scripts/dev.py --install` (or `python scripts/setup.py --install`) |
 | Mic blocked in the browser | Use `http://localhost` or HTTPS; a headset avoids echo |
 | Voice closes immediately (code 4500) | `DEEPGRAM_API_KEY` is missing; use the **Type** tab |
 | Groq 429 | Free-tier limit: enable billing or set `LLM_ROLE_REALTIME` to an OpenRouter model |

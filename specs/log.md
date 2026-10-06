@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-10-06 (CP-0004 dev launcher)
+* **Creation**: [CP-0004](changes/cp-0004-one-command-dev-launcher.md) and the [dev launcher](build/dev-launcher.md) spec (DEV-01…06); new acceptance prefix `DEV` in [conventions](process/conventions.md).
+* **Update**: [Local runbook](build/runbook-local.md) — first run uses `scripts/dev.py`; the manual web dev server needs `NEXT_PUBLIC_API_BASE`.
+
 ## 2026-10-06 (CP-0003 .env role overrides)
 * **Creation**: [CP-0003](changes/cp-0003-env-file-role-overrides.md) — `LLM_ROLE_<ROLE>` honored from `apps/api/.env`.
 * **Update**: [LLM gateway](architecture/llm-gateway.md) — override sources and LG-07.

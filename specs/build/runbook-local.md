@@ -18,21 +18,23 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 ```bash
 python scripts/setup.py --install           # hooks, apps/api/.env, uv sync, npm ci (use `py -3` on Windows)
-# edit apps/api/.env and add the keys, then:
-cd apps/api
-uv run voiceai seed --reset                 # optional: the server auto-seeds an empty DB
-uv run voiceai serve                        # http://localhost:8000
+# edit apps/api/.env and add the keys, then start the whole stack from this one terminal:
+python scripts/dev.py                       # web http://localhost:3000 + API http://localhost:8000, logs prefixed [web] / [api]
 ```
 
-In a second terminal:
+Ctrl+C stops everything. `python scripts/dev.py --single-origin` builds the web export and serves it from the API on :8000 (what Cloud Run runs). Full reference: [/build/dev-launcher.md](/build/dev-launcher.md).
+
+Manual alternative (two terminals):
 
 ```bash
-cd apps/web
-npm install
-npm run dev                                 # http://localhost:3000 (talks to :8000)
+cd apps/api && uv run voiceai serve         # terminal 1: http://localhost:8000 (auto-seeds an empty DB)
 ```
 
-Single-origin mode (what Cloud Run runs): `npm run build` in `apps/web`, then `uv run voiceai serve` serves the exported site at http://localhost:8000.
+```bash
+cd apps/web && npm run dev                  # terminal 2: http://localhost:3000; needs NEXT_PUBLIC_API_BASE=http://localhost:8000 in the environment
+```
+
+Or single-origin by hand: `npm run build` in `apps/web`, then `uv run voiceai serve` serves the exported site at http://localhost:8000.
 
 # Running without some keys
 

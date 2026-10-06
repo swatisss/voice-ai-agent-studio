@@ -35,7 +35,8 @@ python scripts/setup.py --install            # new machine: hooks, apps/api/.env
 python scripts/spec_check.py --ci --base origin/main   # exactly what CI enforces (spec-first, log, lifecycle, coverage ratchet)
 python scripts/spec_check.py                 # quick spec lint (repo root)
 cd apps/api && uv sync && uv run pytest      # backend tests
-cd apps/api && uv run voiceai serve          # API + web (if built) on :8000
+python scripts/dev.py                        # whole stack: web :3000 + API :8000, prefixed logs, Ctrl+C stops all
+cd apps/api && uv run voiceai serve          # API only (+ built web) on :8000
 cd apps/api && uv run voiceai seed --reset   # reseed demo data
 cd apps/web && npm install && npm run dev    # web dev server on :3000
 cd apps/web && npm run build                 # static export to apps/web/out

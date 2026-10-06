@@ -35,7 +35,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 * Live under a `# Acceptance` heading at the end of the concept.
 * Format: `- **PREFIX-NN** — Given <context>, when <action>, then <observable result>.`
-* Prefixes: `SDD` process · `RT` runtime · `VO` voice · `LG` LLM gateway · `KN` knowledge · `TS` tools & skills · `ES` escalation · `FL` fleet learning · `EV` evaluation · `JB` jobs & events · `MT` multi-tenancy · `DM` data model · `API` REST API · `MOCK` mock API · `UI` UI pages · `DEP` deployment.
+* Prefixes: `SDD` process · `RT` runtime · `VO` voice · `LG` LLM gateway · `KN` knowledge · `TS` tools & skills · `ES` escalation · `FL` fleet learning · `EV` evaluation · `JB` jobs & events · `MT` multi-tenancy · `DEV` developer tooling · `DM` data model · `API` REST API · `MOCK` mock API · `UI` UI pages · `DEP` deployment.
 * IDs are never reused. To retire one, strike it through (`~~ES-04~~`) and say why.
 
 # Links

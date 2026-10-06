@@ -1,5 +1,13 @@
 # Directory Update Log
 
+## 2026-10-06 (backend build, CP-0001 T01–T17)
+* **Update**: [Agent runtime](architecture/agent-runtime.md) — the runtime speaks the handoff itself after `escalate_to_human` (no extra LLM round) and supplies a default goodbye after `end_call`.
+* **Update**: [LLM gateway](architecture/llm-gateway.md) — realtime `max_tokens` 800 (reasoning tokens count), streaming-usage and `json_schema`→`json_object` fallback notes.
+* **Update**: [Escalation](architecture/escalation.md) — evaluation calls never reach the human console.
+* **Update**: [Call history](demo-data/call-history.md) — seed window is relative to the seed date.
+* **Update**: [Spikes](verification/spikes.md) — verified package versions and Pipecat 1.12 API facts; [tech stack](architecture/tech-stack.md) and [local runbook](build/runbook-local.md) now say Node.js LTS 24.
+* **Update**: [Task plan](build/task-plan.md) — T01–T17 done (66 backend tests passing).
+
 ## 2026-10-06
 * **Initialization**: Created the spec bundle for the multi-tenant voice AI agent platform (healthcare & insurance demo domain) under [CP-0001](changes/cp-0001-initial-platform.md).
 * **Creation**: Established the [SDD workflow](process/sdd-workflow.md), [conventions](process/conventions.md) and [change proposal template](process/change-proposal-template.md).

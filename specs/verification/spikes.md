@@ -28,6 +28,24 @@ Fill in each spike's **Result** with measured numbers and dates. Findings that c
 
 # Verified versions and APIs
 
-Recorded during the CP-0001 build (see `apps/api/uv.lock`, `apps/web/package-lock.json` for exact pins):
+Recorded during the CP-0001 build on 2026-10-06 (exact pins in `apps/api/uv.lock`, `apps/web/package-lock.json`):
 
-* _to be filled by T17 (Pipecat class and frame names actually used)._
+| Package | Version | Notes |
+|---|---|---|
+| pipecat-ai | 1.12.0 | see API notes below |
+| openai (Python) | 3.24.0 | `AsyncOpenAI`, `chat.completions.create(..., reasoning_effort=, stream_options=)` and the exception classes used by the gateway are unchanged from 1.x |
+| fastapi / sqlalchemy | 0.142.2 / 2.1.3 | |
+| fastembed | 0.8.1 | `TextEmbedding.passage_embed` / `query_embed` |
+| Python / Node | 3.12.10 / 24.19.0 | |
+
+Pipecat 1.12 API facts the voice code depends on (verified against the installed package; guarded by `tests/test_voice_smoke.py`):
+
+* VAD is **not** a transport param any more: use `pipecat.processors.audio.vad_processor.VADProcessor(vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=...)))`; it emits `VADUserStartedSpeakingFrame` / `VADUserStoppedSpeakingFrame`.
+* Barge-in: a processor calls `await self.broadcast_interruption()`, which sends `InterruptionFrame` both ways; the websocket output transport passes it to the serializer (we emit `{"type":"interrupt"}`).
+* `FrameSerializer` subclasses implement `async serialize(frame) -> str|bytes|None` and `async deserialize(data) -> Frame|None`; `EndFrame`/`CancelFrame` reach `serialize` on stop (we emit `{"type":"end"}`).
+* `FastAPIWebsocketParams(audio_in_enabled, audio_in_sample_rate, audio_out_enabled, audio_out_sample_rate, serializer, session_timeout, add_wav_header)`; JSON text from the client arrives as a broadcast `InputTransportMessageFrame(message=...)`.
+* `DeepgramSTTService(api_key, sample_rate, settings=DeepgramSTTService.Settings(model, language, smart_format, punctuate, interim_results))`; `DeepgramTTSService(api_key, voice, sample_rate)`.
+* TTS services aggregate `LLMTextFrame`s between `LLMFullResponseStartFrame` and `LLMFullResponseEndFrame` into sentences.
+* `PipelineTask(pipeline, params=PipelineParams(audio_in_sample_rate, audio_out_sample_rate))`, `PipelineRunner(handle_sigint=False).run(task)`; `task.queue_frame(EndFrame())` ends gracefully.
+
+Still unverified (needs live keys, see S1): VO-01 greeting audio and VO-03 barge-in behavior end to end.

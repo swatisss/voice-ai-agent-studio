@@ -1,0 +1,43 @@
+[project]
+name = "voiceai"
+version = "0.1.0"
+description = "Voice Agent Studio API - multi-tenant voice AI agents that resolve, escalate and learn"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "aiosqlite>=0.20",
+    "asyncpg>=0.29",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "openai>=1.40",
+    "httpx>=0.27",
+    "numpy>=1.26",
+    "fastembed>=0.4",
+    "pypdf>=4.2",
+    "pyyaml>=6.0",
+    "python-multipart>=0.0.9",
+    "pipecat-ai[deepgram,silero,websocket]>=1.0",
+]
+
+[project.scripts]
+voiceai = "voiceai.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["voiceai"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

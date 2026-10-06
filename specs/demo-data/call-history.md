@@ -9,7 +9,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Window and generator
 
-* Four weeks: 2026-09-07 → 2026-10-04 (Mon–Sun weeks), business hours, deterministic RNG seed `42`.
+* Four weeks: the 28 days ending the day before seeding (for a seed on 2026-10-05 that is 2026-09-07 → 2026-10-04), business hours, deterministic RNG seed `42`. Dates are relative so a reseed before any demo keeps clusters inside the 28-day impact window.
 * Channel `voice`, agent version v1, `is_seed: true`, analyses with `source: seed` (no LLM needed to seed).
 * Each call gets a short transcript (4–10 events) from templates, consistent with [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md); costs ≈ $0.004–0.012; latency 650–1,400 ms.
 

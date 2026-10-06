@@ -28,7 +28,7 @@ models:            # price per 1M tokens (USD) for cost accounting
   "groq:openai/gpt-oss-20b":        { input: 0.10, output: 0.50, json_schema: true, reasoning_effort: true }
   "openrouter:openai/gpt-oss-120b": { input: 0.15, output: 0.60, json_schema: false }
 roles:
-  realtime:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0.3, max_tokens: 400 },
+  realtime:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0.3, max_tokens: 800 },
                fallback: ["openrouter:openai/gpt-oss-120b"] }
   analysis:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0 }, fallback: ["openrouter:openai/gpt-oss-120b"] }
   drafting:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: medium, temperature: 0.4 }, fallback: ["openrouter:openai/gpt-oss-120b"] }
@@ -57,7 +57,9 @@ roles:
 
 # Provider quirks
 
-* Groq gpt-oss models accept `reasoning_effort`; it is sent only when the model entry says `reasoning_effort: true`.
+* Groq gpt-oss models accept `reasoning_effort`; it is sent only when the model entry says `reasoning_effort: true`. Reasoning tokens count toward `max_tokens`, so the realtime cap is 800 even though spoken replies are short.
+* Groq reports streaming usage in `x_groq.usage` on the last chunk; OpenRouter needs `stream_options.include_usage` (`stream_usage: true` in the provider entry). Missing usage is estimated as characters ÷ 4.
+* `json_schema` response format is tried first when the model entry allows it; a 400 from the provider falls back to `json_object` on the same model.
 * Tool call arguments are parsed with `json.loads`; malformed JSON is returned to the model as a tool error (`{"error":"invalid_arguments"}`), never raised.
 * OpenRouter requests include `HTTP-Referer` and `X-Title: Voice AI Platform` headers.
 

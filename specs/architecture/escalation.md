@@ -42,6 +42,8 @@ Safety phrases (case-insensitive substring): `suicide`, `kill myself`, `end my l
 5. Build the packet **immediately** in a background task (not the job queue): LLM `analysis` role with [/prompts/escalation-packet.md](/prompts/escalation-packet.md) over transcript + state. On success `packet_status: ready`; on failure the deterministic fallback packet with `packet_status: fallback`. Publish `escalation.updated`.
 6. The call stays open in *holding* mode (holding message on further caller turns) until the caller hangs up.
 
+Evaluation (simulated) calls also create an escalation row so judging can see the outcome, but they never reach the human console: no `console` events, no packet LLM call (deterministic fallback packet), and `GET /api/escalations` excludes them.
+
 # Groundwork packet
 
 ```json

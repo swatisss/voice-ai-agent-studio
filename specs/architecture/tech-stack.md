@@ -27,7 +27,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 | Concern | Choice |
 |---|---|
-| Runtime | Node.js 22 LTS, npm |
+| Runtime | Node.js LTS (24.x at time of writing), npm |
 | Framework | Next.js (App Router) with `output: "export"` — static files served by the API service |
 | UI | React 19, Tailwind CSS 4, hand-written small components (no component CLI), `lucide-react` icons |
 | Charts | `recharts` |

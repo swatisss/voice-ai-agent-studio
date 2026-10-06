@@ -10,7 +10,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 # Prerequisites
 
 * Python 3.12 and **uv** — Windows: `winget install --source winget Python.Python.3.12 astral-sh.uv`; macOS: `brew install python@3.12 uv`.
-* Node.js 22 LTS — Windows: `winget install --source winget OpenJS.NodeJS.LTS`; macOS: `brew install node@22`.
+* Node.js LTS (24.x) — Windows: `winget install --source winget OpenJS.NodeJS.LTS`; macOS: `brew install node`.
+* Windows note: if `winget install astral-sh.uv` stalls on an admin prompt, `py -3.12 -m pip install --user uv` and run uv as `py -m uv`.
 * Keys: `GROQ_API_KEY` (required for the agent), `DEEPGRAM_API_KEY` (voice), `OPENROUTER_API_KEY` (optional fallback / model switching).
 
 # First run

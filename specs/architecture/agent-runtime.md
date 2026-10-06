@@ -53,8 +53,8 @@ If the LLM fails after gateway fallback, yield `"I'm sorry, I'm having trouble r
 | Name | Parameters | Effect |
 |---|---|---|
 | `search_knowledge` | `query: string` | Searches the agent's knowledge docs ([/architecture/knowledge.md](/architecture/knowledge.md)). Returns results or `{"no_answer": true}`. |
-| `escalate_to_human` | `reason_category` (enum, see escalation spec), `reason_detail: string` | Marks the call escalated; returns `{"status":"escalated","say":<handoff_message>}`. The model must then speak the handoff. |
-| `end_call` | `summary: string` | Marks the call for ending after the reply. |
+| `escalate_to_human` | `reason_category` (enum, see escalation spec), `reason_detail: string` | Marks the call escalated and returns `{"status":"escalated","say":<handoff_message>}`. The runtime then speaks the handoff message itself and ends the turn without another LLM round (deterministic wording, no extra latency). |
+| `end_call` | `summary: string` | Marks the call for ending after the reply. If the model produced no goodbye text in that turn, the runtime says "Thank you for calling. Take care!" |
 
 Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-skills.md](/architecture/tools-and-skills.md). Name collisions with built-ins are rejected at tool creation.
 

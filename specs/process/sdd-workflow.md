@@ -61,19 +61,37 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Guardrails (automated)
 
-`scripts/spec_check.py` runs as a git hook (`.githooks/`) and in CI:
+Enforcement has three layers. Only the last one cannot be skipped from a developer's machine.
+
+| Layer | Where | Role |
+|---|---|---|
+| 1. Git hooks | `.githooks/` — enabled per clone by `python scripts/setup.py` | Fast local feedback: lint on pre-commit, spec-first rule on commit-msg. Bypassable with `--no-verify`. |
+| 2. CI | `.github/workflows/ci.yml` | Runs `spec_check.py --ci` over the whole PR, plus backend tests and the web build. |
+| 3. Branch protection | GitHub repository settings | Makes the CI jobs required and a review mandatory before merging to `main`. |
+
+`scripts/spec_check.py` (stdlib only) implements these checks:
 
 * **OKF lint** — every non-reserved `.md` under `specs/` has YAML frontmatter with a non-empty `type`; reserved `index.md`/`log.md` have no frontmatter except the root `okf_version`.
 * **Index coverage** — every concept file is listed in its folder's `index.md`.
 * **Links** — bundle-absolute and relative links resolve.
-* **Acceptance IDs** — unique across the bundle; IDs not cited by any test are reported (warning).
-* **Spec-first rule** (commit-msg hook) — if a commit touches `apps/` but not `specs/`, it is rejected unless the message contains `[no-spec]`.
+* **Acceptance IDs** — unique across the bundle. Tests may only cite (`Covers:`) IDs that a spec defines.
+* **Spec-first rule** (commit-msg hook, and `--base` in CI over the whole PR) — a change to behavior code needs a spec change in the same commit/PR. *Behavior code* is anything under `apps/` except `apps/api/tests/` and lock files (`uv.lock`, `package-lock.json`). Exemption: `[no-spec]` in a commit message, or in CI the `no-spec` PR label.
+* **Log rule** (`--base`) — spec edits other than `log.md` itself require a `specs/log.md` change.
+* **Lifecycle rule** (`--base`) — when behavior code changes, spec files changed in the same diff may not be `status: draft`, and changed change proposals may not be `cp_state: proposed` (review comes before implementation; closing a CP sets specs to `stable`).
+* **Coverage ratchet** (`--ci`) — every acceptance ID in a `status: stable` spec must be cited by a test or listed in `scripts/acceptance-baseline.txt`, the register of criteria verified by hand. New uncovered IDs fail the build; IDs that gain a test must be removed from the baseline. IDs in `draft` specs are exempt until the spec is marked stable.
 
-Enable the hooks once per clone: `git config core.hooksPath .githooks`.
+# Onboarding
+
+`python scripts/setup.py [--install]` works on Windows, macOS and Linux: it points `core.hooksPath` at `.githooks`, creates `apps/api/.env` from `.env.example` (never overwriting), optionally runs `uv sync` and `npm ci`, and finishes with a spec check. The README is the contributor entry point.
 
 # Acceptance
 
-- **SDD-01** — Given a commit that changes files under `apps/` and none under `specs/`, when the commit message lacks `[no-spec]`, then the commit-msg hook rejects it.
+- **SDD-01** — Given a commit that changes behavior code under `apps/` (not tests or lock files) and nothing under `specs/`, when the commit message lacks `[no-spec]`, then the commit-msg hook rejects it; given only test files changed, it passes.
+- **SDD-05** — Given a PR that changes spec files other than `log.md` and does not change `log.md`, when `spec_check.py --base` runs, then it fails naming `specs/log.md`.
+- **SDD-06** — Given a PR that changes behavior code and a spec whose `status` is `draft` (or a change proposal whose `cp_state` is `proposed`), when `spec_check.py --base` runs, then it fails naming that file.
+- **SDD-07** — Given a `status: stable` spec with an acceptance ID that no test cites and the baseline does not list, when `spec_check.py --ci` runs, then it fails naming the ID; given the same ID in a `draft` spec, it passes.
+- **SDD-08** — Given a test that cites an acceptance ID no spec defines, when `spec_check.py` runs, then it fails naming the ID.
+- **SDD-09** — Given a fresh clone, when `scripts/setup.py` runs, then `core.hooksPath` is `.githooks` and `apps/api/.env` exists; given an existing `.env`, it is left untouched.
 - **SDD-02** — Given any `.md` file under `specs/` other than `index.md`/`log.md`, when it lacks frontmatter or a non-empty `type`, then `spec_check.py` exits non-zero and names the file.
 - **SDD-03** — Given two concepts declaring the same acceptance ID, when `spec_check.py` runs, then it fails and lists both locations.
 - **SDD-04** — Given a concept file not listed in its folder `index.md`, when `spec_check.py` runs, then it fails with the missing entry.

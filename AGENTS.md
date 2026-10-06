@@ -10,6 +10,7 @@ This repo practices **spec-driven development (SDD)**. The `specs/` folder is an
 4. **Prompts live in `specs/prompts/`** and are loaded verbatim at runtime. Change the spec file, not a copy in code.
 5. **Log every spec change** in `specs/log.md` (newest date first) and keep `specs/build/task-plan.md` statuses and CP `cp_state` current.
 6. **Synthetic data only.** Never add real PHI/PII or secrets anywhere.
+7. **CI is the gate, not the hooks.** `--no-verify` does not get you past `.github/workflows/ci.yml`. A stable acceptance ID needs a test that cites it (or an approved line in `scripts/acceptance-baseline.txt`); a spec you are still implementing stays `status: draft`.
 
 Full workflow: `specs/process/sdd-workflow.md`. Writing rules: `specs/process/conventions.md`.
 
@@ -30,7 +31,9 @@ Full workflow: `specs/process/sdd-workflow.md`. Writing rules: `specs/process/co
 ## Commands
 
 ```bash
-python scripts/spec_check.py                 # spec lint (repo root)
+python scripts/setup.py --install            # new machine: hooks, apps/api/.env, dependencies
+python scripts/spec_check.py --ci --base origin/main   # exactly what CI enforces (spec-first, log, lifecycle, coverage ratchet)
+python scripts/spec_check.py                 # quick spec lint (repo root)
 cd apps/api && uv sync && uv run pytest      # backend tests
 cd apps/api && uv run voiceai serve          # API + web (if built) on :8000
 cd apps/api && uv run voiceai seed --reset   # reseed demo data

@@ -1,0 +1,33 @@
+# Acceptance criteria verified by hand, not by an automated test.
+# Spec: /process/sdd-workflow.md (Coverage ratchet, SDD-07)
+#
+# This file is a debt register, not an allowlist for new work:
+#   * `spec_check.py --ci` fails on any stable acceptance ID that has no test and is not listed here;
+#   * it also fails if a listed ID gains a test (remove it) or disappears from the specs;
+#   * adding a line needs a reviewer's explicit approval and a reason below.
+# The way to shrink it: add the test (a CP may introduce Playwright/browser tests) and delete the line.
+
+# Cloud deployment: needs Docker + GCP; verified when running infra/deploy-cloudrun.sh
+DEP-03
+
+# Web UI: verified in the browser against the seeded app (no browser test harness yet)
+UI-01
+UI-02
+UI-04
+UI-05
+UI-06
+UI-07
+UI-08
+UI-09
+UI-10
+UI-11
+UI-12
+UI-13
+UI-14
+UI-15
+UI-16
+UI-17
+
+# Live voice: needs a Deepgram key, a microphone and speakers (spike S1 in specs/verification/spikes.md)
+VO-01
+VO-03

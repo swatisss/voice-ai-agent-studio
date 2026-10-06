@@ -90,7 +90,8 @@ async def test_llm_outage_escalates_then_holds(client, seeded, fake_llm):
     calls = {"n": 0}
 
     def responder(role, m, t):  # noqa: ANN001, ANN202
-        calls["n"] += 1
+        if role == "realtime":  # the background packet build also calls the gateway; only count the agent's turns
+            calls["n"] += 1
         raise LLMError("all models failed")
 
     fake_llm(responder)

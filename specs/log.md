@@ -1,5 +1,10 @@
 # Directory Update Log
 
+## 2026-10-06 (CP-0002 spec enforcement)
+* **Creation**: [CP-0002](changes/cp-0002-spec-enforcement-and-onboarding.md) — CI gate, PR-level rules, acceptance ratchet, setup script, README.
+* **Update**: [SDD workflow](process/sdd-workflow.md) — guardrails restated as hooks / CI / branch protection; log, lifecycle and coverage-ratchet rules; test-only changes exempt from spec-first; SDD-01 refined, SDD-05…09 added.
+* **Update**: [Local runbook](build/runbook-local.md) — first run uses `scripts/setup.py`.
+
 ## 2026-10-06 (close-out)
 * **Update**: [CP-0001](changes/cp-0001-initial-platform.md) set to `implemented`; open items are the live-key spikes S1–S3 in [spikes](verification/spikes.md).
 

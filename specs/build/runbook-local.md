@@ -17,10 +17,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 # First run
 
 ```bash
-git config core.hooksPath .githooks        # enable SDD hooks (once per clone)
+python scripts/setup.py --install           # hooks, apps/api/.env, uv sync, npm ci (use `py -3` on Windows)
+# edit apps/api/.env and add the keys, then:
 cd apps/api
-cp .env.example .env                        # then fill in keys
-uv sync
 uv run voiceai seed --reset                 # optional: the server auto-seeds an empty DB
 uv run voiceai serve                        # http://localhost:8000
 ```

@@ -4,7 +4,7 @@ import { Shell } from "@/components/shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Voice Agent Studio",
+  title: "Echo Mind Voice Agent Studio",
   description: "Multi-tenant voice AI agents that resolve, escalate with context, and learn.",
 };
 

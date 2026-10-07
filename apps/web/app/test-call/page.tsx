@@ -267,7 +267,7 @@ function TestCall() {
                   <li key={`${p.member_id}-${p.try}`}><span className="font-medium">{p.name}</span> · ID <span className="mono">{p.member_id}</span> · DOB {p.date_of_birth}<div className="text-muted">{p.try}</div></li>
                 ))}
               </ul>
-            ) : <div className="text-xs text-muted">No caller to verify: you speak as an Evergreen colleague.</div>)}
+            ) : <div className="text-xs text-muted">No caller to verify: you speak as a colleague.</div>)}
           </Card>
         </div>
       </div>

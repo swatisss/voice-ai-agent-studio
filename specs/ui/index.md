@@ -1,8 +1,8 @@
 # UI
 
 * [Design system](design-system.md) - Visual language, tokens, components and copy rules
-* [App shell](app-shell.md) - Navigation, tenant switcher, routing, API client
-* [Dashboard](dashboard.md) - Containment trend, outcomes, root causes, cost saved
+* [App shell](app-shell.md) - Left sidebar navigation, product brand, business-unit switcher, routing, API client
+* [Dashboard](dashboard.md) - Calls, containment, escalated to human, response time, containment trend, root causes
 * [Agent builder](agent-builder.md) - Agents list and the builder: persona, policy, knowledge, tools, skills, versions
 * [Personas](personas.md) - Create and edit the tenant's personas and try one in a test call
 * [Test call](test-call.md) - Talk or type to an agent with live transcript and tool activity

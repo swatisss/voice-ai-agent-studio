@@ -1,7 +1,7 @@
 ---
 type: UI Spec
 title: Design system
-description: Health-insurer portal look and feel - brand palette tokens (light and dark), top-navigation layout, pill controls, soft cards, accessibility rules and copy conventions for the web app.
+description: Health-insurer portal look and feel - brand palette tokens (light and dark), left-sidebar layout, pill controls, soft cards, accessibility rules and copy conventions for the web app.
 status: stable
 tags: [ui, design, accessibility]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
@@ -15,14 +15,15 @@ The studio should feel like a trusted health-insurer customer portal: calm, clea
 * **Large, friendly type.** 16 px base, 1.5 line height, headings 600 weight in navy; no dense walls of text.
 * **Round and soft.** Pill buttons, 16 px cards with a faint shadow, 10 px inputs.
 * **Accessible first.** WCAG AA contrast everywhere, visible focus, keyboard-operable navigation, status never conveyed by color alone (always a text label), motion respects `prefers-reduced-motion`.
-* The business unit's own name is the brand in the header; the product is the small caption beneath it. No third-party logos or fonts are bundled.
+* The product's own name, **Echo Mind** with the caption "Voice Agent Studio", is the brand at the top of the sidebar; it does not change with the selected business unit. No third-party logos or fonts are bundled.
+* **Simple over dense.** Show only the few metrics and navigation items the owner uses; everything else is one click deeper.
 
 # Tokens (CSS variables in `apps/web/app/globals.css`; dark mode follows `prefers-color-scheme`)
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
 | `--bg` | `#F2F6FA` | `#0B1624` | page background |
-| `--panel` | `#FFFFFF` | `#12223A` | cards, header, inputs |
+| `--panel` | `#FFFFFF` | `#12223A` | cards, sidebar, mobile top bar, inputs |
 | `--border` | `#D5DFEA` | `#26405F` | hairlines |
 | `--text` | `#0E1F33` | `#E8EEF6` | body and headings |
 | `--muted` | `#4A5D75` | `#9DB0C7` | secondary text |
@@ -40,9 +41,10 @@ Typography: system UI stack (`Segoe UI`, `system-ui`, `-apple-system`, `Roboto`)
 
 # Layout
 
-* **Header** (sticky, white, 1 px bottom border): brand mark + business-unit brand name with the product caption "Voice Agent Studio"; horizontal navigation; on the right the **business unit** switcher and provider status dots.
-* **Navigation** items in order: Dashboard, Agents, Personas, Test call, Calls, Agent console (waiting badge), Insights (ready badge). The active item has a 4 px accent underline and accent text. Between 768 and 1279 px only the active item shows its label (the others keep an icon, a tooltip and an accessible name) so the bar fits without scrolling; below 768 px the items collapse into a menu button.
-* **Content**: max width 1280 px, 24 px page padding (16 px on phones), page titles at 28 px.
+* **Sidebar** (768 px and wider; fixed, 16 rem wide, full height, `--panel` background, 1 px right border): the brand (mark, "Echo Mind", caption "Voice Agent Studio") on top; the navigation below it; the **business unit** switcher and provider status dots pinned at the bottom. Details in [/ui/app-shell.md](/ui/app-shell.md).
+* **Navigation** items in order: Dashboard, Agents, Personas, Test call, Calls, Agent console (waiting badge), Insights (ready badge), stacked vertically, icon + label, 44 px row height. The active item has an `--accent-soft` background, accent text and a 4 px accent bar on its left edge; hover uses the same soft background.
+* **Below 768 px**: no sidebar; a slim sticky top bar (brand + menu button) opens the sidebar as a drawer over the page.
+* **Content**: fills the space right of the sidebar, max width 1280 px, 24 px page padding (16 px on phones), page titles at 28 px.
 * A visually hidden **Skip to content** link is the first focusable element.
 
 # Components (in `apps/web/components/ui.tsx`)

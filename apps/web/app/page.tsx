@@ -8,7 +8,7 @@ import { ClusterLabel } from "@/components/cluster-label";
 import { useTenant } from "@/components/shell";
 import { Badge, Card, EmptyState, Spinner, Stat } from "@/components/ui";
 import { useApi, useEvents } from "@/lib/api";
-import { money, pct, ROOT_CAUSE, secs, when } from "@/lib/format";
+import { pct, ROOT_CAUSE, secs, when } from "@/lib/format";
 
 export default function Dashboard() {
   const { tenant } = useTenant();
@@ -29,13 +29,11 @@ export default function Dashboard() {
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-semibold">Dashboard</h1>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">  {/* UI-27 */}
         <Stat label="Calls" value={t.calls} />
         <Stat label="Containment rate" value={pct(t.containment_rate)} sub="resolved ÷ (resolved + escalated)" />
-        <Stat label="Escalated" value={t.escalated} />
-        <Stat label="Cost saved" value={money(t.cost_saved_usd)} sub="vs. human-handled" />
-        <Stat label="Avg LLM cost / call" value={money(t.avg_llm_cost_usd, 3)} />
-        <Stat label="Median response" value={secs(t.latency_p50_ms)} />
+        <Stat label="Escalated to human" value={t.escalated} sub="handed to a human reviewer" />
+        <Stat label="Response time" value={secs(t.latency_p50_ms)} sub="median time to first reply" />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Containment by week">
@@ -68,13 +66,12 @@ export default function Dashboard() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title="Top clusters" className="lg:col-span-2" actions={<Link className="text-sm text-accent" href="/insights/">Open insights</Link>}>
           <table className="w-full text-sm">
-            <thead className="text-left text-xs text-muted"><tr><th className="pb-2">Cluster</th><th>Esc./week</th><th>Est. weekly cost</th><th>Status</th></tr></thead>
+            <thead className="text-left text-xs text-muted"><tr><th className="pb-2">Cluster</th><th>Esc./week</th><th>Status</th></tr></thead>
             <tbody>
               {data.top_clusters.map((c: any) => (
                 <tr key={c.id} className="border-t border-line">
                   <td className="py-2"><Link href={`/insights/cluster/?id=${c.id}`} className="hover:text-accent">{c.name}</Link></td>
                   <td>{c.weekly_escalations}</td>
-                  <td>{money(c.est_weekly_cost_usd)}</td>
                   <td><ClusterLabel c={c} /></td>
                 </tr>
               ))}

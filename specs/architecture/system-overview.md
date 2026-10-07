@@ -20,12 +20,12 @@ Browser (Next.js static export)
 │ routes ── agent runtime (shared brain) ── tools ── knowledge search   │
 │              ▲                    │            │                       │
 │ voice pipeline (Pipecat: VAD→STT→turns→brain→TTS)   mock healthcare API│
-│ LLM gateway (roles → Groq / OpenRouter)   event bus   job worker       │
+│ LLM gateway (roles → Groq / OpenRouter / OpenAI)   event bus   job worker       │
 │                 learning: analyze → cluster → draft fix → evaluate     │
 └──────────────────────────────┬───────────────────────────────────────┘
                                ▼
               SQLite (local) / Postgres (Cloud SQL)
-External: Groq, OpenRouter (LLM) · Deepgram (STT/TTS)
+External: Groq, OpenRouter, OpenAI (LLM) · Deepgram (STT/TTS)
 ```
 
 # Components

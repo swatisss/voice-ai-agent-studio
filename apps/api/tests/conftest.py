@@ -16,6 +16,7 @@ os.environ.update({
     "LLM_FAKE": "1",
     "GROQ_API_KEY": "",
     "OPENROUTER_API_KEY": "",
+    "OPENAI_API_KEY": "",
     "DEEPGRAM_API_KEY": "",
     "WEB_DIST_DIR": str(_TMP / "no-web"),
 })

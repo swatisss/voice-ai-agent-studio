@@ -34,13 +34,23 @@ if [[ -n "${DB_INSTANCE:-}" ]]; then
   EXTRA+=(--add-cloudsql-instances "${DB_INSTANCE}")
 fi
 
+# GROQ and DEEPGRAM are required; OPENROUTER and OPENAI are optional and attached only when the secret exists.
+SECRETS="GROQ_API_KEY=GROQ_API_KEY:latest,DEEPGRAM_API_KEY=DEEPGRAM_API_KEY:latest"
+for optional in OPENROUTER_API_KEY OPENAI_API_KEY; do
+  if gcloud secrets describe "${optional}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
+    SECRETS+=",${optional}=${optional}:latest"
+  else
+    echo "==> Optional secret ${optional} not found in Secret Manager; deploying without it"
+  fi
+done
+
 echo "==> Deploying ${SERVICE} to ${REGION}"
 gcloud run deploy "${SERVICE}" --project "${PROJECT_ID}" --region "${REGION}" \
   --image "${IMAGE}" --platform managed --allow-unauthenticated \
   --min-instances 1 --max-instances 1 --no-cpu-throttling \
   --cpu 2 --memory 2Gi --timeout 3600 --session-affinity \
   --set-env-vars "${ENV_VARS}" \
-  --set-secrets "GROQ_API_KEY=GROQ_API_KEY:latest,DEEPGRAM_API_KEY=DEEPGRAM_API_KEY:latest,OPENROUTER_API_KEY=OPENROUTER_API_KEY:latest" \
+  --set-secrets "${SECRETS}" \
   "${EXTRA[@]}"
 
 URL="$(gcloud run services describe "${SERVICE}" --project "${PROJECT_ID}" --region "${REGION}" --format 'value(status.url)')"

@@ -13,7 +13,7 @@ A sticky **top header** over the content, in the portal style of [/ui/design-sys
 
 * **Brand**: a generic mark plus the business unit's brand name (the part of the selected tenant's name before ` · `), with the product caption "Voice Agent Studio" beneath it.
 * **Navigation** (icon + label, horizontal): **Dashboard** `/`, **Agents** `/agents/`, **Personas** `/personas/`, **Test call** `/test-call/`, **Calls** `/calls/`, **Agent console** `/console/` (badge = waiting escalations), **Insights** `/insights/` (badge = clusters ready for a fix). The active item is underlined. Between 768 and 1279 px only the active item shows its label; below 768 px the items collapse into a menu button that opens a dropdown panel.
-* **Business-unit switcher** (select listing `GET /api/tenants`; choice persisted in `localStorage` key `tenant`; default first tenant) and provider health dots from `/healthz` (Groq, OpenRouter, Deepgram: configured or not) on the right.
+* **Business-unit switcher** (select listing `GET /api/tenants`; choice persisted in `localStorage` key `tenant`; default first tenant) and provider health dots from `/healthz` (Groq, OpenRouter, OpenAI, Deepgram: configured or not) on the right.
 * A **Skip to content** link is the first focusable element and jumps to the main region.
 
 # Routing (static export)

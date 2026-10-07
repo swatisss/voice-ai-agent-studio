@@ -32,7 +32,7 @@ Windows without a `python` command: `py -3 scripts/dev.py`. Stdlib only (Python 
 
 1. **Pre-flight** (before anything starts). Errors stop the launcher with exit code 1; warnings do not.
    * Errors: `uv` or `npm` not found; `apps/api/.venv` missing; `apps/web/node_modules` missing (when the web app is started or built); `apps/web/out` missing with `--skip-build`; a required port already in use. Every error names the fix (for example `python scripts/setup.py --install` or `--api-port`).
-   * Warnings: `apps/api/.env` missing; no `GROQ_API_KEY` and no `OPENROUTER_API_KEY` (agent replies will fail; use `--fake`); only an OpenRouter key and no `LLM_ROLE_REALTIME` (see [runbook](/build/runbook-local.md)); no `DEEPGRAM_API_KEY` (Talk disabled, use Type).
+   * Warnings: `apps/api/.env` missing; none of `GROQ_API_KEY`, `OPENROUTER_API_KEY` and `OPENAI_API_KEY` (agent replies will fail; use `--fake`); an OpenRouter key as the only LLM key and no `LLM_ROLE_REALTIME` (see [runbook](/build/runbook-local.md)); an OpenAI key needs no role lines because every role falls back to OpenAI ([/architecture/llm-gateway.md](/architecture/llm-gateway.md)); no `DEEPGRAM_API_KEY` (Talk disabled, use Type).
    * Keys are read from the process environment and `apps/api/.env`; only whether each is set is printed, never a value.
 2. **Dev mode services**
    * `api`: `uv run voiceai serve --port <api> --reload` in `apps/api`, with `CORS_ORIGINS` allowing `http://localhost:<web>` and `http://127.0.0.1:<web>`.
@@ -49,4 +49,4 @@ Windows without a `python` command: `py -3 scripts/dev.py`. Stdlib only (Python 
 - **DEV-03** — Given two services printing to stdout and stderr, when supervised, then every line appears once, prefixed with its service tag.
 - **DEV-04** — Given one service exits with code 3 while another (which has spawned a grandchild) keeps running, then the launcher returns 3 and the whole other tree, grandchild included, is gone.
 - **DEV-05** — Given a missing dependency directory, a missing tool, or a busy port, when pre-flight runs, then it reports an error naming the fix and `--check` exits 1; given everything present it exits 0.
-- **DEV-06** — Given keys in `.env` and the environment, when pre-flight runs, then key warnings follow the rules above and no key value is ever printed; given `--fake`, the LLM warning is skipped and `DATABASE_URL` defaults to `fake.db` unless already set.
+- **DEV-06** — Given keys in `.env` and the environment, when pre-flight runs, then the key status lists Groq, OpenRouter, OpenAI and Deepgram, key warnings follow the rules above (an OpenAI key alone raises no LLM warning and no `LLM_ROLE_*` advice) and no key value is ever printed; given `--fake`, the LLM warning is skipped and `DATABASE_URL` defaults to `fake.db` unless already set.

@@ -12,7 +12,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Python 3.12 and **uv** — Windows: `winget install --source winget Python.Python.3.12 astral-sh.uv`; macOS: `brew install python@3.12 uv`.
 * Node.js LTS (24.x) — Windows: `winget install --source winget OpenJS.NodeJS.LTS`; macOS: `brew install node`.
 * Windows note: if `winget install astral-sh.uv` stalls on an admin prompt, `py -3.12 -m pip install --user uv` and run uv as `py -m uv`.
-* Keys: `GROQ_API_KEY` (required for the agent), `DEEPGRAM_API_KEY` (voice), `OPENROUTER_API_KEY` (optional fallback / model switching).
+* Keys: an LLM key (`GROQ_API_KEY` by default, or `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`), `DEEPGRAM_API_KEY` (voice). The other LLM keys are optional fallbacks and model switching.
 
 # First run
 
@@ -41,6 +41,7 @@ Or single-origin by hand: `npm run build` in `apps/web`, then `uv run voiceai se
 | You have | Do this | What works |
 |---|---|---|
 | Groq key, **no Deepgram** | Put `GROQ_API_KEY` in `apps/api/.env`; use the **Type** tab on Test call | Everything except the microphone: resolve, escalate, console, insights, evaluation, dashboard |
+| OpenAI key only | Put `OPENAI_API_KEY` in `apps/api/.env`; no `LLM_ROLE_*` lines needed (every role falls back to OpenAI), though the OpenAI-only lines below skip the failed Groq attempt | Same as above |
 | OpenRouter key only | Put `OPENROUTER_API_KEY` and the five `LLM_ROLE_*` lines (below) in `apps/api/.env` | Same as above |
 | No LLM key | `LLM_FAKE=1 EMBEDDINGS_PROVIDER=hash` | UI and plumbing only: the agent answers with a canned placeholder, so the demo acts do not work |
 
@@ -53,6 +54,19 @@ LLM_ROLE_DRAFTING=openrouter:openai/gpt-oss-120b
 LLM_ROLE_SIMULATOR=openrouter:openai/gpt-oss-20b
 LLM_ROLE_JUDGE=openrouter:openai/gpt-oss-120b
 ```
+
+OpenAI role lines (use these when Groq is rate-limited, so each turn goes straight to OpenAI; confirm the model IDs in the OpenAI console):
+
+```
+LLM_ROLE_REALTIME=openai:gpt-4.1-mini
+LLM_ROLE_ANALYSIS=openai:gpt-4.1-mini
+LLM_ROLE_DRAFTING=openai:gpt-4.1-mini
+LLM_ROLE_JUDGE=openai:gpt-4.1-mini
+LLM_ROLE_SIMULATOR=openai:gpt-4.1-nano
+LLM_ROLE_TURN=openai:gpt-4.1-nano
+```
+
+Duplicate keys in `.env` are a trap: when a variable appears twice the later line wins, so a stale or truncated second `GROQ_API_KEY=` silently replaces a good first one (Groq then answers 401 `invalid_api_key`).
 
 Without `DEEPGRAM_API_KEY` the Talk tab refuses the voice socket (close code 4500) and shows a toast; the API stays healthy. The refused voice call row stays `active` in the Calls list. Add the key later with no other change.
 
@@ -78,5 +92,5 @@ cd apps/web && npm run build
 * **Mic blocked** — use `http://localhost` (not an IP) or HTTPS.
 * **Echo / agent interrupts itself** — use a headset.
 * **Voice closes with 4500** — `DEEPGRAM_API_KEY` missing; use Type mode.
-* **Groq 429** — free-tier limit; enable billing or set `LLM_ROLE_REALTIME=openrouter:openai/gpt-oss-120b`.
+* **Groq 429** (`tokens per minute (TPM): Limit 8000`) — the free-tier cap is per model and one tool-calling turn can exceed it, and packets and analysis share the quota. Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` (the fallback then answers), move the background roles to `groq:openai/gpt-oss-20b`, switch the roles to OpenAI (lines above), or enable Groq billing.
 * **First knowledge search slow** — fastembed downloads its model once (~70 MB).

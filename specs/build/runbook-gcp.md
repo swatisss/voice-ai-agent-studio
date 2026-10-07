@@ -16,8 +16,11 @@ gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudb
 gcloud artifacts repositories create voiceai --repository-format=docker --location=us-central1
 printf '%s' "$GROQ_API_KEY"       | gcloud secrets create GROQ_API_KEY --data-file=-
 printf '%s' "$DEEPGRAM_API_KEY"   | gcloud secrets create DEEPGRAM_API_KEY --data-file=-
-printf '%s' "$OPENROUTER_API_KEY" | gcloud secrets create OPENROUTER_API_KEY --data-file=-
+printf '%s' "$OPENROUTER_API_KEY" | gcloud secrets create OPENROUTER_API_KEY --data-file=-   # optional
+printf '%s' "$OPENAI_API_KEY"     | gcloud secrets create OPENAI_API_KEY --data-file=-       # optional
 ```
+
+`OPENROUTER_API_KEY` and `OPENAI_API_KEY` are optional: the deploy script attaches a secret only if it exists in Secret Manager.
 
 Grant the Cloud Run runtime service account `roles/secretmanager.secretAccessor`.
 

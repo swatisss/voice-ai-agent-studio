@@ -22,3 +22,5 @@ The LLM must be cheap and switchable. Groq gives very fast, low-cost inference o
 * Switching models is a config change, visible in the builder.
 * We own small amounts of glue (streaming tool-call assembly, JSON validation, fallback) instead of a heavy dependency.
 * Provider-specific features (e.g. `reasoning_effort`) are gated per model entry.
+
+Amended by [ADR-0007](adr-0007-openai-provider.md): OpenAI is a third provider, and the last fallback of every role.

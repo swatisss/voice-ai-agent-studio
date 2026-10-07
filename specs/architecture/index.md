@@ -4,7 +4,7 @@
 * [Tech stack](tech-stack.md) - Languages, frameworks, providers and version policy
 * [Agent runtime](agent-runtime.md) - The shared brain: turn loop, state, built-in tools, guards
 * [Voice pipeline](voice-pipeline.md) - Browser audio over WebSocket through Pipecat: VAD, STT, turn detection, TTS, interruptions
-* [LLM gateway](llm-gateway.md) - Roles mapped to Groq/OpenRouter models, fallback, JSON mode, cost accounting
+* [LLM gateway](llm-gateway.md) - Roles mapped to Groq, OpenRouter or OpenAI models, fallback, JSON mode, cost accounting
 * [Knowledge](knowledge.md) - Ingestion (text, file, URL, OKF), chunking, embeddings, search with no-answer threshold
 * [Tools and skills](tools-and-skills.md) - HTTP tool definitions, execution, verification gate, skill format
 * [Turn detection](turn-detection.md) - Normal and semantic end-of-turn detection, settings, evaluators, interruptions, live controls

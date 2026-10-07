@@ -12,35 +12,42 @@ providers:
     headers:
       HTTP-Referer: "https://github.com/voice-agent-studio"
       X-Title: "Voice Agent Studio"
+  openai:
+    base_url: "https://api.openai.com/v1"
+    api_key_env: OPENAI_API_KEY
+    stream_usage: true
 
 models:   # price per 1M tokens (USD)
   "groq:openai/gpt-oss-120b":       { input: 0.15, output: 0.60, json_schema: true,  reasoning_effort: true }
   "groq:openai/gpt-oss-20b":        { input: 0.10, output: 0.50, json_schema: true,  reasoning_effort: true }
   "openrouter:openai/gpt-oss-120b": { input: 0.15, output: 0.60, json_schema: false, reasoning_effort: true }
   "openrouter:openai/gpt-oss-20b":  { input: 0.10, output: 0.50, json_schema: false, reasoning_effort: true }
+  # Non-reasoning OpenAI chat models only (they take max_tokens and temperature). Confirm IDs and prices in the OpenAI console.
+  "openai:gpt-4.1-mini":            { input: 0.40, output: 1.60, json_schema: true }
+  "openai:gpt-4.1-nano":            { input: 0.10, output: 0.40, json_schema: true }
 
 roles:
   realtime:
     model: "groq:openai/gpt-oss-120b"
     params: { reasoning_effort: low, temperature: 0.3, max_tokens: 800 }
-    fallback: ["openrouter:openai/gpt-oss-120b"]
+    fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
   analysis:
     model: "groq:openai/gpt-oss-120b"
     params: { reasoning_effort: low, temperature: 0 }
-    fallback: ["openrouter:openai/gpt-oss-120b"]
+    fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
   drafting:
     model: "groq:openai/gpt-oss-120b"
     params: { reasoning_effort: medium, temperature: 0.4 }
-    fallback: ["openrouter:openai/gpt-oss-120b"]
+    fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
   simulator:
     model: "groq:openai/gpt-oss-20b"
     params: { reasoning_effort: low, temperature: 0.7, max_tokens: 400 }
-    fallback: ["groq:openai/gpt-oss-120b"]
+    fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-nano"]
   judge:
     model: "groq:openai/gpt-oss-120b"
     params: { reasoning_effort: low, temperature: 0 }
-    fallback: ["openrouter:openai/gpt-oss-120b"]
+    fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
   turn:
     model: "groq:openai/gpt-oss-20b"
     params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }
-    fallback: ["openrouter:openai/gpt-oss-20b"]
+    fallback: ["openrouter:openai/gpt-oss-20b", "openai:gpt-4.1-nano"]

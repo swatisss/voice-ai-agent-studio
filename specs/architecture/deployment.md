@@ -29,7 +29,7 @@ One container image (multi-stage `infra/Dockerfile`): stage 1 builds the web exp
 | `--timeout` | 3600 | long WebSocket voice calls and SSE |
 | `--session-affinity` | on | sticky WebSockets |
 | CPU / memory | 2 vCPU / 2 GiB | VAD + embeddings |
-| Secrets | Secret Manager → env `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `DEEPGRAM_API_KEY` | |
+| Secrets | Secret Manager → env `GROQ_API_KEY`, `DEEPGRAM_API_KEY`; optional `OPENROUTER_API_KEY`, `OPENAI_API_KEY` (attached only when the secret exists) | |
 
 Database options:
 
@@ -40,7 +40,7 @@ Deploy script: `infra/deploy-cloudrun.sh` ([/build/runbook-gcp.md](/build/runboo
 
 # Health
 
-`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"groq":bool,"openrouter":bool,"deepgram":bool}}` (provider booleans = key configured, no network call).
+`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"groq":bool,"openrouter":bool,"openai":bool,"deepgram":bool}}` (provider booleans = key configured, no network call).
 
 # Acceptance
 

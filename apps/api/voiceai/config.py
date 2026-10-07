@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     groq_api_key: str | None = None
     openrouter_api_key: str | None = None
+    openai_api_key: str | None = None
     deepgram_api_key: str | None = None
     llm_fake: bool = False
     # per-role model overrides (/architecture/llm-gateway.md, LG-06/LG-07); a real env var of the same name wins in the gateway

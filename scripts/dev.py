@@ -29,7 +29,7 @@ from typing import Callable, TextIO
 ROOT = Path(__file__).resolve().parent.parent
 API_DIR = ROOT / "apps" / "api"
 WEB_DIR = ROOT / "apps" / "web"
-KEYS = ("GROQ_API_KEY", "OPENROUTER_API_KEY", "DEEPGRAM_API_KEY")
+KEYS = ("GROQ_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY", "DEEPGRAM_API_KEY")
 COLORS = {"dev": "33", "api": "36", "web": "35"}  # yellow, cyan, magenta
 GRACE_SECONDS = 5.0
 
@@ -150,9 +150,9 @@ def preflight(
     if not dotenv_path.exists():
         warnings.append("apps/api/.env not found; using only the process environment (python scripts/setup.py creates it)")
     if not args.fake:
-        if not status["GROQ_API_KEY"] and not status["OPENROUTER_API_KEY"]:
-            warnings.append("no GROQ_API_KEY or OPENROUTER_API_KEY: agent replies will fail. Add a key to apps/api/.env, or use --fake for a UI-only run")
-        elif not status["GROQ_API_KEY"] and not merged.get("LLM_ROLE_REALTIME"):
+        if not (status["GROQ_API_KEY"] or status["OPENROUTER_API_KEY"] or status["OPENAI_API_KEY"]):
+            warnings.append("no GROQ_API_KEY, OPENROUTER_API_KEY or OPENAI_API_KEY: agent replies will fail. Add a key to apps/api/.env, or use --fake for a UI-only run")
+        elif status["OPENROUTER_API_KEY"] and not (status["GROQ_API_KEY"] or status["OPENAI_API_KEY"]) and not merged.get("LLM_ROLE_REALTIME"):  # an OpenAI key needs no role lines: every role falls back to it
             warnings.append("only OPENROUTER_API_KEY is set: also set the five LLM_ROLE_* lines in apps/api/.env (see specs/build/runbook-local.md)")
     if not status["DEEPGRAM_API_KEY"]:
         warnings.append("no DEEPGRAM_API_KEY: the Talk tab is disabled; use Type on the Test call page")

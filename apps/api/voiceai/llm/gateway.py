@@ -1,4 +1,4 @@
-"""LLM gateway: roles -> Groq/OpenRouter models via one OpenAI-compatible client.
+"""LLM gateway: roles -> Groq/OpenRouter/OpenAI models via one OpenAI-compatible client.
 
 Spec: /architecture/llm-gateway.md, /decisions/adr-0003-llm-gateway.md
 """
@@ -133,7 +133,7 @@ class Gateway:
 
     def _key_from_settings(self, provider: str) -> str | None:
         s = get_settings()
-        return {"groq": s.groq_api_key, "openrouter": s.openrouter_api_key}.get(provider)
+        return {"groq": s.groq_api_key, "openrouter": s.openrouter_api_key, "openai": s.openai_api_key}.get(provider)
 
     def _client(self, provider: str) -> openai.AsyncOpenAI:
         if provider in self._clients:

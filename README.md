@@ -26,7 +26,7 @@ The demo domain is **Evergreen Health**, a fictional health insurer whose busine
 
 ## Run it
 
-Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js LTS (24.x), Git. Keys: `GROQ_API_KEY` (agent), `DEEPGRAM_API_KEY` (voice), optional `OPENROUTER_API_KEY`.
+Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js LTS (24.x), Git. Keys: an LLM key (`GROQ_API_KEY` by default, or `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`) and `DEEPGRAM_API_KEY` (voice); the other LLM keys are optional fallbacks.
 
 ```bash
 python scripts/setup.py --install      # once: hooks, apps/api/.env, uv sync, npm ci   (Windows: py -3 scripts/setup.py --install)
@@ -47,7 +47,7 @@ python scripts/dev.py                  # the whole stack from one terminal (Wind
 
 Open the web URL, pick a tenant, and follow the three-act script in [`specs/product/demo-script.md`](specs/product/demo-script.md): *resolve* a claim question, *escalate* an appeal with a packet, *learn* the "add a newborn" gap and ship the fix. **Test call** shows a gallery of the seven use cases (select one to see what to say and which demo caller to use), places **outbound** renewal and onboarding calls (the agent speaks first), and its **Live controls** switch the persona and the turn detection (normal or semantic) in the middle of a call. Use a headset for voice; the **Type** tab is a full fallback.
 
-**No Deepgram key yet?** Set only `GROQ_API_KEY` and use the **Type** tab on *Test call*: everything works except the microphone (the launcher prints a warning, not an error). OpenRouter-only and no-LLM-key setups are in [`specs/build/runbook-local.md`](specs/build/runbook-local.md#running-without-some-keys); the launcher reference is [`specs/build/dev-launcher.md`](specs/build/dev-launcher.md).
+**No Deepgram key yet?** Set only `GROQ_API_KEY` and use the **Type** tab on *Test call*: everything works except the microphone (the launcher prints a warning, not an error). OpenAI-only, OpenRouter-only and no-LLM-key setups are in [`specs/build/runbook-local.md`](specs/build/runbook-local.md#running-without-some-keys); the launcher reference is [`specs/build/dev-launcher.md`](specs/build/dev-launcher.md).
 
 Deploying to GCP Cloud Run: [`specs/build/runbook-gcp.md`](specs/build/runbook-gcp.md).
 
@@ -264,7 +264,7 @@ apps/web/              Next.js 16 static-export UI                   .github/   
 | Run only the API (serves a built web) | `uv run --project apps/api voiceai serve` (port 8000) |
 | Reset demo data | `uv run --project apps/api voiceai seed --reset` |
 | Chat with an agent in the terminal | `uv run --project apps/api voiceai chat --agent <id>` |
-| Switch an LLM role | `LLM_ROLE_REALTIME=openrouter:openai/gpt-oss-120b` or edit `apps/api/config/models.yaml` |
+| Switch an LLM role | `LLM_ROLE_REALTIME=openai:gpt-4.1-mini` (or an `openrouter:` model) in `apps/api/.env`, or edit `apps/api/config/models.yaml` |
 
 ## Troubleshooting
 
@@ -278,7 +278,8 @@ apps/web/              Next.js 16 static-export UI                   .github/   
 | `dev.py`: "dependencies are not installed" | `python scripts/dev.py --install` (or `python scripts/setup.py --install`) |
 | Mic blocked in the browser | Use `http://localhost` or HTTPS; a headset avoids echo |
 | Voice closes immediately (code 4500) | `DEEPGRAM_API_KEY` is missing; use the **Type** tab |
-| Groq 429 | Free-tier limit: enable billing or set `LLM_ROLE_REALTIME` to an OpenRouter model |
+| Groq 429 (`tokens per minute`) | Free-tier cap of 8,000 tokens/min per model. Add `OPENAI_API_KEY` or `OPENROUTER_API_KEY` (the fallback answers), switch the roles to OpenAI (see `.env.example`), or enable Groq billing |
+| Groq 401 `invalid_api_key` with a good key | `apps/api/.env` lists the key twice: the later line wins. Keep one |
 | Everything slow the first time | fastembed downloads its ~70 MB model once |
 
 Status and known gaps: live-key voice/LLM runs and the Cloud Run build haven't been verified yet — see [`specs/verification/spikes.md`](specs/verification/spikes.md).

@@ -6,7 +6,7 @@ A multi-tenant voice AI agent platform. A business unit (a *tenant*) provides **
 2. **Escalates** hard or risky calls to a human with a *groundwork packet* (summary, intent, what was tried, sentiment, next step) so nobody starts from zero.
 3. **Learns**: every escalation is analyzed, recurring gaps are clustered, fixes are drafted from what human specialists actually said, proven by simulated replays, and published after a human approves.
 
-The demo domain is **Evergreen Health**, a fictional health insurer. All data is synthetic, never use real PHI. Voice is tested from the browser (no telephony yet); LLMs run on Groq with OpenRouter as a switchable fallback.
+The demo domain is **Evergreen Health**, a fictional health insurer whose business unit *Customer Support & Channels* serves seven use cases: Policy Inquiry & Status, Claims Status Tracking, Document Center & Green Card, Outbound Renewal Calls, Policyholder Onboarding, an Internal Knowledge Assistant and Coverage Information Support ([`specs/product/use-cases.md`](specs/product/use-cases.md)). All data is synthetic, never use real PHI. Voice is tested from the browser (no telephony yet); LLMs run on Groq with OpenRouter as a switchable fallback.
 
 > **This repo is spec-driven.** `specs/` is the source of truth; code is generated from it and changes start there. Read [Spec-driven development](#spec-driven-development) before changing anything.
 
@@ -45,7 +45,7 @@ python scripts/dev.py                  # the whole stack from one terminal (Wind
 | `python scripts/dev.py --check` | Pre-flight checks only (missing tools or dependencies, busy ports, missing keys) |
 | `--api-port N`, `--web-port N`, `--no-reload`, `--install` | Change ports, disable API reload, or run `setup.py --install` first |
 
-Open the web URL, pick a tenant, and follow the three-act script in [`specs/product/demo-script.md`](specs/product/demo-script.md): *resolve* a claim question, *escalate* an appeal with a packet, *learn* the "add a newborn" gap and ship the fix. Use a headset for voice; the **Type** tab is a full fallback.
+Open the web URL, pick a tenant, and follow the three-act script in [`specs/product/demo-script.md`](specs/product/demo-script.md): *resolve* a claim question, *escalate* an appeal with a packet, *learn* the "add a newborn" gap and ship the fix. **Test call** shows a gallery of the seven use cases (select one to see what to say and which demo caller to use), places **outbound** renewal and onboarding calls (the agent speaks first), and its **Live controls** switch the persona and the turn detection (normal or semantic) in the middle of a call. Use a headset for voice; the **Type** tab is a full fallback.
 
 **No Deepgram key yet?** Set only `GROQ_API_KEY` and use the **Type** tab on *Test call*: everything works except the microphone (the launcher prints a warning, not an error). OpenRouter-only and no-LLM-key setups are in [`specs/build/runbook-local.md`](specs/build/runbook-local.md#running-without-some-keys); the launcher reference is [`specs/build/dev-launcher.md`](specs/build/dev-launcher.md).
 
@@ -98,12 +98,12 @@ Rules of the road (details in [`specs/process/sdd-workflow.md`](specs/process/sd
 ### Example: adding a feature
 
 ```text
-/spec-change Let callers ask for their ID card to be emailed instead of mailed
-   → creates specs/changes/cp-0003-email-id-card.md, edits specs/architecture/tools-and-skills.md
-     and specs/api/mock-healthcare-api.md, adds acceptance IDs (e.g. MOCK-05), logs it. No code yet.
+/spec-change Let callers request a premium invoice for a previous year
+   → creates specs/changes/cp-0008-past-premium-invoices.md, edits specs/architecture/tools-and-skills.md
+     and specs/api/mock-healthcare-api.md, adds acceptance IDs (e.g. MOCK-13), logs it. No code yet.
 You: review `git diff specs/`, tweak, set cp_state: accepted
-/spec-implement CP-0003
-   → mock API + tool + skill + tests ("Covers: MOCK-05"), checks green, specs stable, one commit.
+/spec-implement CP-0008
+   → mock API + tool + skill + tests ("Covers: MOCK-13"), checks green, specs stable, one commit.
 ```
 
 ---

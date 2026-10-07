@@ -13,7 +13,7 @@ from voiceai.live import LiveControls
 from voiceai.voice.processors import BrainProcessor, TurnAggregator, UserTurnFrame
 from voiceai.voice.turn_detection import TurnEvaluator, TurnSettings, expected_slots, heuristic_verdict
 
-H = {"X-Tenant-Id": "evergreen-members"}
+H = {"X-Tenant-Id": "evergreen-care"}
 
 
 def make_aggregator(**turn):  # noqa: ANN003, ANN202
@@ -181,7 +181,7 @@ async def test_interruptions_can_be_disabled():
 
 async def test_turn_detection_bounds_are_validated(client, seeded):
     """Covers: TD-08"""
-    agent_id = seeded["evergreen-members"]["agent_id"]
+    agent_id = seeded["care"]["agent_id"]
     cfg = (await client.get(f"/api/agents/{agent_id}", headers=H)).json()["draft_config"]
     for bad in ({"min_silence_ms": 100}, {"max_extra_wait_ms": 9000}, {"mode": "psychic"}, {"evaluator": "oracle"}):
         body = {**cfg, "voice": {"turn_detection": {**cfg["voice"]["turn_detection"], **bad}}}

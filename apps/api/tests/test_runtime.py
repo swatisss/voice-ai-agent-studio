@@ -14,12 +14,12 @@ from voiceai.llm.gateway import FakeReply, LLMError
 from voiceai.models import Agent, Call, CallEvent, Escalation, Job
 from voiceai.runtime.session import AgentSession
 
-H = {"X-Tenant-Id": "evergreen-members"}
+H = {"X-Tenant-Id": "evergreen-care"}
 VERIFY = ("verify_member", {"member_id": "482913", "date_of_birth": "1986-04-12"})
 
 
 async def _start(client, seeded, channel: str = "text") -> str:  # noqa: ANN001
-    r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["evergreen-members"]["agent_id"], "channel": channel})
+    r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["care"]["agent_id"], "channel": channel})
     assert r.status_code == 200, r.text
     return r.json()["call_id"]
 
@@ -37,7 +37,7 @@ async def _say(client, call_id: str, text: str) -> dict[str, Any]:  # noqa: ANN0
 
 async def test_greeting_then_disclosure(client, seeded):
     """Covers: RT-01"""
-    r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["evergreen-members"]["agent_id"], "channel": "text"})
+    r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})
     assert r.json()["greeting"].startswith("Thanks for calling Evergreen Health member services, this is Ava. I'm a virtual assistant")
 
 
@@ -166,11 +166,11 @@ async def test_text_and_simulation_behave_identically(client, seeded, fake_llm):
     await _say(client, text_id, "482913 April 12 1986")
     fake_llm(make())
     async with sessionmaker()() as s:
-        call = Call(tenant_id="evergreen-members", agent_id=seeded["evergreen-members"]["agent_id"],
-                    agent_version_id=seeded["evergreen-members"]["version_id"], channel="simulation", is_eval=True)
+        call = Call(tenant_id="evergreen-care", agent_id=seeded["care"]["agent_id"],
+                    agent_version_id=seeded["care"]["version_id"], channel="simulation", is_eval=True)
         s.add(call)
         await s.commit()
-    sim = await AgentSession.open(call.id, "evergreen-members")
+    sim = await AgentSession.open(call.id, "evergreen-care")
     await sim.start()
     await sim.reply("482913 April 12 1986")
     strip = lambda evs: [(e.kind, e.text, e.data.get("name")) for e in evs]  # noqa: E731
@@ -180,7 +180,7 @@ async def test_text_and_simulation_behave_identically(client, seeded, fake_llm):
 async def test_unpublished_agent_and_wrong_channel(client, seeded):
     """Covers: API-01, API-02, API-03"""
     async with sessionmaker()() as s:
-        a = Agent(tenant_id="evergreen-members", name="Draft only", draft_config={})
+        a = Agent(tenant_id="evergreen-care", name="Draft only", draft_config={})
         s.add(a)
         await s.commit()
     r = await client.post("/api/calls", headers=H, json={"agent_id": a.id, "channel": "text"})

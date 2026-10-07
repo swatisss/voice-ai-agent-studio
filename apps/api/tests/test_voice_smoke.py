@@ -33,14 +33,14 @@ def sync_client(app, tmp_path, monkeypatch):  # noqa: ANN001, ANN201
 def test_websocket_close_codes(sync_client):
     """Covers: VO-04, VO-05"""
     with pytest.raises(WebSocketDisconnect) as exc:
-        with sync_client.websocket_connect("/api/voice/doesnotexist?tenant=evergreen-members") as ws:
+        with sync_client.websocket_connect("/api/voice/doesnotexist?tenant=evergreen-care") as ws:
             ws.receive_text()
     assert exc.value.code == 4404
-    agent_id = sync_client.get("/api/agents", headers={"X-Tenant-Id": "evergreen-members"}).json()["items"][0]["id"]
-    call_id = sync_client.post("/api/calls", headers={"X-Tenant-Id": "evergreen-members"},
+    agent_id = sync_client.get("/api/agents", headers={"X-Tenant-Id": "evergreen-care"}).json()["items"][0]["id"]
+    call_id = sync_client.post("/api/calls", headers={"X-Tenant-Id": "evergreen-care"},
                                json={"agent_id": agent_id, "channel": "voice"}).json()["call_id"]
     with pytest.raises(WebSocketDisconnect) as exc:
-        with sync_client.websocket_connect(f"/api/voice/{call_id}?tenant=evergreen-members") as ws:
+        with sync_client.websocket_connect(f"/api/voice/{call_id}?tenant=evergreen-care") as ws:
             ws.receive_text()
     assert exc.value.code == 4500
     assert sync_client.get("/healthz").json()["status"] == "ok"

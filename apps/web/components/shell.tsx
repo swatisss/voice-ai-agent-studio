@@ -62,13 +62,14 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => { setMenuOpen(false); }, [path]);
 
   const brand = brandOf(tenants.find((t) => t.id === tenant)?.name ?? "Voice Agent Studio");
-  const items = NAV.map(({ href, label, icon: Icon, badge }) => {
+  // compact: between 768 and 1279 px only the active item keeps its label so the bar fits (design-system: Navigation)
+  const renderItems = (compact: boolean) => NAV.map(({ href, label, icon: Icon, badge }) => {
     const active = href === "/" ? path === "/" : path.startsWith(href);
     const count = badge === "console" ? waiting : badge === "insights" ? ready : 0;
     return (
-      <Link key={href} href={href} className="nav-link" aria-current={active ? "page" : undefined}>
+      <Link key={href} href={href} className="nav-link" aria-current={active ? "page" : undefined} aria-label={compact ? label : undefined} title={compact ? label : undefined}>
         <Icon size={18} aria-hidden="true" />
-        <span>{label}</span>
+        <span className={compact && !active ? "hidden xl:inline" : undefined}>{label}</span>
         {count > 0 && <Badge tone={badge === "console" ? "warn" : "accent"}>{count}</Badge>}
       </Link>
     );
@@ -79,7 +80,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <ToastProvider>
         <a href="#main" className="skip-link">Skip to content</a>
         <header className="sticky top-0 z-30 border-b border-line bg-panel shadow-[var(--shadow)]">
-          <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 md:px-6">
+          <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 md:px-6 xl:gap-6">
             <Link href="/" className="flex items-center gap-3 py-3" aria-label={`${brand} home`}>
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-on-accent"><HeartPulse size={22} aria-hidden="true" /></span>
               <span className="whitespace-nowrap leading-tight">
@@ -87,7 +88,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 <span className="block text-xs text-muted">Voice Agent Studio</span>
               </span>
             </Link>
-            <nav className="hidden items-center gap-5 md:flex" aria-label="Primary">{items}</nav>
+            <nav className="hidden items-center gap-3 md:flex xl:gap-5" aria-label="Primary">{renderItems(true)}</nav>
             <div className="ml-auto flex items-center gap-3">
               <label className="sr-only" htmlFor="business-unit">Business unit</label>
               <Select id="business-unit" className="max-w-[13rem]" value={tenant} onChange={(e) => setTenant(e.target.value)}>
@@ -105,7 +106,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </button>
             </div>
           </div>
-          {menuOpen && <nav className="flex flex-col gap-1 border-t border-line px-4 pb-3 md:hidden" aria-label="Primary (menu)">{items}</nav>}
+          {menuOpen && <nav className="flex flex-col gap-1 border-t border-line px-4 pb-3 md:hidden" aria-label="Primary (menu)">{renderItems(false)}</nav>}
         </header>
         <main id="main" className="mx-auto w-full max-w-7xl p-4 md:p-6">
           {tenant ? children : <div className="text-sm text-muted">Loading business units… (is the API running?)</div>}

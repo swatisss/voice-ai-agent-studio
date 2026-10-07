@@ -19,8 +19,10 @@ from voiceai.knowledge import okf
 from voiceai.knowledge.embeddings import embed
 from voiceai.knowledge.ingest import import_okf
 from voiceai.learning.analyze import refresh_stats
+from voiceai.live import persona_dict
+from voiceai.mock import data as mock_data
 from voiceai.models import (
-    Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, Persona, Skill, Tenant, Tool,
+    Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, Persona, Skill, Tenant, Tool, UseCase,
 )
 from voiceai.schemas import FIXABLE
 from voiceai.seed import catalog
@@ -34,8 +36,10 @@ async def seed(reset: bool = False) -> dict[str, Any]:
         from voiceai.db import init_db
 
         await init_db(drop=True)
+    mock_data.reset()  # date-relative business records restart together with the database
     kb_root = get_settings().specs_dir / "demo-data" / "kb"
     summary: dict[str, Any] = {}
+    care = catalog.CARE_TENANT
     async with sessionmaker()() as s:
         if await s.scalar(select(Tenant.id).limit(1)):
             return {"skipped": "database already has tenants"}
@@ -43,41 +47,50 @@ async def seed(reset: bool = False) -> dict[str, Any]:
             s.add(Tenant(**t))
         await s.flush()
 
+        tools = {t["name"]: Tool(tenant_id=care, **t) for t in catalog.TOOLS}
+        personas = {p["name"]: Persona(tenant_id=care, **p) for p in catalog.PERSONAS}
+        s.add_all([*tools.values(), *personas.values()])
+        await s.flush()
+
         agents: dict[str, Agent] = {}
-        for tenant_id, tools_def, skills_def, agent_def, kb_dir in (
-            (catalog.MEMBERS_TENANT, catalog.MEMBER_TOOLS, catalog.MEMBER_SKILLS, catalog.MEMBER_AGENT, "member-services"),
-            (catalog.PHARMACY_TENANT, catalog.PHARMACY_TOOLS, catalog.PHARMACY_SKILLS, catalog.PHARMACY_AGENT, "pharmacy"),
-        ):
-            tools = [Tool(tenant_id=tenant_id, **t) for t in tools_def]
-            skills = [Skill(tenant_id=tenant_id, **k) for k in skills_def]
-            s.add_all(tools + skills)
+        for ad in catalog.AGENTS:
+            skills = [Skill(tenant_id=care, **k) for k in ad["skills"]]
+            s.add_all(skills)
             await s.flush()
-            docs = await import_okf(s, tenant_id, okf.read_dir(kb_root / kb_dir), f"specs/demo-data/kb/{kb_dir}")
-            ap = agent_def["persona"]
-            library = [Persona(tenant_id=tenant_id, name=ap["name"], description=agent_def["description"], voice=ap["voice"], speed=ap.get("speed", 1.0),
-                               greeting=ap["greeting"], disclosure=ap["disclosure"], opening=ap.get("opening", ""), style=ap["style"])]
-            library += [Persona(tenant_id=tenant_id, **extra) for extra in catalog.EXTRA_PERSONAS.get(tenant_id, [])]
-            s.add_all(library)
-            await s.flush()
-            cfg = {
-                "persona_id": library[0].id,
-                "voice": {"turn_detection": catalog.VOICE_DEFAULTS.get(tenant_id, {})},
-                "persona": agent_def["persona"],
-                "policy": agent_def["policy"],
-                "tool_ids": [t.id for t in tools], "skill_ids": [k.id for k in skills],
+            docs = await import_okf(s, care, okf.read_dir(kb_root / ad["kb"]), f"specs/demo-data/kb/{ad['kb']}")
+            persona = personas[ad["persona"]]
+            cfg: dict[str, Any] = {
+                "mode": ad["mode"],
+                "persona_id": persona.id,
+                "persona": {k: v for k, v in persona_dict(persona).items() if k != "id"},
+                "voice": {"turn_detection": ad["turn_detection"]},
+                "policy": ad["policy"],
+                "tool_ids": [tools[n].id for n in ad["tools"]], "skill_ids": [k.id for k in skills],
                 "knowledge_doc_ids": [d.id for d in docs], "models": {"realtime": None},
             }
-            agent = Agent(tenant_id=tenant_id, name=agent_def["name"], description=agent_def["description"], draft_config=cfg)
+            if ad["mode"] == "outbound":
+                cfg["outbound"] = {"targets_url": ad["targets_url"]}
+            agent = Agent(tenant_id=care, name=ad["name"], description=ad["description"], draft_config=cfg)
             s.add(agent)
             await s.flush()
             version = await publish(s, agent, "Initial version")
-            agents[tenant_id] = agent
-            summary[tenant_id] = {"agent_id": agent.id, "version_id": version.id, "tools": len(tools), "skills": len(skills), "docs": len(docs)}
+            agents[ad["key"]] = agent
+            summary[ad["key"]] = {"agent_id": agent.id, "version_id": version.id, "tools": len(ad["tools"]), "skills": len(skills), "docs": len(docs)}
+        summary["tools"] = len(tools)
 
-        member_agent = agents[catalog.MEMBERS_TENANT]
-        for sc in catalog.MEMBER_SCENARIOS:
-            s.add(EvalScenario(tenant_id=catalog.MEMBERS_TENANT, agent_id=member_agent.id, **sc))
-        summary["history_calls"] = await _seed_history(s, member_agent)
+        sandbox_docs = await import_okf(s, catalog.SANDBOX_TENANT, okf.read_dir(kb_root / catalog.SANDBOX_KB), f"specs/demo-data/kb/{catalog.SANDBOX_KB}")
+        summary["sandbox_docs"] = len(sandbox_docs)
+
+        care_agent = agents["care"]
+        for sc in catalog.SCENARIOS:
+            s.add(EvalScenario(tenant_id=care, agent_id=care_agent.id, **sc))
+        for i, uc in enumerate(catalog.USE_CASES, 1):
+            s.add(UseCase(
+                tenant_id=care, agent_id=agents[uc["agent"]].id, category=catalog.CATEGORY, title=uc["title"], summary=uc["summary"],
+                channels=["voice", "chat"], sample_utterances=uc["sample_utterances"], demo_callers=uc["demo_callers"], sort=i,
+            ))
+        summary["use_cases"] = len(catalog.USE_CASES)
+        summary["history_calls"] = await _seed_history(s, care_agent)
         await s.commit()
     log.info("seeded: %s", summary)
     return summary
@@ -90,7 +103,7 @@ async def _seed_history(s, agent: Agent) -> int:  # noqa: ANN001
     for sc in calls:
         turns = sum(1 for k, _, _ in sc.events if k == "user")
         call = Call(
-            tenant_id=agent.tenant_id, agent_id=agent.id, agent_version_id=version_id, channel="voice",
+            tenant_id=agent.tenant_id, agent_id=agent.id, agent_version_id=version_id, channel="voice", direction="inbound",
             status="ended", outcome=sc.outcome, caller_ref=sc.member_ref, started_at=sc.started_at,
             ended_at=sc.started_at + timedelta(seconds=40 + 25 * turns), end_reason="hangup" if sc.outcome != "resolved" else "end_call",
             turn_count=turns, tokens_in=1800 * max(turns, 1), tokens_out=60 * max(turns, 1), llm_cost_usd=sc.cost,

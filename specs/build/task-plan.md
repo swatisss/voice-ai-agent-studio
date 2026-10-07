@@ -16,7 +16,7 @@ Work top to bottom; each task ends green (`spec_check`, tests, web build where r
 | T03 | Event bus, SSE endpoint, job queue and worker | [/architecture/jobs-and-events.md](/architecture/jobs-and-events.md), [/api/events.md](/api/events.md) | JB-01…05 | done |
 | T04 | LLM gateway, `models.yaml`, fake provider | [/architecture/llm-gateway.md](/architecture/llm-gateway.md) | LG-01…06 | done |
 | T05 | Knowledge ingest (text/file/url/OKF), chunking, embeddings, search | [/architecture/knowledge.md](/architecture/knowledge.md) | KN-01…06 | done |
-| T06 | Mock healthcare and pharmacy API | [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md), [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md) | MOCK-01…04 | done |
+| T06 | Mock healthcare and insurance API | [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md), [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md) | MOCK-01…04 | done |
 | T07 | Tool executor (gate, URL rendering, in-process ASGI), tools/skills CRUD | [/architecture/tools-and-skills.md](/architecture/tools-and-skills.md) | TS-01…08 | done |
 | T08 | Prompt loader reading `specs/prompts/*.md` | [/prompts/](/prompts/) | — | done |
 | T09 | Agent runtime `AgentSession`; text call endpoints | [/architecture/agent-runtime.md](/architecture/agent-runtime.md), [/api/rest-api.md](/api/rest-api.md) | RT-01…09, API-01…04 | done |

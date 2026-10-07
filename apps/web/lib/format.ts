@@ -26,3 +26,5 @@ export const DISPOSITIONS = ["resolved_by_human", "appeal_filed", "callback_sche
 export const label = (s: string | null | undefined) => (s ? s.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()) : "—");
 export const outcomeTone = (o: string | null | undefined): Tone => (o === "resolved" ? "ok" : o === "escalated" ? "warn" : "neutral");
 export type Tone = "ok" | "warn" | "bad" | "info" | "neutral" | "accent";
+export const MODE_LABEL: Record<string, string> = { inbound: "Inbound", outbound: "Outbound", internal: "Internal" };
+export const MODE_TONE: Record<string, Tone> = { inbound: "accent", outbound: "info", internal: "neutral" };

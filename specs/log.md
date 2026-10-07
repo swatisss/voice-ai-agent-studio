@@ -1,5 +1,14 @@
 # Directory Update Log
 
+## 2026-10-06 (CP-0006 Customer Support & Channels use cases)
+* **Creation**: [CP-0006](changes/cp-0006-customer-support-use-cases.md), [use cases](product/use-cases.md) (UC-02), [call modes](architecture/call-modes.md) (OB-01…06), mode prompts ([inbound](prompts/mode-inbound.md), [outbound](prompts/mode-outbound.md), [internal](prompts/mode-internal.md)); new acceptance prefixes `UC`, `OB`.
+* **Update**: [Members, policies and claims](demo-data/members-and-claims.md) and [Evergreen Health](demo-data/evergreen-health.md) rewritten for the seven use cases (UC-01, UC-03, UC-04); [mock insurance API](api/mock-healthcare-api.md) extended and pharmacy/ID-card endpoints removed (MOCK-05…12); [call history](demo-data/call-history.md) re-expressed in the new intents (UC-05); knowledge bases regrouped per agent (customer care, renewals, onboarding, internal, sandbox), pharmacy removed.
+* **Update**: [REST API](api/rest-api.md) (use cases, outbound targets, `context`, `direction`), [agent config](data/agent-config.md) (`mode`, `outbound`), [data model](data/data-model.md) (`use_cases`, `calls.direction`, 19 tables), [agent runtime](architecture/agent-runtime.md), [system prompt](prompts/agent-system-prompt.md) (`mode_instructions`).
+* **Update**: [Test call](ui/test-call.md) (use-case gallery, outbound placement; UI-24, UI-25), [agent builder](ui/agent-builder.md) (mode; UI-26), [calls](ui/calls.md) (direction); [vision](product/vision.md), [scope](product/scope.md), [glossary](product/glossary.md), [demo script](product/demo-script.md).
+* **Update**: [Conventions](process/conventions.md) - frontmatter values containing a colon and a space must be quoted, and `scripts/spec_check.py` enforces it (SDD-02); seven knowledge articles with unquoted descriptions had been skipped by the OKF importer and are fixed.
+* **Update**: [Design system](ui/design-system.md) and [App shell](ui/app-shell.md) - between 768 and 1279 px only the active navigation item shows its label so the header does not scroll sideways.
+* **Update**: [Evergreen Health](demo-data/evergreen-health.md) - how the spoken opening splits into greeting and disclosure; UC-03 now states the isolation guarantee that tests can check; [call analysis prompt](prompts/call-analysis.md) - intent examples use the new use-case labels.
+
 ## 2026-10-06 (CP-0007 turn detection and personas)
 * **Creation**: [CP-0007](changes/cp-0007-turn-detection-and-personas.md), [turn detection](architecture/turn-detection.md) (TD-01…08), [personas](architecture/personas.md) (PER-01…06), [ADR-0006](decisions/adr-0006-turn-detection.md), [turn end check prompt](prompts/turn-end-check.md), [personas page](ui/personas.md) (UI-21).
 * **Update**: [Voice pipeline](architecture/voice-pipeline.md) — turn aggregation delegated to the turn-detection spec, VAD stop 0.2 s, barge-in setting, TTS live updates, live controls.

@@ -65,7 +65,12 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `evaluator` | `heuristic` or `llm` |
 | `allow_interruptions` | boolean |
 
-The snapshot carries `persona` (resolved, with `id` when from the library) and `voice`.
+The snapshot carries `persona` (resolved, with `id` when from the library), `voice`, `mode` and `outbound`.
+
+# Mode and outbound settings
+
+* `mode`: `inbound` (default), `outbound` or `internal` ([/architecture/call-modes.md](/architecture/call-modes.md)).
+* `outbound.targets_url`: required for outbound agents: a relative (in-process) or absolute URL that returns `{"targets": [{"member_ref", "first_name", "summary", "context"}]}`.
 
 # Tool definition (`tools` row / API body)
 

@@ -25,7 +25,7 @@ from voiceai.errors import ApiError, install_handlers
 from voiceai.jobs import worker
 from voiceai.mock.routes import router as mock_router
 from voiceai.models import Tenant
-from voiceai.routes import agents, calls, console, dashboard, insights, knowledge, meta, personas
+from voiceai.routes import agents, calls, console, dashboard, insights, knowledge, meta, personas, usecases
 from voiceai.runtime import app_ref, escalation
 
 log = logging.getLogger("voiceai")
@@ -90,7 +90,7 @@ def create_app() -> FastAPI:
         allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
         allow_methods=["*"], allow_headers=["*"],
     )
-    for r in (meta.router, agents.router, personas.router, knowledge.router, calls.router, console.router, insights.router, dashboard.router, mock_router):
+    for r in (meta.router, agents.router, personas.router, knowledge.router, calls.router, usecases.router, console.router, insights.router, dashboard.router, mock_router):
         app.include_router(r)
 
     @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

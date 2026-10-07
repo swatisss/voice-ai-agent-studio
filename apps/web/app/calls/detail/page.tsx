@@ -9,7 +9,7 @@ import { useTenant } from "@/components/shell";
 import { Transcript } from "@/components/transcript";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { useApi } from "@/lib/api";
-import { label, maskRef, money, outcomeTone, ROOT_CAUSE, secs, when } from "@/lib/format";
+import { label, maskRef, MODE_LABEL, MODE_TONE, money, outcomeTone, ROOT_CAUSE, secs, when } from "@/lib/format";
 
 export default function Page() {
   return <Suspense fallback={<Spinner />}><CallDetail /></Suspense>;
@@ -30,6 +30,7 @@ function CallDetail() {
         <h1 className="text-xl font-semibold">Call <span className="mono text-base">{c.id.slice(0, 8)}</span></h1>
         {c.outcome ? <Badge tone={outcomeTone(c.outcome)}>{label(c.outcome)}</Badge> : <Badge>{label(c.status)}</Badge>}
         <Badge>{label(c.channel)}</Badge>
+        <Badge tone={MODE_TONE[c.direction] ?? "neutral"}>{MODE_LABEL[c.direction] ?? "Inbound"}</Badge>
         {c.agent_version && <Badge tone="ok">v{c.agent_version}</Badge>}
       </div>
       <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-6">

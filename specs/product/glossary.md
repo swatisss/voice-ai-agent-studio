@@ -9,7 +9,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 | Term | Meaning |
 |---|---|
-| **Tenant** | A business unit using the platform (e.g. *Evergreen Health · Member Services*). All data is scoped to one tenant. |
+| **Tenant** | A business unit using the platform (e.g. *Evergreen Health · Customer Support & Channels*). All data is scoped to one tenant. |
 | **Agent** | A configured AI agent: persona + policy + knowledge + tools + skills + model choice. Has an editable **draft** and published **versions**. |
 | **Agent version** | Immutable snapshot of an agent's config. Every call records the version that handled it. |
 | **Persona** | Name, voice, greeting, speaking style and disclosure line. |
@@ -31,4 +31,10 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | **Eval run** | Simulated replay of a cluster's cases plus regression scenarios against the current version (baseline) and the proposal (candidate), graded by a judge. |
 | **Regression scenario** | A saved caller goal the agent already handles; must keep passing. |
 | **Role (LLM)** | A job the LLM does: `realtime`, `analysis`, `drafting`, `simulator`, `judge`. Each maps to a provider + model. |
+| **Use case** | A named support scenario (for example *Document Center & Green Card*) linked to an agent, with sample utterances and demo callers ([/product/use-cases.md](/product/use-cases.md)). |
+| **Call mode** | `inbound` (customer calls in), `outbound` (the agent places the call) or `internal` (staff-facing assistant) ([/architecture/call-modes.md](/architecture/call-modes.md)). |
+| **Call context** | Facts about whom an outbound call is to (first name, policy, renewal details); never marks the callee as verified. |
+| **Green Card** | The international motor insurance certificate proving motor cover when driving abroad. |
+| **Turn detection** | How the voice pipeline decides the caller has finished speaking: normal (silence) or semantic ([/architecture/turn-detection.md](/architecture/turn-detection.md)). |
+| **Live controls** | Persona and turn-detection settings changed while a test call is running. |
 | **OKF** | Open Knowledge Format — Markdown + YAML frontmatter bundle format used for these specs and importable as knowledge. |

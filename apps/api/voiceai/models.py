@@ -1,4 +1,4 @@
-"""ORM models - the 17 tables of the data model.
+"""ORM models - the 19 tables of the data model.
 
 Spec: /data/data-model.md
 """
@@ -137,6 +137,7 @@ class Call(Base):
     agent_id: Mapped[str] = mapped_column(String(32), index=True)
     agent_version_id: Mapped[str] = mapped_column(String(32))
     channel: Mapped[str] = mapped_column(String(16))
+    direction: Mapped[str] = mapped_column(String(16), default="inbound", index=True)
     status: Mapped[str] = mapped_column(String(16), default="active")
     outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
     caller_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -282,6 +283,21 @@ class EvalScenario(Base):
     caller_goal: Mapped[str] = mapped_column(Text)
     caller_profile: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     expected: Mapped[str] = mapped_column(String(16), default="resolved")
+    created_at: Mapped[datetime] = _created()
+
+
+class UseCase(Base):
+    __tablename__ = "use_cases"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    category: Mapped[str] = mapped_column(String(120), default="")
+    title: Mapped[str] = mapped_column(String(200))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    channels: Mapped[list[str]] = mapped_column(JSON, default=list)
+    sample_utterances: Mapped[list[str]] = mapped_column(JSON, default=list)
+    demo_callers: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    sort: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = _created()
 
 

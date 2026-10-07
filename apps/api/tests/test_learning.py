@@ -17,7 +17,7 @@ from voiceai.llm.gateway import FakeReply
 from voiceai.models import Agent, AgentVersion, Call, CallAnalysis, CallEvent, Cluster, EvalResult, Job, KnowledgeDoc
 from voiceai.schemas import AnalysisOut, JudgeOut
 
-H = {"X-Tenant-Id": "evergreen-members"}
+H = {"X-Tenant-Id": "evergreen-care"}
 ARTICLE = {
     "kind": "knowledge_article", "title": "Adding a newborn to your coverage", "rationale": "Specialists consistently explained the 60-day rule.",
     "article": {"title": "Adding a newborn to your coverage",
@@ -58,7 +58,7 @@ async def _cluster(client, name: str) -> dict:  # noqa: ANN001
 async def test_analyze_call_job(client, seeded, fake_llm):
     """Covers: FL-01"""
     fake_llm(responder())
-    r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["evergreen-members"]["agent_id"], "channel": "text"})
+    r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})
     call_id = r.json()["call_id"]
     await client.post(f"/api/calls/{call_id}/messages", headers=H, json={"text": "claim status?"})
     await client.post(f"/api/calls/{call_id}/end", headers=H)
@@ -71,12 +71,12 @@ async def test_analyze_call_job(client, seeded, fake_llm):
 async def test_clustering_join_and_new(client, seeded, fake_llm):
     """Covers: FL-02, FL-03"""
     fake_llm(responder())
-    agent_id = seeded["evergreen-members"]["agent_id"]
+    agent_id = seeded["care"]["agent_id"]
     async with sessionmaker()() as s:
         newborn = await s.scalar(select(Cluster).where(Cluster.name == "Adding a newborn to coverage"))
         before = newborn.escalation_count
         for gap in ("How to add a newborn to an existing plan", "Updating my mailing address after a move"):
-            call = Call(tenant_id="evergreen-members", agent_id=agent_id, agent_version_id=seeded["evergreen-members"]["version_id"], channel="text")
+            call = Call(tenant_id="evergreen-care", agent_id=agent_id, agent_version_id=seeded["care"]["version_id"], channel="text")
             s.add(call)
             await s.flush()
             a = await save_analysis(s, call, AnalysisOut(outcome="escalated", intent="x", root_cause="missing_knowledge", gap_summary=gap), "llm")
@@ -116,8 +116,8 @@ async def test_draft_fix_creates_draft_article(client, seeded, fake_llm):
 async def test_eval_then_approve(client, seeded, fake_llm):
     """Covers: EV-01, EV-02, EV-03, EV-06, FL-07, API-04"""
     pid = await _draft(client, fake_llm)
-    sub = bus.subscribe("evergreen-members", {"insights"})
-    agent_id = seeded["evergreen-members"]["agent_id"]
+    sub = bus.subscribe("evergreen-care", {"insights"})
+    agent_id = seeded["care"]["agent_id"]
     async with sessionmaker()() as s:
         versions_before = await s.scalar(select(func.count()).select_from(AgentVersion).where(AgentVersion.agent_id == agent_id))
     assert (await client.post(f"/api/proposals/{pid}/evaluate", headers=H)).status_code == 200
@@ -153,7 +153,7 @@ async def test_eval_then_approve(client, seeded, fake_llm):
 
 async def test_regression_failure_blocks_approval(client, seeded, fake_llm):
     """Covers: FL-06"""
-    pid = await _draft(client, fake_llm, judge_fail_case="lost your insurance card")
+    pid = await _draft(client, fake_llm, judge_fail_case="Green Card")
     await client.post(f"/api/proposals/{pid}/evaluate", headers=H)
     await jobs.drain()
     r = await client.post(f"/api/proposals/{pid}/approve", headers=H, json={"decided_by": "Reviewer"})
@@ -183,7 +183,7 @@ async def test_reanalysis_after_resolution(client, seeded, fake_llm):
     """Covers: FL-08"""
     fake_llm(lambda role, m, t: FakeReply(tool_calls=[("escalate_to_human", {"reason_category": "caller_requested", "reason_detail": "person"})])
              if role == "realtime" else responder()(role, m, t))
-    r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["evergreen-members"]["agent_id"], "channel": "text"})
+    r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})
     call_id = r.json()["call_id"]
     await client.post(f"/api/calls/{call_id}/messages", headers=H, json={"text": "a person please"})
     await client.post(f"/api/calls/{call_id}/end", headers=H)

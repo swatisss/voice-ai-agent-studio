@@ -32,6 +32,10 @@ Behavior MUST NOT differ between channels except: voice may emit a short *filler
 
 A session is constructed from a `call` row and the **config snapshot** of the agent version (or a candidate config during evaluation). It never reads the agent's draft.
 
+# Call modes
+
+A session knows its agent's `mode` (`inbound`, `outbound`, `internal`) and, for outbound calls, the call `context`. `start()` returns the persona greeting plus disclosure for inbound and internal calls, and the rendered persona **opening** for outbound calls. The mode prompt is part of the system prompt. Identity verification state is never inferred from the context. See [/architecture/call-modes.md](/architecture/call-modes.md).
+
 # Turn algorithm
 
 1. Record the `user` event; increment `turns`.

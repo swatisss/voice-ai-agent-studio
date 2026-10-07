@@ -9,7 +9,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Agents list (`/agents/`)
 
-Cards: name, description, published version (or "Not published"), updated time; actions **Open**, **Test**. Button **New agent** (modal: name, description) creates an agent with default persona/policy and opens it.
+Cards: name, description, **mode badge** (Inbound / Outbound / Internal), published version (or "Not published"), updated time; actions **Open**, **Test**. Button **New agent** (modal: name, description) creates an agent with default persona/policy and opens it.
 
 # Builder (`/agents/edit/?id=…`)
 
@@ -19,7 +19,7 @@ Tabs:
 
 | Tab | Content |
 |---|---|
-| Overview | Name, description, realtime model select (`GET /api/models`, "Default (role setting)" first), counts of docs/tools/skills |
+| Overview | Name, description, realtime model select (`GET /api/models`, "Default (role setting)" first), counts of docs/tools/skills; **mode** select (Inbound / Outbound / Internal) and, for outbound agents, the **targets URL** |
 | Persona | Choose a **library persona** (select, with a read-only summary and a link to the Personas page). Agents without a library persona edit the inline persona fields (name, voice, speed, greeting, disclosure, outbound opening, style) as before. |
 | Policy | editable lists (rules, escalate when, never), max turns, handoff and holding messages, safety screen toggle, voice filler toggle |
 | Voice | **Turn detection**: two selectable cards, *Normal detection* ("ends the turn after a silence") and *Semantic detection* ("also understands whether the caller has finished"); sliders for silence threshold (200–2000 ms) and, in semantic mode, extra wait (0–4000 ms); evaluator choice (*Local rules* / *LLM check*, with a note that it adds a small model call); *Allow the caller to interrupt* toggle. Values save with the draft and are versioned on publish. |
@@ -34,5 +34,6 @@ Unsaved changes show a sticky bar "Unsaved changes — Save draft". Navigating a
 
 - **UI-05** — Given an agent with a skill requiring a tool that is not attached, when Publish is clicked, then the modal shows the API error naming the missing tool and no version is created.
 - **UI-06** — Given the Knowledge tab, when a `.zip` OKF bundle is uploaded, then each imported doc appears in the list with source "OKF".
+- **UI-26** — Given the Agents list and an agent's Overview tab, then each agent shows its mode, and changing the mode and targets URL saves with the draft and is part of the published version.
 - **UI-22** — Given the Voice tab, when *Semantic detection* is selected, then the extra-wait and evaluator controls appear (hidden in *Normal detection*), and after Save draft and Publish the new version's snapshot contains the chosen values.
 - **UI-07** — Given the Knowledge tab, when "Test search" is run with an unrelated query, then the panel shows "No answer — the agent would offer a specialist".

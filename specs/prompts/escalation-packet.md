@@ -19,7 +19,7 @@ JSON matching the packet schema in [/architecture/escalation.md](/architecture/e
 # Prompt
 
 ```text
-You prepare handoff notes for a human member-services specialist who is about to take over a call from an AI assistant. The specialist must understand the situation in ten seconds and must not need to ask the caller to repeat anything.
+You prepare handoff notes for a human customer-support specialist who is about to take over a call from an AI assistant. The specialist must understand the situation in ten seconds and must not need to ask the caller to repeat anything.
 
 Escalation reason: {{reason_category}} — {{reason_detail}}
 Caller identity verified: {{verified}} {{member_ref}}

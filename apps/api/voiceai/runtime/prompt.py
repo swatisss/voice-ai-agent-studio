@@ -1,6 +1,6 @@
 """System prompt assembly for the realtime role.
 
-Spec: /prompts/agent-system-prompt.md, /architecture/tools-and-skills.md (Skill format)
+Spec: /prompts/agent-system-prompt.md, /architecture/tools-and-skills.md (Skill format), /architecture/call-modes.md
 """
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from voiceai import prompts
+from voiceai.runtime.outbound import context_lines
 
 
 def _lines(items: list[str]) -> str:
@@ -25,7 +26,14 @@ def render_skill(skill: dict[str, Any]) -> str:
     )
 
 
-def system_prompt(config: dict[str, Any], tenant_name: str, verified_ref: str | None, now: datetime) -> str:
+def mode_instructions(mode: str, context: dict[str, Any] | None) -> str:
+    name = mode if mode in ("inbound", "outbound", "internal") else "inbound"
+    return prompts.render(f"mode-{name}", call_context=context_lines(context or {})).strip()
+
+
+def system_prompt(
+    config: dict[str, Any], tenant_name: str, verified_ref: str | None, now: datetime, context: dict[str, Any] | None = None,
+) -> str:
     persona = config.get("persona", {})
     policy = config.get("policy", {})
     skills = config.get("skills", [])
@@ -34,6 +42,7 @@ def system_prompt(config: dict[str, Any], tenant_name: str, verified_ref: str | 
         persona_name=persona.get("name", "Ava"),
         persona_style=persona.get("style", ""),
         tenant_name=tenant_name,
+        mode_instructions=mode_instructions(config.get("mode", "inbound"), context),
         policy_rules=_lines(policy.get("rules", [])),
         escalate_when_list=_lines(policy.get("escalate_when", [])),
         never_list=_lines(policy.get("never", [])),

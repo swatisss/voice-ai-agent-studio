@@ -33,7 +33,7 @@ Transcript:
 
 Return JSON with:
 - outcome: "resolved" if the assistant fully handled the caller's request without a human; "escalated" if the call was handed to a human; "abandoned" if the caller left before resolution without escalation.
-- intent: snake_case label of the caller's main goal (claim_status, benefits_deductible, id_card_replacement, find_provider, claim_appeal, add_dependent_newborn, prior_auth_status, ...).
+- intent: snake_case label of the caller's main goal (policy_status, claim_status, document_request, coverage_question, find_provider, claim_appeal, add_dependent_newborn, prior_auth_status, ...).
 - root_cause: for resolved calls "none". Otherwise exactly one of:
   missing_knowledge (the assistant lacked approved information to answer),
   missing_skill (the request needed an action or lookup the assistant had no tool for),

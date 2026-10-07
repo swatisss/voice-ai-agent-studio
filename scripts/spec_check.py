@@ -65,6 +65,21 @@ def parse_frontmatter(text: str) -> dict[str, str] | None:
     return fields
 
 
+def frontmatter_yaml_problems(text: str) -> list[str]:
+    """Plain (unquoted) scalars containing ': ' are invalid YAML; the OKF importer would skip such a file."""
+    lines = text.splitlines()
+    try:
+        end = lines[1:].index("---") + 1
+    except ValueError:
+        return []
+    problems = []
+    for line in lines[1:end]:
+        m = re.match(r"^([A-Za-z_][\w-]*):\s+(.*)$", line)
+        if m and ": " in m.group(2) and not m.group(2).lstrip().startswith(('"', "'", "{", "[", "|", ">")):
+            problems.append(m.group(1))
+    return problems
+
+
 class Report:
     def __init__(self) -> None:
         self.errors: list[str] = []
@@ -105,6 +120,8 @@ def lint_files(rep: Report) -> list[Path]:
             continue
         if not fm.get("type"):
             rep.err(f"{rel(f)}: frontmatter has no non-empty `type`")
+        for key in frontmatter_yaml_problems(text):
+            rep.err(f"{rel(f)}: frontmatter `{key}` contains ': ' and must be quoted (invalid YAML otherwise)")
         for key in REPO_REQUIRED:
             if not fm.get(key):
                 rep.err(f"{rel(f)}: frontmatter missing `{key}` (repo rule)")

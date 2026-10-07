@@ -10,20 +10,20 @@ from voiceai.db import engine, sessionmaker
 from voiceai.knowledge.ingest import create_doc
 from voiceai.models import AgentVersion, KnowledgeChunk, KnowledgeDoc
 
-M = {"X-Tenant-Id": "evergreen-members"}
-P = {"X-Tenant-Id": "evergreen-pharmacy"}
+M = {"X-Tenant-Id": "evergreen-care"}
+P = {"X-Tenant-Id": "evergreen-sandbox"}
 
 
 async def test_all_tables_exist(database):
     """Covers: DM-01"""
     async with engine().connect() as conn:
         names = await conn.run_sync(lambda c: inspect(c).get_table_names())
-    assert len(names) == 18
+    assert len(names) == 19
 
 
 async def test_versions_and_snapshots(client, seeded):
     """Covers: DM-02, DM-05"""
-    agent_id = seeded["evergreen-members"]["agent_id"]
+    agent_id = seeded["care"]["agent_id"]
     tools = (await client.get("/api/tools", headers=M)).json()["items"]
     tool = next(t for t in tools if t["name"] == "find_providers")
     r = await client.post(f"/api/agents/{agent_id}/publish", headers=M, json={"change_note": "second"})
@@ -52,7 +52,7 @@ async def test_chunks_deleted_with_doc(database):
 
 async def test_config_validation(client, seeded):
     """Covers: DM-04"""
-    agent_id = seeded["evergreen-members"]["agent_id"]
+    agent_id = seeded["care"]["agent_id"]
     cfg = (await client.get(f"/api/agents/{agent_id}", headers=M)).json()["draft_config"]
     cfg["policy"]["max_turns"] = 2
     r = await client.put(f"/api/agents/{agent_id}", headers=M, json={"draft_config": cfg})
@@ -61,12 +61,12 @@ async def test_config_validation(client, seeded):
 
 async def test_cross_tenant_isolation(client, seeded):
     """Covers: MT-01, MT-02, MT-03"""
-    agent_id = seeded["evergreen-members"]["agent_id"]
+    agent_id = seeded["care"]["agent_id"]
     assert (await client.get(f"/api/agents/{agent_id}", headers=P)).status_code == 404
     assert (await client.get("/api/agents")).json()["error"] == "tenant_required"
-    pharmacy_doc = (await client.get("/api/knowledge", headers=P)).json()["items"][0]["id"]
+    sandbox_doc = (await client.get("/api/knowledge", headers=P)).json()["items"][0]["id"]
     cfg = (await client.get(f"/api/agents/{agent_id}", headers=M)).json()["draft_config"]
-    cfg["knowledge_doc_ids"].append(pharmacy_doc)
+    cfg["knowledge_doc_ids"].append(sandbox_doc)
     await client.put(f"/api/agents/{agent_id}", headers=M, json={"draft_config": cfg})
     r = await client.post(f"/api/agents/{agent_id}/publish", headers=M, json={})
     assert r.status_code == 422
@@ -75,16 +75,16 @@ async def test_cross_tenant_isolation(client, seeded):
 async def test_dashboard_is_tenant_scoped(client, seeded):
     """Covers: MT-04"""
     members = (await client.get("/api/dashboard/summary", headers=M)).json()["totals"]["calls"]
-    pharmacy = (await client.get("/api/dashboard/summary", headers=P)).json()["totals"]["calls"]
-    assert members == 123 and pharmacy == 0
+    sandbox = (await client.get("/api/dashboard/summary", headers=P)).json()["totals"]["calls"]
+    assert members == 123 and sandbox == 0
 
 
 async def test_publish_requires_skill_tools(client, seeded):
     """Covers: TS-07"""
-    agent_id = seeded["evergreen-members"]["agent_id"]
+    agent_id = seeded["care"]["agent_id"]
     cfg = (await client.get(f"/api/agents/{agent_id}", headers=M)).json()["draft_config"]
     tools = {t["id"]: t["name"] for t in (await client.get("/api/tools", headers=M)).json()["items"]}
-    cfg["tool_ids"] = [i for i in cfg["tool_ids"] if tools[i] != "request_id_card"]
+    cfg["tool_ids"] = [i for i in cfg["tool_ids"] if tools[i] != "request_document"]
     await client.put(f"/api/agents/{agent_id}", headers=M, json={"draft_config": cfg})
     r = await client.post(f"/api/agents/{agent_id}/publish", headers=M, json={})
-    assert r.status_code == 422 and "request_id_card" in r.json()["detail"]
+    assert r.status_code == 422 and "request_document" in r.json()["detail"]

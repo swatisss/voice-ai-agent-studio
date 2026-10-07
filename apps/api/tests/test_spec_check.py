@@ -80,6 +80,15 @@ def test_missing_type_fails(tmp_path):
     assert any("missing YAML frontmatter" in e for e in _run(_load(tmp_path)).errors)
 
 
+def test_unquoted_colon_in_frontmatter_fails(tmp_path):
+    """Covers: SDD-02"""
+    bad = "---\ntype: Knowledge Article\ntitle: X\ndescription: How it works: the steps\nstatus: stable\n---\n# Body\n"
+    _bundle(tmp_path, {"index.md": "* [a](a.md) - a\n", "a.md": bad})
+    assert any("must be quoted" in e for e in _run(_load(tmp_path)).errors)
+    _bundle(tmp_path, {"a.md": bad.replace("How it works: the steps", '"How it works: the steps"')})
+    assert not any("must be quoted" in e for e in _run(_load(tmp_path)).errors)
+
+
 def test_duplicate_acceptance_ids_fail(tmp_path):
     """Covers: SDD-03"""
     _bundle(tmp_path, {"index.md": "* [a](a.md) - a\n* [b](b.md) - b\n",

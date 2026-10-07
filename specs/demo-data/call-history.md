@@ -1,7 +1,7 @@
 ---
 type: Seed Data
 title: Synthetic call history
-description: Design of the ~120 historical calls seeded for the Member Services agent - volumes, intents, outcomes, clusters, analyses and human resolution notes.
+description: Design of the ~120 historical calls seeded for the Customer Care Agent - volumes, intents, outcomes, clusters, analyses and human resolution notes.
 status: stable
 tags: [demo-data, seed, learning]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
@@ -17,11 +17,11 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 | Intent | Count | Outcome | Root cause | `cluster_key` |
 |---|---|---|---|---|
-| `claim_status` | 30 | resolved | none | — |
-| `benefits_deductible` | 22 | resolved | none | — |
-| `id_card_replacement` | 12 | resolved | none | — |
-| `find_provider` | 10 | resolved | none | — |
-| `copay_question` | 8 | resolved | none | — |
+| `policy_status` | 14 | resolved | none | — |
+| `claim_status` | 26 | resolved | none | — |
+| `document_request` (6 of them Green Card) | 16 | resolved | none | — |
+| `coverage_question` | 20 | resolved | none | — |
+| `find_provider` | 6 | resolved | none | — |
 | `add_dependent_newborn` | 14 | escalated (`knowledge_gap`) | `missing_knowledge` | `newborn` |
 | `prior_auth_status` | 9 | escalated (`capability_gap`) | `missing_skill` | `prior_auth` |
 | `claim_appeal` | 8 | escalated (`policy_required`) | `policy_required` | `appeals` |
@@ -74,3 +74,7 @@ Centroids are the normalized mean of member gap-summary embeddings (computed at 
 * newborn: "Hi, I just had a baby two weeks ago and I need to add her to my insurance." / "How do I put my newborn son on my plan?"
 * prior_auth: "I'm calling to check on a prior authorization for my knee surgery, PA-77930."
 * appeals: "My claim was denied and I want to appeal."
+
+# Acceptance
+
+- **UC-05** — Given the seeded history, when the dashboard summary is requested for `evergreen-care`, then it counts 123 calls (82 resolved, 38 escalated, 3 abandoned), and the clusters *Adding a newborn to coverage* (14 escalations) and *Prior authorization status* (9) are ready for a fix while *Claim denial appeals* is marked as a correct escalation.

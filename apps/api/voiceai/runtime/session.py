@@ -24,7 +24,7 @@ from voiceai.knowledge.search import search as kb_search
 from voiceai.llm.gateway import LLMError, gateway
 from voiceai.live import effective_turn, persona_dict, settings_view
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, Persona, Tenant
-from voiceai.runtime import escalation
+from voiceai.runtime import escalation, outbound
 from voiceai.runtime.prompt import system_prompt
 from voiceai.runtime.state import CallState
 from voiceai.runtime.tools import ToolExecutor, all_schemas, truncate
@@ -54,14 +54,28 @@ def _trim_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 async def create_call(
     s: AsyncSession, tenant_id: str, agent_id: str, channel: str, is_eval: bool = False, live: dict[str, Any] | None = None,
+    context: dict[str, Any] | None = None, app: Any | None = None,
 ) -> Call:
     agent = await s.scalar(select(Agent).where(Agent.id == agent_id, Agent.tenant_id == tenant_id))
     if not agent:
         raise ApiError(404, "agent_not_found", "Agent not found")
     if not agent.published_version_id:  # API-01
         raise ApiError(409, "agent_not_published", "Publish the agent before starting a call")
+    version = await s.get(AgentVersion, agent.published_version_id)
+    config = version.config if version else {}
+    mode = config.get("mode", "inbound")
     meta: dict[str, Any] = {"live": live} if live else {}
-    call = Call(tenant_id=tenant_id, agent_id=agent.id, agent_version_id=agent.published_version_id, channel=channel, is_eval=is_eval, meta=meta)
+    if mode == "outbound" and not is_eval:  # OB-01: the callee must be one of the agent's targets
+        ref = str((context or {}).get("member_ref") or "")
+        targets = await outbound.fetch_targets((config.get("outbound") or {}).get("targets_url", ""), app)
+        target = next((t for t in targets if t["member_ref"] == ref), None)
+        if target is None:
+            raise ApiError(422, "unknown_target", "Choose a person from the outbound target list")
+        meta["context"] = outbound.build_context(target)
+    call = Call(
+        tenant_id=tenant_id, agent_id=agent.id, agent_version_id=agent.published_version_id, channel=channel,
+        direction=mode, is_eval=is_eval, meta=meta,
+    )
     s.add(call)
     await s.flush()
     return call
@@ -71,9 +85,10 @@ class AgentSession:
     def __init__(
         self, *, call: Call, config: dict[str, Any], tenant_name: str, app: Any | None,
         history: list[dict[str, Any]] | None = None, state: CallState | None = None, seq: int = 0,
-        live: dict[str, Any] | None = None,
+        live: dict[str, Any] | None = None, context: dict[str, Any] | None = None,
     ) -> None:
         self.call_id = call.id
+        self.context: dict[str, Any] = dict(context or {})  # outbound call context (OB-01)
         self.tenant_id = call.tenant_id
         self.agent_id = call.agent_id
         self.channel = call.channel
@@ -116,7 +131,7 @@ class AgentSession:
             state = CallState(**meta["state"]) if meta.get("state") else CallState()
             state.ended = state.ended or call.ended_at is not None
             sess = cls(call=call, config=config, tenant_name=tenant.name if tenant else tenant_id, app=app,
-                       history=list(meta.get("history", [])), state=state, seq=seq, live=live)
+                       history=list(meta.get("history", [])), state=state, seq=seq, live=live, context=meta.get("context"))
             sess.base_persona = base_persona
         if not sess.state.ended:
             REGISTRY[call_id] = sess
@@ -172,7 +187,10 @@ class AgentSession:
     # ------------------------------------------------------------ lifecycle
     async def start(self) -> str:
         persona = self.config.get("persona", {})
-        greeting = f"{persona.get('greeting', '').strip()} {persona.get('disclosure', '').strip()}".strip()
+        if self.config.get("mode") == "outbound":  # OB-02: the agent speaks first with the persona opening
+            greeting = outbound.render_opening(persona, self.context, self.tenant_name)
+        else:
+            greeting = f"{persona.get('greeting', '').strip()} {persona.get('disclosure', '').strip()}".strip()
         self.history.append({"role": "assistant", "content": greeting})
         await self._event("assistant", greeting, {"greeting": True})
         await self._persist()
@@ -256,7 +274,7 @@ class AgentSession:
         first_chunk_ms: int | None = None
 
         while True:
-            system = system_prompt(self.config, self.tenant_name, self.state.verified_member_ref, self.started_at)
+            system = system_prompt(self.config, self.tenant_name, self.state.verified_member_ref, self.started_at, self.context)
             messages = [{"role": "system", "content": system}, *_trim_history(self.history)]
             result = None
             round_text = ""

@@ -16,7 +16,7 @@ A digital ID card is always available in the Evergreen Health app and the member
 
 ## Replacement card
 
-A verified member can request a replacement physical card by phone. Replacement cards arrive by mail in 7 to 10 business days at the address on file. There is no charge.
+A verified member can request the membership card from the document center during a call: by email within 15 minutes, as a download link instantly, or by post in 5 to 7 business days to the address on file. There is no charge.
 
 ## New cards
 

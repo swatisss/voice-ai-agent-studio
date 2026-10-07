@@ -28,7 +28,8 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
     except ValidationError as exc:  # DM-04
         first = exc.errors()[0]
         loc = ".".join(str(x) for x in first.get("loc", []))
-        raise ApiError(422, "invalid_config", f"{loc}: {first.get('msg')}") from exc
+        msg = str(first.get("msg", "")).removeprefix("Value error, ")
+        raise ApiError(422, "invalid_config", f"{loc}: {msg}" if loc else msg) from exc
     if cfg.models.realtime and cfg.models.realtime not in gateway().selectable():
         raise ApiError(422, "invalid_config", f"Unknown model '{cfg.models.realtime}'")
     return cfg.model_dump()
@@ -106,6 +107,7 @@ async def publish(
 def agent_out(agent: Agent, version: AgentVersion | None) -> dict[str, Any]:
     return {
         "id": agent.id, "name": agent.name, "description": agent.description, "draft_config": agent.draft_config,
+        "mode": (agent.draft_config or {}).get("mode", "inbound"),
         "published_version": {"id": version.id, "version": version.version, "created_at": version.created_at.isoformat()} if version else None,
         "updated_at": agent.updated_at.isoformat() if agent.updated_at else None,
     }

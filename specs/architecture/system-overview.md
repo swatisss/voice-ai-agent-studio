@@ -33,6 +33,7 @@ External: Groq, OpenRouter (LLM) · Deepgram (STT/TTS)
 | Component | Responsibility | Spec |
 |---|---|---|
 | Agent runtime | Turn loop, prompt assembly, tool execution, state, safety screen, escalation triggers. Shared by voice, text and simulation. | [/architecture/agent-runtime.md](/architecture/agent-runtime.md) |
+| Call modes | Inbound, outbound (the agent places the call) and internal (staff assistant) modes, call context, outbound targets. | [/architecture/call-modes.md](/architecture/call-modes.md) |
 | Voice pipeline | Browser PCM over WebSocket → Silero VAD → Deepgram STT → turn aggregation → runtime → Deepgram TTS → browser; barge-in. | [/architecture/voice-pipeline.md](/architecture/voice-pipeline.md) |
 | LLM gateway | Role → provider/model mapping, streaming, tool calls, JSON outputs, fallback, cost. | [/architecture/llm-gateway.md](/architecture/llm-gateway.md) |
 | Knowledge | Ingest, chunk, embed (local fastembed), search with a no-answer threshold. | [/architecture/knowledge.md](/architecture/knowledge.md) |
@@ -41,7 +42,7 @@ External: Groq, OpenRouter (LLM) · Deepgram (STT/TTS)
 | Fleet learning | Analysis, clustering, impact, fix drafting, approval → new version. | [/architecture/fleet-learning.md](/architecture/fleet-learning.md) |
 | Evaluation | Simulator + judge replays; baseline vs candidate; regressions. | [/architecture/evaluation.md](/architecture/evaluation.md) |
 | Jobs & events | DB-backed job queue; in-process pub/sub streamed as SSE. | [/architecture/jobs-and-events.md](/architecture/jobs-and-events.md) |
-| Mock healthcare API | Members, benefits, claims, prior auths, providers, ID cards, pharmacy. | [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md) |
+| Mock insurance API | Members, policies, coverage, claims, documents and Green Card, renewals, onboarding, outreach lists, internal reference data. | [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md) |
 | Web app | All UI pages. | [/ui/](/ui/) |
 
 # Flow 1 — Resolve

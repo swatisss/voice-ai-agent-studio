@@ -136,6 +136,16 @@ function Overview({ draft, meta, setMeta, update }: TabProps & { meta: { name: s
             {models?.selectable.map((m: string) => <option key={m} value={m}>{m}</option>)}
           </Select>
         </Field>
+        <Field label="Call mode" hint="Inbound: customers call in. Outbound: the agent phones people from a target list. Internal: staff ask questions, no member verification.">
+          <Select value={draft.mode ?? "inbound"} onChange={(e) => update(["mode"], e.target.value)}>
+            <option value="inbound">Inbound</option><option value="outbound">Outbound</option><option value="internal">Internal</option>
+          </Select>
+        </Field>
+        {draft.mode === "outbound" && (
+          <Field label="Targets URL" hint="Returns the people to call: {targets: [{member_ref, first_name, summary, context}]}. Required for outbound agents.">
+            <Input value={draft.outbound?.targets_url ?? ""} placeholder="/mock/insurance/outreach/renewals" onChange={(e) => update(["outbound", "targets_url"], e.target.value)} />
+          </Field>
+        )}
         <div className="md:col-span-2"><Field label="Description"><Textarea value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} /></Field></div>
       </div>
       <div className="mt-4 flex gap-4 text-sm text-muted">
@@ -299,7 +309,7 @@ function KnowledgeTab({ draft, update }: TabProps) {
         </ul>
       </Card>
       <Card title="Test search">
-        <div className="flex gap-2"><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="How do I replace my ID card?" onKeyDown={(e) => e.key === "Enter" && test()} /><Button onClick={test}>Search</Button></div>
+        <div className="flex gap-2"><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="How do I get a Green Card?" onKeyDown={(e) => e.key === "Enter" && test()} /><Button onClick={test}>Search</Button></div>
         {result && (result.no_answer
           ? <div className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">No answer — the agent would offer a specialist</div>
           : <ul className="mt-3 space-y-2">{result.results.map((r: any, i: number) => (

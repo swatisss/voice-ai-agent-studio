@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("reindex", help="re-embed all knowledge chunks")
     ch = sub.add_parser("chat", help="text chat with an agent in the terminal")
     ch.add_argument("--agent", required=True)
-    ch.add_argument("--tenant", default="evergreen-members")
+    ch.add_argument("--tenant", default="evergreen-care")
     ev = sub.add_parser("eval-scenarios", help="run regression scenarios against the published version")
     ev.add_argument("--agent", required=True)
     ev.add_argument("--repeat", type=int, default=1)

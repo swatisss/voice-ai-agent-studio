@@ -25,7 +25,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Agents
 | Method | Path | Body → Result |
 |---|---|---|
-| GET | `/api/agents` | `{items: [{id, name, description, published_version, updated_at}]}` |
+| GET | `/api/agents` | `{items: [{id, name, description, mode, published_version, updated_at}]}` |
 | POST | `/api/agents` | `{name, description, draft_config?}` → agent (default config filled in) |
 | GET | `/api/agents/{id}` | `{id, name, description, draft_config, published_version: {id, version, created_at} \| null}` |
 | PUT | `/api/agents/{id}` | `{name?, description?, draft_config?}` → agent (validated per [/data/agent-config.md](/data/agent-config.md)) |
@@ -61,13 +61,19 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Calls
 | Method | Path | Body → Result |
 |---|---|---|
-| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?}` → `{call_id, greeting, settings}`; 409 if agent unpublished. `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
+| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings}`; 409 if agent unpublished. For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
 | POST | `/api/calls/{id}/messages` | `{text}` → `{reply, call_status, ended, escalated}` (text channel only) |
 | POST | `/api/calls/{id}/end` | → `{status, outcome}` |
 | PATCH | `/api/calls/{id}/live` | `{persona_id?, turn_detection?}` → `{settings}`; changes persona and/or turn detection of a running call (404 unknown, 409 ended, 422 invalid). See [/architecture/personas.md](/architecture/personas.md), [/architecture/turn-detection.md](/architecture/turn-detection.md). |
-| GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `include_seed=true` → `{items: [call summary]}` (eval calls excluded) |
+| GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `direction?`, `include_seed=true` → `{items: [call summary]}` (eval calls excluded) |
 | GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
+
+## Use cases and outbound
+| Method | Path | Result |
+|---|---|---|
+| GET | `/api/use-cases` | `{items: [{id, category, title, summary, channels, mode, agent_id, agent_name, published, sample_utterances, demo_callers}]}` in catalog order ([/product/use-cases.md](/product/use-cases.md)) |
+| GET | `/api/outbound/targets` | query `agent_id` → `{items: [{member_ref, first_name, summary, context}]}` from the agent's `outbound.targets_url`; 409 `not_outbound` for other agents ([/architecture/call-modes.md](/architecture/call-modes.md)) |
 
 ## Escalations (console)
 | Method | Path | Body → Result |

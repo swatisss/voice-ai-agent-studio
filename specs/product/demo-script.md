@@ -1,61 +1,71 @@
 ---
 type: Demo Script
 title: Hackathon demo script
-description: Three-act, about seven-minute demo proving the loop resolve → escalate well → learn, on seeded Evergreen Health data.
+description: About ten minutes - the loop resolve, escalate well, learn on seeded Evergreen Health data, plus a one-minute tour of the other Customer Support & Channels use cases.
 status: stable
 tags: [product, demo]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
+generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---
 
 # Setup (before presenting)
 
-* App running (local or Cloud Run), tenant **Evergreen Health · Member Services** selected, database freshly seeded (`make seed` / `uv run voiceai seed --reset`).
-* Two browser windows: **Test call** (presenter) and **Agent console** (teammate playing the human).
-* Headset microphone. Text chat is the fallback for any audio problem — same agent, same flow.
-* Dashboard open in a third tab showing ~120 historical calls and the containment trend.
+* App running (`python scripts/dev.py` or Cloud Run), business unit **Evergreen Health · Customer Support & Channels** selected, database freshly seeded (`uv run voiceai seed --reset`).
+* Two browser windows: **Test call** (presenter) and **Agent console** (a teammate playing the human).
+* Headset microphone. **Type** is a full fallback for any audio problem — same agents, same flow.
+* Dashboard open in a third tab: 123 historical calls, containment about 68%.
+* On Test call, the use-case gallery lists the seven use cases; selecting one picks its agent and shows what to say.
 
-# Act 1 — Resolve (≈2 min)
+# Act 1 — Resolve (≈2 min): Policy Inquiry & Claims Status
 
-Caller: **Maria Lopez**, member ID `482913` (EVG-482913), DOB **April 12, 1986**.
+Use case **Policy Inquiry & Status**, caller **Maria Lopez**, member ID `482913`, date of birth **April 12, 1986**.
 
 | Caller says | Agent does | Visible |
 |---|---|---|
-| "Hi, I'm calling to check on a claim." | Asks for member ID and date of birth | Live transcript |
-| "It's 4-8-2-9-1-3, April 12th, 1986." | `verify_member` → verified | Tool call chip ✓ |
-| "Claim C-20931." | `get_claim_status` | Tool result |
-| — | "That claim for your dermatology visit on September 10th was paid on September 28th. The plan paid $185 and your share is your $35 specialist copay." | |
-| "How much of my deductible is left?" | `get_benefits` | |
-| — | "You've met $850 of your $1,500 deductible, so $650 remains." | |
-| "That's all, thanks." | `end_call` | Call outcome **Resolved**, cost ≈ $0.01 |
+| "Hi, is my health policy still active, and when does it renew?" | asks for member ID and date of birth | live transcript |
+| "It's 4-8-2-9-1-3, April 12th, 1986." | `verify_member` → `get_member_policies` → `get_policy_details` | tool chips ✓ |
+| — | "Your Silver PPO is active and renews in 25 days. You pay about $212 a month and your next payment is in 9 days." | |
+| "What happened with claim C-20931?" (use case **Claims Status Tracking**) | `get_claim_status` | tool result with timeline |
+| — | "That dermatology visit was paid on September 28th. The plan paid $185 and your share is your $35 specialist copay." | |
+| "That's all, thanks." | `end_call` | outcome **Resolved**, cost about $0.01 |
 
-**Message:** routine call contained end-to-end, grounded in real tool results, identity verified before any PHI.
+With semantic turn detection on (Live controls), dictate the member ID slowly with pauses: the agent waits for all six digits instead of cutting in.
 
 # Act 2 — Escalate with context (≈2 min)
 
-Caller: **James Carter**, member ID `337120`, DOB **November 2, 1979** — speak with frustration.
+Caller **James Carter**, member ID `337120`, date of birth **November 2, 1979**, frustrated.
 
 | Caller says | Agent does |
 |---|---|
-| "My claim for my emergency surgery got denied and I want to appeal. This is ridiculous, I was in the emergency room!" | Empathizes, asks for ID + DOB |
-| "337120, November 2nd 1979." | `verify_member` ✓, `get_member_claims` → finds C-31544 **denied, out-of-network facility** |
-| — | Explains the denial reason; appeals require a specialist per policy → `escalate_to_human(policy_required)` → "I'm connecting you with an appeals specialist who will have all the details — you won't need to repeat yourself." |
+| "My emergency surgery claim was denied and I want to appeal. This is ridiculous!" | empathizes, asks for ID and date of birth |
+| "337120, November 2nd 1979." | `verify_member`, `get_member_claims` → claim C-31544 **denied, out-of-network facility** |
+| — | explains the reason; appeals need a specialist → `escalate_to_human(policy_required)` → "I'm connecting you with a specialist who will have all the details — you won't need to repeat yourself." |
 
-On the **Agent console** the escalation appears instantly; the packet fills in within a second or two: summary, intent `claim_appeal`, claim `C-31544`, already tried (identity verified, claim looked up: denied, out-of-network facility), reason `policy_required`, sentiment *neutral → frustrated*, suggested next action. The teammate clicks **Accept**, reads the packet aloud, then **Resolve** with disposition `appeal_filed` and a note.
-
-**Message:** the agent knows its limits; the human starts with full context.
+On the **Agent console** the escalation appears instantly; the packet fills in within a second or two: summary, intent `claim_appeal`, claim `C-31544`, already tried (identity verified, claim looked up: denied), reason `policy_required`, sentiment *neutral → frustrated*, suggested next action. The teammate clicks **Accept**, reads the packet aloud, then **Resolve** with disposition `appeal_filed` and a note.
 
 # Act 3 — Learn (≈3 min)
 
-1. **Insights** shows clusters from the last four weeks. Top fixable cluster: **"Adding a newborn to coverage"** — 14 escalations, root cause `missing_knowledge`, est. cost/week. Also visible: *Prior authorization status* (`missing_skill`) and *Claim denial appeals* marked **correct escalation — no fix**.
-2. Click **Draft fix** → a knowledge article *"Adding a newborn to your coverage"* is drafted from what human agents told those callers (60-day window, member portal → Life events, retroactive to date of birth, birth record needed).
-3. Click **Run evaluation** → simulated callers replay the cluster's cases against v1 (baseline) and v1 + article (candidate), plus 6 regression scenarios. Expected: baseline ≈ 0 of 6 cluster cases resolved, candidate ≥ 5 of 6, regressions 6 of 6 pass.
-4. Click **Approve** → agent **v2** published; dashboard shows projected containment lift.
-5. Live proof: new test call — *"Hi, I just had a baby last week. How do I add him to my plan?"* → resolved from the new article.
+1. **Insights** shows clusters from the last four weeks. Top fixable cluster: **"Adding a newborn to coverage"** — 14 escalations, root cause `missing_knowledge`, estimated weekly cost. Also: *Prior authorization status* (`missing_skill`) and *Claim denial appeals* marked **correct escalation — no fix**.
+2. **Draft fix** → a knowledge article *"Adding a newborn to your coverage"* is drafted from what human agents told those callers (60-day window, member portal → Life events, retroactive to date of birth, birth record needed).
+3. **Run evaluation** → simulated callers replay the cluster's cases against v1 (baseline) and v1 + article (candidate), plus six regression scenarios. Expected: baseline about 0 of 6 cluster cases resolved, candidate at least 5 of 6, regressions 6 of 6.
+4. **Approve** → Customer Care Agent **v2** published; the dashboard shows the projected lift.
+5. Live proof: new call — *"Hi, I just had a baby last week. How do I add him to my plan?"* → resolved from the new article.
 
-**Message:** "we escalated this a lot" became "we fixed it" — with evidence, and a human in control.
+# Use-case tour (≈1 min each, pick what the audience cares about)
+
+| Use case | Select in the gallery, then | Highlight |
+|---|---|---|
+| **Document Center & Green Card** | James Carter: "I'm driving to Spain next month, I need a Green Card emailed." | collects countries and dates, issues instantly; try "the USA" → not covered → specialist |
+| **Coverage Information Support** | Priya Nair: "How much of my dental allowance is left, is there a waiting period?" | member-specific limit remaining plus the waiting period from knowledge |
+| **Outbound Renewal Calls** | choose *James Carter — motor, +8%* and **Place outbound call** | the agent speaks first, verifies date of birth before any price, explains reasons, offers a higher-excess option, records the decision |
+| **Policyholder Onboarding** | choose *Aisha Okafor — 5 steps left* and **Place outbound call** | walks the checklist, records each step, sends the membership card |
+| **Internal Knowledge Assistant** | "What can a claims handler approve for inpatient?" / "Who do I contact about suspected fraud?" | cites the article, quotes the limit, refuses member-specific data |
+
+# Dynamic controls (≈1 min)
+
+On any voice call open **Live controls**: switch the persona from Ava to Grace mid-call (voice and style change on the next reply), and flip **Normal ↔ Semantic** turn detection to compare how the agent handles a dictated number.
 
 # Fallbacks
 
-* Audio fails → use the **Type** tab in Test call for Acts 1–3 (identical behavior).
+* Audio fails → use the **Type** tab for every act (identical behavior).
 * LLM provider slow → switch the agent's realtime model in the builder (Groq ↔ OpenRouter).
 * Eval takes too long → it streams progress; talk through the per-case results as they arrive.

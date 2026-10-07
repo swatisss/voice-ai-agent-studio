@@ -64,10 +64,11 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: 
   );
 }
 
-const inputCls = "w-full min-h-10 rounded-[10px] border-[1.5px] border-line bg-panel px-3 py-2 text-sm outline-none focus:border-accent";
-export const Input = (p: React.InputHTMLAttributes<HTMLInputElement>) => <input {...p} className={cx(inputCls, p.className)} />;
-export const Textarea = (p: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...p} className={cx(inputCls, "min-h-20", p.className)} />;
-export const Select = (p: React.SelectHTMLAttributes<HTMLSelectElement>) => <select {...p} className={cx(inputCls, p.className)} />;
+const inputCls = "min-h-10 rounded-[10px] border-[1.5px] border-line bg-panel px-3 py-2 text-sm outline-none focus:border-accent";
+const fullWidth = (c?: string) => (c && /(^|\s)w-/.test(c) ? "" : "w-full");  // an explicit w-* class replaces the default full width
+export const Input = (p: React.InputHTMLAttributes<HTMLInputElement>) => <input {...p} className={cx(inputCls, fullWidth(p.className), p.className)} />;
+export const Textarea = (p: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...p} className={cx(inputCls, fullWidth(p.className), "min-h-20", p.className)} />;
+export const Select = (p: React.SelectHTMLAttributes<HTMLSelectElement>) => <select {...p} className={cx(inputCls, fullWidth(p.className), p.className)} />;
 
 export function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string | null; children: ReactNode }) {
   return (

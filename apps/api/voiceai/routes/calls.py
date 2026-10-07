@@ -31,6 +31,7 @@ class CallCreate(BaseModel):
     channel: Literal["voice", "text"] = "text"
     persona_id: str | None = None
     turn_detection: TurnDetectionPatch | None = None
+    context: dict[str, Any] | None = None  # outbound agents: {member_ref} of a listed target (OB-01)
 
 
 class LiveBody(BaseModel):
@@ -52,7 +53,7 @@ class MessageBody(BaseModel):
 def call_summary(c: Call, analysis: CallAnalysis | None = None, version: int | None = None) -> dict[str, Any]:
     return {
         "id": c.id, "agent_id": c.agent_id, "agent_version_id": c.agent_version_id, "agent_version": version,
-        "channel": c.channel, "status": c.status, "outcome": c.outcome, "caller_ref": c.caller_ref,
+        "channel": c.channel, "direction": c.direction, "status": c.status, "outcome": c.outcome, "caller_ref": c.caller_ref,
         "started_at": c.started_at.isoformat() if c.started_at else None,
         "ended_at": c.ended_at.isoformat() if c.ended_at else None, "end_reason": c.end_reason,
         "turn_count": c.turn_count, "tokens_in": c.tokens_in, "tokens_out": c.tokens_out,
@@ -76,7 +77,7 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
         live["persona_id"] = body.persona_id
     if body.turn_detection:
         live["turn_detection"] = body.turn_detection.model_dump(exclude_none=True)
-    call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None)
+    call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None, context=body.context, app=request.app)
     await s.commit()
     greeting = None
     if body.channel == "text":
@@ -141,8 +142,8 @@ async def end_call(call_id: str, request: Request, tenant_id: str = Depends(curr
 
 @router.get("/calls")
 async def list_calls(
-    agent_id: str | None = None, outcome: str | None = None, channel: str | None = None, include_seed: bool = True,
-    tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session),
+    agent_id: str | None = None, outcome: str | None = None, channel: str | None = None, direction: str | None = None,
+    include_seed: bool = True, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session),
 ) -> dict:
     q = (
         select(Call, CallAnalysis, AgentVersion.version)
@@ -158,6 +159,8 @@ async def list_calls(
         q = q.where(Call.outcome == outcome)
     if channel:
         q = q.where(Call.channel == channel)
+    if direction:
+        q = q.where(Call.direction == direction)
     if not include_seed:
         q = q.where(Call.is_seed.is_(False))
     rows = (await s.execute(q)).all()

@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 BUILTIN_TOOLS = {"search_knowledge", "escalate_to_human", "end_call"}
 ESCALATION_CATEGORIES = (
@@ -118,7 +118,13 @@ class ModelChoice(BaseModel):
     realtime: str | None = None
 
 
+class OutboundConfig(BaseModel):
+    targets_url: str = Field(default="", max_length=500)
+
+
 class AgentConfig(BaseModel):
+    mode: Literal["inbound", "outbound", "internal"] = "inbound"
+    outbound: OutboundConfig = Field(default_factory=OutboundConfig)
     persona_id: str | None = None
     persona: Persona = Field(default_factory=Persona)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
@@ -127,6 +133,12 @@ class AgentConfig(BaseModel):
     skill_ids: list[str] = Field(default_factory=list)
     knowledge_doc_ids: list[str] = Field(default_factory=list)
     models: ModelChoice = Field(default_factory=ModelChoice)
+
+    @model_validator(mode="after")
+    def _outbound_needs_targets(self) -> AgentConfig:
+        if self.mode == "outbound" and not self.outbound.targets_url.strip():
+            raise ValueError("outbound agents need outbound.targets_url")
+        return self
 
 
 class ToolDef(BaseModel):

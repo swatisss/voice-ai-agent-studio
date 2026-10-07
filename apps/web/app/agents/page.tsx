@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, EmptyState, Field, Input, Modal, Spinner, Textarea, useToast } from "@/components/ui";
 import { api, ApiError, useApi } from "@/lib/api";
-import { when } from "@/lib/format";
+import { MODE_LABEL, MODE_TONE, when } from "@/lib/format";
 
 export default function AgentsPage() {
   const { tenant } = useTenant();
@@ -48,7 +48,10 @@ export default function AgentsPage() {
                   <div className="font-medium">{a.name}</div>
                   <div className="text-sm text-muted">{a.description}</div>
                 </div>
-                {a.published_version ? <Badge tone="ok">v{a.published_version.version}</Badge> : <Badge>Not published</Badge>}
+                <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                  <Badge tone={MODE_TONE[a.mode] ?? "neutral"}>{MODE_LABEL[a.mode] ?? "Inbound"}</Badge>
+                  {a.published_version ? <Badge tone="ok">v{a.published_version.version}</Badge> : <Badge>Not published</Badge>}
+                </div>
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <Link href={`/agents/edit/?id=${a.id}`}><Button>Open</Button></Link>

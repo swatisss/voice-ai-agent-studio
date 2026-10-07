@@ -9,6 +9,7 @@
 * [Tools and skills](tools-and-skills.md) - HTTP tool definitions, execution, verification gate, skill format
 * [Turn detection](turn-detection.md) - Normal and semantic end-of-turn detection, settings, evaluators, interruptions, live controls
 * [Personas](personas.md) - Tenant persona library, snapshot resolution, per-call overrides and live switching
+* [Call modes](call-modes.md) - Inbound, outbound and internal modes, call context, outbound targets and opening
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios

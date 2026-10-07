@@ -1,4 +1,4 @@
-"""Deterministic synthetic call history for the Member Services agent.
+"""Deterministic synthetic call history for the Customer Care agent.
 
 Spec: /demo-data/call-history.md
 """
@@ -13,10 +13,10 @@ from voiceai.mock import data as mock
 
 GREETING = "Thanks for calling Evergreen Health member services, this is Ava. I'm a virtual assistant, and this call may be recorded for quality. How can I help you today?"
 HANDOFF = "I'm connecting you with a specialist who will have all the details, so you won't need to repeat yourself."
-ASSIGNEES = ["Dana (Member Services)", "Luis (Member Services)", "Morgan (Appeals)"]
+ASSIGNEES = ["Dana (Customer Care)", "Luis (Customer Care)", "Morgan (Appeals)"]
 
 MIX = [  # (intent, count)
-    ("claim_status", 30), ("benefits_deductible", 22), ("id_card_replacement", 12), ("find_provider", 10), ("copay_question", 8),
+    ("policy_status", 14), ("claim_status", 26), ("document_request", 16), ("coverage_question", 20), ("find_provider", 6),
     ("add_dependent_newborn", 14), ("prior_auth_status", 9), ("claim_appeal", 8), ("provider_billing_dispute", 3),
     ("speak_to_person", 4), ("abandoned", 3),
 ]
@@ -75,6 +75,12 @@ GOALS = {
     "caller_requested": "You want to speak with a person.",
 }
 
+GREEN_CARD_CALLS = {1, 3, 6, 8, 11, 14}  # which of the 16 document_request calls ask for a Green Card
+GREEN_CARD_TRIPS = ["Spain", "France", "Italy", "Germany", "Portugal", "Greece"]
+DOCUMENTS = [("policy_schedule", "policy schedule"), ("membership_card", "membership card"), ("premium_invoice", "premium invoice"),
+             ("policy_wording", "policy wording"), ("tax_certificate", "annual premium statement")]
+COVERAGE_BENEFITS = ["dental", "optical", "outpatient", "maternity", "mental_health", "dental", "outpatient", "optical"]
+
 AUTH_OWNERS = {"PA-77930": "EVG-725031", "PA-77812": "EVG-559804", "PA-78001": "EVG-610277"}
 
 
@@ -124,42 +130,92 @@ def _build(intent: str, when: datetime, rng: random.Random, counters: dict[str, 
     idx = counters.setdefault(intent, 0)
     counters[intent] += 1
 
-    if intent == "claim_status":
-        claims = [cid for cid, cl in mock.CLAIMS.items() if cl["member"] == member_ref] or ["C-20931"]
-        if member_ref not in {cl["member"] for cl in mock.CLAIMS.values()}:
+    if intent == "policy_status":
+        pid, pol = next((i, p) for i, p in mock.POLICIES.items() if p["member"] == member_ref and p["type"] == "health")
+        c.events.append(("user", rng.choice(["Hi, is my health policy still active, and when does it renew?", "Can you check my policy status and my next payment date?"]), {}))
+        _verify(c, member_ref)
+        _tool(c, "get_member_policies", {}, {"policies": [{"policy_id": pid, "status": pol["status"], "renewal_date": pol["renewal_date"]}]}, "get_member_policies: 1 policies")
+        _tool(c, "get_policy_details", {"policy_id": pid}, {"policy_id": pid, "status": pol["status"], "payment_status": pol["payment_status"]},
+              f"get_policy_details: policy_id={pid}, status={pol['status']}")
+        ans = f"Your {pol['product']} is {pol['status']} and renews on {date.fromisoformat(pol['renewal_date']):%B} {date.fromisoformat(pol['renewal_date']).day}."
+        if pol["payment_status"] == "overdue":
+            ans += " A payment is overdue, but you are still inside the grace period."
+        c.events += [("assistant", ans, {}), ("user", "Great, thanks.", {}), ("assistant", "Thank you for calling. Take care!", {})]
+        goal, resolution = "You want to know if your health policy is active and when it renews.", ans
+    elif intent == "claim_status":
+        owners = {cl["member"] for cl in mock.CLAIMS.values()}
+        if member_ref not in owners:
             member_ref = "EVG-482913"
-            c.member_ref, claims = member_ref, ["C-20931", "C-20977"]
-        cid = rng.choice(claims)
+            c.member_ref = member_ref
+        cid = rng.choice([cid for cid, cl in mock.CLAIMS.items() if cl["member"] == member_ref])
         cl = mock.CLAIMS[cid]
         c.events.append(("user", "Hi, I'm calling to check on a claim.", {}))
         _verify(c, member_ref)
         c.events += [("assistant", f"Thanks, {mock.MEMBERS[member_ref]['first_name']}. What's the claim number?", {}), ("user", f"It's {cid}.", {})]
-        _tool(c, "get_claim_status", {"claim_id": cid}, {"claim_id": cid, "status": cl["status"]}, f"get_claim_status: status={cl['status']}")
+        _tool(c, "get_claim_status", {"claim_id": cid}, {"claim_id": cid, "status": cl["status"]}, f"get_claim_status: claim_id={cid}, status={cl['status']}")
         if cl["status"] == "paid":
-            ans = f"That claim for {cl['service'].lower()} was paid on {cl['paid_date']}. The plan paid ${cl['plan_paid']:,.0f} and your share is ${cl['member_responsibility']:,.0f}."
+            paid = date.fromisoformat(cl["paid_date"])
+            ans = f"That claim for {cl['service'].lower()} was paid on {paid:%B} {paid.day}. The plan paid ${cl['plan_paid']:,.0f} and your share is ${cl['member_responsibility']:,.0f}."
         elif cl["status"] == "denied":
-            ans = f"That claim was denied: {cl['denial_reason'].lower()}. You can appeal within 180 days."
+            ans = f"That claim was denied: {cl['denial_reason'].lower()}. An appeals specialist can help you appeal."
         else:
-            ans = f"That claim is {cl['status']}." + (f" A decision is expected by {cl['expected_decision_date']}." if cl.get("expected_decision_date") else "")
+            ans = f"That claim is {cl['status']}." + (" A decision is expected within a few days." if "expected_decision_date_offset" in cl else "")
         c.events += [("assistant", ans, {}), ("user", "Great, that's all. Thanks!", {}), ("assistant", "Thank you for calling. Take care!", {})]
         goal, resolution = f"You want to know the status of claim {cid}.", ans
-    elif intent == "benefits_deductible":
-        c.events.append(("user", "How much of my deductible have I met this year?", {}))
+    elif intent == "document_request" and idx in GREEN_CARD_CALLS:
+        member_ref = "EVG-337120"
+        c.member_ref = member_ref
+        country = GREEN_CARD_TRIPS[idx % len(GREEN_CARD_TRIPS)]
+        c.events.append(("user", f"I'm driving to {country} next month and need a Green Card.", {}))
+        _verify(c, member_ref)
+        trip = when.date() + timedelta(days=30)
+        end_trip = trip + timedelta(days=10)
+        args = {"policy_id": "MP-200415", "document_type": "green_card", "delivery": "email", "countries": [country],
+                "travel_start": trip.isoformat(), "travel_end": end_trip.isoformat()}
+        _tool(c, "request_document", args, {"request_id": f"DOC-{900 + idx}", "status": "queued", "eta": "within 15 minutes"}, f"request_document: request_id=DOC-{900 + idx}, status=queued")
+        ans = f"Done. Your Green Card for {country} is valid from {trip:%B} {trip.day} to {end_trip:%B} {end_trip.day} and will be emailed within 15 minutes."
+        c.events += [("assistant", ans, {}), ("user", "Perfect, thank you.", {}), ("assistant", "Thank you for calling. Take care!", {})]
+        goal, resolution = f"You are driving to {country} and want a Green Card for your car policy.", ans
+    elif intent == "document_request":
+        pid, pol = next((i, p) for i, p in mock.POLICIES.items() if p["member"] == member_ref and p["type"] == "health")
+        dtype, title = DOCUMENTS[idx % len(DOCUMENTS)]
+        c.events.append(("user", f"Can you email me my {title}?", {}))
+        _verify(c, member_ref)
+        _tool(c, "request_document", {"policy_id": pid, "document_type": dtype, "delivery": "email"}, {"request_id": f"DOC-{800 + idx}", "status": "queued", "eta": "within 15 minutes"},
+              f"request_document: request_id=DOC-{800 + idx}, status=queued")
+        ans = f"I've emailed your {title} to the address on file. It should arrive within 15 minutes."
+        c.events += [("assistant", ans, {}), ("user", "Thanks, that's all.", {}), ("assistant", "Thank you for calling. Take care!", {})]
+        goal, resolution = f"You want your {title} emailed to you.", ans
+    elif intent == "coverage_question" and idx % 4 == 3:
+        visit = rng.choice(["specialist", "urgent_care", "primary_care"])
+        c.events.append(("user", f"What's my copay for {visit.replace('_', ' ')}, and how much of my deductible is left?", {}))
         _verify(c, member_ref)
         remaining = max(plan["deductible"] - m["ded_met"], 0)
-        _tool(c, "get_benefits", {}, {"deductible": {"individual": plan["deductible"], "met": m["ded_met"], "remaining": remaining}}, f"get_benefits: remaining={remaining}")
-        ans = f"You've met ${m['ded_met']:,} of your ${plan['deductible']:,} deductible, so ${remaining:,} remains."
-        c.events += [("assistant", ans, {}), ("user", "Okay, thank you.", {}), ("assistant", "Thank you for calling. Take care!", {})]
-        goal, resolution = "You want to know how much of your deductible is left this year.", ans
-    elif intent == "id_card_replacement":
-        c.events.append(("user", "I lost my insurance card and need a new one.", {}))
+        _tool(c, "get_benefits", {}, {"deductible": {"individual": plan["deductible"], "met": m["ded_met"], "remaining": remaining}, "copays": plan["copays"]},
+              f"get_benefits: remaining={remaining}")
+        ans = f"Your {visit.replace('_', ' ')} copay is ${plan['copays'][visit]}, and ${remaining:,} of your ${plan['deductible']:,} deductible remains."
+        c.events += [("assistant", ans, {}), ("user", "Got it, thanks.", {}), ("assistant", "Thank you for calling. Take care!", {})]
+        goal, resolution = f"You want to know your {visit.replace('_', ' ')} copay and your remaining deductible.", ans
+    elif intent == "coverage_question":
+        pid, pol = next((i, p) for i, p in mock.POLICIES.items() if p["member"] == member_ref and p["type"] == "health")
+        benefit = COVERAGE_BENEFITS[idx % len(COVERAGE_BENEFITS)]
+        covered, limit, copay, wait, preauth, _notes = mock.BENEFITS[pol["product"]][benefit]
+        label = benefit.replace("_", " ")
+        c.events.append(("user", f"How much of my {label} cover do I have left, and is there a waiting period?", {}))
         _verify(c, member_ref)
-        _tool(c, "request_id_card", {"reason": "lost"}, {"request_id": f"IDC-{1000 + idx}", "mail_eta_business_days": "7-10"}, "request_id_card: request_id")
-        ans = "Done. Your new card will arrive in 7 to 10 business days, and your digital card is available now in the Evergreen Health app."
-        c.events += [("assistant", ans, {}), ("user", "Perfect, thanks.", {}), ("assistant", "Thank you for calling. Take care!", {})]
-        goal, resolution = "You lost your insurance card and want a replacement.", ans
+        used = mock.USAGE.get(member_ref, {}).get(benefit, 0) if covered else 0
+        remaining = (max(limit - used, 0) if limit is not None else None) if covered else None
+        _tool(c, "get_coverage_detail", {"policy_id": pid, "benefit": benefit}, {"policy_id": pid, "benefit": benefit, "covered": covered, "remaining": remaining},
+              f"get_coverage_detail: covered={covered}, remaining={remaining}")
+        if not covered:
+            ans = f"{label.capitalize()} is not covered on your {pol['product']}."
+        else:
+            ans = (f"You have ${remaining:,} of your ${limit:,} {label} limit left." if limit is not None else f"Your {label} cover has no annual limit.")
+            ans += f" There is a {wait}-day waiting period." if wait else " There is no waiting period."
+        c.events += [("assistant", ans, {}), ("user", "Thanks, that's clear.", {}), ("assistant", "Thank you for calling. Take care!", {})]
+        goal, resolution = f"You want to know how much {label} cover is left and whether there is a waiting period.", ans
     elif intent == "find_provider":
-        spec, zip_code = rng.choice([("dermatology", "94110"), ("pediatrics", "94110"), ("primary care", "94124"), ("orthopedics", "94115")])
+        spec, zip_code = rng.choice([("dermatology", "94110"), ("pediatrics", "94110"), ("primary care", "94124"), ("orthopedics", "94115"), ("dentistry", "94110")])
         prov = next(p for p in mock.PROVIDERS if spec in p["specialty"].lower())
         c.member_ref = None
         c.events.append(("user", f"I need an in-network {spec} doctor near {zip_code}.", {}))
@@ -167,14 +223,6 @@ def _build(intent: str, when: datetime, rng: random.Random, counters: dict[str, 
         ans = f"{prov['name']} at {prov['practice']} is in network and {'is' if prov['accepting_new_patients'] else 'is not'} accepting new patients."
         c.events += [("assistant", ans, {}), ("user", "Thanks, that helps.", {}), ("assistant", "Thank you for calling. Take care!", {})]
         goal, resolution = f"You want an in-network {spec} doctor near zip code {zip_code}.", ans
-    elif intent == "copay_question":
-        visit = rng.choice(["specialist", "urgent_care", "primary_care"])
-        c.events.append(("user", f"What's my copay for {visit.replace('_', ' ')}?", {}))
-        _verify(c, member_ref)
-        _tool(c, "get_benefits", {}, {"copays": plan["copays"]}, "get_benefits: copays")
-        ans = f"Your {visit.replace('_', ' ')} copay is ${plan['copays'][visit]}."
-        c.events += [("assistant", ans, {}), ("user", "Got it, thanks.", {}), ("assistant", "Thank you for calling. Take care!", {})]
-        goal, resolution = f"You want to know your copay for {visit.replace('_', ' ')}.", ans
     elif intent == "abandoned":
         c.events.append(("user", rng.choice(["Hi, um, I had a question about my bill...", "Hello? Can you hear me?", "I wanted to ask about"]), {}))
         c.outcome, c.member_ref = "abandoned", None

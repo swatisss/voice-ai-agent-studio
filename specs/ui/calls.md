@@ -9,7 +9,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Explorer (`/calls/`)
 
-Filters: agent, outcome, channel, "Include seeded history" (default on). Table: started, channel, agent version, caller (masked, e.g. `EVG-•••913`), intent, outcome badge, root cause, turns, LLM cost. Row click → detail.
+Filters: agent, outcome, channel, direction, "Include seeded history" (default on). Table: started, channel, direction badge, agent version, caller (masked, e.g. `EVG-•••913`), intent, outcome badge, root cause, turns, LLM cost. Row click → detail.
 
 # Detail (`/calls/detail/?id=…`)
 

@@ -30,6 +30,14 @@ from voiceai.llm import gateway as gw  # noqa: E402
 get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def fresh_business_data() -> None:
+    """Mock business records are module state (policies, onboarding, requests): start every test from the seed state."""
+    from voiceai.mock import data
+
+    data.reset()
+
+
 @pytest.fixture
 async def database(tmp_path: Path) -> AsyncIterator[None]:
     db.configure(f"sqlite+aiosqlite:///{(tmp_path / 'db.sqlite').as_posix()}")
@@ -71,7 +79,7 @@ async def client(app, database) -> AsyncIterator[httpx.AsyncClient]:  # noqa: AN
 
 @pytest.fixture
 def members_headers() -> dict[str, str]:
-    return {"X-Tenant-Id": "evergreen-members"}
+    return {"X-Tenant-Id": "evergreen-care"}
 
 
 Responder = Callable[[str, list[dict[str, Any]], Any], Any]

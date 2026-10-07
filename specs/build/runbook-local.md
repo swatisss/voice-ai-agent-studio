@@ -44,7 +44,7 @@ Or single-origin by hand: `npm run build` in `apps/web`, then `uv run voiceai se
 | OpenRouter key only | Put `OPENROUTER_API_KEY` and the five `LLM_ROLE_*` lines (below) in `apps/api/.env` | Same as above |
 | No LLM key | `LLM_FAKE=1 EMBEDDINGS_PROVIDER=hash` | UI and plumbing only: the agent answers with a canned placeholder, so the demo acts do not work |
 
-OpenRouter-only role lines (the simulator's fallback is Groq-only, so all five are needed):
+OpenRouter-only role lines (the simulator's fallback is Groq-only, so all five are needed; the optional `turn` role falls back to a local heuristic when unavailable):
 
 ```
 LLM_ROLE_REALTIME=openrouter:openai/gpt-oss-120b

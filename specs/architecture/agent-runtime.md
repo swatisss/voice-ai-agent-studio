@@ -28,6 +28,8 @@ Behavior MUST NOT differ between channels except: voice may emit a short *filler
 | `end(reason)` | Ends the call (`hangup`, `end_call`, `timeout`, `error`); sets `ended_at`; queues `analyze_call`. Idempotent. |
 | `state` | Current `CallState` (below). |
 
+| `set_persona(persona)` | Replaces the persona used for the next turns (live switch), records a `system` event "Persona switched to ...", never repeats the greeting. See [/architecture/personas.md](/architecture/personas.md). |
+
 A session is constructed from a `call` row and the **config snapshot** of the agent version (or a candidate config during evaluation). It never reads the agent's draft.
 
 # Turn algorithm

@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import WebSocket
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
-from pipecat.frames.frames import EndFrame
+from pipecat.frames.frames import EndFrame, TTSUpdateSettingsFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -21,16 +21,21 @@ from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPIWebsocketTransport
 
 from voiceai.config import get_settings
+from voiceai.live import LiveControls
 from voiceai.runtime.session import AgentSession
 from voiceai.voice.processors import BrainProcessor, TurnAggregator
+from voiceai.voice.turn_detection import TurnEvaluator
 from voiceai.voice.serializer import IN_RATE, OUT_RATE, RawPCMSerializer
 
 log = logging.getLogger("voiceai.voice")
 
 
-def build(websocket: WebSocket, session: AgentSession, deepgram_key: str) -> tuple[PipelineTask, FastAPIWebsocketTransport, BrainProcessor, RawPCMSerializer]:
+def build(
+    websocket: WebSocket, session: AgentSession, deepgram_key: str, controls: LiveControls | None = None,
+) -> tuple[PipelineTask, FastAPIWebsocketTransport, BrainProcessor, RawPCMSerializer]:
     """Construct the pipeline without network I/O (VO-06)."""
     settings = get_settings()
+    controls = controls or LiveControls(turn=session.turn_settings())
     serializer = RawPCMSerializer()
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
@@ -52,9 +57,12 @@ def build(websocket: WebSocket, session: AgentSession, deepgram_key: str) -> tup
             model=settings.deepgram_stt_model, language="en-US", smart_format=True, punctuate=True, interim_results=True,
         ),
     )
-    voice = (session.config.get("persona") or {}).get("voice") or "aura-2-thalia-en"
-    tts = DeepgramTTSService(api_key=deepgram_key, voice=voice, sample_rate=OUT_RATE)
-    turns = TurnAggregator(delay_ms=settings.voice_turn_delay_ms)
+    persona = session.config.get("persona") or {}
+    tts = DeepgramTTSService(
+        api_key=deepgram_key, sample_rate=OUT_RATE,
+        settings=DeepgramTTSService.Settings(voice=persona.get("voice") or "aura-2-thalia-en", speed=float(persona.get("speed") or 1.0)),
+    )
+    turns = TurnAggregator(controls, TurnEvaluator(), last_agent_text=lambda: last_agent_message(session), vad_stop_ms=int(settings.voice_vad_stop_secs * 1000))
 
     task_holder: dict[str, Any] = {}
 
@@ -65,15 +73,27 @@ def build(websocket: WebSocket, session: AgentSession, deepgram_key: str) -> tup
         if task:
             await task.queue_frame(EndFrame())
 
-    brain = BrainProcessor(session, on_end)
+    brain = BrainProcessor(session, on_end, controls)
+
+    async def apply_voice(voice: str, speed: float) -> None:  # live persona switch: next sentence uses the new voice
+        await task_holder["task"].queue_frame(TTSUpdateSettingsFrame(delta=DeepgramTTSService.Settings(voice=voice, speed=speed)))
+
+    controls.on_voice = apply_voice
     pipeline = Pipeline([transport.input(), vad, stt, turns, brain, tts, transport.output()])
     task = PipelineTask(pipeline, params=PipelineParams(audio_in_sample_rate=IN_RATE, audio_out_sample_rate=OUT_RATE))
     task_holder["task"] = task
     return task, transport, brain, serializer
 
 
-async def run(websocket: WebSocket, session: AgentSession, deepgram_key: str) -> None:
-    task, transport, brain, _ = build(websocket, session, deepgram_key)
+def last_agent_message(session: AgentSession) -> str | None:
+    for m in reversed(session.history):
+        if m.get("role") == "assistant" and m.get("content"):
+            return str(m["content"])
+    return None
+
+
+async def run(websocket: WebSocket, session: AgentSession, deepgram_key: str, controls: LiveControls | None = None) -> None:
+    task, transport, brain, _ = build(websocket, session, deepgram_key, controls)
 
     @transport.event_handler("on_client_connected")
     async def _connected(_transport, _ws) -> None:  # noqa: ANN001

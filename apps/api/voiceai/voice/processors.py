@@ -1,6 +1,6 @@
 """Turn aggregation and the brain processor that bridges Pipecat to AgentSession.
 
-Spec: /architecture/voice-pipeline.md (Pipeline processors), /decisions/adr-0002-voice-pipeline.md
+Spec: /architecture/voice-pipeline.md (Pipeline processors), /architecture/turn-detection.md
 """
 from __future__ import annotations
 
@@ -29,7 +29,9 @@ from pipecat.frames.frames import (
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
+from voiceai.live import LiveControls
 from voiceai.runtime.session import AgentSession
+from voiceai.voice.turn_detection import VAD_STOP_MS, TurnEvaluator
 
 log = logging.getLogger("voiceai.voice")
 
@@ -43,27 +45,54 @@ class UserTurnFrame(Frame):
 
 
 class TurnAggregator(FrameProcessor):
-    """Collects final transcripts into one caller turn; dispatches after a short silence (VO-02)."""
+    """Collects final transcripts into one caller turn and decides when it is over (TD-01..TD-06).
 
-    def __init__(self, delay_ms: int = 350, **kwargs) -> None:  # noqa: ANN003
+    Settings are read from `controls.turn` at every decision, so live changes apply immediately.
+    """
+
+    def __init__(
+        self, controls: LiveControls, evaluator: TurnEvaluator | None = None,
+        last_agent_text: Callable[[], str | None] | None = None, vad_stop_ms: int = VAD_STOP_MS, **kwargs,  # noqa: ANN003
+    ) -> None:
         super().__init__(**kwargs)
-        self.delay = delay_ms / 1000
+        self.controls = controls
+        self.evaluator = evaluator or TurnEvaluator()
+        self.last_agent_text = last_agent_text or (lambda: None)
+        self.vad_stop_ms = vad_stop_ms
         self.buffer: list[str] = []
         self.speaking = False
         self._timer: asyncio.Task[None] | None = None
 
+    # -- timers
     def _cancel_timer(self) -> None:
-        if self._timer and not self._timer.done():
+        if self._timer and not self._timer.done() and self._timer is not asyncio.current_task():
             self._timer.cancel()
         self._timer = None
 
-    def _start_timer(self) -> None:
+    def _schedule(self, seconds: float, stage: str) -> None:
         self._cancel_timer()
-        self._timer = asyncio.create_task(self._fire_later())
+        self._timer = asyncio.create_task(self._fire(seconds, stage))
 
-    async def _fire_later(self) -> None:
-        await asyncio.sleep(self.delay)
-        await self.flush()
+    async def _fire(self, seconds: float, stage: str) -> None:
+        await asyncio.sleep(seconds)
+        await self.decide(stage)
+
+    # -- decisions
+    async def decide(self, stage: str) -> None:
+        """Timer 1 ("first") may extend the wait in semantic mode; timer 2 ("extra") always dispatches."""
+        text = " ".join(t.strip() for t in self.buffer if t.strip())
+        if not text:
+            return
+        turn = self.controls.turn
+        if turn.mode != "semantic" or stage == "extra":
+            await self.flush()
+            return
+        verdict = await self.evaluator.is_complete(text, self.last_agent_text(), turn)
+        log.debug("turn verdict complete=%s (%s/%s) text=%r", verdict.complete, verdict.source, verdict.reason, text)
+        if verdict.complete or turn.max_extra_wait_ms <= 0:
+            await self.flush()
+        else:
+            self._schedule(turn.max_extra_wait_ms / 1000, "extra")
 
     async def flush(self) -> None:
         text = " ".join(t.strip() for t in self.buffer if t.strip())
@@ -71,6 +100,7 @@ class TurnAggregator(FrameProcessor):
         if text:
             await self.push_frame(UserTurnFrame(text))
 
+    # -- frame handling
     async def handle(self, frame: Frame) -> bool:
         """Update turn state for one frame; returns True if the frame is consumed here."""
         if isinstance(frame, VADUserStartedSpeakingFrame):
@@ -78,11 +108,11 @@ class TurnAggregator(FrameProcessor):
             self._cancel_timer()
         elif isinstance(frame, VADUserStoppedSpeakingFrame):
             self.speaking = False
-            self._start_timer()
+            self._schedule(self.controls.turn.first_delay_s(self.vad_stop_ms), "first")
         elif isinstance(frame, TranscriptionFrame):
             self.buffer.append(frame.text)
             if not self.speaking:
-                self._start_timer()
+                self._schedule(self.controls.turn.first_delay_s(self.vad_stop_ms), "first")
             return True
         elif isinstance(frame, InterimTranscriptionFrame):
             return True
@@ -99,13 +129,17 @@ class TurnAggregator(FrameProcessor):
 class BrainProcessor(FrameProcessor):
     """Runs AgentSession for each caller turn and streams the reply to TTS."""
 
-    def __init__(self, session: AgentSession, on_end: Callable[[str], Awaitable[None]], **kwargs) -> None:  # noqa: ANN003
+    def __init__(
+        self, session: AgentSession, on_end: Callable[[str], Awaitable[None]], controls: LiveControls, **kwargs,  # noqa: ANN003
+    ) -> None:
         super().__init__(**kwargs)
         self.session = session
         self.on_end = on_end
+        self.controls = controls
         self._task: asyncio.Task[None] | None = None
         self._bot_speaking = False
         self._greeted = False
+        self._held: list[str] = []
         self._bot_stopped = asyncio.Event()
 
     async def greet(self) -> None:
@@ -121,6 +155,31 @@ class BrainProcessor(FrameProcessor):
         for c in chunks:
             await self.push_frame(LLMTextFrame(c))
         await self.push_frame(LLMFullResponseEndFrame())
+
+    @property
+    def busy(self) -> bool:
+        return self._bot_speaking or bool(self._task and not self._task.done())
+
+    # -- decisions (also called directly by tests)
+    async def on_user_started(self) -> None:
+        """VO-03 barge-in, unless interruptions are disabled (TD-07)."""
+        if not self.controls.turn.allow_interruptions:
+            return
+        if self.busy:
+            await self._cancel_task()
+            await self.broadcast_interruption()
+
+    async def on_user_turn(self, text: str) -> None:
+        if self.busy and not self.controls.turn.allow_interruptions:
+            self._held.append(text)  # answered after the agent finishes
+            return
+        await self._cancel_task()
+        self._task = asyncio.create_task(self._respond(text))
+
+    async def _release_held(self) -> None:
+        if self._held and not self.busy:
+            text, self._held = " ".join(self._held), []
+            self._task = asyncio.create_task(self._respond(text))
 
     async def _respond(self, text: str) -> None:
         started = False
@@ -139,6 +198,8 @@ class BrainProcessor(FrameProcessor):
                 await self.push_frame(LLMFullResponseEndFrame())
         if self.session.state.ended:
             await self._finish("end_call")
+        elif not self._bot_speaking:
+            asyncio.get_running_loop().call_soon(lambda: asyncio.ensure_future(self._release_held()))
 
     async def _finish(self, reason: str) -> None:
         # let the goodbye play out before closing (max 10 s)
@@ -148,7 +209,7 @@ class BrainProcessor(FrameProcessor):
         await self.on_end(reason)
 
     async def _cancel_task(self) -> None:
-        if self._task and not self._task.done():
+        if self._task and not self._task.done() and self._task is not asyncio.current_task():
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._task
@@ -157,18 +218,16 @@ class BrainProcessor(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
         if isinstance(frame, UserTurnFrame):
-            await self._cancel_task()
-            self._task = asyncio.create_task(self._respond(frame.text))
+            await self.on_user_turn(frame.text)
             return
-        if isinstance(frame, VADUserStartedSpeakingFrame):  # VO-03 barge-in
-            if self._bot_speaking or (self._task and not self._task.done()):
-                await self._cancel_task()
-                await self.broadcast_interruption()
+        if isinstance(frame, VADUserStartedSpeakingFrame):
+            await self.on_user_started()
         elif isinstance(frame, BotStartedSpeakingFrame):
             self._bot_speaking = True
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._bot_speaking = False
             self._bot_stopped.set()
+            await self._release_held()
         elif isinstance(frame, InputTransportMessageFrame):
             if isinstance(frame.message, dict) and frame.message.get("type") == "hangup":
                 await self._cancel_task()

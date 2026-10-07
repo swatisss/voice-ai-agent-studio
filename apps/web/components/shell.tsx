@@ -1,7 +1,7 @@
 // Spec: /ui/app-shell.md, /ui/design-system.md (Layout)
 "use client";
 
-import { Bot, Headphones, HeartPulse, LayoutDashboard, Lightbulb, Menu, Phone, PhoneCall, X } from "lucide-react";
+import { Bot, Headphones, HeartPulse, LayoutDashboard, Lightbulb, Menu, Phone, PhoneCall, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
@@ -15,6 +15,7 @@ export const useTenant = () => useContext(TenantCtx);
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/agents/", label: "Agents", icon: Bot },
+  { href: "/personas/", label: "Personas", icon: UserRound },
   { href: "/test-call/", label: "Test call", icon: PhoneCall },
   { href: "/calls/", label: "Calls", icon: Phone },
   { href: "/console/", label: "Agent console", icon: Headphones, badge: "console" as const },

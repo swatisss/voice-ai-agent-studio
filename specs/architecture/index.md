@@ -7,6 +7,8 @@
 * [LLM gateway](llm-gateway.md) - Roles mapped to Groq/OpenRouter models, fallback, JSON mode, cost accounting
 * [Knowledge](knowledge.md) - Ingestion (text, file, URL, OKF), chunking, embeddings, search with no-answer threshold
 * [Tools and skills](tools-and-skills.md) - HTTP tool definitions, execution, verification gate, skill format
+* [Turn detection](turn-detection.md) - Normal and semantic end-of-turn detection, settings, evaluators, interruptions, live controls
+* [Personas](personas.md) - Tenant persona library, snapshot resolution, per-call overrides and live switching
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios

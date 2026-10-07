@@ -16,6 +16,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `drafting` | Cluster naming, fix drafting | JSON output, writing quality | `groq:openai/gpt-oss-120b` |
 | `simulator` | Simulated callers | cheap, fast | `groq:openai/gpt-oss-20b` |
 | `judge` | Eval grading | JSON output | `groq:openai/gpt-oss-120b` |
+| `turn` | Semantic turn detection (LLM evaluator) | tiny JSON verdict in under a second | `groq:openai/gpt-oss-20b` |
 
 # Configuration — `apps/api/config/models.yaml`
 
@@ -34,6 +35,7 @@ roles:
   drafting:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: medium, temperature: 0.4 }, fallback: ["openrouter:openai/gpt-oss-120b"] }
   simulator: { model: "groq:openai/gpt-oss-20b",  params: { reasoning_effort: low, temperature: 0.7 }, fallback: ["groq:openai/gpt-oss-120b"] }
   judge:     { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0 }, fallback: ["openrouter:openai/gpt-oss-120b"] }
+  turn:      { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }, fallback: ["openrouter:openai/gpt-oss-20b"] }
 ```
 
 * A **model ref** is `<provider>:<model id>`. Any OpenRouter model may be used by adding it under `models`.
@@ -47,6 +49,8 @@ roles:
 | `stream_chat(role, messages, tools, override=None)` | Async iterator of events: `text` deltas, then a final `done` event carrying the assembled tool calls (id, name, JSON args), finish reason and usage. |
 | `complete_json(role, messages, schema: type[BaseModel])` | Returns a validated Pydantic object. Uses `response_format={"type":"json_schema",...}` when the model supports it, else `json_object` plus the schema in the prompt. On validation failure retries once with the error appended. |
 | `usage_cost(model_ref, usage)` | USD from the price table; unknown models cost 0 and log a warning. |
+
+The `turn` role is optional in practice: if it fails or times out, semantic turn detection uses its local heuristic ([/architecture/turn-detection.md](/architecture/turn-detection.md)).
 
 # Fallback and timeouts
 

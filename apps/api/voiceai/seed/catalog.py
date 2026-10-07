@@ -184,3 +184,21 @@ MEMBER_SCENARIOS = [
     {"name": "Appeal denied claim", "caller_goal": "Your surgery claim C-31544 was denied and you want to appeal it.",
      "caller_profile": _profile("James Carter", "337120", "1979-11-02", claim_number="C-31544"), "expected": "escalated"},
 ]
+
+
+# ---- persona library (CP-0007): the first persona of each tenant is the agent's default
+EXTRA_PERSONAS = {
+    MEMBERS_TENANT: [
+        {"name": "Grace", "description": "Formal and reassuring; suits appeals and sensitive conversations.", "voice": "aura-2-helena-en", "speed": 0.95,
+         "greeting": "Good day, you have reached Evergreen Health member services. My name is Grace.",
+         "disclosure": "I am a virtual assistant, and this call may be recorded for quality. How may I assist you?", "opening": "",
+         "style": "Formal, measured and reassuring. Full sentences, no slang, acknowledge feelings before facts."},
+        {"name": "Leo", "description": "Upbeat and efficient; suits quick lookups.", "voice": "aura-2-apollo-en", "speed": 1.05,
+         "greeting": "Evergreen Health member services, this is Leo.",
+         "disclosure": "I'm a virtual assistant, and this call may be recorded for quality. What can I do for you?", "opening": "",
+         "style": "Upbeat and efficient. Short sentences, get to the answer quickly, friendly but not chatty."},
+    ],
+    PHARMACY_TENANT: [],
+}
+
+VOICE_DEFAULTS = {MEMBERS_TENANT: {"mode": "semantic", "min_silence_ms": 700, "max_extra_wait_ms": 1500, "evaluator": "heuristic", "allow_interruptions": True}}

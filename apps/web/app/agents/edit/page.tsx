@@ -9,9 +9,10 @@ import { useTenant } from "@/components/shell";
 import { Badge, Button, Card, Field, Input, JsonView, Modal, Select, Spinner, Tabs, Textarea, useToast } from "@/components/ui";
 import { api, ApiError, useApi } from "@/lib/api";
 import { when } from "@/lib/format";
+import { DEFAULT_TURN, VOICES, voiceLabel } from "@/lib/voices";
+import { TurnDetectionEditor } from "@/components/voice-settings";
 
-type Tab = "overview" | "persona" | "policy" | "knowledge" | "tools" | "skills" | "versions";
-const VOICES = ["aura-2-thalia-en", "aura-2-andromeda-en", "aura-2-helena-en", "aura-2-apollo-en", "aura-2-arcas-en", "aura-2-orion-en"];
+type Tab = "overview" | "persona" | "policy" | "voice" | "knowledge" | "tools" | "skills" | "versions";
 
 export default function Page() {
   return <Suspense fallback={<Spinner />}><Builder /></Suspense>;
@@ -94,13 +95,14 @@ function Builder() {
         </div>
       </div>
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[
-        { id: "overview", label: "Overview" }, { id: "persona", label: "Persona" }, { id: "policy", label: "Policy" },
+        { id: "overview", label: "Overview" }, { id: "persona", label: "Persona" }, { id: "policy", label: "Policy" }, { id: "voice", label: "Voice" },
         { id: "knowledge", label: `Knowledge (${draft.knowledge_doc_ids.length})` }, { id: "tools", label: `Tools (${draft.tool_ids.length})` },
         { id: "skills", label: `Skills (${draft.skill_ids.length})` }, { id: "versions", label: "Versions" },
       ]} />
       {tab === "overview" && <Overview draft={draft} meta={meta} setMeta={setMeta} update={update} />}
       {tab === "persona" && <Persona draft={draft} update={update} />}
       {tab === "policy" && <PolicyTab draft={draft} update={update} />}
+      {tab === "voice" && <VoiceTab draft={draft} update={update} />}
       {tab === "knowledge" && <KnowledgeTab draft={draft} update={update} />}
       {tab === "tools" && <ToolsTab draft={draft} update={update} />}
       {tab === "skills" && <SkillsTab draft={draft} update={update} />}
@@ -144,16 +146,51 @@ function Overview({ draft, meta, setMeta, update }: TabProps & { meta: { name: s
 }
 
 function Persona({ draft, update }: TabProps) {
+  const { tenant } = useTenant();
+  const { data } = useApi<{ items: any[] }>("/api/personas", [tenant]);
   const p = draft.persona;
+  const chosen = data?.items.find((x) => x.id === draft.persona_id);
   return (
-    <Card>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Name"><Input value={p.name} onChange={(e) => update(["persona", "name"], e.target.value)} /></Field>
-        <Field label="Voice"><Select value={p.voice} onChange={(e) => update(["persona", "voice"], e.target.value)}>{VOICES.map((v) => <option key={v}>{v}</option>)}</Select></Field>
-        <Field label="Greeting"><Textarea value={p.greeting} onChange={(e) => update(["persona", "greeting"], e.target.value)} /></Field>
-        <Field label="Disclosure" hint="Required: say it's a virtual assistant and the call may be recorded."><Textarea value={p.disclosure} onChange={(e) => update(["persona", "disclosure"], e.target.value)} /></Field>
-        <div className="md:col-span-2"><Field label="Speaking style"><Textarea value={p.style} onChange={(e) => update(["persona", "style"], e.target.value)} /></Field></div>
-      </div>
+    <div className="space-y-4">
+      <Card title="Library persona" actions={<Link className="text-sm font-medium text-accent" href="/personas/">Manage personas</Link>}>
+        <Field label="Persona" hint="Personas live in the library so several agents can share a voice. Publishing snapshots the persona into the version.">
+          <Select value={draft.persona_id ?? ""} onChange={(e) => update(["persona_id"], e.target.value || null)}>
+            <option value="">None: use the inline persona below</option>
+            {data?.items.map((x) => <option key={x.id} value={x.id}>{x.name}{x.description ? ` — ${x.description}` : ""}</option>)}
+          </Select>
+        </Field>
+        {chosen && (
+          <div className="mt-3 rounded-xl bg-accent-soft p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2"><b>{chosen.name}</b><Badge tone="info">{voiceLabel(chosen.voice)}</Badge><Badge>speed {chosen.speed}×</Badge></div>
+            <div className="mt-1 italic text-muted">“{chosen.greeting}”</div>
+            <div className="mt-1 text-muted">{chosen.style}</div>
+          </div>
+        )}
+      </Card>
+      {!draft.persona_id && (
+        <Card title="Inline persona">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Name"><Input value={p.name} onChange={(e) => update(["persona", "name"], e.target.value)} /></Field>
+            <Field label="Voice"><Select value={p.voice} onChange={(e) => update(["persona", "voice"], e.target.value)}>{VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}</Select></Field>
+            <Field label={`Speaking speed (${Number(p.speed ?? 1).toFixed(2)}×)`}><input type="range" className="w-full accent-[var(--accent)]" min={0.7} max={1.5} step={0.05} value={p.speed ?? 1} onChange={(e) => update(["persona", "speed"], Number(e.target.value))} /></Field>
+            <div />
+            <Field label="Greeting"><Textarea value={p.greeting} onChange={(e) => update(["persona", "greeting"], e.target.value)} /></Field>
+            <Field label="Disclosure" hint="Required: say it's a virtual assistant and the call may be recorded."><Textarea value={p.disclosure} onChange={(e) => update(["persona", "disclosure"], e.target.value)} /></Field>
+            <Field label="Outbound opening" hint="Placeholders: {first_name}"><Textarea value={p.opening ?? ""} onChange={(e) => update(["persona", "opening"], e.target.value)} /></Field>
+            <Field label="Speaking style"><Textarea value={p.style} onChange={(e) => update(["persona", "style"], e.target.value)} /></Field>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function VoiceTab({ draft, update }: TabProps) {
+  const value = { ...DEFAULT_TURN, ...(draft.voice?.turn_detection ?? {}) };
+  return (
+    <Card title="Turn detection">
+      <p className="mb-4 max-w-3xl text-sm text-muted">Decide when the agent starts replying. These are the agent's defaults and are versioned when you publish; on the Test call page you can compare modes and change them live during a call.</p>
+      <TurnDetectionEditor value={value} onChange={(v) => update(["voice"], { ...(draft.voice ?? {}), turn_detection: v })} />
     </Card>
   );
 }

@@ -45,6 +45,22 @@ class Agent(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
+class Persona(Base):
+    __tablename__ = "personas"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    name: Mapped[str] = mapped_column(String(40))
+    description: Mapped[str] = mapped_column(String(200), default="")
+    voice: Mapped[str] = mapped_column(String(64), default="aura-2-thalia-en")
+    speed: Mapped[float] = mapped_column(Float, default=1.0)
+    greeting: Mapped[str] = mapped_column(String(300))
+    disclosure: Mapped[str] = mapped_column(String(300))
+    opening: Mapped[str] = mapped_column(String(400), default="")
+    style: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
 class AgentVersion(Base):
     __tablename__ = "agent_versions"
     __table_args__ = (UniqueConstraint("agent_id", "version"),)

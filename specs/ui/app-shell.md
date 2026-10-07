@@ -12,7 +12,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 A sticky **top header** over the content, in the portal style of [/ui/design-system.md](/ui/design-system.md); no sidebar.
 
 * **Brand**: a generic mark plus the business unit's brand name (the part of the selected tenant's name before ` · `), with the product caption "Voice Agent Studio" beneath it.
-* **Navigation** (icon + label, horizontal): **Dashboard** `/`, **Agents** `/agents/`, **Test call** `/test-call/`, **Calls** `/calls/`, **Agent console** `/console/` (badge = waiting escalations), **Insights** `/insights/` (badge = clusters ready for a fix). The active item is underlined. Below 768 px the items collapse into a menu button that opens a dropdown panel.
+* **Navigation** (icon + label, horizontal): **Dashboard** `/`, **Agents** `/agents/`, **Personas** `/personas/`, **Test call** `/test-call/`, **Calls** `/calls/`, **Agent console** `/console/` (badge = waiting escalations), **Insights** `/insights/` (badge = clusters ready for a fix). The active item is underlined. Below 768 px the items collapse into a menu button that opens a dropdown panel.
 * **Business-unit switcher** (select listing `GET /api/tenants`; choice persisted in `localStorage` key `tenant`; default first tenant) and provider health dots from `/healthz` (Groq, OpenRouter, Deepgram: configured or not) on the right.
 * A **Skip to content** link is the first focusable element and jumps to the main region.
 

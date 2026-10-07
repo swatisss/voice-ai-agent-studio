@@ -20,7 +20,7 @@ from voiceai.knowledge.embeddings import embed
 from voiceai.knowledge.ingest import import_okf
 from voiceai.learning.analyze import refresh_stats
 from voiceai.models import (
-    Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, Skill, Tenant, Tool,
+    Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, Persona, Skill, Tenant, Tool,
 )
 from voiceai.schemas import FIXABLE
 from voiceai.seed import catalog
@@ -53,7 +53,15 @@ async def seed(reset: bool = False) -> dict[str, Any]:
             s.add_all(tools + skills)
             await s.flush()
             docs = await import_okf(s, tenant_id, okf.read_dir(kb_root / kb_dir), f"specs/demo-data/kb/{kb_dir}")
+            ap = agent_def["persona"]
+            library = [Persona(tenant_id=tenant_id, name=ap["name"], description=agent_def["description"], voice=ap["voice"], speed=ap.get("speed", 1.0),
+                               greeting=ap["greeting"], disclosure=ap["disclosure"], opening=ap.get("opening", ""), style=ap["style"])]
+            library += [Persona(tenant_id=tenant_id, **extra) for extra in catalog.EXTRA_PERSONAS.get(tenant_id, [])]
+            s.add_all(library)
+            await s.flush()
             cfg = {
+                "persona_id": library[0].id,
+                "voice": {"turn_detection": catalog.VOICE_DEFAULTS.get(tenant_id, {})},
                 "persona": agent_def["persona"],
                 "policy": agent_def["policy"],
                 "tool_ids": [t.id for t in tools], "skill_ids": [k.id for k in skills],

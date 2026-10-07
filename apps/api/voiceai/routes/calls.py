@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from voiceai.config import get_settings
 from voiceai.db import get_session, sessionmaker
 from voiceai.errors import ApiError
-from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, Escalation
+from voiceai.live import LIVE, LiveControls, effective_settings, persona_dict
+from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, Escalation, Persona
+from voiceai.schemas import TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
 from voiceai.runtime.session import AgentSession, create_call
 from voiceai.tenancy import current_tenant, resolve_tenant
@@ -27,6 +29,20 @@ router = APIRouter(prefix="/api")
 class CallCreate(BaseModel):
     agent_id: str
     channel: Literal["voice", "text"] = "text"
+    persona_id: str | None = None
+    turn_detection: TurnDetectionPatch | None = None
+
+
+class LiveBody(BaseModel):
+    persona_id: str | None = None          # "" restores the agent's own persona
+    turn_detection: TurnDetectionPatch | None = None
+
+
+async def _persona(s: AsyncSession, tenant_id: str, persona_id: str) -> Persona:
+    row = await s.scalar(select(Persona).where(Persona.id == persona_id, Persona.tenant_id == tenant_id))
+    if row is None:  # PER-06
+        raise ApiError(404, "persona_not_found", "Persona not found")
+    return row
 
 
 class MessageBody(BaseModel):
@@ -54,13 +70,43 @@ def analysis_out(a: CallAnalysis | None) -> dict[str, Any] | None:
 
 @router.post("/calls")
 async def start_call(body: CallCreate, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    call = await create_call(s, tenant_id, body.agent_id, body.channel)
+    live: dict = {}
+    if body.persona_id:
+        await _persona(s, tenant_id, body.persona_id)
+        live["persona_id"] = body.persona_id
+    if body.turn_detection:
+        live["turn_detection"] = body.turn_detection.model_dump(exclude_none=True)
+    call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None)
     await s.commit()
     greeting = None
     if body.channel == "text":
         session = await AgentSession.open(call.id, tenant_id, app=request.app)
         greeting = await session.start()
-    return {"call_id": call.id, "greeting": greeting}
+    return {"call_id": call.id, "greeting": greeting, "settings": await effective_settings(s, call)}
+
+
+@router.patch("/calls/{call_id}/live")
+async def live_settings(call_id: str, body: LiveBody, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    """Change persona and/or turn detection of a running call (PER-04, TD-06)."""
+    call = await s.scalar(select(Call).where(Call.id == call_id, Call.tenant_id == tenant_id))
+    if not call:
+        raise ApiError(404, "call_not_found", "Call not found")
+    if call.ended_at:
+        raise ApiError(409, "call_ended", "This call has ended")
+    persona = await _persona(s, tenant_id, body.persona_id) if body.persona_id else None
+    await s.close()
+    session = await AgentSession.open(call_id, tenant_id, app=request.app)
+    controls = LIVE.get(call_id)
+    if body.persona_id is not None:
+        await session.switch_persona(persona_dict(persona) if persona else None)
+        voice = session.config.get("persona") or {}
+        if controls and controls.on_voice:
+            await controls.on_voice(voice.get("voice", "aura-2-thalia-en"), float(voice.get("speed", 1.0)))
+    if body.turn_detection is not None:
+        await session.change_turn_detection(body.turn_detection.model_dump(exclude_none=True))
+        if controls:
+            controls.turn = session.turn_settings()
+    return {"settings": session.settings()}
 
 
 @router.post("/calls/{call_id}/messages")
@@ -132,6 +178,7 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
         "events": [{"seq": e.seq, "at": e.at.isoformat(), "kind": e.kind, "text": e.text, "data": e.data} for e in events],
         "escalation": esc_mod.summary(esc) if esc else None,
         "analysis": analysis_out(analysis),
+        "settings": await effective_settings(s, call),
     }
 
 
@@ -162,4 +209,9 @@ async def voice(websocket: WebSocket, call_id: str) -> None:
         await websocket.close(code=4500, reason="voice_unavailable")
         return
     session = await AgentSession.open(call_id, tenant_id, app=websocket.app)
-    await pipeline.run(websocket, session, key)
+    controls = LiveControls(turn=session.turn_settings())
+    LIVE[call_id] = controls
+    try:
+        await pipeline.run(websocket, session, key, controls)
+    finally:
+        LIVE.pop(call_id, None)

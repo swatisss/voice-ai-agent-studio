@@ -25,12 +25,71 @@ ShortText = Field(default="", max_length=300)
 
 
 # ------------------------------------------------------------------ agent config
+VOICE_RE = re.compile(r"aura-2-[a-z]+-en")
+
+
+def _voice(v: str) -> str:
+    if not VOICE_RE.fullmatch(v):
+        raise ValueError("voice must look like aura-2-<name>-en")
+    return v
+
+
 class Persona(BaseModel):
+    id: str | None = None  # set when resolved from the library (snapshot)
     name: str = Field(default="Ava", min_length=1, max_length=40)
     voice: str = "aura-2-thalia-en"
+    speed: float = Field(default=1.0, ge=0.7, le=1.5)
     greeting: str = Field(default="Thanks for calling, this is Ava.", min_length=1, max_length=300)
     disclosure: str = Field(default="I'm a virtual assistant, and this call may be recorded for quality.", min_length=1, max_length=300)
+    opening: str = Field(default="", max_length=400)
     style: str = Field(default="Warm, calm and concise. One question at a time.", max_length=500)
+
+    @field_validator("voice")
+    @classmethod
+    def _v(cls, v: str) -> str:
+        return _voice(v)
+
+
+class PersonaIn(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    description: str = Field(default="", max_length=200)
+    voice: str = "aura-2-thalia-en"
+    speed: float = Field(default=1.0, ge=0.7, le=1.5)
+    greeting: str = Field(min_length=1, max_length=300)
+    disclosure: str = Field(min_length=1, max_length=300)
+    opening: str = Field(default="", max_length=400)
+    style: str = Field(default="", max_length=500)
+
+    @field_validator("voice")
+    @classmethod
+    def _v(cls, v: str) -> str:
+        return _voice(v)
+
+
+class TurnDetection(BaseModel):
+    mode: Literal["vad", "semantic"] = "vad"
+    min_silence_ms: int = Field(default=700, ge=200, le=2000)
+    max_extra_wait_ms: int = Field(default=1500, ge=0, le=4000)
+    evaluator: Literal["heuristic", "llm"] = "heuristic"
+    allow_interruptions: bool = True
+
+
+class TurnDetectionPatch(BaseModel):
+    """Any subset of the turn-detection fields (call-start and live overrides)."""
+
+    mode: Literal["vad", "semantic"] | None = None
+    min_silence_ms: int | None = Field(default=None, ge=200, le=2000)
+    max_extra_wait_ms: int | None = Field(default=None, ge=0, le=4000)
+    evaluator: Literal["heuristic", "llm"] | None = None
+    allow_interruptions: bool | None = None
+
+
+class VoiceConfig(BaseModel):
+    turn_detection: TurnDetection = Field(default_factory=TurnDetection)
+
+
+class TurnVerdictOut(BaseModel):
+    complete: bool
 
 
 class Policy(BaseModel):
@@ -60,7 +119,9 @@ class ModelChoice(BaseModel):
 
 
 class AgentConfig(BaseModel):
+    persona_id: str | None = None
     persona: Persona = Field(default_factory=Persona)
+    voice: VoiceConfig = Field(default_factory=VoiceConfig)
     policy: Policy = Field(default_factory=Policy)
     tool_ids: list[str] = Field(default_factory=list)
     skill_ids: list[str] = Field(default_factory=list)

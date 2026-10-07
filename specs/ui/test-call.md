@@ -14,6 +14,14 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Right panel: **Activity** — tool call chips in order (name, args summary, ✓/✕, duration), knowledge searches with top result title + score or "No answer"; **Call** card: call id (link to call detail), status, turns, tokens, LLM cost, median latency.
 * Demo helper (collapsible): the seeded caller profiles (name, member ID, DOB) from [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md) for quick reference.
 
+# Live controls
+
+A **Live controls** card above the Activity panel (and shown before the call starts, where the values become call-start overrides):
+
+* **Persona** select (the tenant's library personas; "Agent default" first). Changing it during a call sends `PATCH /api/calls/{id}/live`; the transcript shows the system notice "Persona switched to ..." and the next reply uses it (voice calls also change the TTS voice and speed).
+* **Turn detection** (voice calls): the *Normal / Semantic* toggle, silence-threshold and extra-wait sliders, evaluator, and the interruption toggle. Changes are sent (debounced 300 ms) and apply to the next turn decision; a system notice records the change. For text calls the card is shown disabled with the hint "Turn detection applies to voice calls".
+* Initial values come from the agent's default settings (`settings` in the call response) or from `/test-call/?persona=<id>`.
+
 # Talk mode
 
 1. **Start call** → `POST /api/calls {channel: "voice"}` → open WebSocket ([/api/voice-protocol.md](/api/voice-protocol.md)) and SSE `call:{id}`; ask for mic permission.
@@ -32,6 +40,7 @@ After the call ends (either mode): outcome banner — "Resolved", "Escalated —
 
 # Acceptance
 
+- **UI-23** — Given a running call, when the persona or the turn-detection mode is changed in Live controls, then a system notice appears in the transcript, the call continues without restarting, and the next agent reply (or turn decision) uses the new setting.
 - **UI-08** — Given a text call, when the agent calls a tool, then a tool chip appears in Activity with ✓ or ✕ before the reply bubble.
 - **UI-09** — Given a voice call, when the user clicks Hang up, then the socket sends `hangup`, capture stops, and the outcome banner appears.
 - **UI-10** — Given an escalation, then the transcript shows a system notice with the reason and the input is disabled except for "End".

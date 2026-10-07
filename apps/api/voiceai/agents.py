@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.llm.gateway import gateway
-from voiceai.models import Agent, AgentVersion, KnowledgeDoc, Skill, Tool
+from voiceai.live import persona_dict
+from voiceai.models import Agent, AgentVersion, KnowledgeDoc, Persona, Skill, Tool
 from voiceai.schemas import AgentConfig
 
 
@@ -68,10 +69,17 @@ async def build_snapshot(s: AsyncSession, tenant_id: str, draft: dict[str, Any])
         absent = [n for n in (sk.required_tools or []) if n not in tool_names and n != "search_knowledge"]
         if absent:
             raise ApiError(422, "missing_tool", f"Skill '{sk.name}' requires tool(s) not attached to this agent: {', '.join(absent)}")
+    persona = cfg["persona"]
+    if cfg.get("persona_id"):
+        row = await s.scalar(select(Persona).where(Persona.id == cfg["persona_id"], Persona.tenant_id == tenant_id))
+        if row is None:
+            raise ApiError(422, "invalid_reference", f"Config references an unknown persona: {cfg['persona_id']}")
+        persona = persona_dict(row)
     order_t = {i: n for n, i in enumerate(cfg["tool_ids"])}
     order_s = {i: n for n, i in enumerate(cfg["skill_ids"])}
     return {
         **cfg,
+        "persona": persona,
         "tools": [tool_dict(t) for t in sorted(tools, key=lambda t: order_t[t.id])],
         "skills": [skill_dict(k) for k in sorted(skills, key=lambda k: order_s[k.id])],
     }

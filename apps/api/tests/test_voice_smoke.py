@@ -1,34 +1,11 @@
-"""Voice pipeline smoke tests (guards Pipecat API drift). Covers: VO-02, VO-04, VO-05, VO-06"""
+"""Voice pipeline smoke tests (guards Pipecat API drift). Covers: VO-04, VO-05, VO-06"""
 from __future__ import annotations
-
-import asyncio
 
 import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from voiceai.voice.processors import TurnAggregator, UserTurnFrame
 from voiceai.voice.serializer import RawPCMSerializer
-
-
-async def test_turn_aggregator_merges_finals():
-    """Covers: VO-02"""
-    from pipecat.frames.frames import TranscriptionFrame, VADUserStartedSpeakingFrame, VADUserStoppedSpeakingFrame
-
-    agg = TurnAggregator(delay_ms=50)
-    out: list[str] = []
-
-    async def capture(frame, direction=None):  # noqa: ANN001, ANN202
-        if isinstance(frame, UserTurnFrame):
-            out.append(frame.text)
-
-    agg.push_frame = capture  # type: ignore[method-assign]
-    await agg.handle(VADUserStartedSpeakingFrame())
-    await agg.handle(TranscriptionFrame("My claim is", "u", "t"))
-    await agg.handle(VADUserStoppedSpeakingFrame())
-    await agg.handle(TranscriptionFrame("C-20931.", "u", "t"))
-    await asyncio.sleep(0.15)
-    assert out == ["My claim is C-20931."]
 
 
 async def test_serializer_round_trip():
@@ -78,6 +55,16 @@ def test_pipeline_builds_without_network():
     class FakeWS:
         headers: dict = {}
 
-    session = SimpleNamespace(config={"persona": {"voice": "aura-2-thalia-en"}})
-    task, transport, brain, serializer = build(FakeWS(), session, "dummy-key")  # type: ignore[arg-type]
+    from pipecat.frames.frames import TTSUpdateSettingsFrame
+    from pipecat.services.deepgram.tts import DeepgramTTSService
+
+    from voiceai.live import LiveControls
+    from voiceai.voice.turn_detection import TurnSettings
+
+    session = SimpleNamespace(config={"persona": {"voice": "aura-2-thalia-en", "speed": 1.1}}, history=[], turn_settings=lambda: TurnSettings())
+    controls = LiveControls(turn=TurnSettings())
+    task, transport, brain, serializer = build(FakeWS(), session, "dummy-key", controls)  # type: ignore[arg-type]
     assert task is not None and brain.session is session and serializer.end_reason == "hangup"
+    assert controls.on_voice is not None  # live persona switches change the TTS voice
+    frame = TTSUpdateSettingsFrame(delta=DeepgramTTSService.Settings(voice="aura-2-apollo-en", speed=1.05))
+    assert frame.delta.voice == "aura-2-apollo-en" and frame.delta.speed == 1.05

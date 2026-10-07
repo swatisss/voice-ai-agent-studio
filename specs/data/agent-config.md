@@ -40,10 +40,32 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `persona.name` | 1–40 chars |
 | `persona.voice` | Deepgram Aura voice id; default `aura-2-thalia-en` |
 | `persona.greeting`, `persona.disclosure` | required, ≤ 300 chars each |
+| `persona.speed` | 0.7–1.5, default 1.0 (speaking-rate multiplier) |
+| `persona.opening` | ≤ 400 chars, may be empty; outbound opener, supports `{first_name}` placeholders |
 | `policy.max_turns` | 4–40 |
 | `policy.rules`, `policy.escalate_when`, `policy.never` | lists of ≤ 300-char strings, ≤ 30 items each |
 | `models.realtime` | `null` (role default) or a model ref listed by `GET /api/models` |
 | `*_ids` | must reference same-tenant, non-archived objects |
+
+# Library persona and voice settings
+
+* `persona_id` (string or null): id of a tenant persona from the library ([/architecture/personas.md](/architecture/personas.md)). When set, publish resolves it into the snapshot's `persona` and it overrides the inline `persona`; an unknown or other-tenant id fails the publish with 422.
+* `voice.turn_detection` ([/architecture/turn-detection.md](/architecture/turn-detection.md)):
+
+```json
+"voice": { "turn_detection": { "mode": "vad", "min_silence_ms": 700, "max_extra_wait_ms": 1500,
+                               "evaluator": "heuristic", "allow_interruptions": true } }
+```
+
+| Field | Rules |
+|---|---|
+| `mode` | `vad` or `semantic` |
+| `min_silence_ms` | integer 200–2000 |
+| `max_extra_wait_ms` | integer 0–4000 |
+| `evaluator` | `heuristic` or `llm` |
+| `allow_interruptions` | boolean |
+
+The snapshot carries `persona` (resolved, with `id` when from the library) and `voice`.
 
 # Tool definition (`tools` row / API body)
 
@@ -95,5 +117,5 @@ Later edits to a tool or skill never change existing versions. Knowledge docs ar
 
 # Acceptance
 
-- **DM-04** — Given a draft config with `max_turns: 2`, when saved, then the API returns 422.
+- **DM-04** — Given a draft config with `max_turns: 2`, when saved, then the API returns 422. (Turn-detection bounds: TD-08.)
 - **DM-05** — Given a published version, when the underlying tool is edited, then the version's snapshot still holds the old definition.

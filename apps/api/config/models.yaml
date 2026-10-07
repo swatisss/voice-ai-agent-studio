@@ -40,3 +40,7 @@ roles:
     model: "groq:openai/gpt-oss-120b"
     params: { reasoning_effort: low, temperature: 0 }
     fallback: ["openrouter:openai/gpt-oss-120b"]
+  turn:
+    model: "groq:openai/gpt-oss-20b"
+    params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }
+    fallback: ["openrouter:openai/gpt-oss-20b"]

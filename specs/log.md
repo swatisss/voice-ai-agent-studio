@@ -1,5 +1,11 @@
 # Directory Update Log
 
+## 2026-10-06 (CP-0007 turn detection and personas)
+* **Creation**: [CP-0007](changes/cp-0007-turn-detection-and-personas.md), [turn detection](architecture/turn-detection.md) (TD-01…08), [personas](architecture/personas.md) (PER-01…06), [ADR-0006](decisions/adr-0006-turn-detection.md), [turn end check prompt](prompts/turn-end-check.md), [personas page](ui/personas.md) (UI-21).
+* **Update**: [Voice pipeline](architecture/voice-pipeline.md) — turn aggregation delegated to the turn-detection spec, VAD stop 0.2 s, barge-in setting, TTS live updates, live controls.
+* **Update**: [LLM gateway](architecture/llm-gateway.md) — optional `turn` role; [agent runtime](architecture/agent-runtime.md) — `set_persona`; [agent config](data/agent-config.md) and [data model](data/data-model.md) — `persona_id`, `voice.turn_detection`, `personas` table (18 tables); [REST API](api/rest-api.md) — personas, call overrides, `PATCH /api/calls/{id}/live`.
+* **Update**: [Agent builder](ui/agent-builder.md) — library persona and Voice tab (UI-22); [Test call](ui/test-call.md) — Live controls (UI-23); navigation gains Personas; new acceptance prefixes `TD`, `PER`.
+
 ## 2026-10-06 (CP-0005 insurer portal theme)
 * **Creation**: [CP-0005](changes/cp-0005-insurer-portal-theme.md).
 * **Update**: [Design system](ui/design-system.md) — rewritten for the health-insurer portal look: brand-blue tokens, top-header layout, pill controls, accessibility rules; UI-18 (contrast, automated).

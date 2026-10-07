@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     llm_role_drafting: str | None = None
     llm_role_simulator: str | None = None
     llm_role_judge: str | None = None
+    llm_role_turn: str | None = None
 
     embeddings_provider: str = "fastembed"  # fastembed | hash
     fastembed_cache: Path = API_DIR / ".cache" / "fastembed"
@@ -47,8 +48,7 @@ class Settings(BaseSettings):
     ev_max_cluster_cases: int = 6
     ev_concurrency: int = 4
 
-    voice_vad_stop_secs: float = 0.5
-    voice_turn_delay_ms: int = 350
+    voice_vad_stop_secs: float = 0.2
     deepgram_stt_model: str = "nova-3"
 
     @property

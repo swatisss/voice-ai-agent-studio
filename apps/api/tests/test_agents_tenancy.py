@@ -18,7 +18,7 @@ async def test_all_tables_exist(database):
     """Covers: DM-01"""
     async with engine().connect() as conn:
         names = await conn.run_sync(lambda c: inspect(c).get_table_names())
-    assert len(names) == 17
+    assert len(names) == 18
 
 
 async def test_versions_and_snapshots(client, seeded):

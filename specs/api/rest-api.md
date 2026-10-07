@@ -33,6 +33,16 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | GET | `/api/agents/{id}/versions` | `{items: [{id, version, change_note, source_proposal_id, created_at}]}` |
 | GET | `/api/agents/{id}/scenarios` | `{items: [eval_scenario]}` |
 
+## Personas
+| Method | Path | Body → Result |
+|---|---|---|
+| GET | `/api/personas` | `{items: [persona + used_by: [agent names]]}` |
+| POST | `/api/personas` | persona fields ([/architecture/personas.md](/architecture/personas.md)) → persona |
+| PUT | `/api/personas/{id}` | persona fields → persona |
+| DELETE | `/api/personas/{id}` | 204; 409 `persona_in_use` while an agent draft references it |
+
+`settings` (in call responses and `GET /api/calls/{id}`): `{persona: {id, name, voice, speed}, turn_detection: {...}}`, the effective values after overrides.
+
 ## Tools, skills, knowledge
 | Method | Path | Body → Result |
 |---|---|---|
@@ -51,9 +61,10 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Calls
 | Method | Path | Body → Result |
 |---|---|---|
-| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text"}` → `{call_id, greeting}`; 409 if agent unpublished. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
+| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?}` → `{call_id, greeting, settings}`; 409 if agent unpublished. `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
 | POST | `/api/calls/{id}/messages` | `{text}` → `{reply, call_status, ended, escalated}` (text channel only) |
 | POST | `/api/calls/{id}/end` | → `{status, outcome}` |
+| PATCH | `/api/calls/{id}/live` | `{persona_id?, turn_detection?}` → `{settings}`; changes persona and/or turn detection of a running call (404 unknown, 409 ended, 422 invalid). See [/architecture/personas.md](/architecture/personas.md), [/architecture/turn-detection.md](/architecture/turn-detection.md). |
 | GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `include_seed=true` → `{items: [call summary]}` (eval calls excluded) |
 | GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |

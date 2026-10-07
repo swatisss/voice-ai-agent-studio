@@ -41,7 +41,7 @@ Typography: system UI stack (`Segoe UI`, `system-ui`, `-apple-system`, `Roboto`)
 # Layout
 
 * **Header** (sticky, white, 1 px bottom border): brand mark + business-unit brand name with the product caption "Voice Agent Studio"; horizontal navigation; on the right the **business unit** switcher and provider status dots.
-* **Navigation** items in order: Dashboard, Agents, Test call, Calls, Agent console (waiting badge), Insights (ready badge). The active item has a 4 px accent underline and accent text. Below 768 px the items collapse into a menu button.
+* **Navigation** items in order: Dashboard, Agents, Personas, Test call, Calls, Agent console (waiting badge), Insights (ready badge). The active item has a 4 px accent underline and accent text. Below 768 px the items collapse into a menu button.
 * **Content**: max width 1280 px, 24 px page padding (16 px on phones), page titles at 28 px.
 * A visually hidden **Skip to content** link is the first focusable element.
 

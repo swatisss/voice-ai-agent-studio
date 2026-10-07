@@ -22,7 +22,8 @@ from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.knowledge.search import search as kb_search
 from voiceai.llm.gateway import LLMError, gateway
-from voiceai.models import Agent, AgentVersion, Call, CallEvent, Tenant
+from voiceai.live import effective_turn, persona_dict, settings_view
+from voiceai.models import Agent, AgentVersion, Call, CallEvent, Persona, Tenant
 from voiceai.runtime import escalation
 from voiceai.runtime.prompt import system_prompt
 from voiceai.runtime.state import CallState
@@ -52,14 +53,15 @@ def _trim_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 async def create_call(
-    s: AsyncSession, tenant_id: str, agent_id: str, channel: str, is_eval: bool = False,
+    s: AsyncSession, tenant_id: str, agent_id: str, channel: str, is_eval: bool = False, live: dict[str, Any] | None = None,
 ) -> Call:
     agent = await s.scalar(select(Agent).where(Agent.id == agent_id, Agent.tenant_id == tenant_id))
     if not agent:
         raise ApiError(404, "agent_not_found", "Agent not found")
     if not agent.published_version_id:  # API-01
         raise ApiError(409, "agent_not_published", "Publish the agent before starting a call")
-    call = Call(tenant_id=tenant_id, agent_id=agent.id, agent_version_id=agent.published_version_id, channel=channel, is_eval=is_eval)
+    meta: dict[str, Any] = {"live": live} if live else {}
+    call = Call(tenant_id=tenant_id, agent_id=agent.id, agent_version_id=agent.published_version_id, channel=channel, is_eval=is_eval, meta=meta)
     s.add(call)
     await s.flush()
     return call
@@ -69,6 +71,7 @@ class AgentSession:
     def __init__(
         self, *, call: Call, config: dict[str, Any], tenant_name: str, app: Any | None,
         history: list[dict[str, Any]] | None = None, state: CallState | None = None, seq: int = 0,
+        live: dict[str, Any] | None = None,
     ) -> None:
         self.call_id = call.id
         self.tenant_id = call.tenant_id
@@ -77,6 +80,8 @@ class AgentSession:
         self.is_eval = call.is_eval
         self.started_at = call.started_at or utcnow()
         self.config = config
+        self.base_persona: dict[str, Any] = dict(config.get("persona") or {})  # the version's persona, for "reset to default"
+        self.live: dict[str, Any] = dict(live or {})  # persisted overrides: persona_id, turn_detection
         self.tenant_name = tenant_name
         self.history: list[dict[str, Any]] = history or []
         self.state = state or CallState()
@@ -102,10 +107,17 @@ class AgentSession:
             tenant = await s.get(Tenant, tenant_id)
             seq = await s.scalar(select(func.max(CallEvent.seq)).where(CallEvent.call_id == call_id)) or 0
             meta = call.meta or {}
+            live = dict(meta.get("live") or {})
+            base_persona = dict(config.get("persona") or {})
+            if live.get("persona_id"):  # call-start or live persona override
+                row = await s.get(Persona, live["persona_id"])
+                if row is not None and row.tenant_id == tenant_id:
+                    config = {**config, "persona": persona_dict(row)}
             state = CallState(**meta["state"]) if meta.get("state") else CallState()
             state.ended = state.ended or call.ended_at is not None
             sess = cls(call=call, config=config, tenant_name=tenant.name if tenant else tenant_id, app=app,
-                       history=list(meta.get("history", [])), state=state, seq=seq)
+                       history=list(meta.get("history", [])), state=state, seq=seq, live=live)
+            sess.base_persona = base_persona
         if not sess.state.ended:
             REGISTRY[call_id] = sess
         return sess
@@ -131,8 +143,31 @@ class AgentSession:
             call.caller_ref = self.state.verified_member_ref
             if self.state.latencies_ms:
                 call.latency_p50_ms = int(statistics.median(self.state.latencies_ms))
-            call.meta = {**(call.meta or {}), "state": asdict(self.state), "history": self.history[-60:]}
+            call.meta = {**(call.meta or {}), "state": asdict(self.state), "history": self.history[-60:], "live": self.live}
             await s.commit()
+
+    # ------------------------------------------------------------ live settings
+    def turn_settings(self):  # noqa: ANN201
+        return effective_turn(self.config, self.live)
+
+    def settings(self) -> dict[str, Any]:
+        return settings_view(self.config.get("persona") or {}, self.turn_settings())
+
+    async def switch_persona(self, persona: dict[str, Any] | None) -> None:
+        """Live persona switch (PER-04); None restores the agent's own persona."""
+        persona = persona or self.base_persona
+        self.config = {**self.config, "persona": persona}
+        self.live["persona_id"] = persona.get("id") if persona is not self.base_persona else None
+        await self._event("system", f"Persona switched to {persona.get('name', 'default')}", {"persona_id": persona.get("id")})
+        await self._persist()
+
+    async def change_turn_detection(self, patch: dict[str, Any]) -> None:
+        merged = {**(self.live.get("turn_detection") or {}), **patch}
+        self.live["turn_detection"] = merged
+        t = self.turn_settings()
+        label = "Semantic" if t.mode == "semantic" else "Normal"
+        await self._event("system", f"Turn detection: {label} detection, {t.min_silence_ms} ms silence", {"turn_detection": t.to_dict()})
+        await self._persist()
 
     # ------------------------------------------------------------ lifecycle
     async def start(self) -> str:

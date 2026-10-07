@@ -9,3 +9,4 @@ The code loads each prompt directly from the fenced `text` block under the `# Pr
 * [Fix draft](fix-draft.md) - Drafts a knowledge article, skill or policy rule from cluster evidence
 * [Caller simulator](caller-simulator.md) - Plays a caller with a goal during evaluations
 * [Eval judge](eval-judge.md) - Grades a simulated call against its goal and expected outcome
+* [Turn end check](turn-end-check.md) - Fast yes/no judgment that the caller finished speaking (LLM turn evaluator)

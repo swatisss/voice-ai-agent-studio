@@ -11,6 +11,8 @@ import { Badge, Button, Card, cx, EmptyState, Input, Select, Spinner, Tabs, useT
 import { api, ApiError, type CallEvent, useApi, useEvents } from "@/lib/api";
 import { money, secs } from "@/lib/format";
 import { VoiceClient } from "@/lib/voice";
+import { LiveControlsCard } from "@/components/live-controls";
+import { DEFAULT_TURN, type TurnDetection } from "@/lib/voices";
 
 const PROFILES = [
   { name: "Maria Lopez", id: "482913", dob: "April 12, 1986", note: "Claim C-20931 (paid), deductible $650 left" },
@@ -47,6 +49,10 @@ function TestCall() {
   const [level, setLevel] = useState(0);
   const [speaking, setSpeaking] = useState(false);
   const [helper, setHelper] = useState(true);
+  const { data: personas } = useApi<{ items: any[] }>("/api/personas", [tenant]);
+  const { data: agentDetail } = useApi<any>(agentId ? `/api/agents/${agentId}` : null, [agentId]);
+  const [personaId, setPersonaId] = useState(params.get("persona") ?? "");
+  const [turn, setTurn] = useState<TurnDetection>(DEFAULT_TURN);
   const voice = useRef<VoiceClient | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -73,6 +79,9 @@ function TestCall() {
   }, tenant);
 
   useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth" }); }, [events.length]);
+  useEffect(() => {  // the agent's own defaults seed the controls whenever no call is running
+    if (agentDetail && !callId) setTurn({ ...DEFAULT_TURN, ...(agentDetail.draft_config?.voice?.turn_detection ?? {}) });
+  }, [agentDetail, callId]);
   useEffect(() => () => voice.current?.hangup(), []);
 
   function reset() {
@@ -85,7 +94,7 @@ function TestCall() {
     reset();
     setStatus("connecting");
     try {
-      const r = await api("/api/calls", { method: "POST", json: { agent_id: agentId, channel: mode === "talk" ? "voice" : "text" } });
+      const r = await api("/api/calls", { method: "POST", json: { agent_id: agentId, channel: mode === "talk" ? "voice" : "text", persona_id: personaId || undefined, turn_detection: mode === "talk" ? turn : undefined } });
       setCallId(r.call_id);
       if (mode === "type") {
         await sync(r.call_id);
@@ -186,6 +195,8 @@ function TestCall() {
           </div>
         </Card>
         <div className="space-y-4">
+          <LiveControlsCard callId={callId} active={status === "active"} voiceCall={mode === "talk"} personas={personas?.items ?? []}
+            personaId={personaId} onPersona={setPersonaId} turn={turn} onTurn={setTurn} />
           <Card title="Activity"><ActivityList events={events} /></Card>
           <Card title="Call">
             {callId ? (

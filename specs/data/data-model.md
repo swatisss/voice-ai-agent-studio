@@ -21,6 +21,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **agents** — `id`, `tenant_id`, `name`, `description`, `draft_config` JSON ([/data/agent-config.md](/data/agent-config.md)), `published_version_id` (nullable FK), `created_at`, `updated_at`
 
+**personas** — `id`, `tenant_id`, `name`, `description`, `voice`, `speed` float, `greeting`, `disclosure`, `opening`, `style`, `created_at`, `updated_at` ([/architecture/personas.md](/architecture/personas.md))
+
 **agent_versions** — `id`, `tenant_id`, `agent_id`, `version` int (1..n per agent, unique with agent_id), `config` JSON (snapshot), `change_note`, `source_proposal_id` (nullable), `created_at`
 
 **tools** — `id`, `tenant_id`, `name` (unique per tenant), `description`, `method`, `url`, `parameters` JSON, `requires_verification` bool, `is_verification` bool, `timeout_s` int, `status` (`active`|`draft`), `created_at`, `updated_at`
@@ -31,7 +33,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **knowledge_chunks** — `id`, `tenant_id`, `doc_id` (FK, cascade delete), `ordinal`, `heading`, `content`, `embedding` JSON (list of float)
 
-**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason`, `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON
+**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason`, `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON (`state`, `history`, and the live overrides `live.persona_id` and `live.turn_detection`)
 
 **call_events** — `id`, `tenant_id`, `call_id` (indexed), `seq` int (1..n per call), `at`, `kind` (`user`|`assistant`|`tool_call`|`tool_result`|`system`), `text` (nullable), `data` JSON (tool name/args/result, `latency_ms`, usage)
 
@@ -64,6 +66,6 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 17 tables exist.
+- **DM-01** — Given a fresh database, when the app starts, then all 18 tables exist.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.

@@ -7,7 +7,7 @@ tags: [product, use-cases, demo]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---
 
-All seven live in the business unit **Evergreen Health · Customer Support & Channels** (category shown in the UI: *Customer Support & Channels*). Four agents serve them ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)). Every use case is available in **voice** (browser microphone) and **chat**. Data is synthetic ([/demo-data/members-and-claims.md](/demo-data/members-and-claims.md)). Tool names are the platform tools of [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
+All seven live in the business unit **Evergreen Health · Customer Support & Channels** (category in the API data: *Customer Support & Channels*). Four agents serve them ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)). Every use case is available in **voice** (browser microphone) and **chat**. Data is synthetic ([/demo-data/members-and-claims.md](/demo-data/members-and-claims.md)). Tool names are the platform tools of [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
 
 Common rules: identity is verified (member ID + date of birth) before any policy, claim or document detail; the agent answers facts only from tools or approved knowledge; appeals, grievances, safety language and requests for a person escalate with a groundwork packet ([/architecture/escalation.md](/architecture/escalation.md)).
 

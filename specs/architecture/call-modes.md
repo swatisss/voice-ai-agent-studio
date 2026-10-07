@@ -17,6 +17,8 @@ An agent has a `mode` in its config ([/data/agent-config.md](/data/agent-config.
 | `outbound` | the agent, with the persona's **opening** | a customer the agent is calling | the agent knows whom it is calling, but the callee must still confirm their date of birth before any account detail |
 | `internal` | the agent, with the persona's greeting and disclosure | Evergreen staff (assumed authenticated by the surrounding channel) | no member verification; the agent never discloses member data |
 
+"Speaks first" holds for every channel: in a text chat the first utterance is shown on start; in a voice call it is **spoken** as soon as the pipeline is ready, without the caller saying anything ([/architecture/voice-pipeline.md](/architecture/voice-pipeline.md), VO-07).
+
 The mode selects a mode prompt ([/prompts/mode-inbound.md](/prompts/mode-inbound.md), [/prompts/mode-outbound.md](/prompts/mode-outbound.md), [/prompts/mode-internal.md](/prompts/mode-internal.md)) that is inserted into the system prompt ([/prompts/agent-system-prompt.md](/prompts/agent-system-prompt.md)) as `mode_instructions`.
 
 # Outbound calls

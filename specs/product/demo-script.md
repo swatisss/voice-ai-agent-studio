@@ -13,7 +13,8 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 * Two browser windows: **Test call** (presenter) and **Agent console** (a teammate playing the human).
 * Headset microphone. **Type** is a full fallback for any audio problem — same agents, same flow.
 * Dashboard open in a third tab: 123 historical calls, containment about 68%.
-* On Test call, the use-case gallery lists the seven use cases; selecting one picks its agent and shows what to say.
+* On Test call, the agent select picks the agent; its "Handles" line names the use cases it serves and the **Test script** card shows the starting phrase of each. Callers' member IDs and dates of birth are not on screen; use [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md) and the callers named below. Switch **Technical details** on to show tool chips and costs.
+* In Talk mode the agent opens with its spoken welcome after **Start call**; wait for it, then answer.
 
 # Act 1 — Resolve (≈2 min): Policy Inquiry & Claims Status
 
@@ -52,7 +53,7 @@ On the **Agent console** the escalation appears instantly; the packet fills in w
 
 # Use-case tour (≈1 min each, pick what the audience cares about)
 
-| Use case | Select in the gallery, then | Highlight |
+| Use case | Select its agent (see the Test script), then | Highlight |
 |---|---|---|
 | **Document Center & Green Card** | James Carter: "I'm driving to Spain next month, I need a Green Card emailed." | collects countries and dates, issues instantly; try "the USA" → not covered → specialist |
 | **Coverage Information Support** | Priya Nair: "How much of my dental allowance is left, is there a waiting period?" | member-specific limit remaining plus the waiting period from knowledge |

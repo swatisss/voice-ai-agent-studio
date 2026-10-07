@@ -20,6 +20,7 @@ class LiveControls:
 
     turn: TurnSettings
     on_voice: Callable[[str, float], Awaitable[None]] | None = None  # set by the pipeline: change TTS voice/speed
+    welcoming: bool = False  # the opening welcome is playing: caller speech is ignored (VO-08); set by the brain
 
 
 LIVE: dict[str, LiveControls] = {}

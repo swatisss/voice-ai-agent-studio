@@ -29,7 +29,7 @@ Wire format and control messages: [/api/voice-protocol.md](/api/voice-protocol.m
 2. **STT** — Deepgram streaming, model `nova-3`, `en-US`, smart formatting on, interim results on (interims are ignored by the brain).
 3. **TurnAggregator** (ours) — collects final transcripts into one caller turn and decides when the turn is over, in **normal** (silence) or **semantic** mode, with settings read live from the call's `LiveControls`. Full algorithm, evaluator rules and settings: [/architecture/turn-detection.md](/architecture/turn-detection.md).
 4. **BrainProcessor** (ours) — wraps one `AgentSession`:
-   * on client connect: push the greeting text;
+   * **welcome**: once the client is connected *and* the pipeline has started, send `ready`, then speak the welcome exactly once — the persona greeting and disclosure for inbound and internal agents, the persona opening for outbound agents ([/architecture/call-modes.md](/architecture/call-modes.md)) — the same text `AgentSession.start()` records as the first assistant event. The welcome is **protected**: from the moment it starts until the agent has finished speaking it (or a safety timeout scaled to its length, at least 15 s, elapses) caller speech does not interrupt it and caller turns heard in that time are dropped, not answered. Without this, any sound the microphone picks up — including the agent's own voice from open speakers — interrupted the welcome after about a second and the call carried on as if the caller had spoken;
    * on user turn: if `allow_interruptions` is false and the agent is still speaking or responding, hold the turn and answer it after the agent finishes; otherwise cancel any in-flight response task, then start `respond(text)` and push each chunk downstream as text between LLM-response start/end frames so TTS speaks it sentence by sentence;
    * on interruption: cancel the in-flight task (partial reply is still recorded, suffixed `[interrupted]`);
    * when the session ends (e.g. `end_call`): after the final text is spoken, send the `end` control message and close.
@@ -51,7 +51,9 @@ Wire format and control messages: [/api/voice-protocol.md](/api/voice-protocol.m
 
 # Acceptance
 
-- **VO-01** — Given a voice call, when the socket connects, then the caller hears the greeting without speaking first.
+- **VO-01** — Given a voice call, when the socket connects, then the caller hears the greeting without speaking first (checked by hand with real audio; the automated checks are VO-07 and VO-08).
+- **VO-07** — Given a voice call whose pipeline has started, when the client is connected, then the brain emits the `ready` control message and then the welcome text exactly once, as one spoken response — greeting + disclosure for an inbound or internal agent, the rendered opening for an outbound agent — and a repeated connect signal does not speak it again.
+- **VO-08** — Given the welcome is playing (interruptions allowed), when the caller starts speaking or the microphone picks up the agent's own voice, then no interruption is broadcast, the welcome is not cancelled, and a caller turn recognised during it is not answered; once the agent has finished the welcome (or the safety timeout passes), a caller speaking again interrupts and a caller turn is answered as in TD-07.
 - **VO-02** — Given the TurnAggregator in normal mode, when two final transcripts arrive and the caller stays silent for the threshold, then the brain receives one turn containing both texts in order (detailed in TD-01).
 - **VO-03** — Given the agent is speaking, when the caller starts speaking, then TTS output stops, the browser receives `interrupt`, and the in-flight response task is cancelled.
 - **VO-04** — Given the WebSocket opens with an unknown call id, then it closes with code 4404.

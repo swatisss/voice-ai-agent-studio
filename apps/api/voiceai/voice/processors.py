@@ -110,6 +110,8 @@ class TurnAggregator(FrameProcessor):
             self.speaking = False
             self._schedule(self.controls.turn.first_delay_s(self.vad_stop_ms), "first")
         elif isinstance(frame, TranscriptionFrame):
+            if self.controls.welcoming:  # VO-08: speech heard during the welcome is never a caller turn
+                return True
             self.buffer.append(frame.text)
             if not self.speaking:
                 self._schedule(self.controls.turn.first_delay_s(self.vad_stop_ms), "first")
@@ -127,7 +129,28 @@ class TurnAggregator(FrameProcessor):
 
 
 class BrainProcessor(FrameProcessor):
-    """Runs AgentSession for each caller turn and streams the reply to TTS."""
+    """Runs AgentSession for each caller turn and streams the reply to TTS.
+
+    The opening welcome is protected (VO-08): while it plays, caller speech (or the agent's own voice
+    leaking from the speakers into the microphone) neither interrupts it nor is answered.
+    """
+
+    WELCOME_GRACE_S = 0.8        # silence after the welcome audio before the protection ends (bridges gaps between sentences)
+    WELCOME_MIN_TIMEOUT_S = 15.0  # safety net if the welcome never finishes speaking
+    WELCOME_SLOW_CHARS_PER_S = 6.0
+
+    # class-level defaults so the welcome state exists even on test doubles that skip __init__
+    _welcome_spoken = False
+    _welcome_end: asyncio.TimerHandle | None = None
+    _welcome_timeout: asyncio.TimerHandle | None = None
+
+    @property
+    def _welcoming(self) -> bool:
+        return self.controls.welcoming  # shared with the TurnAggregator, which drops transcripts meanwhile
+
+    @_welcoming.setter
+    def _welcoming(self, value: bool) -> None:
+        self.controls.welcoming = value
 
     def __init__(
         self, session: AgentSession, on_end: Callable[[str], Awaitable[None]], controls: LiveControls, **kwargs,  # noqa: ANN003
@@ -146,9 +169,40 @@ class BrainProcessor(FrameProcessor):
         if self._greeted:
             return
         self._greeted = True
-        await self.push_frame(OutputTransportMessageUrgentFrame(message={"type": "ready"}))
-        greeting = await self.session.start()
-        await self._speak_text([greeting])
+        self._welcoming = True  # protected from the first moment: noise can arrive before any audio is out
+        try:
+            await self.push_frame(OutputTransportMessageUrgentFrame(message={"type": "ready"}))
+            greeting = await self.session.start()
+            loop = asyncio.get_running_loop()
+            timeout = max(self.WELCOME_MIN_TIMEOUT_S, len(greeting) / self.WELCOME_SLOW_CHARS_PER_S)
+            self._welcome_timeout = loop.call_later(timeout, self._end_welcome)
+            await self._speak_text([greeting])
+        except BaseException:
+            self._end_welcome()
+            raise
+
+    def _end_welcome(self) -> None:
+        self._welcoming = False
+        self._welcome_spoken = False
+        for handle in (self._welcome_end, self._welcome_timeout):
+            if handle:
+                handle.cancel()
+        self._welcome_end = self._welcome_timeout = None
+
+    def on_bot_started(self) -> None:
+        self._bot_speaking = True
+        if self._welcoming:
+            self._welcome_spoken = True
+            if self._welcome_end:  # audio resumed after a gap between sentences
+                self._welcome_end.cancel()
+                self._welcome_end = None
+
+    async def on_bot_stopped(self) -> None:
+        self._bot_speaking = False
+        self._bot_stopped.set()
+        if self._welcoming and self._welcome_spoken and not self._welcome_end:
+            self._welcome_end = asyncio.get_running_loop().call_later(self.WELCOME_GRACE_S, self._end_welcome)
+        await self._release_held()
 
     async def _speak_text(self, chunks: list[str]) -> None:
         await self.push_frame(LLMFullResponseStartFrame())
@@ -162,14 +216,17 @@ class BrainProcessor(FrameProcessor):
 
     # -- decisions (also called directly by tests)
     async def on_user_started(self) -> None:
-        """VO-03 barge-in, unless interruptions are disabled (TD-07)."""
-        if not self.controls.turn.allow_interruptions:
+        """VO-03 barge-in, unless interruptions are disabled (TD-07) or the welcome is playing (VO-08)."""
+        if self._welcoming or not self.controls.turn.allow_interruptions:
             return
         if self.busy:
             await self._cancel_task()
             await self.broadcast_interruption()
 
     async def on_user_turn(self, text: str) -> None:
+        if self._welcoming:  # VO-08: heard during the welcome (often our own echo): not a caller turn
+            log.debug("dropping caller turn heard during the welcome: %r", text)
+            return
         if self.busy and not self.controls.turn.allow_interruptions:
             self._held.append(text)  # answered after the agent finishes
             return
@@ -223,11 +280,9 @@ class BrainProcessor(FrameProcessor):
         if isinstance(frame, VADUserStartedSpeakingFrame):
             await self.on_user_started()
         elif isinstance(frame, BotStartedSpeakingFrame):
-            self._bot_speaking = True
+            self.on_bot_started()
         elif isinstance(frame, BotStoppedSpeakingFrame):
-            self._bot_speaking = False
-            self._bot_stopped.set()
-            await self._release_held()
+            await self.on_bot_stopped()
         elif isinstance(frame, InputTransportMessageFrame):
             if isinstance(frame.message, dict) and frame.message.get("type") == "hangup":
                 await self._cancel_task()
@@ -237,6 +292,7 @@ class BrainProcessor(FrameProcessor):
             await self.push_frame(frame, direction)
             return
         elif isinstance(frame, (EndFrame, CancelFrame)):
+            self._end_welcome()
             await self._cancel_task()
         elif isinstance(frame, InterruptionFrame):
             pass

@@ -51,7 +51,7 @@ Role `turn` ([/architecture/llm-gateway.md](/architecture/llm-gateway.md)) with 
 
 # Interruptions
 
-`BrainProcessor` handles caller speech while the agent speaks. With `allow_interruptions: true` the VAD start event cancels the in-flight reply and broadcasts an interruption (TTS stops, the browser flushes audio). With `false` nothing is interrupted: the caller's turn is held and answered after the agent finishes.
+`BrainProcessor` handles caller speech while the agent speaks. With `allow_interruptions: true` the VAD start event cancels the in-flight reply and broadcasts an interruption (TTS stops, the browser flushes audio). With `false` nothing is interrupted: the caller's turn is held and answered after the agent finishes. The opening **welcome** of a voice call is always protected, whatever this setting says ([/architecture/voice-pipeline.md](/architecture/voice-pipeline.md), VO-08).
 
 # Live controls
 

@@ -18,7 +18,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | client → server | binary | Caller audio: PCM signed 16-bit little-endian, mono, **16,000 Hz**, 20 ms per frame (640 bytes) recommended |
 | client → server | text (JSON) | `{"type":"hangup"}` |
 | server → client | binary | Agent audio: PCM signed 16-bit little-endian, mono, **24,000 Hz**, arbitrary frame sizes |
-| server → client | text (JSON) | `{"type":"ready"}` once the pipeline is running |
+| server → client | text (JSON) | `{"type":"ready"}` once the pipeline is running; the agent's spoken welcome follows immediately and the caller does not need to speak first ([VO-07](/architecture/voice-pipeline.md)) |
 | server → client | text (JSON) | `{"type":"interrupt"}` — caller barged in; client MUST discard queued playback immediately |
 | server → client | text (JSON) | `{"type":"end","reason":"end_call"\|"hangup"\|"error"}` — client stops capture; server closes after sending |
 

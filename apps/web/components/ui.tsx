@@ -12,16 +12,16 @@ export function Button({
   children, variant = "secondary", loading, className, ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; loading?: boolean }) {
   const styles: Record<BtnVariant, string> = {
-    primary: "bg-accent text-white dark:text-black hover:opacity-90",
-    secondary: "bg-panel border border-line hover:bg-neutral-soft",
-    ghost: "hover:bg-neutral-soft",
-    danger: "bg-bad text-white hover:opacity-90",
+    primary: "bg-accent text-on-accent hover:brightness-95 active:brightness-90",
+    secondary: "bg-panel border-[1.5px] border-accent text-accent hover:bg-accent-soft",
+    ghost: "text-accent hover:bg-accent-soft",
+    danger: "bg-bad-soft border-[1.5px] border-bad text-bad hover:brightness-95",
   };
   return (
     <button
       {...rest}
       disabled={rest.disabled || loading}
-      className={cx("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed", styles[variant], className)}
+      className={cx("inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed", styles[variant], className)}
     >
       {loading && <Loader2 size={14} className="animate-spin" />}
       {children}
@@ -31,14 +31,14 @@ export function Button({
 
 export function Card({ children, className, title, actions }: { children: ReactNode; className?: string; title?: ReactNode; actions?: ReactNode }) {
   return (
-    <section className={cx("rounded-xl border border-line bg-panel", className)}>
+    <section className={cx("rounded-2xl border border-line bg-panel shadow-[var(--shadow)]", className)}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
-          <h2 className="text-sm font-semibold">{title}</h2>
+        <header className="flex items-center justify-between gap-2 border-b border-line px-5 py-3">
+          <h2 className="text-base font-semibold">{title}</h2>
           <div className="flex items-center gap-2">{actions}</div>
         </header>
       )}
-      <div className="p-4">{children}</div>
+      <div className="p-5">{children}</div>
     </section>
   );
 }
@@ -56,7 +56,7 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: 
     <div className="flex gap-1 border-b border-line">
       {tabs.map((t) => (
         <button key={t.id} onClick={() => onChange(t.id)}
-          className={cx("px-3 py-2 text-sm -mb-px border-b-2", value === t.id ? "border-accent text-fg font-medium" : "border-transparent text-muted hover:text-fg")}>
+          className={cx("px-4 py-2.5 text-sm -mb-px border-b-[3px] font-medium", value === t.id ? "border-accent text-accent" : "border-transparent text-muted hover:text-fg")}>
           {t.label}
         </button>
       ))}
@@ -64,7 +64,7 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: 
   );
 }
 
-const inputCls = "w-full rounded-lg border border-line bg-panel px-3 py-1.5 text-sm outline-none focus:border-accent";
+const inputCls = "w-full min-h-10 rounded-[10px] border-[1.5px] border-line bg-panel px-3 py-2 text-sm outline-none focus:border-accent";
 export const Input = (p: React.InputHTMLAttributes<HTMLInputElement>) => <input {...p} className={cx(inputCls, p.className)} />;
 export const Textarea = (p: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...p} className={cx(inputCls, "min-h-20", p.className)} />;
 export const Select = (p: React.SelectHTMLAttributes<HTMLSelectElement>) => <select {...p} className={cx(inputCls, p.className)} />;
@@ -81,8 +81,8 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
 
 export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return (
-    <div className="rounded-xl border border-line bg-panel px-4 py-3">
-      <div className="text-xs text-muted">{label}</div>
+    <div className="rounded-2xl border border-line bg-panel px-5 py-4 shadow-[var(--shadow)]">
+      <div className="text-xs font-medium text-muted">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
       {sub && <div className="text-xs text-muted mt-0.5">{sub}</div>}
     </div>
@@ -91,7 +91,7 @@ export function Stat({ label, value, sub }: { label: string; value: ReactNode; s
 
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-line p-8 text-center">
+    <div className="rounded-2xl border-[1.5px] border-dashed border-line bg-panel p-10 text-center">
       <div className="font-medium">{title}</div>
       {children && <div className="mt-1 text-sm text-muted">{children}</div>}
     </div>
@@ -118,7 +118,7 @@ export function Modal({ open, title, onClose, children, footer }: { open: boolea
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-xl border border-line bg-panel shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-2xl border border-line bg-panel shadow-xl" onClick={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-line px-4 py-3">
           <h3 className="font-semibold">{title}</h3>
           <button onClick={onClose} aria-label="Close"><X size={16} /></button>

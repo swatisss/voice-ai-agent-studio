@@ -59,7 +59,7 @@ export default function Dashboard() {
                 <XAxis type="number" stroke="var(--muted)" fontSize={12} allowDecimals={false} />
                 <YAxis type="category" dataKey="cause" stroke="var(--muted)" fontSize={12} width={110} />
                 <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--border)" }} />
-                <Bar dataKey="count" fill="var(--warn)" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" fill="var(--chart-warn)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

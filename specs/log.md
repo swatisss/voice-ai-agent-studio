@@ -1,5 +1,10 @@
 # Directory Update Log
 
+## 2026-10-06 (CP-0005 insurer portal theme)
+* **Creation**: [CP-0005](changes/cp-0005-insurer-portal-theme.md).
+* **Update**: [Design system](ui/design-system.md) — rewritten for the health-insurer portal look: brand-blue tokens, top-header layout, pill controls, accessibility rules; UI-18 (contrast, automated).
+* **Update**: [App shell](ui/app-shell.md) — top header with horizontal navigation replaces the sidebar; UI-19, UI-20.
+
 ## 2026-10-06 (CP-0004 dev launcher)
 * **Creation**: [CP-0004](changes/cp-0004-one-command-dev-launcher.md) and the [dev launcher](build/dev-launcher.md) spec (DEV-01…06); new acceptance prefix `DEV` in [conventions](process/conventions.md).
 * **Update**: [Local runbook](build/runbook-local.md) — first run uses `scripts/dev.py`; the manual web dev server needs `NEXT_PUBLIC_API_BASE`.

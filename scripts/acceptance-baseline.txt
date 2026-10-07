@@ -27,6 +27,8 @@ UI-14
 UI-15
 UI-16
 UI-17
+UI-19
+UI-20
 
 # Live voice: needs a Deepgram key, a microphone and speakers (spike S1 in specs/verification/spikes.md)
 VO-01

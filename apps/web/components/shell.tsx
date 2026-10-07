@@ -1,7 +1,7 @@
-// Spec: /ui/app-shell.md
+// Spec: /ui/app-shell.md, /ui/design-system.md (Layout)
 "use client";
 
-import { Bot, Headphones, LayoutDashboard, Lightbulb, Menu, Phone, PhoneCall } from "lucide-react";
+import { Bot, Headphones, HeartPulse, LayoutDashboard, Lightbulb, Menu, Phone, PhoneCall, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
@@ -21,13 +21,16 @@ const NAV = [
   { href: "/insights/", label: "Insights", icon: Lightbulb, badge: "insights" as const },
 ];
 
+/** The business unit's brand is the part of its name before " · ". */
+export const brandOf = (name: string) => (name.split("·")[0] || name).trim();
+
 export function Shell({ children }: { children: ReactNode }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenant, setTenantState] = useState("");
   const [health, setHealth] = useState<{ providers?: Record<string, boolean> } | null>(null);
   const [waiting, setWaiting] = useState(0);
   const [ready, setReady] = useState(0);
-  const [navOpen, setNavOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const path = usePathname();
 
   const setTenant = useCallback((t: string) => {
@@ -55,48 +58,57 @@ export function Shell({ children }: { children: ReactNode }) {
   useEvents(["console", "insights"], (e) => {  // UI-02
     if (e.type.startsWith("escalation") || e.type.startsWith("cluster") || e.type.startsWith("proposal")) refreshBadges();
   }, tenant);
+  useEffect(() => { setMenuOpen(false); }, [path]);
+
+  const brand = brandOf(tenants.find((t) => t.id === tenant)?.name ?? "Voice Agent Studio");
+  const items = NAV.map(({ href, label, icon: Icon, badge }) => {
+    const active = href === "/" ? path === "/" : path.startsWith(href);
+    const count = badge === "console" ? waiting : badge === "insights" ? ready : 0;
+    return (
+      <Link key={href} href={href} className="nav-link" aria-current={active ? "page" : undefined}>
+        <Icon size={18} aria-hidden="true" />
+        <span>{label}</span>
+        {count > 0 && <Badge tone={badge === "console" ? "warn" : "accent"}>{count}</Badge>}
+      </Link>
+    );
+  });
 
   return (
     <TenantCtx.Provider value={{ tenant, tenants }}>
       <ToastProvider>
-        <div className="flex min-h-screen">
-          <aside className={cx("fixed inset-y-0 left-0 z-40 w-56 border-r border-line bg-panel p-3 transition md:static md:translate-x-0", navOpen ? "translate-x-0" : "-translate-x-full")}>
-            <div className="mb-4 px-2 pt-1">
-              <div className="text-sm font-semibold">Voice Agent Studio</div>
-              <div className="text-xs text-muted">resolve · escalate · learn</div>
-            </div>
-            <nav className="space-y-0.5">
-              {NAV.map(({ href, label, icon: Icon, badge }) => {
-                const active = href === "/" ? path === "/" : path.startsWith(href);
-                const count = badge === "console" ? waiting : badge === "insights" ? ready : 0;
-                return (
-                  <Link key={href} href={href} onClick={() => setNavOpen(false)}
-                    className={cx("flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm", active ? "bg-accent-soft text-accent font-medium" : "text-muted hover:bg-neutral-soft hover:text-fg")}>
-                    <Icon size={16} />
-                    <span className="flex-1">{label}</span>
-                    {count > 0 && <Badge tone={badge === "console" ? "warn" : "accent"}>{count}</Badge>}
-                  </Link>
-                );
-              })}
-            </nav>
-          </aside>
-          <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-panel/90 px-4 py-2 backdrop-blur">
-              <button className="md:hidden" onClick={() => setNavOpen(!navOpen)} aria-label="Menu"><Menu size={18} /></button>
-              <Select className="max-w-xs" value={tenant} onChange={(e) => setTenant(e.target.value)} aria-label="Tenant">
+        <a href="#main" className="skip-link">Skip to content</a>
+        <header className="sticky top-0 z-30 border-b border-line bg-panel shadow-[var(--shadow)]">
+          <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 md:px-6">
+            <Link href="/" className="flex items-center gap-3 py-3" aria-label={`${brand} home`}>
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-on-accent"><HeartPulse size={22} aria-hidden="true" /></span>
+              <span className="whitespace-nowrap leading-tight">
+                <span className="block text-lg font-semibold">{brand}</span>
+                <span className="block text-xs text-muted">Voice Agent Studio</span>
+              </span>
+            </Link>
+            <nav className="hidden items-center gap-5 md:flex" aria-label="Primary">{items}</nav>
+            <div className="ml-auto flex items-center gap-3">
+              <label className="sr-only" htmlFor="business-unit">Business unit</label>
+              <Select id="business-unit" className="max-w-[13rem]" value={tenant} onChange={(e) => setTenant(e.target.value)}>
                 {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
-              <div className="ml-auto flex items-center gap-3 text-xs text-muted">
+              <div className="hidden items-center gap-2 text-xs text-muted lg:flex">
                 {health?.providers && Object.entries(health.providers).map(([k, ok]) => (
                   <span key={k} className="inline-flex items-center gap-1" title={ok ? `${k} configured` : `${k} key missing`}>
-                    <span className={cx("h-2 w-2 rounded-full", ok ? "bg-ok" : "bg-line")} />{k}
+                    <span className={cx("h-2.5 w-2.5 rounded-full", ok ? "bg-ok" : "bg-line")} /><span className="sr-only 2xl:not-sr-only">{k}</span>
                   </span>
                 ))}
               </div>
-            </header>
-            <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{tenant ? children : <div className="text-sm text-muted">Loading tenants… (is the API running?)</div>}</main>
+              <button className="rounded-full p-2 hover:bg-accent-soft md:hidden" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu" aria-expanded={menuOpen}>
+                {menuOpen ? <X size={22} /> : <Menu size={22} />}
+              </button>
+            </div>
           </div>
-        </div>
+          {menuOpen && <nav className="flex flex-col gap-1 border-t border-line px-4 pb-3 md:hidden" aria-label="Primary (menu)">{items}</nav>}
+        </header>
+        <main id="main" className="mx-auto w-full max-w-7xl p-4 md:p-6">
+          {tenant ? children : <div className="text-sm text-muted">Loading business units… (is the API running?)</div>}
+        </main>
       </ToastProvider>
     </TenantCtx.Provider>
   );

@@ -1,7 +1,7 @@
 ---
 type: UI Spec
 title: App shell
-description: Navigation, tenant switcher, routing scheme for the static export, and the shared API/SSE client.
+description: Top-header navigation, business-unit switcher, routing scheme for the static export, and the shared API/SSE client.
 status: stable
 tags: [ui, shell, routing]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
@@ -9,10 +9,12 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Layout
 
-Left sidebar (collapsible on narrow screens) + top bar + content.
+A sticky **top header** over the content, in the portal style of [/ui/design-system.md](/ui/design-system.md); no sidebar.
 
-* Sidebar items (icon + label): **Dashboard** `/`, **Agents** `/agents/`, **Test call** `/test-call/`, **Calls** `/calls/`, **Agent console** `/console/` (badge = waiting escalations), **Insights** `/insights/` (badge = clusters ready for a fix).
-* Top bar: product name "Voice Agent Studio", **tenant switcher** (select listing `GET /api/tenants`; choice persisted in `localStorage` key `tenant`; default first tenant), provider health dots from `/healthz` (Groq, OpenRouter, Deepgram: configured or not).
+* **Brand**: a generic mark plus the business unit's brand name (the part of the selected tenant's name before ` · `), with the product caption "Voice Agent Studio" beneath it.
+* **Navigation** (icon + label, horizontal): **Dashboard** `/`, **Agents** `/agents/`, **Test call** `/test-call/`, **Calls** `/calls/`, **Agent console** `/console/` (badge = waiting escalations), **Insights** `/insights/` (badge = clusters ready for a fix). The active item is underlined. Below 768 px the items collapse into a menu button that opens a dropdown panel.
+* **Business-unit switcher** (select listing `GET /api/tenants`; choice persisted in `localStorage` key `tenant`; default first tenant) and provider health dots from `/healthz` (Groq, OpenRouter, Deepgram: configured or not) on the right.
+* A **Skip to content** link is the first focusable element and jumps to the main region.
 
 # Routing (static export)
 
@@ -28,4 +30,6 @@ No dynamic path segments. Detail pages use query parameters: `/agents/edit/?id=�
 # Acceptance
 
 - **UI-01** — Given two tenants, when the user switches tenant, then the current page refetches and only that tenant's data is shown.
-- **UI-02** — Given a waiting escalation is created, when any page is open, then the Agent console sidebar badge increments without reload.
+- **UI-02** — Given a waiting escalation is created, when any page is open, then the Agent console navigation badge increments without reload.
+- **UI-19** — Given any page, when navigating with the keyboard only, then the first Tab stop is "Skip to content", every navigation item and control shows a visible focus ring, and the active navigation item is underlined and marked `aria-current="page"`.
+- **UI-20** — Given a 375 px wide viewport, then the page has no horizontal scrollbar and the navigation is reachable through the menu button.

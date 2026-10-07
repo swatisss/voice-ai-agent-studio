@@ -178,7 +178,7 @@ function TestCall() {
             )}
             {mode === "talk" && (status === "active" || status === "connecting") && (
               <div className="mt-3 flex items-center justify-center gap-6">
-                <div className={cx("flex h-16 w-16 items-center justify-center rounded-full bg-accent text-white dark:text-black", speaking && "speaking")}
+                <div className={cx("flex h-16 w-16 items-center justify-center rounded-full bg-accent text-on-accent", speaking && "speaking")}
                   style={{ transform: `scale(${1 + Math.min(level * 4, 0.35)})` }}><Mic size={26} /></div>
                 <div className="text-sm text-muted">{status === "connecting" ? "Connecting…" : speaking ? "Agent speaking" : "Listening"}</div>
               </div>

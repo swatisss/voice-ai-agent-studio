@@ -20,7 +20,7 @@ export function Transcript({ events, showTools = true }: { events: CallEvent[]; 
         if (e.kind === "user") {
           return (
             <div key={e.seq} className="flex justify-end">
-              <div className="max-w-[75%] rounded-2xl rounded-br-sm bg-accent px-3 py-2 text-sm text-white dark:text-black">{e.text}</div>
+              <div className="max-w-[75%] rounded-2xl rounded-br-sm bg-accent px-3 py-2 text-sm text-on-accent">{e.text}</div>
             </div>
           );
         }

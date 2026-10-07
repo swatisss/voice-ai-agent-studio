@@ -1,43 +1,49 @@
-/* Spec: /ui/design-system.md (Tokens) */
+/* Spec: /ui/design-system.md (Tokens, Layout, Components) */
 @import "tailwindcss";
 
 :root {
-  --bg: #f7f8fa;
-  --panel: #ffffff;
-  --border: #e3e6ea;
-  --text: #14181f;
-  --muted: #5f6b7a;
-  --accent: #0f766e;
-  --accent-soft: #e6f4f2;
-  --ok: #15803d;
-  --ok-soft: #e8f6ec;
-  --warn: #b45309;
-  --warn-soft: #fdf3e5;
-  --bad: #b91c1c;
-  --bad-soft: #fdecec;
-  --info: #4338ca;
-  --info-soft: #eef0fd;
-  --neutral-soft: #eef0f3;
+  --bg: #F2F6FA;
+  --panel: #FFFFFF;
+  --border: #D5DFEA;
+  --text: #0E1F33;
+  --muted: #4A5D75;
+  --accent: #0A62B5;
+  --on-accent: #FFFFFF;
+  --accent-soft: #E3EFFB;
+  --ok: #0E7A3D;
+  --ok-soft: #E4F5EA;
+  --warn: #8A5200;
+  --warn-soft: #FFF1D9;
+  --bad: #B3261E;
+  --bad-soft: #FDE8E7;
+  --info: #3B4BB0;
+  --info-soft: #E9ECFC;
+  --neutral-soft: #E8EDF3;
+  --chart-warn: #C27400;
+  --shadow: 0 1px 2px rgba(14, 31, 51, 0.06), 0 6px 16px rgba(14, 31, 51, 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1216;
-    --panel: #171b21;
-    --border: #2a3038;
-    --text: #e8ebef;
-    --muted: #9aa5b1;
-    --accent: #2dd4bf;
-    --accent-soft: #10302c;
-    --ok: #4ade80;
-    --ok-soft: #12291a;
-    --warn: #fbbf24;
-    --warn-soft: #2e2410;
-    --bad: #f87171;
-    --bad-soft: #351616;
-    --info: #a5b4fc;
-    --info-soft: #1d2140;
-    --neutral-soft: #222831;
+    --bg: #0B1624;
+    --panel: #12223A;
+    --border: #26405F;
+    --text: #E8EEF6;
+    --muted: #9DB0C7;
+    --accent: #5FB0FF;
+    --on-accent: #04223F;
+    --accent-soft: #12365C;
+    --ok: #5CD68C;
+    --ok-soft: #10301E;
+    --warn: #F5B94D;
+    --warn-soft: #3A2A0E;
+    --bad: #FF8A82;
+    --bad-soft: #3B1715;
+    --info: #A9B6FF;
+    --info-soft: #1E2550;
+    --neutral-soft: #1B2E48;
+    --chart-warn: #F5B94D;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -48,6 +54,7 @@
   --color-fg: var(--text);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
   --color-accent-soft: var(--accent-soft);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
@@ -61,13 +68,40 @@
 }
 
 html, body { background: var(--bg); color: var(--text); }
-body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 16px; line-height: 1.5; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* grid children may shrink below their content width (charts, tables): no horizontal page scroll on phones */
+.grid > * { min-width: 0; }
+
+main h1 { font-size: 1.75rem; line-height: 2.2rem; font-weight: 600; letter-spacing: -0.01em; }
+main h2 { font-weight: 600; }
+
+/* keyboard focus: thick, visible, on every interactive element */
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline-offset: 0; }
+
+.skip-link {
+  position: absolute; left: 12px; top: -64px; z-index: 100; padding: 10px 18px; border-radius: 9999px;
+  background: var(--accent); color: var(--on-accent); font-weight: 600; transition: top 0.15s;
+}
+.skip-link:focus { top: 12px; }
+
+.nav-link { white-space: nowrap; position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 18px 4px; font-weight: 500; color: var(--muted); }
+.nav-link:hover { color: var(--text); }
+.nav-link[aria-current="page"] { color: var(--accent); }
+.nav-link[aria-current="page"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; border-radius: 4px 4px 0 0; background: var(--accent); }
+
 .prose-md h1 { font-size: 1.15rem; font-weight: 600; margin: 0.5rem 0; }
 .prose-md h2 { font-size: 1rem; font-weight: 600; margin: 0.75rem 0 0.25rem; }
 .prose-md p, .prose-md li { line-height: 1.6; }
 .prose-md ul { list-style: disc; padding-left: 1.25rem; }
+
 @keyframes flash { from { background: var(--accent-soft); } to { background: transparent; } }
 .flash { animation: flash 2s ease-out; }
 @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: 0 0 0 18px transparent; } }
 .speaking { animation: pulse-ring 1.2s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}

@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Spec checks (pull request: whole-PR rules)
+      - name: "Spec checks (pull request: whole-PR rules)"
         if: github.event_name == 'pull_request'
         env:
           SPEC_EXEMPT: ${{ contains(github.event.pull_request.labels.*.name, 'no-spec') }}

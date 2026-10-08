@@ -5,10 +5,10 @@ import asyncio
 
 from sqlalchemy import select
 
-from voiceai.db import sessionmaker
-from voiceai.events import bus
-from voiceai.llm.gateway import FakeReply
-from voiceai.models import Escalation
+from voiceai.core.db import sessionmaker
+from voiceai.core.events import bus
+from voiceai.core.llm.gateway import FakeReply
+from voiceai.core.tables import Escalation
 from voiceai.runtime.escalation import wait_packets
 
 H = {"X-Tenant-Id": "evergreen-care"}

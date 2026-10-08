@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import pytest
 
-from voiceai import jobs
-from voiceai.db import get_owned, sessionmaker
-from voiceai.models import Agent, Persona, Tenant
+from voiceai.core import jobs
+from voiceai.core.db import get_owned, sessionmaker
+from voiceai.core.tables import Agent, Persona, Tenant
 
 
 @pytest.fixture

@@ -14,12 +14,12 @@ import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.errors import ApiError
+from voiceai.core.errors import ApiError
 from voiceai.knowledge import okf
 from voiceai.knowledge.chunking import chunk_markdown
-from voiceai.knowledge.embeddings import embed
+from voiceai.core.embeddings import embed
 from voiceai.knowledge.search import invalidate
-from voiceai.models import KnowledgeChunk, KnowledgeDoc
+from voiceai.core.tables import KnowledgeChunk, KnowledgeDoc
 
 MAX_UPLOAD = 5 * 1024 * 1024
 

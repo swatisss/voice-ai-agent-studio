@@ -5,12 +5,12 @@ import httpx
 from sqlalchemy import select
 
 from tests.conftest import script
-from voiceai.db import sessionmaker
-from voiceai.llm.gateway import FakeReply
-from voiceai.models import Call, CallEvent
+from voiceai.core.db import sessionmaker
+from voiceai.core.llm.gateway import FakeReply
+from voiceai.core.tables import Call, CallEvent
 from voiceai.runtime.outbound import render_opening
 from voiceai.runtime.session import AgentSession
-from voiceai.runtime.tools import ToolExecutor
+from voiceai.core.toolcalling import ToolCaller, tool_caller
 
 H = {"X-Tenant-Id": "evergreen-care"}
 JAMES = {"member_ref": "EVG-337120"}
@@ -62,23 +62,26 @@ def test_default_opening_without_persona_opening():
 async def test_outbound_callee_must_verify_before_account_tools(client, seeded, fake_llm, app, monkeypatch):
     """Covers: OB-03"""
     seen: list[str] = []
+    real = tool_caller(app)
 
-    class Recording(httpx.AsyncBaseTransport):
-        def __init__(self) -> None:
-            self.inner = httpx.ASGITransport(app=app)
+    class Recording:  # a ToolCaller that records every request it forwards
+        async def request(self, method, url, **kw):  # noqa: ANN001, ANN003, ANN202
+            seen.append(url)
+            return await real.request(method, url, **kw)
 
-        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-            seen.append(request.url.path)
-            return await self.inner.handle_async_request(request)
-
-    monkeypatch.setattr(ToolExecutor, "_client", lambda self, absolute: httpx.AsyncClient(transport=Recording(), base_url="http://internal"))
+    assert isinstance(Recording(), ToolCaller)
+    # the route imported tool_caller by name, so patch it where it is used
+    monkeypatch.setattr("voiceai.routes.calls.tool_caller", lambda app=None: Recording())
     fake_llm(script(FakeReply(tool_calls=[QUOTE]), FakeReply(tool_calls=[VERIFY_JAMES]), FakeReply(tool_calls=[QUOTE]), FakeReply(text="It renews at $738.70.")))
     call_id = (await _outbound_call(client, seeded)).json()["call_id"]
     out = await client.post(f"/api/calls/{call_id}/messages", headers=H, json={"text": "Yes, speaking. It's November 2nd 1979."})
     assert out.json()["reply"] == "It renews at $738.70."
     results = [e.data for e in await _events(call_id) if e.kind == "tool_result"]
     assert results[0]["result"]["error"] == "identity_not_verified"
-    assert seen == ["/mock/healthcare/verify", "/mock/insurance/policies/MP-200415/renewal-quote"]  # nothing was sent before verification
+    # one port carries every outgoing request now, so the target list fetch is recorded too
+    assert seen[0] == "/mock/insurance/outreach/renewals"  # choosing who to call (OB-01)
+    # the blocked first quote never left the process: verification precedes any account request
+    assert seen[1:] == ["/mock/healthcare/verify", "/mock/insurance/policies/MP-200415/renewal-quote"]
     assert results[2]["result"]["renewal_premium"] == 738.70
 
 

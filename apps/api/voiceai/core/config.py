@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-API_DIR = Path(__file__).resolve().parent.parent  # apps/api
+API_DIR = Path(__file__).resolve().parents[2]  # apps/api
 REPO_DIR = API_DIR.parent.parent
 
 

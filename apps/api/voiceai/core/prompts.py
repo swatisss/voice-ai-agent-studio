@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-from voiceai.config import get_settings
+from voiceai.core.config import get_settings
 
 _BLOCK = re.compile(r"^# Prompt\s*$.*?^```text\s*$\n(.*?)^```\s*$", re.S | re.M)
 _VAR = re.compile(r"\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}")

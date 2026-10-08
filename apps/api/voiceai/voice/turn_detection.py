@@ -126,8 +126,8 @@ LlmCheck = Callable[[str, str], Awaitable[bool]]
 
 async def llm_turn_check(last_agent: str, caller_text: str) -> bool:
     """Ask the fast `turn` model whether the caller is done. Raises on any failure."""
-    from voiceai import prompts
-    from voiceai.llm.gateway import gateway
+    from voiceai.core import prompts
+    from voiceai.core.llm.gateway import gateway
     from voiceai.schemas import TurnVerdictOut
 
     prompt = prompts.render("turn-end-check", last_agent_message=last_agent or "(none)", caller_text=caller_text)

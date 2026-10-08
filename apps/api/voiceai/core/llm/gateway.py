@@ -21,7 +21,7 @@ import yaml
 from pydantic import BaseModel, ValidationError
 
 from voiceai.adapters.llm.registry import DEFAULT_WIRE, UnknownWire, client_for
-from voiceai.config import get_settings
+from voiceai.core.config import get_settings
 from voiceai.ports.llm import BadRequest, ChatClient, ChatResult, ProviderConfig, Retryable, ToolCall, Usage
 
 log = logging.getLogger("voiceai.llm")

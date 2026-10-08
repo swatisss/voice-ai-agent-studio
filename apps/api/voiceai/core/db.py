@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.types import TypeDecorator
 
-from voiceai.config import get_settings
+from voiceai.core.config import get_settings
 
 T = TypeVar("T")
 
@@ -108,7 +108,10 @@ async def get_owned(session: AsyncSession, model: type[T], tenant_id: str, row_i
 
 
 async def init_db(drop: bool = False) -> None:
-    from voiceai import models  # noqa: F401  (register tables)
+    # Importing a table module is what puts it on Base.metadata, so a module missing from this
+    # list silently vanishes from the schema. tests/test_agents_tenancy.py counts the tables and
+    # is the guard against exactly that - keep it.
+    from voiceai.core import tables  # noqa: F401  (register tables)
 
     async with engine().begin() as conn:
         if drop:

@@ -10,8 +10,8 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.config import get_settings
-from voiceai.models import KnowledgeChunk, KnowledgeDoc
+from voiceai.core.config import get_settings
+from voiceai.core.tables import KnowledgeChunk, KnowledgeDoc
 
 NO_ANSWER = {"no_answer": True, "message": "No approved information found for this question."}
 _cache: dict[tuple[str, tuple[str, ...], int], tuple[np.ndarray, list[dict[str, Any]]]] = {}
@@ -48,7 +48,7 @@ async def _matrix(session: AsyncSession, tenant_id: str, doc_ids: list[str]) -> 
 async def search(
     session: AsyncSession, tenant_id: str, doc_ids: list[str], query: str, top_k: int = 4
 ) -> dict[str, Any]:
-    from voiceai.knowledge.embeddings import embed
+    from voiceai.core.embeddings import embed
 
     if not doc_ids or not query.strip():
         return dict(NO_ANSWER)

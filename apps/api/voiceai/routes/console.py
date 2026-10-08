@@ -9,11 +9,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.db import get_session
-from voiceai.models import Call, CallEvent, Escalation
+from voiceai.core.db import get_session
+from voiceai.core.tables import Call, CallEvent, Escalation
 from voiceai.routes.calls import call_summary
 from voiceai.runtime import escalation as esc_mod
-from voiceai.tenancy import current_tenant
+from voiceai.core.tenancy import current_tenant
 
 router = APIRouter(prefix="/api/escalations")
 

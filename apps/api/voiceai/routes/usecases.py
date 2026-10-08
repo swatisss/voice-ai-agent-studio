@@ -8,11 +8,12 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.db import get_session
-from voiceai.errors import ApiError
-from voiceai.models import Agent, AgentVersion, UseCase
+from voiceai.core.db import get_session
+from voiceai.core.errors import ApiError
+from voiceai.core.tables import Agent, AgentVersion, UseCase
+from voiceai.core.toolcalling import tool_caller
 from voiceai.runtime import outbound
-from voiceai.tenancy import current_tenant
+from voiceai.core.tenancy import current_tenant
 
 router = APIRouter(prefix="/api")
 
@@ -45,7 +46,7 @@ async def outbound_targets(
     config = version.config if version else (agent.draft_config or {})
     if config.get("mode") != "outbound":  # OB-05
         raise ApiError(409, "not_outbound", "This agent does not place outbound calls")
-    targets = await outbound.fetch_targets((config.get("outbound") or {}).get("targets_url", ""), request.app)
+    targets = await outbound.fetch_targets((config.get("outbound") or {}).get("targets_url", ""), tool_caller(request.app))
     return {"items": [
         {"member_ref": t["member_ref"], "first_name": t.get("first_name", ""), "summary": t.get("summary", ""), "context": t.get("context") or {}}
         for t in targets

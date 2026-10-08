@@ -8,10 +8,10 @@ from typing import Any
 
 from sqlalchemy import select
 
-from voiceai.db import sessionmaker
+from voiceai.core.db import sessionmaker
 from voiceai.live import LIVE, LiveControls
-from voiceai.llm.gateway import FakeReply
-from voiceai.models import AgentVersion, CallEvent
+from voiceai.core.llm.gateway import FakeReply
+from voiceai.core.tables import AgentVersion, CallEvent
 from voiceai.voice.turn_detection import TurnSettings
 
 M = {"X-Tenant-Id": "evergreen-care"}

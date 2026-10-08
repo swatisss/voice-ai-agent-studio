@@ -12,17 +12,18 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.config import get_settings
-from voiceai.db import get_session, sessionmaker
-from voiceai.errors import ApiError
+from voiceai.core.config import get_settings
+from voiceai.core.db import get_session, sessionmaker
+from voiceai.core.errors import ApiError
 from voiceai.live import LIVE, LiveControls, effective_settings, persona_dict
-from voiceai import jobs
-from voiceai.db import utcnow
-from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Escalation, Persona
+from voiceai.core import jobs
+from voiceai.core.db import utcnow
+from voiceai.core.tables import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Escalation, Persona
 from voiceai.schemas import TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
+from voiceai.core.toolcalling import tool_caller
 from voiceai.runtime.session import AgentSession, create_call
-from voiceai.tenancy import current_tenant, resolve_tenant
+from voiceai.core.tenancy import current_tenant, resolve_tenant
 
 log = logging.getLogger("voiceai.calls")
 router = APIRouter(prefix="/api")
@@ -91,11 +92,11 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
         live["persona_id"] = body.persona_id
     if body.turn_detection:
         live["turn_detection"] = body.turn_detection.model_dump(exclude_none=True)
-    call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None, context=body.context, app=request.app)
+    call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None, context=body.context, caller=tool_caller(request.app))
     await s.commit()
     greeting = None
     if body.channel == "text":
-        session = await AgentSession.open(call.id, tenant_id, app=request.app)
+        session = await AgentSession.open(call.id, tenant_id, caller=tool_caller(request.app))
         greeting = await session.start()
     return {"call_id": call.id, "greeting": greeting, "settings": await effective_settings(s, call)}
 
@@ -110,7 +111,7 @@ async def live_settings(call_id: str, body: LiveBody, request: Request, tenant_i
         raise ApiError(409, "call_ended", "This call has ended")
     persona = await _persona(s, tenant_id, body.persona_id) if body.persona_id else None
     await s.close()
-    session = await AgentSession.open(call_id, tenant_id, app=request.app)
+    session = await AgentSession.open(call_id, tenant_id, caller=tool_caller(request.app))
     controls = LIVE.get(call_id)
     if body.persona_id is not None:
         await session.switch_persona(persona_dict(persona) if persona else None)
@@ -134,7 +135,7 @@ async def message(call_id: str, body: MessageBody, request: Request, tenant_id: 
     if call.ended_at:
         raise ApiError(409, "call_ended", "This call has ended")
     await s.close()
-    session = await AgentSession.open(call_id, tenant_id, app=request.app)
+    session = await AgentSession.open(call_id, tenant_id, caller=tool_caller(request.app))
     reply = await session.reply(body.text)
     status = "ended" if session.state.ended else ("escalated" if session.state.escalated else "active")
     return {"reply": reply, "call_status": status, "ended": session.state.ended, "escalated": session.state.escalated}
@@ -147,7 +148,7 @@ async def end_call(call_id: str, request: Request, tenant_id: str = Depends(curr
         raise ApiError(404, "call_not_found", "Call not found")
     await s.close()
     if not call.ended_at:
-        session = await AgentSession.open(call_id, tenant_id, app=request.app)
+        session = await AgentSession.open(call_id, tenant_id, caller=tool_caller(request.app))
         await session.end("hangup")
     async with sessionmaker()() as s2:
         fresh = await s2.get(Call, call_id)
@@ -256,7 +257,7 @@ async def voice(websocket: WebSocket, call_id: str) -> None:
         log.error("voice pipeline unavailable: %s", exc)
         await websocket.close(code=4500, reason="voice_unavailable")
         return
-    session = await AgentSession.open(call_id, tenant_id, app=websocket.app)
+    session = await AgentSession.open(call_id, tenant_id, caller=tool_caller(websocket.app))
     controls = LiveControls(turn=session.turn_settings())
     LIVE[call_id] = controls
     try:

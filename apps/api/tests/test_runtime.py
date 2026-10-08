@@ -9,9 +9,9 @@ from typing import Any
 from sqlalchemy import func, select
 
 from tests.conftest import script
-from voiceai.db import sessionmaker
-from voiceai.llm.gateway import FakeReply, LLMError
-from voiceai.models import Agent, Call, CallEvent, Escalation, Job
+from voiceai.core.db import sessionmaker
+from voiceai.core.llm.gateway import FakeReply, LLMError
+from voiceai.core.tables import Agent, Call, CallEvent, Escalation, Job
 from voiceai.runtime.session import AgentSession
 
 H = {"X-Tenant-Id": "evergreen-care"}

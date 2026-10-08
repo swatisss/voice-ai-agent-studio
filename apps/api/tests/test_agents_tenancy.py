@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from sqlalchemy import func, inspect, select
 
-from voiceai.db import engine, sessionmaker
+from voiceai.core.db import engine, sessionmaker
 from voiceai.knowledge.ingest import create_doc
-from voiceai.models import AgentVersion, KnowledgeChunk, KnowledgeDoc
+from voiceai.core.tables import AgentVersion, KnowledgeChunk, KnowledgeDoc
 
 M = {"X-Tenant-Id": "evergreen-care"}
 P = {"X-Tenant-Id": "evergreen-sandbox"}
@@ -38,7 +38,7 @@ async def test_versions_and_snapshots(client, seeded):
 
 async def test_chunks_deleted_with_doc(database):
     """Covers: DM-03"""
-    from voiceai.models import Tenant
+    from voiceai.core.tables import Tenant
 
     async with sessionmaker()() as s:
         s.add(Tenant(id="t1", name="T1"))

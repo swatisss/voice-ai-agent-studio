@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from voiceai import prompts
+from voiceai.core import prompts
 from voiceai.runtime.outbound import context_lines
 
 

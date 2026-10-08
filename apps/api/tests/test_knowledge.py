@@ -4,12 +4,12 @@ from __future__ import annotations
 import io
 import zipfile
 
-from voiceai.db import sessionmaker
+from voiceai.core.db import sessionmaker
 from voiceai.knowledge import okf
 from voiceai.knowledge.chunking import MAX_CHARS, chunk_markdown
 from voiceai.knowledge.ingest import create_doc
 from voiceai.knowledge.search import search
-from voiceai.models import Tenant
+from voiceai.core.tables import Tenant
 
 
 def test_heading_chunks():

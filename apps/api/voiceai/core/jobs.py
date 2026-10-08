@@ -15,8 +15,8 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.db import engine, sessionmaker, utcnow
-from voiceai.models import Job
+from voiceai.core.db import engine, sessionmaker, utcnow
+from voiceai.core.tables import Job
 
 log = logging.getLogger("voiceai.jobs")
 

@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.models import AgentVersion, Call, Persona
+from voiceai.core.tables import AgentVersion, Call, Persona
 from voiceai.voice.turn_detection import TurnSettings
 
 

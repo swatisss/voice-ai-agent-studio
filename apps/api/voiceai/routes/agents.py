@@ -13,11 +13,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.agents import agent_out, default_config, publish, skill_dict, tool_dict, validate_config
-from voiceai.db import get_session
-from voiceai.errors import ApiError
-from voiceai.models import Agent, AgentVersion, EvalScenario, Skill, Tool
+from voiceai.core.db import get_session
+from voiceai.core.errors import ApiError
+from voiceai.core.tables import Agent, AgentVersion, EvalScenario, Skill, Tool
 from voiceai.schemas import SkillDef, ToolDef
-from voiceai.tenancy import current_tenant
+from voiceai.core.tenancy import current_tenant
 
 router = APIRouter(prefix="/api")
 

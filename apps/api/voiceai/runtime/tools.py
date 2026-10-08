@@ -9,8 +9,7 @@ import re
 from typing import Any
 from urllib.parse import quote
 
-import httpx
-
+from voiceai.core.toolcalling import ToolCaller, ToolTimeout, ToolUnreachable
 from voiceai.runtime.state import CallState
 from voiceai.schemas import ESCALATION_CATEGORIES
 
@@ -99,22 +98,15 @@ def _summary(name: str, status: int | None, body: Any) -> str:
 
 
 class ToolExecutor:
-    """Executes agent HTTP tools for one call. Relative URLs run in-process (ASGI)."""
+    """Executes one call's agent tools. How a request travels is the ToolCaller's business."""
 
-    def __init__(self, tenant_id: str, call_id: str, tools: list[dict[str, Any]], state: CallState, app: Any | None = None) -> None:
+    def __init__(self, tenant_id: str, call_id: str, tools: list[dict[str, Any]], state: CallState,
+                 caller: ToolCaller) -> None:
         self.tenant_id = tenant_id
         self.call_id = call_id
         self.tools = {t["name"]: t for t in tools}
         self.state = state
-        self.app = app
-
-    def _client(self, absolute: bool) -> httpx.AsyncClient:
-        from voiceai.runtime import app_ref
-
-        app = self.app or app_ref.APP
-        if absolute or app is None:
-            return httpx.AsyncClient(follow_redirects=True)
-        return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://internal")
+        self.caller = caller
 
     async def execute(self, name: str, raw_args: str) -> tuple[dict[str, Any], bool]:
         """Returns (result, ok). ok=False counts toward the tool-error streak."""
@@ -135,23 +127,21 @@ class ToolExecutor:
         if self.state.verified and self.state.verified_member_ref:  # TS-08
             headers["X-Member-Ref"] = self.state.verified_member_ref
         method = tool.get("method", "GET").upper()
-        absolute = url.startswith("http://") or url.startswith("https://")
+        get = method == "GET"
         try:
-            async with self._client(absolute) as client:
-                if method == "GET":
-                    resp = await client.get(url, params={k: v for k, v in rest.items() if v is not None}, headers=headers, timeout=tool.get("timeout_s", 8))
-                else:
-                    resp = await client.post(url, json=rest, headers=headers, timeout=tool.get("timeout_s", 8))
-        except httpx.TimeoutException:
+            resp = await self.caller.request(
+                method, url,
+                params={k: v for k, v in rest.items() if v is not None} if get else None,
+                json=None if get else rest,
+                headers=headers, timeout_s=tool.get("timeout_s", 8),
+            )
+        except ToolTimeout:
             self.state.tools_used.append({"name": name, "ok": False, "summary": f"{name}: timeout"})
             return {"error": "timeout"}, False
-        except httpx.HTTPError as exc:
+        except ToolUnreachable as exc:
             self.state.tools_used.append({"name": name, "ok": False, "summary": f"{name}: connection error"})
             return {"error": "connection_error", "detail": str(exc)[:200]}, False
-        try:
-            body: Any = resp.json()
-        except ValueError:
-            body = {"text": resp.text}
+        body = resp.body
         if resp.status_code >= 400:  # TS-04
             result = {"error": f"http_{resp.status_code}", "detail": json.dumps(body)[:300]}
             self.state.tools_used.append({"name": name, "ok": False, "summary": _summary(name, resp.status_code, body)})

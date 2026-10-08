@@ -13,15 +13,15 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import jobs, prompts
-from voiceai.config import get_settings
-from voiceai.db import sessionmaker, utcnow
-from voiceai.errors import ApiError
-from voiceai.events import bus
+from voiceai.core import jobs, prompts
+from voiceai.core.config import get_settings
+from voiceai.core.db import sessionmaker, utcnow
+from voiceai.core.errors import ApiError
+from voiceai.core.events import bus
 from voiceai.learning.propose import candidate_config, cluster_evidence, proposal_summary
-from voiceai.llm.gateway import gateway
+from voiceai.core.llm.gateway import gateway
 from voiceai.mock import data as mock
-from voiceai.models import Agent, AgentVersion, Call, CallEvent, EvalResult, EvalRun, EvalScenario, FixProposal, Tenant
+from voiceai.core.tables import Agent, AgentVersion, Call, CallEvent, EvalResult, EvalRun, EvalScenario, FixProposal, Tenant
 from voiceai.runtime.escalation import transcript_lines
 from voiceai.runtime.session import AgentSession
 from voiceai.schemas import JudgeOut
@@ -71,7 +71,7 @@ async def simulate(
         call = Call(tenant_id=tenant_id, agent_id=agent_id, agent_version_id=version_id, channel="simulation", is_eval=True)
         s.add(call)
         await s.commit()
-    session = AgentSession(call=call, config=config, tenant_name=tenant_name, app=None)
+    session = AgentSession(call=call, config=config, tenant_name=tenant_name)
     await session.start()
     lines: list[str] = [f"Agent: {session.history[-1]['content']}"]
     for _ in range(MAX_CALLER_TURNS):  # EV-04

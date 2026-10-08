@@ -12,11 +12,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.config import get_settings
-from voiceai.db import get_session
-from voiceai.models import AgentVersion, Call, CallAnalysis
+from voiceai.core.config import get_settings
+from voiceai.core.db import get_session
+from voiceai.core.tables import AgentVersion, Call, CallAnalysis
 from voiceai.routes.insights import clusters as list_clusters
-from voiceai.tenancy import current_tenant
+from voiceai.core.tenancy import current_tenant
 
 router = APIRouter(prefix="/api/dashboard")
 

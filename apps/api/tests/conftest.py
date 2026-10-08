@@ -24,9 +24,9 @@ os.environ.update({
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 
-from voiceai import db  # noqa: E402
-from voiceai.config import get_settings  # noqa: E402
-from voiceai.llm import gateway as gw  # noqa: E402
+from voiceai.core import db  # noqa: E402
+from voiceai.core.config import get_settings  # noqa: E402
+from voiceai.core.llm import gateway as gw  # noqa: E402
 
 get_settings.cache_clear()
 
@@ -66,9 +66,7 @@ async def seeded(database: None) -> dict[str, Any]:
 @pytest.fixture
 def app():  # noqa: ANN201
     from voiceai.main import app as fastapi_app
-    from voiceai.runtime import app_ref
 
-    app_ref.APP = fastapi_app
     return fastapi_app
 
 

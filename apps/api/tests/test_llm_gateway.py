@@ -9,8 +9,8 @@ import pytest
 from pydantic import BaseModel
 
 from voiceai.adapters.llm import openai_compatible as wire
-from voiceai.config import Settings
-from voiceai.llm import gateway as gw
+from voiceai.core.config import Settings
+from voiceai.core.llm import gateway as gw
 
 
 @pytest.fixture
@@ -97,7 +97,7 @@ def test_role_env_override(monkeypatch):
 
 def test_role_override_from_dotenv_settings(monkeypatch):
     """Covers: LG-07"""
-    from voiceai.config import Settings
+    from voiceai.core.config import Settings
 
     monkeypatch.delenv("LLM_ROLE_JUDGE", raising=False)
     monkeypatch.setattr(gw, "get_settings", lambda: Settings(llm_role_judge="openrouter:openai/gpt-oss-20b"))

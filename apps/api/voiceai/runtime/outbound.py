@@ -7,9 +7,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-import httpx
-
-from voiceai.errors import ApiError
+from voiceai.core.errors import ApiError
+from voiceai.core.toolcalling import ToolCaller, ToolTimeout, ToolUnreachable
 
 _PLACEHOLDER = re.compile(r"\{([a-z_][a-z0-9_]*)\}")
 
@@ -19,21 +18,14 @@ def brand(tenant_name: str) -> str:
     return tenant_name.split("·")[0].strip() or tenant_name
 
 
-async def fetch_targets(url: str, app: Any | None = None) -> list[dict[str, Any]]:
-    """Targets from the agent's `targets_url`; relative URLs run in-process (like tools)."""
-    from voiceai.runtime import app_ref
-
-    asgi = app or app_ref.APP
-    absolute = url.startswith(("http://", "https://"))
-    client = httpx.AsyncClient(follow_redirects=True) if absolute or asgi is None else httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=asgi), base_url="http://internal",
-    )
+async def fetch_targets(url: str, caller: ToolCaller) -> list[dict[str, Any]]:
+    """Targets from the agent's `targets_url`, fetched through the same port tools use."""
     try:
-        async with client:
-            resp = await client.get(url, timeout=8)
-        resp.raise_for_status()
-        targets = resp.json().get("targets", [])
-    except (httpx.HTTPError, ValueError, AttributeError) as exc:
+        resp = await caller.request("GET", url, timeout_s=8)
+        if resp.status_code >= 400:
+            raise ApiError(502, "targets_unavailable", f"Could not load outbound targets: HTTP {resp.status_code}")
+        targets = resp.body.get("targets", [])
+    except (ToolTimeout, ToolUnreachable, AttributeError) as exc:
         raise ApiError(502, "targets_unavailable", f"Could not load outbound targets: {exc}") from exc
     return [t for t in targets if isinstance(t, dict) and t.get("member_ref")]
 

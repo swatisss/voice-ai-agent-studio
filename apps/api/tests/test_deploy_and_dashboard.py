@@ -13,7 +13,7 @@ def test_static_web_and_api_404(tmp_path, monkeypatch):
     monkeypatch.setenv("WEB_DIST_DIR", str(web))
     monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{(tmp_path / 'web.db').as_posix()}")
     monkeypatch.setenv("AUTO_SEED", "1")
-    from voiceai.config import get_settings
+    from voiceai.core.config import get_settings
 
     get_settings.cache_clear()
     from voiceai.main import create_app

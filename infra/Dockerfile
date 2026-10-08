@@ -24,6 +24,6 @@ RUN uv sync --frozen --no-dev
 COPY specs/ /app/specs/
 COPY --from=web /app/apps/web/out /app/apps/web/out
 # bake the embedding model so the first request needs no download
-RUN uv run python -c "from voiceai.knowledge.embeddings import FastEmbedder; FastEmbedder().embed(['warm up'])"
+RUN uv run python -c "from voiceai.adapters.embeddings.fastembed import FastEmbedder; FastEmbedder().embed(['warm up'])"
 EXPOSE 8080
 CMD ["sh", "-c", "uv run --no-sync voiceai serve --host 0.0.0.0 --port ${PORT}"]

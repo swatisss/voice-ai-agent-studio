@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from sqlalchemy import func, select
 
-from voiceai.db import sessionmaker
+from voiceai.core.db import sessionmaker
 from voiceai.knowledge.search import search
-from voiceai.models import Agent, EvalScenario, KnowledgeDoc, Persona, Tool
+from voiceai.core.tables import Agent, EvalScenario, KnowledgeDoc, Persona, Tool
 
 H = {"X-Tenant-Id": "evergreen-care"}
 SANDBOX = {"X-Tenant-Id": "evergreen-sandbox"}

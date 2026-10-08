@@ -20,7 +20,7 @@ from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPIWebsocketTransport
 
-from voiceai.config import get_settings
+from voiceai.core.config import get_settings
 from voiceai.live import LiveControls
 from voiceai.runtime.session import AgentSession
 from voiceai.voice.processors import BrainProcessor, TurnAggregator

@@ -6,6 +6,7 @@ import json
 from fastapi import FastAPI, Request
 
 from voiceai.runtime.state import CallState
+from voiceai.core.toolcalling import tool_caller
 from voiceai.runtime.tools import MAX_RESULT_CHARS, ToolExecutor, render_url, truncate
 
 echo = FastAPI()
@@ -26,7 +27,7 @@ async def _echo(path: str, request: Request):  # noqa: ANN201
 
 def _ex(state: CallState, tools: list[dict]) -> ToolExecutor:
     SEEN.clear()
-    return ToolExecutor("t1", "c1", tools, state, app=echo)
+    return ToolExecutor("t1", "c1", tools, state, tool_caller(echo))
 
 
 async def test_verification_gate_blocks_without_request():

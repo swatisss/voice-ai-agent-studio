@@ -8,13 +8,13 @@ from typing import Any
 
 from sqlalchemy import func, select
 
-from voiceai import jobs
-from voiceai.db import sessionmaker
-from voiceai.events import bus
+from voiceai.core import jobs
+from voiceai.core.db import sessionmaker
+from voiceai.core.events import bus
 from voiceai.learning.analyze import save_analysis
 from voiceai.learning.evaluate import passed
-from voiceai.llm.gateway import FakeReply
-from voiceai.models import Agent, AgentVersion, Call, CallAnalysis, CallEvent, Cluster, EvalResult, Job, KnowledgeDoc
+from voiceai.core.llm.gateway import FakeReply
+from voiceai.core.tables import Agent, AgentVersion, Call, CallAnalysis, CallEvent, Cluster, EvalResult, Job, KnowledgeDoc
 from voiceai.schemas import AnalysisOut, JudgeOut
 
 H = {"X-Tenant-Id": "evergreen-care"}

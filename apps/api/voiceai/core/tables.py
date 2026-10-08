@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from voiceai.db import Base, UTCDateTime, new_id, utcnow
+from voiceai.core.db import Base, UTCDateTime, new_id, utcnow
 
 
 def _id() -> Mapped[str]:

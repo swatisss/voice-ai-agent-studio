@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from sqlalchemy import update
 
-from voiceai import jobs
-from voiceai.db import sessionmaker, utcnow
-from voiceai.events import EventBus
-from voiceai.models import Job, Tenant
+from voiceai.core import jobs
+from voiceai.core.db import sessionmaker, utcnow
+from voiceai.adapters.eventbus.inprocess import InProcessEventBus
+from voiceai.ports.eventbus import EventBus
+from voiceai.core.tables import Job, Tenant
 
 
 async def _tenant() -> None:
@@ -77,7 +78,8 @@ async def test_stale_running_reset_and_dedupe(database):
 
 def test_events_are_tenant_scoped():
     """Covers: JB-05"""
-    bus = EventBus()
+    bus = InProcessEventBus()
+    assert isinstance(bus, EventBus)  # the adapter satisfies the port
     sub = bus.subscribe("tenant-a", {"console"})
     bus.publish("tenant-b", "console", "escalation.created", {})
     assert sub.queue.empty()

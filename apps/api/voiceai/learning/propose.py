@@ -10,14 +10,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import jobs, prompts
+from voiceai.core import jobs, prompts
 from voiceai.agents import publish
-from voiceai.db import sessionmaker, utcnow
-from voiceai.errors import ApiError
-from voiceai.events import bus
+from voiceai.core.db import sessionmaker, utcnow
+from voiceai.core.errors import ApiError
+from voiceai.core.events import bus
 from voiceai.knowledge.ingest import create_doc
-from voiceai.llm.gateway import gateway
-from voiceai.models import Agent, AgentVersion, Call, CallAnalysis, CallFeedback, Cluster, Escalation, EvalRun, FixProposal, KnowledgeDoc, Skill, Tool
+from voiceai.core.llm.gateway import gateway
+from voiceai.core.tables import Agent, AgentVersion, Call, CallAnalysis, CallFeedback, Cluster, Escalation, EvalRun, FixProposal, KnowledgeDoc, Skill, Tool
 from voiceai.schemas import FixDraft, SkillDef, ToolDef
 
 # Endpoints of the tenant's business API that exist but are not tools yet (fix drafting may target them).

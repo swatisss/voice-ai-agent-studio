@@ -9,12 +9,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.db import get_session
-from voiceai.errors import ApiError
+from voiceai.core.db import get_session
+from voiceai.core.errors import ApiError
 from voiceai.knowledge import ingest, okf
 from voiceai.knowledge.search import search
-from voiceai.models import KnowledgeChunk, KnowledgeDoc
-from voiceai.tenancy import current_tenant
+from voiceai.core.tables import KnowledgeChunk, KnowledgeDoc
+from voiceai.core.tenancy import current_tenant
 
 router = APIRouter(prefix="/api/knowledge")
 

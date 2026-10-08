@@ -17,7 +17,7 @@ def _serve(args: argparse.Namespace) -> None:
 
 
 async def _seed(args: argparse.Namespace) -> None:
-    from voiceai import db
+    from voiceai.core import db
     from voiceai.seed.loader import seed
 
     db.configure()
@@ -29,9 +29,9 @@ async def _seed(args: argparse.Namespace) -> None:
 async def _reindex(_: argparse.Namespace) -> None:
     from sqlalchemy import select
 
-    from voiceai import db
+    from voiceai.core import db
     from voiceai.knowledge.ingest import rechunk
-    from voiceai.models import KnowledgeDoc
+    from voiceai.core.tables import KnowledgeDoc
 
     db.configure()
     async with db.sessionmaker()() as s:
@@ -43,7 +43,7 @@ async def _reindex(_: argparse.Namespace) -> None:
 
 
 async def _chat(args: argparse.Namespace) -> None:
-    from voiceai import db, jobs
+    from voiceai.core import db, jobs
     from voiceai.runtime.session import AgentSession, create_call
 
     db.configure()
@@ -68,9 +68,9 @@ async def _chat(args: argparse.Namespace) -> None:
 async def _eval_scenarios(args: argparse.Namespace) -> None:
     from sqlalchemy import select
 
-    from voiceai import db
+    from voiceai.core import db
     from voiceai.learning.evaluate import judge, passed, simulate
-    from voiceai.models import Agent, AgentVersion, EvalScenario, Tenant
+    from voiceai.core.tables import Agent, AgentVersion, EvalScenario, Tenant
 
     db.configure()
     async with db.sessionmaker()() as s:

@@ -12,13 +12,13 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import jobs, prompts
-from voiceai.config import get_settings
-from voiceai.db import sessionmaker, utcnow
-from voiceai.events import bus
-from voiceai.knowledge.embeddings import embed_one
-from voiceai.llm.gateway import gateway
-from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Cluster, Escalation
+from voiceai.core import jobs, prompts
+from voiceai.core.config import get_settings
+from voiceai.core.db import sessionmaker, utcnow
+from voiceai.core.events import bus
+from voiceai.core.embeddings import embed_one
+from voiceai.core.llm.gateway import gateway
+from voiceai.core.tables import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Cluster, Escalation
 from voiceai.runtime.escalation import transcript_lines
 from voiceai.schemas import FIXABLE, AnalysisOut, ClusterName
 

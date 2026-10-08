@@ -14,8 +14,8 @@ import yaml
 
 from voiceai.adapters.llm import registry
 from voiceai.adapters.llm import openai_compatible as wire
-from voiceai.config import Settings
-from voiceai.llm import gateway as gw
+from voiceai.core.config import Settings
+from voiceai.core.llm import gateway as gw
 from voiceai.ports.llm import ChatClient, ChatResult, ProviderConfig, Usage
 
 REPO = Path(__file__).resolve().parents[3]
@@ -106,8 +106,8 @@ def test_adding_a_provider_names_no_python_file(monkeypatch, tmp_path, pretend_w
     )
     g = _gateway(monkeypatch, config)
     assert g.api_key("pretend") == "pk-live"  # resolved from the declared api_key_env, not a field
-    assert "pretend" not in (PKG / "config.py").read_text(encoding="utf-8")
-    assert "pretend" not in (PKG / "llm" / "gateway.py").read_text(encoding="utf-8")
+    assert "pretend" not in (PKG / "core" / "config.py").read_text(encoding="utf-8")
+    assert "pretend" not in (PKG / "core" / "llm" / "gateway.py").read_text(encoding="utf-8")
     assert g.selectable() == ["pretend:parrot-1"]
 
 
@@ -182,7 +182,7 @@ def test_importing_the_app_loads_no_wire_adapter_eagerly():
     code = textwrap.dedent(
         """
         import sys
-        import voiceai.llm.gateway  # noqa: F401
+        import voiceai.core.llm.gateway  # noqa: F401
         loaded = [m for m in sys.modules if m.startswith("voiceai.adapters.llm.") and not m.endswith("registry")]
         print(",".join(sorted(loaded)))
         """
@@ -212,7 +212,7 @@ def test_usage_quirk_is_declared_in_yaml_not_coded(monkeypatch):
     standard = chunk(usage={"prompt_tokens": 4, "completion_tokens": 1}, model_extra=None)
     assert quirky._usage_from(standard) == {"prompt_tokens": 4, "completion_tokens": 1}  # the standard field wins
 
-    assert "x_groq" not in (PKG / "llm" / "gateway.py").read_text(encoding="utf-8")
+    assert "x_groq" not in (PKG / "core" / "llm" / "gateway.py").read_text(encoding="utf-8")
     assert "groq" not in (PKG / "routes" / "meta.py").read_text(encoding="utf-8")
 
 

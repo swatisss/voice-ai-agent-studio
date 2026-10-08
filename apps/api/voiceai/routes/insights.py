@@ -12,13 +12,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.db import get_session, utcnow
-from voiceai.errors import ApiError
+from voiceai.core.db import get_session, utcnow
+from voiceai.core.errors import ApiError
 from voiceai.learning import evaluate, propose
 from voiceai.learning.analyze import cluster_summary
 from voiceai.learning.impact import impact
-from voiceai.models import Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc
-from voiceai.tenancy import current_tenant
+from voiceai.core.tables import Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc
+from voiceai.core.tenancy import current_tenant
 
 router = APIRouter(prefix="/api")
 
@@ -85,7 +85,7 @@ async def draft_fix(cluster_id: str, tenant_id: str = Depends(current_tenant), s
     recent = await _recent_stats(s, tenant_id)
     if not _cluster_out(c, recent)["ready_for_fix"]:
         raise ApiError(409, "cluster_not_ready", "Cluster is not fixable, below threshold, or already has a proposal")
-    from voiceai import jobs
+    from voiceai.core import jobs
 
     job = await jobs.enqueue(s, tenant_id, "draft_fix", {"cluster_id": cluster_id})
     await s.commit()

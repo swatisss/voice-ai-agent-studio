@@ -5,6 +5,8 @@ Covers: MOD-01, MOD-02, MOD-03, MOD-04, MOD-05, MOD-06, MOD-07
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -203,3 +205,38 @@ def test_real_package_satisfies_every_rule():
     rep = mod.Report()
     mod.check(rep)
     assert rep.errors == []
+
+
+def test_settings_paths_survive_module_moves():
+    """Every filesystem default in Settings resolves after a package reshuffle.
+
+    A path derived from __file__ breaks silently when its module changes depth, and a blind
+    import rewrite can corrupt a filename that looks like a module path. Both happened.
+    """
+    from voiceai.core.config import Settings
+
+    # the field defaults, not an instance: conftest overrides several of these by environment
+    default = {name: f.default for name, f in Settings.model_fields.items()}
+    assert default["models_config"].exists(), default["models_config"]
+    assert default["specs_dir"].exists(), default["specs_dir"]
+    assert default["web_dist_dir"].name == "out" and default["web_dist_dir"].parent.name == "web"
+    assert default["database_url"].endswith("/data/voiceai.db"), default["database_url"]
+    assert default["fastembed_cache"].parents[1].name == "api", default["fastembed_cache"]
+
+
+def test_building_the_app_does_not_load_the_heavy_optional_dependencies():
+    """Importing the app or the CLI must not drag in pipecat or the embedding model.
+
+    `voiceai seed` and `voiceai reindex` rely on this, and a worker image need not install
+    pipecat at all. The composition root therefore exposes adapter factories rather than
+    instances (/architecture/modular-structure.md).
+    """
+    code = (
+        "import sys\n"
+        "import voiceai.cli, voiceai.main\n"
+        "heavy = {m.split('.')[0] for m in sys.modules} & {'pipecat', 'fastembed', 'onnxruntime', 'torch'}\n"
+        "print(','.join(sorted(heavy)))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=REPO / "apps" / "api")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "", f"eagerly imported: {out.stdout.strip()}"

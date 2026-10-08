@@ -7,9 +7,9 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from voiceai.config import get_settings
-from voiceai.db import utcnow
-from voiceai.models import Cluster
+from voiceai.core.config import get_settings
+from voiceai.core.db import utcnow
+from voiceai.core.tables import Cluster
 
 CORRECT = {"policy_required", "safety", "caller_requested"}
 

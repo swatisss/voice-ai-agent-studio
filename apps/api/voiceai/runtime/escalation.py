@@ -11,12 +11,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import jobs, prompts
-from voiceai.db import sessionmaker, utcnow
-from voiceai.errors import ApiError
-from voiceai.events import bus
-from voiceai.llm.gateway import gateway
-from voiceai.models import Call, CallEvent, Escalation
+from voiceai.core import jobs, prompts
+from voiceai.core.db import sessionmaker, utcnow
+from voiceai.core.errors import ApiError
+from voiceai.core.events import bus
+from voiceai.core.llm.gateway import gateway
+from voiceai.core.tables import Call, CallEvent, Escalation
 from voiceai.schemas import DISPOSITIONS, Packet
 
 log = logging.getLogger("voiceai.escalation")

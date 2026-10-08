@@ -22,7 +22,7 @@ async def test_serializer_round_trip():
 def sync_client(app, tmp_path, monkeypatch):  # noqa: ANN001, ANN201
     monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{(tmp_path / 'ws.db').as_posix()}")
     monkeypatch.setenv("AUTO_SEED", "1")
-    from voiceai.config import get_settings
+    from voiceai.core.config import get_settings
 
     get_settings.cache_clear()
     with TestClient(app) as c:

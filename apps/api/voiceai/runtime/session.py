@@ -16,14 +16,15 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import jobs
-from voiceai.db import sessionmaker, utcnow
-from voiceai.errors import ApiError
-from voiceai.events import bus
+from voiceai.core import jobs
+from voiceai.core.db import sessionmaker, utcnow
+from voiceai.core.errors import ApiError
+from voiceai.core.events import bus
 from voiceai.knowledge.search import search as kb_search
-from voiceai.llm.gateway import LLMError, gateway
+from voiceai.core.llm.gateway import LLMError, gateway
+from voiceai.core.toolcalling import ToolCaller, tool_caller
 from voiceai.live import effective_turn, persona_dict, settings_view
-from voiceai.models import Agent, AgentVersion, Call, CallEvent, Persona, Tenant
+from voiceai.core.tables import Agent, AgentVersion, Call, CallEvent, Persona, Tenant
 from voiceai.runtime import endings, escalation, outbound
 from voiceai.runtime.prompt import system_prompt
 from voiceai.runtime.state import CallState
@@ -54,7 +55,7 @@ def _trim_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 async def create_call(
     s: AsyncSession, tenant_id: str, agent_id: str, channel: str, is_eval: bool = False, live: dict[str, Any] | None = None,
-    context: dict[str, Any] | None = None, app: Any | None = None,
+    context: dict[str, Any] | None = None, caller: ToolCaller | None = None,
 ) -> Call:
     agent = await s.scalar(select(Agent).where(Agent.id == agent_id, Agent.tenant_id == tenant_id))
     if not agent:
@@ -67,7 +68,7 @@ async def create_call(
     meta: dict[str, Any] = {"live": live} if live else {}
     if mode == "outbound" and not is_eval:  # OB-01: the callee must be one of the agent's targets
         ref = str((context or {}).get("member_ref") or "")
-        targets = await outbound.fetch_targets((config.get("outbound") or {}).get("targets_url", ""), app)
+        targets = await outbound.fetch_targets((config.get("outbound") or {}).get("targets_url", ""), caller or tool_caller())
         target = next((t for t in targets if t["member_ref"] == ref), None)
         if target is None:
             raise ApiError(422, "unknown_target", "Choose a person from the outbound target list")
@@ -83,7 +84,7 @@ async def create_call(
 
 class AgentSession:
     def __init__(
-        self, *, call: Call, config: dict[str, Any], tenant_name: str, app: Any | None,
+        self, *, call: Call, config: dict[str, Any], tenant_name: str, caller: ToolCaller | None = None,
         history: list[dict[str, Any]] | None = None, state: CallState | None = None, seq: int = 0,
         live: dict[str, Any] | None = None, context: dict[str, Any] | None = None,
     ) -> None:
@@ -102,12 +103,12 @@ class AgentSession:
         self.state = state or CallState()
         self.end_reason: str | None = None  # why this session ended (CE-06: the voice pipeline reports it to the browser)
         self.seq = seq
-        self.tools = ToolExecutor(self.tenant_id, self.call_id, config.get("tools", []), self.state, app)
+        self.tools = ToolExecutor(self.tenant_id, self.call_id, config.get("tools", []), self.state, caller or tool_caller())
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------ loading
     @classmethod
-    async def open(cls, call_id: str, tenant_id: str, app: Any | None = None, config_override: dict[str, Any] | None = None) -> AgentSession:
+    async def open(cls, call_id: str, tenant_id: str, caller: ToolCaller | None = None, config_override: dict[str, Any] | None = None) -> AgentSession:
         cached = REGISTRY.get(call_id)
         if cached and cached.tenant_id == tenant_id:
             return cached
@@ -131,7 +132,7 @@ class AgentSession:
                     config = {**config, "persona": persona_dict(row)}
             state = CallState(**meta["state"]) if meta.get("state") else CallState()
             state.ended = state.ended or call.ended_at is not None
-            sess = cls(call=call, config=config, tenant_name=tenant.name if tenant else tenant_id, app=app,
+            sess = cls(call=call, config=config, tenant_name=tenant.name if tenant else tenant_id, caller=caller,
                        history=list(meta.get("history", [])), state=state, seq=seq, live=live, context=meta.get("context"))
             sess.base_persona = base_persona
         if not sess.state.ended:

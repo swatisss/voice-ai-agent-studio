@@ -13,10 +13,10 @@ from pipecat.frames.frames import LLMTextFrame
 from sqlalchemy import func, select
 
 from tests.conftest import script
-from voiceai.db import sessionmaker
+from voiceai.core.db import sessionmaker
 from voiceai.live import LiveControls
-from voiceai.llm.gateway import FakeReply
-from voiceai.models import Call, CallAnalysis, CallFeedback, Cluster, Escalation, Job
+from voiceai.core.llm.gateway import FakeReply
+from voiceai.core.tables import Call, CallAnalysis, CallFeedback, Cluster, Escalation, Job
 from voiceai.runtime import endings
 from voiceai.runtime.session import AgentSession
 from voiceai.voice.processors import BrainProcessor
@@ -380,7 +380,7 @@ async def test_existing_database_gets_the_feedback_table(client, seeded):
     """Covers: DM-01"""
     from sqlalchemy import inspect
 
-    from voiceai import db
+    from voiceai.core import db
 
     async with db.engine().begin() as conn:  # an older database that predates the table
         await conn.run_sync(lambda c: CallFeedback.__table__.drop(c))

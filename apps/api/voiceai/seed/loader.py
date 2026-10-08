@@ -13,15 +13,15 @@ import numpy as np
 from sqlalchemy import select
 
 from voiceai.agents import publish
-from voiceai.config import get_settings
-from voiceai.db import sessionmaker
+from voiceai.core.config import get_settings
+from voiceai.core.db import sessionmaker
 from voiceai.knowledge import okf
-from voiceai.knowledge.embeddings import embed
+from voiceai.core.embeddings import embed
 from voiceai.knowledge.ingest import import_okf
 from voiceai.learning.analyze import refresh_stats
 from voiceai.live import persona_dict
 from voiceai.mock import data as mock_data
-from voiceai.models import (
+from voiceai.core.tables import (
     Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, Persona, Skill, Tenant, Tool, UseCase,
 )
 from voiceai.schemas import FIXABLE
@@ -33,7 +33,7 @@ log = logging.getLogger("voiceai.seed")
 
 async def seed(reset: bool = False) -> dict[str, Any]:
     if reset:
-        from voiceai.db import init_db
+        from voiceai.core.db import init_db
 
         await init_db(drop=True)
     mock_data.reset()  # date-relative business records restart together with the database

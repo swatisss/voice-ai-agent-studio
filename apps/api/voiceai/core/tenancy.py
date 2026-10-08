@@ -8,9 +8,9 @@ from fastapi import Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.db import get_session
-from voiceai.errors import ApiError
-from voiceai.models import Tenant
+from voiceai.core.db import get_session
+from voiceai.core.errors import ApiError
+from voiceai.core.tables import Tenant
 
 
 async def resolve_tenant(session: AsyncSession, tenant_id: str | None) -> str:

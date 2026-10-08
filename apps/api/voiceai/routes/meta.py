@@ -13,13 +13,14 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.config import get_settings
-from voiceai.db import get_session
-from voiceai.events import bus
-from voiceai.jobs import worker
-from voiceai.llm.gateway import gateway
-from voiceai.models import Tenant
-from voiceai.tenancy import resolve_tenant
+from voiceai.composition.wiring import provider_health
+from voiceai.core.config import get_settings
+from voiceai.core.db import get_session
+from voiceai.core.events import bus
+from voiceai.core.jobs import worker
+from voiceai.core.llm.gateway import gateway
+from voiceai.core.tables import Tenant
+from voiceai.core.tenancy import resolve_tenant
 
 router = APIRouter()
 
@@ -44,16 +45,12 @@ async def healthz(s: AsyncSession = Depends(get_session)) -> dict:
         db_ok = True
     except Exception:  # noqa: BLE001
         db_ok = False
-    g = gateway()
     return {
         "status": "ok" if db_ok else "degraded",
         "db": db_ok,
         "jobs": worker.alive or not settings.jobs_enabled,
-        # LG-13: the LLM providers come from models.yaml, so a new one shows up here by itself
-        "providers": {
-            **{name: g.provider_configured(name) for name in g.providers},
-            "deepgram": bool(settings.deepgram_api_key),
-        },
+        # LG-13: the providers come from models.yaml, so a new one shows up here by itself
+        "providers": provider_health(),
     }
 
 

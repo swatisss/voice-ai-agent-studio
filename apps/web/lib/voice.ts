@@ -51,7 +51,7 @@ export class VoiceClient {
         const msg = JSON.parse(e.data);
         if (msg.type === "ready") this.h.onReady?.();
         else if (msg.type === "interrupt") this.flush();
-        else if (msg.type === "end") { this.h.onEnd?.(msg.reason); }
+        else if (msg.type === "end") { this.h.onEnd?.(msg.reason); this.cleanup(); }  // the server ended the call: release the microphone now (UI-35)
       } else {
         this.play(e.data as ArrayBuffer);
       }
@@ -91,6 +91,7 @@ export class VoiceClient {
   hangup() {
     try { this.ws?.send(JSON.stringify({ type: "hangup" })); } catch { /* socket closed */ }
     setTimeout(() => this.ws?.close(), 300);
+    this.flush();  // a hang-up cuts the agent off at once
     this.cleanup();
   }
 
@@ -99,6 +100,8 @@ export class VoiceClient {
     this.stopped = true;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.ctxIn?.close().catch(() => undefined);
-    setTimeout(() => this.ctxOut?.close().catch(() => undefined), 1500);
+    // the server finishes sending a goodbye faster than it plays: let what is queued play out before closing
+    const queued = this.ctxOut ? Math.max(0, this.playHead - this.ctxOut.currentTime) : 0;
+    setTimeout(() => this.ctxOut?.close().catch(() => undefined), 1500 + queued * 1000);
   }
 }

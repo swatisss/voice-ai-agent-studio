@@ -33,7 +33,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **knowledge_chunks** — `id`, `tenant_id`, `doc_id` (FK, cascade delete), `ordinal`, `heading`, `content`, `embedding` JSON (list of float)
 
-**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `direction` (`inbound`|`outbound`|`internal`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason`, `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON (`state`, `history`, the live overrides `live.persona_id` and `live.turn_detection`, and `context` for outbound calls)
+**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `direction` (`inbound`|`outbound`|`internal`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason` (`end_call`|`farewell`|`handoff`|`idle`|`max_duration`|`hangup`|`error`), `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON (`state`, `history`, the live overrides `live.persona_id` and `live.turn_detection`, and `context` for outbound calls)
+
+**call_feedback** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `rating` (`up`|`down`), `comment` (nullable, ≤ 300 chars), `created_at`, `updated_at`; one row per call, replaced when the caller answers again; never created for simulation calls ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md))
 
 **call_events** — `id`, `tenant_id`, `call_id` (indexed), `seq` int (1..n per call), `at`, `kind` (`user`|`assistant`|`tool_call`|`tool_result`|`system`), `text` (nullable), `data` JSON (tool name/args/result, `latency_ms`, usage)
 
@@ -68,6 +70,6 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 19 tables exist.
+- **DM-01** — Given a fresh database, when the app starts, then all 20 tables exist; given an existing database without `call_feedback`, when the app starts, then that table is created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.

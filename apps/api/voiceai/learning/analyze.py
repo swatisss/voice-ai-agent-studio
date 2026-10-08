@@ -18,7 +18,7 @@ from voiceai.db import sessionmaker, utcnow
 from voiceai.events import bus
 from voiceai.knowledge.embeddings import embed_one
 from voiceai.llm.gateway import gateway
-from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, Cluster, Escalation
+from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Cluster, Escalation
 from voiceai.runtime.escalation import transcript_lines
 from voiceai.schemas import FIXABLE, AnalysisOut, ClusterName
 
@@ -48,6 +48,25 @@ def _escalation_text(esc: Escalation | None) -> str:
     return "; ".join(parts)
 
 
+def feedback_text(fb: CallFeedback | None) -> str:
+    """The `caller_feedback` input of the call-analysis prompt (FB-03)."""
+    if fb is None:
+        return "none"
+    if fb.rating == "up":
+        return "thumbs up"
+    return f"thumbs down: {fb.comment or ''}".rstrip()
+
+
+def apply_feedback(out: AnalysisOut, fb: CallFeedback | None) -> None:
+    """A thumbs-down call is always a learning candidate: never root cause `none`, never an empty gap summary (FB-03)."""
+    if fb is None or fb.rating != "down":
+        return
+    if out.root_cause == "none":
+        out.root_cause = "agent_error"
+    if not out.gap_summary.strip():
+        out.gap_summary = (fb.comment or "").strip()[:200] or "The caller was not satisfied with the help they received"
+
+
 @jobs.register("analyze_call")
 async def analyze_call(tenant_id: str, payload: dict[str, Any]) -> None:
     call_id = payload["call_id"]
@@ -57,6 +76,7 @@ async def analyze_call(tenant_id: str, payload: dict[str, Any]) -> None:
             return
         events = list((await s.scalars(select(CallEvent).where(CallEvent.call_id == call_id).order_by(CallEvent.seq))).all())
         esc = await s.scalar(select(Escalation).where(Escalation.call_id == call_id))
+        fb = await s.scalar(select(CallFeedback).where(CallFeedback.call_id == call_id))
         version = await s.get(AgentVersion, call.agent_version_id)
         tools = (version.config if version else {}).get("tools", [])
         state = (call.meta or {}).get("state", {})
@@ -66,6 +86,7 @@ async def analyze_call(tenant_id: str, payload: dict[str, Any]) -> None:
             tools_available="\n".join(f"- {t['name']}: {t.get('description', '')}" for t in tools) or "- (none)",
             search_results_summary=f"{len(no_answers)} ({'; '.join(no_answers)})" if no_answers else "0",
             escalation=_escalation_text(esc),
+            caller_feedback=feedback_text(fb),
             transcript=transcript_lines(events) or "(empty)",
         )
         out, _ = await gateway().complete_json("analysis", [{"role": "user", "content": prompt}], AnalysisOut)
@@ -73,6 +94,7 @@ async def analyze_call(tenant_id: str, payload: dict[str, Any]) -> None:
             out.outcome = "escalated"
         if out.outcome == "resolved":
             out.root_cause = "none"
+        apply_feedback(out, fb)  # after the resolved rule: a disliked resolved call keeps a cause
         await save_analysis(s, call, out, source="llm")
         await s.commit()
 
@@ -89,7 +111,8 @@ async def save_analysis(s: AsyncSession, call: Call, out: AnalysisOut, source: s
     analysis.source = source
     call.outcome = out.outcome
     await s.flush()
-    if out.outcome == "escalated" and out.gap_summary.strip():
+    disliked = await s.scalar(select(CallFeedback.rating).where(CallFeedback.call_id == call.id)) == "down"
+    if (out.outcome == "escalated" or disliked) and out.gap_summary.strip():  # FB-04: a thumbs down is a candidate like an escalation
         analysis.embedding = await embed_one(out.gap_summary)
         await assign_cluster(s, analysis, when=call.started_at)
     bus.publish(call.tenant_id, "insights", "analysis.created",
@@ -110,7 +133,7 @@ async def assign_cluster(s: AsyncSession, analysis: CallAnalysis, when=None) -> 
             best, best_score = c, score
     if best is not None and best_score >= get_settings().cluster_threshold:
         cluster = best
-        n = max(cluster.escalation_count, 1)
+        n = max(cluster.call_count, 1)  # members, escalated or thumbs-down
         centroid = (np.array(cluster.centroid, dtype=np.float32) * n + vec) / (n + 1)
         cluster.centroid = (centroid / (np.linalg.norm(centroid) or 1.0)).round(6).tolist()
     else:

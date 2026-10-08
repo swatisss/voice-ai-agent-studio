@@ -42,6 +42,13 @@ UI-30
 UI-31
 UI-32
 UI-33
+UI-34
+UI-35
+UI-36
+UI-37
+
+# Prompt rule: the model must say goodbye and call end_call after a thank-you; needs a real model and a person
+CE-03
 
 # Live voice: needs a Deepgram key, a microphone and speakers (spike S1 in specs/verification/spikes.md)
 VO-01

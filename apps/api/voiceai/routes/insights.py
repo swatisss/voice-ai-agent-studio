@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.db import get_session, utcnow
@@ -17,26 +17,39 @@ from voiceai.errors import ApiError
 from voiceai.learning import evaluate, propose
 from voiceai.learning.analyze import cluster_summary
 from voiceai.learning.impact import impact
-from voiceai.models import Call, CallAnalysis, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc
+from voiceai.models import Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc
 from voiceai.tenancy import current_tenant
 
 router = APIRouter(prefix="/api")
 
+_NO_STATS = {"escalations": 0, "dislikes": 0, "signals": 0}
 
-async def _recent_counts(s: AsyncSession, tenant_id: str) -> dict[str, int]:
+
+async def _recent_stats(s: AsyncSession, tenant_id: str) -> dict[str, dict[str, int]]:
+    """Per cluster, over the last 28 days: escalations, thumbs-down calls, and distinct signals (a call that is both counts once)."""
     since = utcnow() - timedelta(days=28)
     rows = (await s.execute(
-        select(CallAnalysis.cluster_id, func.count())
+        select(CallAnalysis.cluster_id, CallAnalysis.outcome, CallFeedback.rating)
         .join(Call, Call.id == CallAnalysis.call_id)
-        .where(CallAnalysis.tenant_id == tenant_id, CallAnalysis.outcome == "escalated", Call.started_at >= since,
-               CallAnalysis.cluster_id.is_not(None))
-        .group_by(CallAnalysis.cluster_id)
+        .outerjoin(CallFeedback, CallFeedback.call_id == CallAnalysis.call_id)
+        .where(CallAnalysis.tenant_id == tenant_id, Call.started_at >= since, CallAnalysis.cluster_id.is_not(None))
     )).all()
-    return {cid: n for cid, n in rows}
+    stats: dict[str, dict[str, int]] = {}
+    for cid, outcome, rating in rows:
+        st = stats.setdefault(cid, dict(_NO_STATS))
+        escalated, disliked = outcome == "escalated", rating == "down"
+        st["escalations"] += escalated
+        st["dislikes"] += disliked
+        st["signals"] += escalated or disliked
+    return stats
 
 
-def _cluster_out(c: Cluster, recent: dict[str, int]) -> dict[str, Any]:
-    return {**cluster_summary(c), **impact(c, recent.get(c.id, 0)), "escalations_28d": recent.get(c.id, 0)}
+def _cluster_out(c: Cluster, stats: dict[str, dict[str, int]]) -> dict[str, Any]:
+    st = stats.get(c.id, _NO_STATS)
+    return {
+        **cluster_summary(c), **impact(c, st["escalations"], recent_signals=st["signals"]),
+        "escalations_28d": st["escalations"], "dislike_count": st["dislikes"], "signal_count": st["signals"],
+    }
 
 
 @router.get("/insights/clusters")
@@ -44,7 +57,7 @@ async def clusters(agent_id: str | None = None, tenant_id: str = Depends(current
     q = select(Cluster).where(Cluster.tenant_id == tenant_id)
     if agent_id:
         q = q.where(Cluster.agent_id == agent_id)
-    recent = await _recent_counts(s, tenant_id)
+    recent = await _recent_stats(s, tenant_id)
     items = [_cluster_out(c, recent) for c in (await s.scalars(q)).all()]
     items.sort(key=lambda c: (-c["est_weekly_cost_usd"], c["name"]))
     return {"items": items}
@@ -60,7 +73,7 @@ async def _cluster(s: AsyncSession, tenant_id: str, cluster_id: str) -> Cluster:
 @router.get("/insights/clusters/{cluster_id}")
 async def cluster_detail(cluster_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     c = await _cluster(s, tenant_id, cluster_id)
-    recent = await _recent_counts(s, tenant_id)
+    recent = await _recent_stats(s, tenant_id)
     evidence = await propose.cluster_evidence(s, c.id, limit=50)
     proposals = (await s.scalars(select(FixProposal).where(FixProposal.cluster_id == c.id).order_by(FixProposal.created_at.desc()))).all()
     return {**_cluster_out(c, recent), "calls": evidence, "proposals": [propose.proposal_summary(p) for p in proposals]}
@@ -69,8 +82,8 @@ async def cluster_detail(cluster_id: str, tenant_id: str = Depends(current_tenan
 @router.post("/insights/clusters/{cluster_id}/draft-fix")
 async def draft_fix(cluster_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     c = await _cluster(s, tenant_id, cluster_id)
-    recent = await _recent_counts(s, tenant_id)
-    if not impact(c, recent.get(c.id, 0))["ready_for_fix"]:
+    recent = await _recent_stats(s, tenant_id)
+    if not _cluster_out(c, recent)["ready_for_fix"]:
         raise ApiError(409, "cluster_not_ready", "Cluster is not fixable, below threshold, or already has a proposal")
     from voiceai import jobs
 
@@ -84,7 +97,7 @@ async def ignore(cluster_id: str, tenant_id: str = Depends(current_tenant), s: A
     c = await _cluster(s, tenant_id, cluster_id)
     c.status = "ignored"
     await s.commit()
-    return _cluster_out(c, await _recent_counts(s, tenant_id))
+    return _cluster_out(c, await _recent_stats(s, tenant_id))
 
 
 class ProposalUpdate(BaseModel):

@@ -17,7 +17,7 @@ from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.knowledge.ingest import create_doc
 from voiceai.llm.gateway import gateway
-from voiceai.models import Agent, AgentVersion, Call, CallAnalysis, Cluster, Escalation, EvalRun, FixProposal, KnowledgeDoc, Skill, Tool
+from voiceai.models import Agent, AgentVersion, Call, CallAnalysis, CallFeedback, Cluster, Escalation, EvalRun, FixProposal, KnowledgeDoc, Skill, Tool
 from voiceai.schemas import FixDraft, SkillDef, ToolDef
 
 # Endpoints of the tenant's business API that exist but are not tools yet (fix drafting may target them).
@@ -43,9 +43,10 @@ def proposal_summary(p: FixProposal) -> dict[str, Any]:
 
 async def cluster_evidence(s: AsyncSession, cluster_id: str, limit: int = 10) -> list[dict[str, Any]]:
     rows = (await s.execute(
-        select(CallAnalysis, Escalation, Call)
+        select(CallAnalysis, Escalation, Call, CallFeedback)
         .join(Call, Call.id == CallAnalysis.call_id)
         .outerjoin(Escalation, Escalation.call_id == CallAnalysis.call_id)
+        .outerjoin(CallFeedback, CallFeedback.call_id == CallAnalysis.call_id)
         .where(CallAnalysis.cluster_id == cluster_id)
         .order_by(Call.started_at.desc())
         .limit(limit)
@@ -54,9 +55,10 @@ async def cluster_evidence(s: AsyncSession, cluster_id: str, limit: int = 10) ->
         {
             "call_id": a.call_id, "date": c.started_at.isoformat(), "caller_goal": a.caller_goal, "gap_summary": a.gap_summary,
             "resolution_note": (e.resolution_note if e else "") or a.resolution_summary, "caller_ref": c.caller_ref,
-            "verified": bool(c.caller_ref), "root_cause": a.root_cause,
+            "verified": bool(c.caller_ref), "root_cause": a.root_cause, "outcome": a.outcome,
+            "feedback": {"rating": f.rating, "comment": f.comment or ""} if f else None,  # UI-37
         }
-        for a, e, c in rows
+        for a, e, c, f in rows
     ]
 
 

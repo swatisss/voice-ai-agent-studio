@@ -1,4 +1,4 @@
-"""ORM models - the 19 tables of the data model.
+"""ORM models - the 20 tables of the data model.
 
 Spec: /data/data-model.md
 """
@@ -183,6 +183,19 @@ class Escalation(Base):
     created_at: Mapped[datetime] = _created()
     accepted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class CallFeedback(Base):
+    """The caller's thumbs up or down after a call (one row per call, replaced on a new answer). Spec: /architecture/call-ending-and-feedback.md"""
+    __tablename__ = "call_feedback"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    call_id: Mapped[str] = mapped_column(String(32), ForeignKey("calls.id", ondelete="CASCADE"), unique=True)
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    rating: Mapped[str] = mapped_column(String(8))  # up | down
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
 class CallAnalysis(Base):

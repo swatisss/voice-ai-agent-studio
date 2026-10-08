@@ -85,25 +85,27 @@ async def test_end_call_queues_single_analysis(client, seeded, fake_llm):
         assert n == 1
 
 
-async def test_llm_outage_escalates_then_holds(client, seeded, fake_llm):
-    """Covers: RT-06, RT-02"""
-    calls = {"n": 0}
-
-    def responder(role, m, t):  # noqa: ANN001, ANN202
-        if role == "realtime":  # the background packet build also calls the gateway; only count the agent's turns
-            calls["n"] += 1
-        raise LLMError("all models failed")
-
-    fake_llm(responder)
+async def test_llm_outage_escalates_and_ends(client, seeded, fake_llm):
+    """Covers: RT-06, CE-01"""
+    fake_llm(lambda role, m, t: (_ for _ in ()).throw(LLMError("all models failed")))
     call_id = await _start(client, seeded)
     out = await _say(client, call_id, "hello")
-    assert "having trouble" in out["reply"] and out["escalated"] is True
-    held = await _say(client, call_id, "are you there?")
-    assert held["reply"].startswith("A specialist will be with you shortly")
-    assert calls["n"] == 1
+    assert "having trouble" in out["reply"] and out["escalated"] is True and out["ended"] is True
     async with sessionmaker()() as s:
         esc = await s.scalar(select(Escalation).where(Escalation.call_id == call_id))
         assert esc.reason_category == "other"
+        call = await s.get(Call, call_id)
+        assert call.end_reason == "handoff" and call.outcome == "escalated"
+
+
+async def test_open_escalated_session_holds(client, seeded, fake_llm):
+    """Covers: RT-02"""
+    fake_llm(lambda *a: (_ for _ in ()).throw(AssertionError("LLM must not be called")))
+    call_id = await _start(client, seeded)
+    session = await AgentSession.open(call_id, "evergreen-care")
+    await session.escalate("other", "a session that is escalated yet still open (simulation, race)")
+    held = await session.reply("are you there?")
+    assert held.startswith("A specialist will be with you shortly")
 
 
 async def test_safety_screen(client, seeded, fake_llm):

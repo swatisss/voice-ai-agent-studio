@@ -20,7 +20,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | server → client | binary | Agent audio: PCM signed 16-bit little-endian, mono, **24,000 Hz**, arbitrary frame sizes |
 | server → client | text (JSON) | `{"type":"ready"}` once the pipeline is running; the agent's spoken welcome follows immediately and the caller does not need to speak first ([VO-07](/architecture/voice-pipeline.md)) |
 | server → client | text (JSON) | `{"type":"interrupt"}` — caller barged in; client MUST discard queued playback immediately |
-| server → client | text (JSON) | `{"type":"end","reason":"end_call"\|"hangup"\|"error"}` — client stops capture; server closes after sending |
+| server → client | text (JSON) | `{"type":"end","reason":"end_call"\|"farewell"\|"handoff"\|"idle"\|"max_duration"\|"hangup"\|"error"}` ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)) — sent after the closing speech has finished; client stops capture and releases the microphone; server closes after sending |
 
 Transcripts, tool calls and status are **not** sent on this socket; the page subscribes to SSE topic `call:{id}` ([/api/events.md](/api/events.md)).
 

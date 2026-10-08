@@ -11,6 +11,7 @@ import { Badge, Button, Card, cx, EmptyState, Input, Select, Spinner, useToast }
 import { api, ApiError, type CallEvent, useApi, useEvents } from "@/lib/api";
 import { MODE_LABEL, MODE_TONE, money, secs } from "@/lib/format";
 import { VoiceClient } from "@/lib/voice";
+import { FeedbackPrompt } from "@/components/feedback";
 import { LiveControlsCard } from "@/components/live-controls";
 import { DEFAULT_TURN, type TurnDetection } from "@/lib/voices";
 
@@ -113,7 +114,7 @@ function TestCall() {
         onReady: () => setStatus("active"),
         onLevel: setLevel,
         onSpeaking: setSpeaking,
-        onEnd: () => setStatus("ended"),
+        onEnd: () => { setStatus("ended"); setSpeaking(false); setLevel(0); sync(r.call_id); },  // UI-35: the server ended the call
         onClose: (code) => {
           if (code === 4500) toast("Voice is unavailable (speech provider key missing) — use Type mode", "bad");
           setStatus("ended");
@@ -217,6 +218,7 @@ function TestCall() {
                 <Button variant="ghost" className="ml-3" onClick={start}>Start new call</Button>
               </div>
             )}
+            {status === "ended" && callId && <FeedbackPrompt key={callId} callId={callId} />}  {/* UI-34: only once the call has ended */}
             {mode === "type" && status === "active" && (
               <div className="mt-3 flex gap-2">
                 <Input value={text} disabled={escalated || waiting} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}

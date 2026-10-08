@@ -56,7 +56,11 @@ A **Live controls** card at the top of the right column (and shown before the ca
 2. Input + Send (Enter); while waiting, a typing indicator; replies come from the POST response and SSE events (de-duplicated by `seq`).
 3. **End chat** button → `POST /end`.
 
-After the call ends (either mode): outcome banner — "Resolved", "Escalated — waiting for a specialist", or "Ended" — and **Start new call**.
+# End of a call and feedback
+
+A call ends by itself, in voice and in chat, after a goodbye, a farewell phrase, the hand-off to a human, silence (voice) or the maximum length (voice) — or when the tester presses **Hang up** / **End chat** ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)). When the server ends a voice call the page needs no action from the tester: the microphone is released, the mic area and the "Listening" state disappear, and in chat the input is replaced.
+
+In both modes the outcome banner then shows — "Resolved", "Escalated — waiting for a specialist", or "Call ended" — and under it the **feedback prompt**: "Was this helpful?" with two labelled buttons, **Yes** (thumbs up) and **No** (thumbs down). **No** reveals an optional comment box ("What went wrong?", up to 300 characters) and **Send**. An answer is sent with `POST /api/calls/{id}/feedback` and replaced by "Thanks for your feedback."; it can be changed until a new call starts. **Start new call** stays available. The prompt is never shown while a call is running.
 
 # Acceptance
 
@@ -68,4 +72,6 @@ After the call ends (either mode): outcome banner — "Resolved", "Escalated —
 - **UI-33** — Given Talk mode and an allowed microphone, when Start call is pressed, then the agent's welcome is heard and appears as the first agent message without the tester speaking, and the tester's answer after it ends is handled as the first turn; talking during the welcome does not cut it off.
 - **UI-08** — Given a text call and Technical details on, when the agent calls a tool, then a tool chip appears in Activity with ✓ or ✕ before the reply bubble.
 - **UI-09** — Given a voice call, when the user clicks Hang up, then the socket sends `hangup`, capture stops, and the outcome banner appears.
-- **UI-10** — Given an escalation, then the transcript shows a system notice with the reason and the input is disabled except for "End".
+- **UI-10** — Given an escalation, then the transcript shows a system notice with the reason and the hand-off message as the last agent message, the call ends, and the banner "Escalated — waiting for a specialist" replaces the input.
+- **UI-34** — Given a chat that ends (goodbye, farewell phrase or hand-off), then the input is replaced by the outcome banner and "Was this helpful?" with Yes and No appears; No offers an optional comment; sending stores the answer and shows "Thanks for your feedback."; and while the call is running no feedback prompt is shown.
+- **UI-35** — Given a Talk call that the server ends (goodbye, hand-off or silence), then without any action from the tester the microphone stops, the "Listening" state disappears, and the outcome banner and the feedback prompt appear.

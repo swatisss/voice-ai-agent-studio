@@ -63,6 +63,7 @@ export default function InsightsPage() {
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <Badge tone={c.fixable ? "accent" : "neutral"}>{ROOT_CAUSE[c.root_cause] ?? c.root_cause}</Badge>
                 <span>{c.escalations_28d} escalations (28 d)</span>
+                {c.dislike_count > 0 && <span className="font-medium">{c.dislike_count} not helpful (28 d)</span>}  {/* UI-37 */}
                 <span>{c.weekly_escalations}/week</span>
                 <span className="font-medium">{money(c.est_weekly_cost_usd)}/week</span>
                 <span className="text-xs text-muted">last {when(c.last_seen_at)}</span>

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { ClusterLabel } from "@/components/cluster-label";
+import { FeedbackBadge } from "@/components/feedback";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, Card, Field, Input, JsonView, Spinner, Textarea, useToast } from "@/components/ui";
 import { api, ApiError, useApi, useEvents } from "@/lib/api";
@@ -121,7 +122,9 @@ function ClusterDetail() {
       <p className="text-sm text-muted">{c.description}</p>
       <div className="flex flex-wrap gap-4 text-sm">
         <Badge tone={c.fixable ? "accent" : "neutral"}>{ROOT_CAUSE[c.root_cause]}</Badge>
-        <span>{c.escalations_28d} escalations in 28 days</span><span>{c.weekly_escalations}/week</span><span className="font-medium">{money(c.est_weekly_cost_usd)}/week</span>
+        <span>{c.escalations_28d} escalations in 28 days</span>
+        {c.dislike_count > 0 && <span className="font-medium">{c.dislike_count} not helpful</span>}
+        <span>{c.weekly_escalations}/week</span><span className="font-medium">{money(c.est_weekly_cost_usd)}/week</span>
       </div>
 
       {approved && (
@@ -186,11 +189,12 @@ function ClusterDetail() {
       <Card title={`Evidence (${c.calls.length} calls)`}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-xs text-muted"><tr><th className="pb-2">Date</th><th>Caller goal</th><th>Gap</th><th>Specialist resolution</th><th /></tr></thead>
+            <thead className="text-left text-xs text-muted"><tr><th className="pb-2">Date</th><th>Caller goal</th><th>Gap</th><th>Specialist resolution</th><th>Caller feedback</th><th /></tr></thead>
             <tbody>{c.calls.map((e: any) => (
               <tr key={e.call_id} className="border-t border-line align-top">
                 <td className="py-2 whitespace-nowrap">{when(e.date)}</td><td>{e.caller_goal}</td><td className="text-muted">{e.gap_summary}</td>
                 <td>{e.resolution_note || <span className="text-muted">—</span>}</td>
+                <td>{e.feedback ? <div className="space-y-1"><FeedbackBadge rating={e.feedback.rating} />{e.feedback.comment && <div className="text-xs text-muted">{e.feedback.comment}</div>}</div> : <span className="text-muted">—</span>}</td>
                 <td><Link className="text-accent" href={`/calls/detail/?id=${e.call_id}`}>Call</Link></td>
               </tr>
             ))}</tbody>

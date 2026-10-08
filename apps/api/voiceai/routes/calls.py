@@ -16,7 +16,9 @@ from voiceai.config import get_settings
 from voiceai.db import get_session, sessionmaker
 from voiceai.errors import ApiError
 from voiceai.live import LIVE, LiveControls, effective_settings, persona_dict
-from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, Escalation, Persona
+from voiceai import jobs
+from voiceai.db import utcnow
+from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Escalation, Persona
 from voiceai.schemas import TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
 from voiceai.runtime.session import AgentSession, create_call
@@ -50,8 +52,20 @@ class MessageBody(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
 
 
-def call_summary(c: Call, analysis: CallAnalysis | None = None, version: int | None = None) -> dict[str, Any]:
+class FeedbackBody(BaseModel):
+    rating: Literal["up", "down"]
+    comment: str | None = Field(default=None, max_length=300)
+
+
+def feedback_out(f: CallFeedback | None) -> dict[str, Any] | None:
+    if f is None:
+        return None
+    return {"rating": f.rating, "comment": f.comment or "", "at": (f.updated_at or f.created_at).isoformat()}
+
+
+def call_summary(c: Call, analysis: CallAnalysis | None = None, version: int | None = None, feedback: str | None = None) -> dict[str, Any]:
     return {
+        "feedback": feedback,
         "id": c.id, "agent_id": c.agent_id, "agent_version_id": c.agent_version_id, "agent_version": version,
         "channel": c.channel, "direction": c.direction, "status": c.status, "outcome": c.outcome, "caller_ref": c.caller_ref,
         "started_at": c.started_at.isoformat() if c.started_at else None,
@@ -140,14 +154,39 @@ async def end_call(call_id: str, request: Request, tenant_id: str = Depends(curr
         return {"status": fresh.status, "outcome": fresh.outcome}
 
 
+@router.post("/calls/{call_id}/feedback")
+async def give_feedback(call_id: str, body: FeedbackBody, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    """FB-01, FB-02, FB-03: the caller's thumbs up or down after the call; a thumbs down queues one more analysis."""
+    call = await s.scalar(select(Call).where(Call.id == call_id, Call.tenant_id == tenant_id))
+    if not call:
+        raise ApiError(404, "call_not_found", "Call not found")
+    if call.is_eval or call.channel == "simulation":
+        raise ApiError(409, "not_ratable", "Simulated calls cannot be rated")
+    if not call.ended_at:
+        raise ApiError(409, "call_active", "Feedback can be given once the call has ended")
+    comment = (body.comment or "").strip() or None
+    row = await s.scalar(select(CallFeedback).where(CallFeedback.call_id == call_id))
+    if row is None:
+        row = CallFeedback(tenant_id=tenant_id, call_id=call_id, agent_id=call.agent_id, rating=body.rating, comment=comment)
+        s.add(row)
+    else:
+        row.rating, row.comment, row.updated_at = body.rating, comment, utcnow()
+    if body.rating == "down":  # the analysis must see the feedback (FB-03); the dedupe key means one extra run per call
+        await jobs.enqueue(s, tenant_id, "analyze_call", {"call_id": call_id}, dedupe_key=f"analyze_call:{call_id}:feedback")
+    await s.commit()
+    return {"rating": row.rating, "comment": row.comment or ""}
+
+
 @router.get("/calls")
 async def list_calls(
     agent_id: str | None = None, outcome: str | None = None, channel: str | None = None, direction: str | None = None,
+    feedback: Literal["up", "down", "none"] | None = None,
     include_seed: bool = True, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session),
 ) -> dict:
     q = (
-        select(Call, CallAnalysis, AgentVersion.version)
+        select(Call, CallAnalysis, AgentVersion.version, CallFeedback.rating)
         .outerjoin(CallAnalysis, CallAnalysis.call_id == Call.id)
+        .outerjoin(CallFeedback, CallFeedback.call_id == Call.id)
         .outerjoin(AgentVersion, AgentVersion.id == Call.agent_version_id)
         .where(Call.tenant_id == tenant_id, Call.is_eval.is_(False))  # API-04
         .order_by(Call.started_at.desc())
@@ -161,10 +200,14 @@ async def list_calls(
         q = q.where(Call.channel == channel)
     if direction:
         q = q.where(Call.direction == direction)
+    if feedback == "none":  # FB-05
+        q = q.where(CallFeedback.rating.is_(None))
+    elif feedback:
+        q = q.where(CallFeedback.rating == feedback)
     if not include_seed:
         q = q.where(Call.is_seed.is_(False))
     rows = (await s.execute(q)).all()
-    return {"items": [call_summary(c, a, v) for c, a, v in rows]}
+    return {"items": [call_summary(c, a, v, f) for c, a, v, f in rows]}
 
 
 @router.get("/calls/{call_id}")
@@ -176,8 +219,10 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
     esc = await s.scalar(select(Escalation).where(Escalation.call_id == call_id))
     analysis = await s.scalar(select(CallAnalysis).where(CallAnalysis.call_id == call_id))
     version = await s.get(AgentVersion, call.agent_version_id)
+    fb = await s.scalar(select(CallFeedback).where(CallFeedback.call_id == call_id))
     return {
-        **call_summary(call, analysis, version.version if version else None),
+        **call_summary(call, analysis, version.version if version else None, fb.rating if fb else None),
+        "feedback": feedback_out(fb),  # detail carries the object; the summary carries just the rating
         "events": [{"seq": e.seq, "at": e.at.isoformat(), "kind": e.kind, "text": e.text, "data": e.data} for e in events],
         "escalation": esc_mod.summary(esc) if esc else None,
         "analysis": analysis_out(analysis),

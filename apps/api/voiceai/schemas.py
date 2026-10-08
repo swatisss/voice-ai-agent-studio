@@ -104,6 +104,15 @@ class Policy(BaseModel):
     holding_message: str = Field(default="A specialist will be with you shortly. Thanks for your patience.", max_length=300)
     safety_screen: bool = True
     voice_filler: bool = True
+    silence_reminder_s: int = Field(default=10, ge=5, le=60)   # voice: "Are you still there?" after this much silence (CE-04)
+    silence_end_s: int = Field(default=30, ge=10, le=300)      # voice: end the call after this much silence
+    max_call_seconds: int = Field(default=600, ge=60, le=3600)  # voice: hard limit (CE-05)
+
+    @model_validator(mode="after")
+    def _silence_order(self) -> Policy:  # CE-07
+        if self.silence_end_s <= self.silence_reminder_s:
+            raise ValueError("silence_end_s must be greater than silence_reminder_s")
+        return self
 
     @field_validator("rules", "escalate_when", "never")
     @classmethod

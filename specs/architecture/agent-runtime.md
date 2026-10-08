@@ -25,7 +25,7 @@ Behavior MUST NOT differ between channels except: voice may emit a short *filler
 |---|---|
 | `start() -> str` | Returns the greeting: persona greeting + disclosure. Records it as an `assistant` event. |
 | `respond(user_text) -> AsyncIterator[str]` | Runs one turn (below), yielding reply text chunks as they stream. |
-| `end(reason)` | Ends the call (`hangup`, `end_call`, `timeout`, `error`); sets `ended_at`; queues `analyze_call`. Idempotent. |
+| `end(reason)` | Ends the call (`end_call`, `farewell`, `handoff`, `idle`, `max_duration`, `hangup`, `error`; see [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)); sets `ended_at`; queues `analyze_call`. Idempotent. |
 | `state` | Current `CallState` (below). |
 
 | `set_persona(persona)` | Replaces the persona used for the next turns (live switch), records a `system` event "Persona switched to ...", never repeats the greeting. See [/architecture/personas.md](/architecture/personas.md). |
@@ -40,7 +40,7 @@ A session knows its agent's `mode` (`inbound`, `outbound`, `internal`) and, for 
 
 1. Record the `user` event; increment `turns`.
 2. **Ended?** If the call has ended, yield nothing.
-3. **Escalated?** If the call is already escalated, yield the policy `holding_message` without calling the LLM.
+3. **Escalated or farewell?** If the call is already escalated (a session that is escalated yet still open), yield the policy `holding_message` without calling the LLM. Otherwise, if the caller's turn is a **farewell phrase** ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md), CE-02), yield the closing line "Thank you for calling. Take care!", end with reason `farewell` and make no LLM request.
 4. **Safety screen** (if `policy.safety_screen`): case-insensitive match against the safety phrase list in [/architecture/escalation.md](/architecture/escalation.md). On match, yield the safety message, escalate with category `safety`, stop.
 5. Build messages: system prompt from [/prompts/agent-system-prompt.md](/prompts/agent-system-prompt.md) + the last 30 conversation messages (user, assistant, tool calls and results).
 6. Call the LLM gateway with role `realtime` (agent model override honored), streaming, with tool schemas for built-in tools + the agent's tools.
@@ -50,7 +50,7 @@ A session knows its agent's `mode` (`inbound`, `outbound`, `internal`) and, for 
    3. call the LLM again with the results appended.
 8. Stream the final assistant text; record the `assistant` event with latency (time to first chunk) and token usage.
 9. **Post-turn triggers** (deterministic, see [/architecture/escalation.md](/architecture/escalation.md)): no-answer streak, tool-error streak, max turns. If one fires and the call is not yet escalated, yield the handoff message and escalate.
-10. If the model called `end_call`, end the session with reason `end_call` after yielding its final text.
+10. **End.** If the call was escalated in this turn (model decision, safety screen or post-turn trigger), end the session with reason `handoff` once the handoff message has been yielded (CE-01); otherwise, if the model called `end_call`, end it with reason `end_call` after yielding its final text.
 
 If the LLM fails after gateway fallback, yield `"I'm sorry, I'm having trouble right now. Let me connect you with someone who can help."` and escalate with category `other`.
 
@@ -59,7 +59,7 @@ If the LLM fails after gateway fallback, yield `"I'm sorry, I'm having trouble r
 | Name | Parameters | Effect |
 |---|---|---|
 | `search_knowledge` | `query: string` | Searches the agent's knowledge docs ([/architecture/knowledge.md](/architecture/knowledge.md)). Returns results or `{"no_answer": true}`. |
-| `escalate_to_human` | `reason_category` (enum, see escalation spec), `reason_detail: string` | Marks the call escalated and returns `{"status":"escalated","say":<handoff_message>}`. The runtime then speaks the handoff message itself and ends the turn without another LLM round (deterministic wording, no extra latency). |
+| `escalate_to_human` | `reason_category` (enum, see escalation spec), `reason_detail: string` | Marks the call escalated and returns `{"status":"escalated","say":<handoff_message>}`. The runtime then speaks the handoff message itself and ends the turn without another LLM round (deterministic wording, no extra latency); the call then ends with reason `handoff` (CE-01). |
 | `end_call` | `summary: string` | Marks the call for ending after the reply. If the model produced no goodbye text in that turn, the runtime says "Thank you for calling. Take care!" |
 
 Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-skills.md](/architecture/tools-and-skills.md). Name collisions with built-ins are rejected at tool creation.
@@ -83,7 +83,7 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 # Acceptance
 
 - **RT-01** — Given a published agent, when a text call starts, then the first assistant event is the persona greeting followed by the disclosure.
-- **RT-02** — Given a call already escalated, when the caller speaks, then the reply is the holding message and no LLM request is made.
+- **RT-02** — Given a session that is escalated but still open, when the caller speaks, then the reply is the holding message and no LLM request is made. (Calls normally end at the hand-off, CE-01.)
 - **RT-03** — Given the model requests a tool, when the tool returns, then `tool_call` and `tool_result` events are stored in order and the model is called again with the result.
 - **RT-04** — Given the model keeps requesting tools, when 4 rounds are reached in one turn, then the runtime stops calling tools and returns the model's text (or an apology) for that turn.
 - **RT-05** — Given the model calls `end_call`, when the reply finishes, then the call is ended with reason `end_call` and an `analyze_call` job is queued.

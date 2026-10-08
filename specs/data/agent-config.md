@@ -26,7 +26,10 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
     "handoff_message": "I'm connecting you with a specialist who will have all the details, so you won't need to repeat yourself.",
     "holding_message": "A specialist will be with you shortly. Thanks for your patience.",
     "safety_screen": true,
-    "voice_filler": true
+    "voice_filler": true,
+    "silence_reminder_s": 10,
+    "silence_end_s": 30,
+    "max_call_seconds": 600
   },
   "tool_ids": ["..."],
   "skill_ids": ["..."],
@@ -43,6 +46,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `persona.speed` | 0.7–1.5, default 1.0 (speaking-rate multiplier) |
 | `persona.opening` | ≤ 400 chars, may be empty; outbound opener, supports `{first_name}` placeholders |
 | `policy.max_turns` | 4–40 |
+| `policy.silence_reminder_s`, `policy.silence_end_s`, `policy.max_call_seconds` | voice call timers ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)): 5–60 (default 10), 10–300 (default 30, must be greater than the reminder), 60–3600 (default 600) |
 | `policy.rules`, `policy.escalate_when`, `policy.never` | lists of ≤ 300-char strings, ≤ 30 items each |
 | `models.realtime` | `null` (role default) or a model ref listed by `GET /api/models` |
 | `*_ids` | must reference same-tenant, non-archived objects |

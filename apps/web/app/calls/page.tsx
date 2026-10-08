@@ -3,6 +3,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { FeedbackBadge } from "@/components/feedback";
 import { useTenant } from "@/components/shell";
 import { Badge, Card, EmptyState, Select, Spinner } from "@/components/ui";
 import { useApi } from "@/lib/api";
@@ -15,8 +16,9 @@ export default function CallsPage() {
   const [outcome, setOutcome] = useState("");
   const [channel, setChannel] = useState("");
   const [direction, setDirection] = useState("");
+  const [feedback, setFeedback] = useState("");
   const [seed, setSeed] = useState(true);
-  const qs = new URLSearchParams({ include_seed: String(seed), ...(agent && { agent_id: agent }), ...(outcome && { outcome }), ...(channel && { channel }), ...(direction && { direction }) });
+  const qs = new URLSearchParams({ include_seed: String(seed), ...(agent && { agent_id: agent }), ...(outcome && { outcome }), ...(channel && { channel }), ...(direction && { direction }), ...(feedback && { feedback }) });
   const { data: agents } = useApi<{ items: any[] }>("/api/agents", [tenant]);
   const { data } = useApi<{ items: any[] }>(`/api/calls?${qs}`, [tenant]);
   const versionOf = (c: any) => (c.agent_version ? `v${c.agent_version}` : "");
@@ -29,13 +31,14 @@ export default function CallsPage() {
         <Select className="w-40" value={outcome} onChange={(e) => setOutcome(e.target.value)}><option value="">All outcomes</option><option value="resolved">Resolved</option><option value="escalated">Escalated</option><option value="abandoned">Abandoned</option></Select>
         <Select className="w-36" value={channel} onChange={(e) => setChannel(e.target.value)}><option value="">All channels</option><option value="voice">Voice</option><option value="text">Text</option></Select>
         <Select className="w-36" value={direction} onChange={(e) => setDirection(e.target.value)}><option value="">All directions</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option><option value="internal">Internal</option></Select>
+        <Select className="w-44" aria-label="Feedback" value={feedback} onChange={(e) => setFeedback(e.target.value)}><option value="">Any feedback</option><option value="down">Not helpful</option><option value="up">Helpful</option><option value="none">No answer</option></Select>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={seed} onChange={(e) => setSeed(e.target.checked)} />Include seeded history</label>
       </div>
       {!data ? <Spinner /> : !data.items.length ? <EmptyState title="No calls match">Run a test call or change the filters.</EmptyState> : (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-xs text-muted"><tr><th className="pb-2">Started</th><th>Channel</th><th>Direction</th><th>Version</th><th>Caller</th><th>Intent</th><th>Outcome</th><th>Root cause</th><th>Turns</th><th>LLM cost</th></tr></thead>
+              <thead className="text-left text-xs text-muted"><tr><th className="pb-2">Started</th><th>Channel</th><th>Direction</th><th>Version</th><th>Caller</th><th>Intent</th><th>Outcome</th><th>Feedback</th><th>Root cause</th><th>Turns</th><th>LLM cost</th></tr></thead>
               <tbody>
                 {data.items.map((c) => (
                   <tr key={c.id} className="cursor-pointer border-t border-line hover:bg-neutral-soft" onClick={() => router.push(`/calls/detail/?id=${c.id}`)}>
@@ -46,6 +49,7 @@ export default function CallsPage() {
                     <td className="mono text-xs">{maskRef(c.caller_ref)}</td>
                     <td>{label(c.intent)}</td>
                     <td>{c.outcome ? <Badge tone={outcomeTone(c.outcome)}>{label(c.outcome)}</Badge> : <Badge>{label(c.status)}</Badge>}</td>
+                    <td><FeedbackBadge rating={c.feedback} /></td>
                     <td>{c.root_cause && c.root_cause !== "none" ? ROOT_CAUSE[c.root_cause] : ""}</td>
                     <td>{c.turn_count}</td>
                     <td>{money(c.llm_cost_usd, 4)}</td>

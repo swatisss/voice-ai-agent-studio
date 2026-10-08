@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { FeedbackBadge } from "@/components/feedback";
 import { PacketCard } from "@/components/packet";
 import { useTenant } from "@/components/shell";
 import { Transcript } from "@/components/transcript";
@@ -32,6 +33,7 @@ function CallDetail() {
         <Badge>{label(c.channel)}</Badge>
         <Badge tone={MODE_TONE[c.direction] ?? "neutral"}>{MODE_LABEL[c.direction] ?? "Inbound"}</Badge>
         {c.agent_version && <Badge tone="ok">v{c.agent_version}</Badge>}
+        <FeedbackBadge rating={c.feedback?.rating} />
       </div>
       <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-6">
         <div><div className="text-xs text-muted">Started</div>{when(c.started_at)}</div>
@@ -53,6 +55,12 @@ function CallDetail() {
                   <div className="rounded-lg bg-neutral-soft p-2">{e.resolution_note}</div>
                 </div>
               )}
+            </Card>
+          )}
+          {c.feedback && (  // UI-36
+            <Card title="Caller feedback" actions={<FeedbackBadge rating={c.feedback.rating} />}>
+              <div className="text-sm">{c.feedback.comment ? <p className="rounded-lg bg-neutral-soft p-2">{c.feedback.comment}</p> : <span className="text-muted">No comment.</span>}</div>
+              <div className="mt-2 text-xs text-muted">{when(c.feedback.at)}</div>
             </Card>
           )}
           {a && (

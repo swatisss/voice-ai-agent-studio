@@ -24,7 +24,7 @@ from voiceai.knowledge.search import search as kb_search
 from voiceai.llm.gateway import LLMError, gateway
 from voiceai.live import effective_turn, persona_dict, settings_view
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, Persona, Tenant
-from voiceai.runtime import escalation, outbound
+from voiceai.runtime import endings, escalation, outbound
 from voiceai.runtime.prompt import system_prompt
 from voiceai.runtime.state import CallState
 from voiceai.runtime.tools import ToolExecutor, all_schemas, truncate
@@ -36,7 +36,7 @@ HISTORY_LIMIT = 30
 FILLER = "One moment while I check that."
 APOLOGY_OUTAGE = "I'm sorry, I'm having trouble right now. Let me connect you with someone who can help."
 APOLOGY_TOOLS = "I'm sorry, I wasn't able to finish looking that up."
-GOODBYE = "Thank you for calling. Take care!"
+GOODBYE = endings.GOODBYE
 
 REGISTRY: dict[str, AgentSession] = {}
 
@@ -100,6 +100,7 @@ class AgentSession:
         self.tenant_name = tenant_name
         self.history: list[dict[str, Any]] = history or []
         self.state = state or CallState()
+        self.end_reason: str | None = None  # why this session ended (CE-06: the voice pipeline reports it to the browser)
         self.seq = seq
         self.tools = ToolExecutor(self.tenant_id, self.call_id, config.get("tools", []), self.state, app)
         self._lock = asyncio.Lock()
@@ -201,6 +202,7 @@ class AgentSession:
         if self.state.ended:
             return
         self.state.ended = True
+        self.end_reason = reason
         REGISTRY.pop(self.call_id, None)
         await self._persist()
         async with sessionmaker()() as s:
@@ -234,6 +236,12 @@ class AgentSession:
         await self._event("assistant", text, data or {})
         return text
 
+    async def announce(self, text: str, data: dict[str, Any] | None = None) -> str:
+        """A line the runtime says outside a caller turn (silence reminder, closing lines); recorded like any assistant line."""
+        await self._say(text, data)
+        await self._persist()
+        return text
+
     # ------------------------------------------------------------ turn
     async def respond(self, user_text: str) -> AsyncIterator[str]:
         async with self._lock:
@@ -258,10 +266,17 @@ class AgentSession:
             await self._persist()
             return
 
+        if endings.is_farewell(text):  # CE-02: no model needed to close a call the caller has finished
+            yield await self._say(GOODBYE, {"farewell": True})
+            await self._persist()
+            await self.end("farewell")
+            return
+
         if policy.get("safety_screen", True) and escalation.safety_match(text):  # ES-01
             yield await self._say(escalation.SAFETY_MESSAGE, {"safety": True})
             await self.escalate("safety", "Caller used emergency or self-harm language")
             await self._persist()
+            await self.end("handoff")  # CE-01
             return
 
         handoff = policy.get("handoff_message") or "I'm connecting you with a specialist."
@@ -294,6 +309,7 @@ class AgentSession:
                 yield await self._say(APOLOGY_OUTAGE, {"error": "llm_unavailable"})
                 await self.escalate("other", "The assistant's language model was unavailable")
                 await self._persist()
+                await self.end("handoff")  # CE-01
                 return
             assert result is not None
             self.state.tokens_in += result.usage.input_tokens
@@ -326,6 +342,7 @@ class AgentSession:
                     self.history.append({"role": "assistant", "content": spoken.strip()})
                 yield await self._say(handoff)
                 await self._persist()
+                await self.end("handoff")  # CE-01
                 return
 
         final = spoken.strip()
@@ -343,7 +360,9 @@ class AgentSession:
             yield await self._say(handoff)
             await self.escalate(*trigger)
         await self._persist()
-        if self.state.end_requested and not self.state.escalated:
+        if self.state.escalated:  # a post-turn trigger fired this turn (an earlier escalation returned above)
+            await self.end("handoff")  # CE-01
+        elif self.state.end_requested:
             await self.end("end_call")  # RT-05
 
     def _post_turn_trigger(self, policy: dict[str, Any]) -> tuple[str, str] | None:

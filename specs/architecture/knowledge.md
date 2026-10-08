@@ -30,6 +30,7 @@ Docs belong to a tenant. An agent uses the docs listed in its config `knowledge_
 * `EMBEDDINGS_PROVIDER=fastembed` (default): `BAAI/bge-small-en-v1.5`, 384 dims, L2-normalized, model cached under `FASTEMBED_CACHE` (default `.cache/fastembed`).
 * `EMBEDDINGS_PROVIDER=hash`: deterministic 384-dim hashed bag-of-words (tests, offline). Lower quality.
 * Embeddings are stored with each chunk as JSON float arrays. Queries use the same provider. Changing provider requires `voiceai reindex`.
+* Both are adapters behind the `Embedder` port, chosen by `EMBEDDINGS_PROVIDER` in the composition root ([/architecture/modular-structure.md](/architecture/modular-structure.md)); a third embedder is a new adapter and a configuration value, with no change to ingestion or search.
 
 # Search
 

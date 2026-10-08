@@ -1,7 +1,7 @@
 ---
 type: Component Spec
 title: LLM gateway
-description: Maps LLM roles to Groq, OpenRouter or OpenAI models through one OpenAI-compatible client, with streaming, tool calls, JSON outputs, fallback and cost accounting.
+description: "Maps LLM roles to provider models over a pluggable wire adapter, with streaming, tool calls, JSON outputs, fallback and cost accounting."
 status: stable
 tags: [architecture, llm, groq, openrouter, openai]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
@@ -22,9 +22,12 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 ```yaml
 providers:
-  groq:       { base_url: "https://api.groq.com/openai/v1", api_key_env: GROQ_API_KEY }
-  openrouter: { base_url: "https://openrouter.ai/api/v1",   api_key_env: OPENROUTER_API_KEY }
-  openai:     { base_url: "https://api.openai.com/v1",      api_key_env: OPENAI_API_KEY, stream_usage: true }
+  groq:       { wire: openai, base_url: "https://api.groq.com/openai/v1", api_key_env: GROQ_API_KEY,
+                options: { stream_usage: false, usage_extra_key: x_groq } }
+  openrouter: { wire: openai, base_url: "https://openrouter.ai/api/v1",   api_key_env: OPENROUTER_API_KEY,
+                options: { stream_usage: true } }
+  openai:     { wire: openai, base_url: "https://api.openai.com/v1",      api_key_env: OPENAI_API_KEY,
+                options: { stream_usage: true } }
 models:            # price per 1M tokens (USD) for cost accounting
   "groq:openai/gpt-oss-120b":       { input: 0.15, output: 0.60, json_schema: true, reasoning_effort: true }
   "groq:openai/gpt-oss-20b":        { input: 0.10, output: 0.50, json_schema: true, reasoning_effort: true }
@@ -42,9 +45,18 @@ roles:
 ```
 
 * A **model ref** is `<provider>:<model id>`. Any OpenRouter model may be used by adding it under `models`, and any non-reasoning OpenAI chat model likewise.
-* Every role's fallback chain **ends with an `openai:` model**, so a deployment that has only `OPENAI_API_KEY` works with no `LLM_ROLE_*` line: providers without a key are skipped, Groq and OpenRouter first, and OpenAI answers. API keys (`GROQ_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`) are read from the process environment or, failing that, from `apps/api/.env`.
+* `wire` names the HTTP protocol the provider speaks and selects the adapter that speaks it. It defaults to `openai`, so an entry that omits it keeps working. `options` is passed to that adapter untouched and is where per-provider quirks are declared instead of being coded; the gateway never reads it. For the `openai` wire: `stream_usage` asks for usage on the final stream chunk, and `usage_extra_key` names a vendor extension carrying usage when the standard field is absent.
+* Every role's fallback chain **ends with an `openai:` model**, so a deployment that has only `OPENAI_API_KEY` works with no `LLM_ROLE_*` line: providers without a key are skipped, Groq and OpenRouter first, and OpenAI answers. Each provider's key is read from the variable its own `api_key_env` names — from the process environment or, failing that, from a line in `apps/api/.env`. No provider or key name appears in Python.
 * Agents may override `realtime` via `config.models.realtime` ([/data/agent-config.md](/data/agent-config.md)). `GET /api/models` lists selectable refs.
 * Env `LLM_ROLE_<ROLE>` (e.g. `LLM_ROLE_REALTIME=openrouter:openai/gpt-oss-120b` or `LLM_ROLE_REALTIME=openai:gpt-4.1-mini`) overrides a role's primary model at deploy time. It is read from a real environment variable or, failing that, from a line in `apps/api/.env`. The role's fallbacks stay as configured; a provider with no API key is skipped.
+
+# Adding a provider
+
+* **A provider that speaks a wire we already have:** add a `providers:` entry naming that `wire`, add its models with prices under `models:`, and set the API key variable the entry names. Reference it from a role or a fallback chain. **No Python file changes** — not the gateway, not the settings, not the routes. `GET /healthz` picks the provider up by itself.
+* **A provider with its own protocol:** add one module at `voiceai/adapters/llm/<wire>.py` exposing `build(cfg) -> ChatClient`, then configure the provider with `wire: <wire>`. The adapter owns client construction, request shaping and the mapping from its errors onto the port's `Retryable` (try the next ref) and `BadRequest` (do not). It owns nothing about roles, fallback order or prices.
+* A `wire` with no adapter module, or one whose SDK is not installed, is skipped exactly like a provider with no API key: the next ref answers and start-up is unaffected. Adapter modules are imported lazily, so an unused provider's SDK is never loaded.
+
+Model IDs still live only in `apps/api/config/models.yaml`, never in code ([/architecture/tech-stack.md](/architecture/tech-stack.md)).
 
 # Interface (`voiceai.llm.gateway`)
 
@@ -66,7 +78,7 @@ The `turn` role is optional in practice: if it fails or times out, semantic turn
 # Provider quirks
 
 * Groq gpt-oss models accept `reasoning_effort`; it is sent only when the model entry says `reasoning_effort: true`. Reasoning tokens count toward `max_tokens`, so the realtime cap is 800 even though spoken replies are short.
-* Groq reports streaming usage in `x_groq.usage` on the last chunk; OpenRouter needs `stream_options.include_usage` (`stream_usage: true` in the provider entry). Missing usage is estimated as characters ÷ 4.
+* Groq reports streaming usage in `x_groq.usage` on the last chunk, declared as `options.usage_extra_key: x_groq`; OpenRouter and OpenAI need `stream_options.include_usage`, declared as `options.stream_usage: true`. Both are configuration read by the wire adapter, not branches on a provider name. Missing usage is estimated by the gateway as characters ÷ 4.
 * `json_schema` response format is tried first when the model entry allows it; a 400 from the provider falls back to `json_object` on the same model.
 * Tool call arguments are parsed with `json.loads`; malformed JSON is returned to the model as a tool error (`{"error":"invalid_arguments"}`), never raised.
 * OpenRouter requests include `HTTP-Referer` and `X-Title: Voice AI Platform` headers.
@@ -76,7 +88,7 @@ The `turn` role is optional in practice: if it fails or times out, semantic turn
 
 # Testing
 
-A `fake` provider (in-memory, scripted responses) implements the same interface and is selected with `LLM_FAKE=1`; unit tests never hit the network.
+A scripted in-memory responder is selected with `LLM_FAKE=1` or installed by a test. It short-circuits at the **role** level, before any wire is chosen, so it exercises no adapter and needs no provider configuration; unit tests never hit the network.
 
 # Acceptance
 
@@ -91,3 +103,7 @@ A `fake` provider (in-memory, scripted responses) implements the same interface 
 - **LG-09** — Given `LLM_ROLE_REALTIME=openai:gpt-4.1-mini`, when a stream starts, then the request goes to model `gpt-4.1-mini` through the `openai` provider with `stream_options.include_usage` set and without `reasoning_effort`, and `usage_cost("openai:gpt-4.1-mini", 1,000,000 input and 1,000,000 output tokens)` returns 2.00.
 - **LG-10** — Given the default configuration, when each role's reference list is built, then it ends with an `openai:` model; given a key for OpenAI only (Groq and OpenRouter skipped for lack of a key) every role (`realtime`, `analysis`, `drafting`, `simulator`, `judge`, `turn`) is served by OpenAI with no `LLM_ROLE_*` line; and given Groq answering 429 and no OpenRouter key, a `realtime` stream is served by `openai:gpt-4.1-mini`.
 - **LG-11** — Given the default configuration, then every `openai:` ref used by a role or fallback has a price entry, and `GET /api/models` lists the OpenAI refs in `selectable`.
+- **LG-12** — Given a `providers:` entry naming a `wire` that has an adapter, a `base_url`, an `api_key_env` whose variable is set, and a priced ref under `models:`, when a role names that ref, then the request reaches that adapter with that base URL, that key, the role's params and the entry's `options`, the result is priced from the table, and no Python file outside `apps/api/config/models.yaml` mentions the provider.
+- **LG-13** — Given `models.yaml` declaring N providers, when `/healthz` is requested, then `providers` has exactly those N names plus `deepgram`, each `true` only when its key resolves.
+- **LG-14** — Given a role whose primary ref names a `wire` with no adapter module, when a stream starts, then that ref is skipped like a missing key and the next ref answers; and a `wire` value that is not a plain lowercase identifier is rejected rather than imported.
+- **LG-15** — Given a provider entry declaring `options.usage_extra_key`, when a stream's chunk carries usage only under that key, then the usage is read from it; given no such declaration the key is ignored, the standard usage field always wins, and usage the provider never reports is estimated as characters ÷ 4.

@@ -40,7 +40,7 @@ Deploy script: `infra/deploy-cloudrun.sh` ([/build/runbook-gcp.md](/build/runboo
 
 # Health
 
-`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"groq":bool,"openrouter":bool,"openai":bool,"deepgram":bool}}` (provider booleans = key configured, no network call).
+`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"<each LLM provider>":bool,"deepgram":bool}}` (provider booleans = key configured, no network call). The LLM provider keys are exactly the `providers:` names in `apps/api/config/models.yaml`, so adding a provider adds a key here with no code change ([/architecture/llm-gateway.md](/architecture/llm-gateway.md)); with the current configuration they are `groq`, `openrouter` and `openai`.
 
 # Acceptance
 

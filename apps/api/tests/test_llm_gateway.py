@@ -8,13 +8,18 @@ import openai
 import pytest
 from pydantic import BaseModel
 
+from voiceai.adapters.llm import openai_compatible as wire
 from voiceai.config import Settings
 from voiceai.llm import gateway as gw
 
 
 @pytest.fixture
 def real_mode(monkeypatch):  # noqa: ANN001, ANN201
+    """A gateway on the models.yaml chain, deaf to the developer's own .env role overrides."""
     monkeypatch.setattr(gw, "fake_active", lambda: False)
+    monkeypatch.setattr(gw, "get_settings", lambda: _settings())
+    for role in ROLE_REFS:
+        monkeypatch.delenv(f"LLM_ROLE_{role.upper()}", raising=False)
     return gw.Gateway()
 
 
@@ -65,22 +70,18 @@ class Out(BaseModel):
 
 async def test_json_retry_once(real_mode, monkeypatch):
     """Covers: LG-04"""
-    calls: list[int] = []
+    sent: list[list[dict]] = []
 
-    class Resp:
-        def __init__(self, content: str) -> None:
-            self.choices = [type("C", (), {"message": type("M", (), {"content": content})()})()]
-            self.usage = None
+    class Client:  # a wire adapter that answers invalid JSON first, then valid JSON
+        async def complete_json(self, model, messages, schema, params):  # noqa: ANN001, ANN201
+            sent.append(messages)
+            return ('{"value": "nope"}' if len(sent) == 1 else '{"value": 7}'), gw.Usage(5, 2)
 
-    class Completions:
-        async def create(self, **kwargs):  # noqa: ANN003, ANN201
-            calls.append(1)
-            return Resp('{"value": "nope"}' if len(calls) == 1 else '{"value": 7}')
-
-    client = type("Client", (), {"chat": type("Chat", (), {"completions": Completions()})()})()
-    monkeypatch.setattr(gw.Gateway, "_client", lambda self, provider: client)
-    out, _ = await real_mode.complete_json("analysis", [{"role": "user", "content": "x"}], Out)
-    assert out.value == 7 and len(calls) == 2
+    monkeypatch.setattr(gw.Gateway, "_client", lambda self, provider: Client())
+    out, usage = await real_mode.complete_json("analysis", [{"role": "user", "content": "x"}], Out)
+    assert out.value == 7 and len(sent) == 2
+    assert (usage.input_tokens, usage.output_tokens) == (10, 4)  # both attempts are billed
+    assert "That JSON was invalid" in sent[1][-1]["content"]  # the error is fed back (LG-04)
 
 
 def test_usage_cost(real_mode):
@@ -156,7 +157,7 @@ class _Stream:
 @pytest.fixture
 def fake_openai(monkeypatch):  # noqa: ANN001, ANN201
     FakeOpenAI.created, FakeOpenAI.groq_limited = [], False
-    monkeypatch.setattr(gw.openai, "AsyncOpenAI", FakeOpenAI)
+    monkeypatch.setattr(wire.openai, "AsyncOpenAI", FakeOpenAI)
     monkeypatch.setattr(gw, "fake_active", lambda: False)
     for role in ROLE_REFS:
         monkeypatch.delenv(f"LLM_ROLE_{role.upper()}", raising=False)
@@ -173,12 +174,13 @@ async def test_openai_key_from_dotenv_settings_and_healthz(client, monkeypatch, 
     g = _gateway(monkeypatch, openai_api_key="sk-from-dotenv")
     assert g.provider_configured("openai") and not g.provider_configured("groq")
     c = g._client("openai")
-    assert c.api_key == "sk-from-dotenv" and c.base_url == "https://api.openai.com/v1"
+    assert c.client.api_key == "sk-from-dotenv" and c.client.base_url == "https://api.openai.com/v1"
     monkeypatch.setattr(gw, "_gateway", g)
-    assert (await client.get("/healthz")).json()["providers"] == {"groq": False, "openrouter": False, "openai": True, "deepgram": False}
+    providers = (await client.get("/healthz")).json()["providers"]
+    assert providers == {**{n: n == "openai" for n in g.providers}, "deepgram": False}
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-from-environment")  # the environment variable wins over the .env line
-    assert _gateway(monkeypatch, openai_api_key="sk-from-dotenv")._client("openai").api_key == "sk-from-environment"
+    assert _gateway(monkeypatch, openai_api_key="sk-from-dotenv")._client("openai").client.api_key == "sk-from-environment"
 
     monkeypatch.setenv("OPENAI_API_KEY", "")  # neither: the provider is unconfigured and skipped
     none = _gateway(monkeypatch)

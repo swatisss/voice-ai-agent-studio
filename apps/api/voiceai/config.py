@@ -4,6 +4,7 @@ Spec: /architecture/deployment.md, /architecture/llm-gateway.md, /architecture/k
 """
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -14,7 +15,10 @@ REPO_DIR = API_DIR.parent.parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=API_DIR / ".env", extra="ignore")
+    # extra="allow" keeps undeclared `.env` lines reachable through env_value(), so a new LLM
+    # provider's API key needs a models.yaml entry and an environment variable - not a field here
+    # (/architecture/llm-gateway.md, LG-12).
+    model_config = SettingsConfigDict(env_file=API_DIR / ".env", extra="allow")
 
     database_url: str = f"sqlite+aiosqlite:///{(API_DIR / 'data' / 'voiceai.db').as_posix()}"
     specs_dir: Path = REPO_DIR / "specs"
@@ -67,6 +71,15 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    def env_value(self, name: str) -> str | None:
+        """Resolve an environment variable by name: the real variable wins, then a declared field,
+        then an undeclared `apps/api/.env` line (LG-07, LG-08). No provider is named in code."""
+        field = name.lower()
+        value = os.environ.get(name) or getattr(self, field, None)
+        if value is None and self.model_extra:
+            value = self.model_extra.get(field)
+        return str(value) if value else None
 
 
 @lru_cache

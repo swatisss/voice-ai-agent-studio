@@ -27,12 +27,30 @@ CONCURRENCY = 2
 POLL_SECONDS = 1.0
 
 
+DECLARED_KINDS = ("analyze_call", "draft_fix", "run_eval")  # every job kind this service runs
+
+
 def register(kind: str) -> Callable[[Handler], Handler]:
     def deco(fn: Handler) -> Handler:
         HANDLERS[kind] = fn
         return fn
 
     return deco
+
+
+def install_handlers() -> None:
+    """Import the modules that own each job kind, then check the declared set arrived (MOD-08).
+
+    Registration is a decorator side effect, so a dropped import used to fail silently: the job
+    row recorded "no handler", retried to MAX_ATTEMPTS and gave up, taking the whole analysis ->
+    cluster -> proposal chain with it. Every entry point that drains or works the queue calls
+    this, so a missing handler is a start-up error instead.
+    """
+    from voiceai.learning import analyze, evaluate, propose  # noqa: F401
+
+    missing = [kind for kind in DECLARED_KINDS if kind not in HANDLERS]
+    if missing:
+        raise RuntimeError(f"job handlers not registered: {', '.join(missing)}")
 
 
 async def enqueue(

@@ -8,13 +8,16 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypeVar
 
-from sqlalchemy import DateTime, event
+from sqlalchemy import DateTime, event, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.types import TypeDecorator
 
 from voiceai.config import get_settings
+
+T = TypeVar("T")
 
 
 def new_id() -> str:
@@ -92,6 +95,16 @@ def sessionmaker() -> async_sessionmaker[AsyncSession]:
 async def get_session() -> AsyncIterator[AsyncSession]:
     async with sessionmaker()() as session:
         yield session
+
+
+async def get_owned(session: AsyncSession, model: type[T], tenant_id: str, row_id: str) -> T | None:
+    """One tenant-owned row, or None when this tenant does not own it (MT-05).
+
+    Every repository helper for a tenant-owned table goes through here, so the `tenant_id`
+    predicate can never be forgotten and another tenant's id is indistinguishable from a
+    missing one (/architecture/multi-tenancy.md).
+    """
+    return await session.scalar(select(model).where(model.id == row_id, model.tenant_id == tenant_id))
 
 
 async def init_db(drop: bool = False) -> None:

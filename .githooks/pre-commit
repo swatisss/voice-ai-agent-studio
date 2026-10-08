@@ -5,4 +5,5 @@ if [ -z "$PY" ]; then
   echo "spec_check: no working Python found; skipping (install Python 3.12)"
   exit 0
 fi
-exec $PY scripts/spec_check.py --quiet
+$PY scripts/spec_check.py --quiet || exit 1
+exec $PY scripts/arch_check.py --quiet

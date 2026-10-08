@@ -30,6 +30,8 @@ jobs:
       - name: Spec checks (push to main)
         if: github.event_name == 'push'
         run: python scripts/spec_check.py --ci
+      - name: Architecture checks
+        run: python scripts/arch_check.py
 
   backend:
     name: Backend tests

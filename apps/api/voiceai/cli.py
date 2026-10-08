@@ -47,6 +47,7 @@ async def _chat(args: argparse.Namespace) -> None:
     from voiceai.runtime.session import AgentSession, create_call
 
     db.configure()
+    jobs.install_handlers()  # the post-call analysis this drains at the end needs its handler
     async with db.sessionmaker()() as s:
         call = await create_call(s, args.tenant, args.agent, "text")
         await s.commit()

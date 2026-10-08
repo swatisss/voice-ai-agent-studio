@@ -30,6 +30,8 @@ External: Groq, OpenRouter, OpenAI (LLM) · Deepgram (STT/TTS)
 
 # Components
 
+One process, but not one blob: the package is layered into ports, adapters, core, eight modules and a composition root, with the dependency rules checked in CI ([/architecture/modular-structure.md](/architecture/modular-structure.md)). The components below map onto those modules.
+
 | Component | Responsibility | Spec |
 |---|---|---|
 | Agent runtime | Turn loop, prompt assembly, tool execution, state, safety screen, escalation triggers. Shared by voice, text and simulation. | [/architecture/agent-runtime.md](/architecture/agent-runtime.md) |

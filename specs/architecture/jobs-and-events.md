@@ -17,6 +17,10 @@ Table `jobs` ([/data/data-model.md](/data/data-model.md)). One worker task runs 
 | `draft_fix` | `{cluster_id}` | fleet learning §4 |
 | `run_eval` | `{proposal_id, eval_run_id}` | [/architecture/evaluation.md](/architecture/evaluation.md) |
 
+Handlers are registered by the composition root from a declared list of kinds, and a declared kind whose module failed to register is a start-up error ([/architecture/modular-structure.md](/architecture/modular-structure.md), MOD-08). Every entry point that works or drains the queue — the API process and the `chat` command alike — performs that registration, so a drained job always has its handler.
+
+A module asks for post-call work through the `PostCallAnalysis` port rather than naming a job kind, so the kind string and its dedupe convention have one owner.
+
 Rules:
 
 1. Poll every 1 s for the oldest `queued` job with `run_after ≤ now`; claim it by setting `status: running` (single worker → no locking needed; Postgres uses `FOR UPDATE SKIP LOCKED` for safety).
@@ -39,7 +43,7 @@ In-process async pub/sub. Each event: `{id, topic, type, tenant_id, at, data}`.
 
 `GET /api/events?topics=console,call:abc` streams matching events for the caller's tenant as SSE ([/api/events.md](/api/events.md)). Subscribers get a bounded queue (500); if full, the oldest events are dropped. A `ping` comment is sent every 15 s.
 
-The bus is per process; v1 runs one instance ([/decisions/adr-0005-single-service.md](/decisions/adr-0005-single-service.md)).
+The bus is per process; v1 runs one instance ([/decisions/adr-0005-single-service.md](/decisions/adr-0005-single-service.md)). Publishing is synchronous, non-blocking and best-effort by contract — it drops rather than waits — because it happens on the voice latency path and inside open transactions. Work that must not be lost therefore MUST NOT be triggered through the bus; it goes on the job queue.
 
 # Acceptance
 

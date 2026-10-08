@@ -15,7 +15,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Isolation rules
 
-1. Every tenant-owned table has a non-null `tenant_id`; every query filters by it. Repository helpers take `tenant_id` as a required argument.
+1. Every tenant-owned table has a non-null `tenant_id`; every query filters by it. Repository helpers take `tenant_id` as a required argument, and every one of them resolves the row through the single shared owned-row helper so the predicate cannot be omitted ([/architecture/modular-structure.md](/architecture/modular-structure.md)). A child row MUST be filtered on its own `tenant_id` rather than trusting that its parent was checked.
 2. Fetching another tenant's object by id returns 404 (never 403 — do not reveal existence).
 3. Agent configs may only reference tools, skills and docs of the same tenant; publish validates this.
 4. Knowledge search, clustering and evaluation operate within one tenant and one agent.
@@ -28,3 +28,4 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 - **MT-02** — Given a request without `X-Tenant-Id` to `/api/agents`, then the response is 400 `tenant_required`.
 - **MT-03** — Given tenant B's doc id in tenant A's agent config, when publishing, then publish fails with 422.
 - **MT-04** — Given calls in both tenants, when tenant A loads the dashboard, then only tenant A's calls are counted.
+- **MT-05** — Given a tenant-owned row, when the shared owned-row helper is called with a tenant that does not own that id, then it returns nothing — indistinguishable from an id that does not exist — and the helper cannot be called without a tenant.

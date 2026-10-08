@@ -49,10 +49,9 @@ async def healthz(s: AsyncSession = Depends(get_session)) -> dict:
         "status": "ok" if db_ok else "degraded",
         "db": db_ok,
         "jobs": worker.alive or not settings.jobs_enabled,
+        # LG-13: the LLM providers come from models.yaml, so a new one shows up here by itself
         "providers": {
-            "groq": g.provider_configured("groq"),
-            "openrouter": g.provider_configured("openrouter"),
-            "openai": g.provider_configured("openai"),
+            **{name: g.provider_configured(name) for name in g.providers},
             "deepgram": bool(settings.deepgram_api_key),
         },
     }

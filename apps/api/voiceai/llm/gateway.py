@@ -1,30 +1,38 @@
-"""LLM gateway: roles -> Groq/OpenRouter/OpenAI models via one OpenAI-compatible client.
+"""LLM gateway: roles -> provider models, over a pluggable wire adapter.
 
 Spec: /architecture/llm-gateway.md, /decisions/adr-0003-llm-gateway.md
+
+This module owns routing policy and nothing about any single provider: role -> model ref
+resolution, the fallback chain, per-model request params, prices, usage estimation, the one
+corrective JSON retry, and the fake responder used by tests. The HTTP conversation belongs to a
+wire adapter in `voiceai/adapters/llm/`, chosen by the `wire:` key of a `providers:` entry
+(/architecture/llm-gateway.md, "Adding a provider").
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
-import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
-import openai
 import yaml
 from pydantic import BaseModel, ValidationError
 
+from voiceai.adapters.llm.registry import DEFAULT_WIRE, UnknownWire, client_for
 from voiceai.config import get_settings
+from voiceai.ports.llm import BadRequest, ChatClient, ChatResult, ProviderConfig, Retryable, ToolCall, Usage
 
 log = logging.getLogger("voiceai.llm")
 T = TypeVar("T", bound=BaseModel)
 
 ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn")
-FIRST_TOKEN_TIMEOUT_S = 8.0
-JSON_TIMEOUT_S = 60.0
+
+__all__ = [
+    "ROLES", "ChatResult", "FakeReply", "Gateway", "LLMError", "LLMJsonError", "ToolCall", "Usage",
+    "fake_active", "gateway", "reset_gateway", "set_fake",
+]
 
 
 class LLMError(Exception):
@@ -35,39 +43,9 @@ class LLMJsonError(LLMError):
     """Raised when JSON output fails validation after the retry."""
 
 
-class _Retryable(Exception):
-    pass
-
-
-@dataclass
-class ToolCall:
-    id: str
-    name: str
-    arguments: str
-
-    def parsed(self) -> dict[str, Any] | None:
-        try:
-            value = json.loads(self.arguments or "{}")
-        except json.JSONDecodeError:
-            return None
-        return value if isinstance(value, dict) else None
-
-
-@dataclass
-class Usage:
-    input_tokens: int = 0
-    output_tokens: int = 0
-    cost_usd: float = 0.0
-
-
-@dataclass
-class ChatResult:
-    text: str = ""
-    tool_calls: list[ToolCall] = field(default_factory=list)
-    finish_reason: str = "stop"
-    usage: Usage = field(default_factory=Usage)
-    model_ref: str = ""
-    first_token_ms: int | None = None
+# A wire adapter signals "try the next ref" with ports.llm.Retryable; the old private name is
+# kept because it is the gateway's documented fallback trigger.
+_Retryable = Retryable
 
 
 # ---------------------------------------------------------------- fake provider (tests)
@@ -105,11 +83,11 @@ class Gateway:
         self.models: dict[str, dict[str, Any]] = cfg.get("models", {})
         self.roles: dict[str, dict[str, Any]] = cfg.get("roles", {})
         settings = get_settings()
-        for role in ROLES:  # LG-06/LG-07: real env var wins, then apps/api/.env
+        for role in self.roles:  # LG-06/LG-07: real env var wins, then apps/api/.env
             env = os.environ.get(f"LLM_ROLE_{role.upper()}") or getattr(settings, f"llm_role_{role}", None)
             if env:
-                self.roles.setdefault(role, {})["model"] = env
-        self._clients: dict[str, openai.AsyncOpenAI] = {}
+                self.roles[role]["model"] = env
+        self._clients: dict[str, ChatClient] = {}
 
     # -- helpers
     def role_model(self, role: str) -> str:
@@ -127,26 +105,35 @@ class Gateway:
                 seen.append(r)
         return seen
 
-    def provider_configured(self, provider: str) -> bool:
+    def api_key(self, provider: str) -> str | None:
+        """The provider's key, from its declared `api_key_env` variable or the .env line of the
+        same name. No provider is named in code (LG-12)."""
         p = self.providers.get(provider)
-        return bool(p and os.environ.get(p["api_key_env"]) or self._key_from_settings(provider))
+        return get_settings().env_value(p["api_key_env"]) if p else None
 
-    def _key_from_settings(self, provider: str) -> str | None:
-        s = get_settings()
-        return {"groq": s.groq_api_key, "openrouter": s.openrouter_api_key, "openai": s.openai_api_key}.get(provider)
+    def provider_configured(self, provider: str) -> bool:
+        return bool(self.api_key(provider))
 
-    def _client(self, provider: str) -> openai.AsyncOpenAI:
+    def _provider_cfg(self, provider: str) -> ProviderConfig:
+        p = self.providers[provider]
+        key = self.api_key(provider)
+        if not key:
+            raise Retryable(f"{p['api_key_env']} not set")
+        options = {"stream_usage": p.get("stream_usage", False), **(p.get("options") or {})}
+        return ProviderConfig(
+            name=provider, wire=p.get("wire", DEFAULT_WIRE), base_url=p["base_url"], api_key=key,
+            headers=p.get("headers") or {}, options=options,
+        )
+
+    def _client(self, provider: str) -> ChatClient:
         if provider in self._clients:
             return self._clients[provider]
-        p = self.providers.get(provider)
-        if not p:
-            raise _Retryable(f"unknown provider {provider}")
-        key = os.environ.get(p["api_key_env"]) or self._key_from_settings(provider)
-        if not key:
-            raise _Retryable(f"{p['api_key_env']} not set")
-        client = openai.AsyncOpenAI(
-            base_url=p["base_url"], api_key=key, default_headers=p.get("headers") or None, max_retries=0
-        )
+        if provider not in self.providers:
+            raise Retryable(f"unknown provider {provider}")
+        try:
+            client = client_for(self._provider_cfg(provider))
+        except UnknownWire as exc:  # LG-14: an unusable wire is skipped like a missing key
+            raise Retryable(str(exc)) from exc
         self._clients[provider] = client
         return client
 
@@ -197,58 +184,14 @@ class Gateway:
     ) -> AsyncIterator[dict[str, Any]]:
         provider, model = ref.split(":", 1)
         client = self._client(provider)
-        kwargs: dict[str, Any] = {"model": model, "messages": messages, "stream": True, **self._params(role, ref)}
-        if tools:
-            kwargs["tools"] = tools
-        if self.providers[provider].get("stream_usage"):
-            kwargs["stream_options"] = {"include_usage": True}
-        started = time.perf_counter()
         result = ChatResult(model_ref=ref)
-        calls: dict[int, dict[str, str]] = {}
-        try:
-            stream = await asyncio.wait_for(client.chat.completions.create(**kwargs), FIRST_TOKEN_TIMEOUT_S)
-            iterator = stream.__aiter__()
-            first = True
-            while True:
-                try:
-                    chunk = await (asyncio.wait_for(iterator.__anext__(), FIRST_TOKEN_TIMEOUT_S) if first else iterator.__anext__())
-                except StopAsyncIteration:
-                    break
-                first = False
-                usage = getattr(chunk, "usage", None) or (getattr(chunk, "model_extra", None) or {}).get("x_groq", {}).get("usage")
-                if usage:
-                    u = usage if isinstance(usage, dict) else usage.model_dump()
-                    result.usage.input_tokens = int(u.get("prompt_tokens") or 0)
-                    result.usage.output_tokens = int(u.get("completion_tokens") or 0)
-                if not chunk.choices:
-                    continue
-                choice = chunk.choices[0]
-                delta = choice.delta
-                if delta and delta.content:
-                    if result.first_token_ms is None:
-                        result.first_token_ms = int((time.perf_counter() - started) * 1000)
-                    result.text += delta.content
-                    yield {"type": "text", "text": delta.content}
-                for tc in (delta.tool_calls or []) if delta else []:
-                    slot = calls.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
-                    if tc.id:
-                        slot["id"] = tc.id
-                    if tc.function and tc.function.name:
-                        slot["name"] += tc.function.name
-                    if tc.function and tc.function.arguments:
-                        slot["arguments"] += tc.function.arguments
-                if choice.finish_reason:
-                    result.finish_reason = choice.finish_reason
-        except (openai.APIConnectionError, openai.APITimeoutError, openai.RateLimitError, openai.InternalServerError, asyncio.TimeoutError) as exc:
-            raise _Retryable(str(exc) or type(exc).__name__) from exc
-        except openai.APIStatusError as exc:
-            if exc.status_code >= 500 or exc.status_code == 429:
-                raise _Retryable(str(exc)) from exc
-            raise
-        result.tool_calls = [ToolCall(c["id"] or f"call_{i}", c["name"], c["arguments"]) for i, c in sorted(calls.items())]
-        if result.tool_calls:
-            result.finish_reason = "tool_calls"
-        if not result.usage.input_tokens:
+        async for ev in client.stream(model, messages, tools, self._params(role, ref)):
+            if ev["type"] == "text":
+                yield ev
+            else:
+                result = ev["result"]
+                result.model_ref = ref
+        if not result.usage.input_tokens:  # the provider reported none: estimate from characters
             result.usage.input_tokens = sum(len(str(m.get("content") or "")) for m in messages) // 4
             result.usage.output_tokens = (len(result.text) + sum(len(c.arguments) for c in result.tool_calls)) // 4
         result.usage.cost_usd = self.usage_cost(ref, result.usage)
@@ -303,38 +246,26 @@ class Gateway:
     async def _json_one(self, role: str, ref: str, messages: list[dict[str, Any]], schema: type[T]) -> tuple[T, Usage]:
         provider, model = ref.split(":", 1)
         client = self._client(provider)
-        schema_json = json.dumps(schema.model_json_schema())
+        json_schema = schema.model_json_schema()
         msgs = [
-            {"role": "system", "content": f"Respond with a single JSON object that matches this JSON Schema:\n{schema_json}"},
+            {"role": "system", "content": f"Respond with a single JSON object that matches this JSON Schema:\n{json.dumps(json_schema)}"},
             *messages,
         ]
         use_schema = bool(self.models.get(ref, {}).get("json_schema"))
         total = Usage()
         last_error = ""
-        for attempt in range(2):  # LG-04: one retry with the validation error
-            kwargs: dict[str, Any] = {"model": model, "messages": msgs, **self._params(role, ref)}
-            kwargs["response_format"] = (
-                {"type": "json_schema", "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema(), "strict": False}}
-                if use_schema
-                else {"type": "json_object"}
-            )
+        for _attempt in range(2):  # LG-04: one retry with the validation error
             try:
-                resp = await asyncio.wait_for(client.chat.completions.create(**kwargs), JSON_TIMEOUT_S)
-            except openai.BadRequestError as exc:
+                content, usage = await client.complete_json(
+                    model, msgs, json_schema if use_schema else None, self._params(role, ref)
+                )
+            except BadRequest as exc:
                 if use_schema:
                     use_schema = False  # provider rejected json_schema: retry same model with json_object
                     continue
                 raise LLMJsonError(str(exc)) from exc
-            except (openai.APIConnectionError, openai.APITimeoutError, openai.RateLimitError, openai.InternalServerError, asyncio.TimeoutError) as exc:
-                raise _Retryable(str(exc) or type(exc).__name__) from exc
-            except openai.APIStatusError as exc:
-                if exc.status_code >= 500:
-                    raise _Retryable(str(exc)) from exc
-                raise
-            if resp.usage:
-                total.input_tokens += resp.usage.prompt_tokens or 0
-                total.output_tokens += resp.usage.completion_tokens or 0
-            content = (resp.choices[0].message.content or "").strip()
+            total.input_tokens += usage.input_tokens
+            total.output_tokens += usage.output_tokens
             try:
                 obj = schema.model_validate_json(_strip_fences(content))
                 total.cost_usd = self.usage_cost(ref, total)

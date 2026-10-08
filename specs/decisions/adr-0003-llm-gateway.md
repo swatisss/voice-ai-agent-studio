@@ -24,3 +24,7 @@ The LLM must be cheap and switchable. Groq gives very fast, low-cost inference o
 * Provider-specific features (e.g. `reasoning_effort`) are gated per model entry.
 
 Amended by [ADR-0007](adr-0007-openai-provider.md): OpenAI is a third provider, and the last fallback of every role.
+
+# Amendment (CP-0012)
+
+The one OpenAI-compatible client became one *adapter* behind the `ChatClient` port, selected by a `wire:` key on each provider entry ([/decisions/adr-0008-modular-monolith.md](/decisions/adr-0008-modular-monolith.md)). The gateway keeps role routing, fallback order, prices and the JSON retry; the adapter owns the HTTP conversation and any vendor quirk, now declared under `options:` rather than branched on a provider name. Providers speaking the OpenAI wire are still just configuration; a provider with its own protocol is one new adapter file.

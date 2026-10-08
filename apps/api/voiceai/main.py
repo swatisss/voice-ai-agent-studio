@@ -15,11 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-# register job handlers
-import voiceai.learning.analyze  # noqa: F401
-import voiceai.learning.evaluate  # noqa: F401
-import voiceai.learning.propose  # noqa: F401
-from voiceai import db
+from voiceai import db, jobs
 from voiceai.config import get_settings
 from voiceai.errors import ApiError, install_handlers
 from voiceai.jobs import worker
@@ -85,6 +81,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="Voice Agent Studio", version="0.1.0", lifespan=lifespan)
     install_handlers(app)
+    jobs.install_handlers()  # MOD-08: explicit, and loud if a job kind lost its module
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],

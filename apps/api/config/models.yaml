@@ -1,21 +1,28 @@
 # LLM roles -> provider:model refs, fallbacks and prices.
 # Spec: /architecture/llm-gateway.md  (model IDs live here only - never in code)
+# Adding a provider that speaks a wire we already have: one entry below plus its api_key_env
+# variable - no Python change. A new wire needs one adapter module in voiceai/adapters/llm/.
 providers:
   groq:
+    wire: openai             # -> voiceai/adapters/llm/openai_compatible.py
     base_url: "https://api.groq.com/openai/v1"
     api_key_env: GROQ_API_KEY
-    stream_usage: false        # Groq reports usage in x_groq on the last chunk
+    options:
+      stream_usage: false
+      usage_extra_key: x_groq   # Groq reports usage under x_groq on the last chunk
   openrouter:
+    wire: openai
     base_url: "https://openrouter.ai/api/v1"
     api_key_env: OPENROUTER_API_KEY
-    stream_usage: true
+    options: { stream_usage: true }
     headers:
       HTTP-Referer: "https://github.com/voice-agent-studio"
       X-Title: "Voice Agent Studio"
   openai:
+    wire: openai
     base_url: "https://api.openai.com/v1"
     api_key_env: OPENAI_API_KEY
-    stream_usage: true
+    options: { stream_usage: true }
 
 models:   # price per 1M tokens (USD)
   "groq:openai/gpt-oss-120b":       { input: 0.15, output: 0.60, json_schema: true,  reasoning_effort: true }

@@ -2,6 +2,7 @@
 
 * [CP-0001 Initial platform build](cp-0001-initial-platform.md) - Build the v1 platform: builder, voice and text test calls, escalation with groundwork packets, fleet learning with eval-gated fixes
 * [CP-0002 Spec enforcement in CI and contributor onboarding](cp-0002-spec-enforcement-and-onboarding.md) - CI gate, PR-level spec-first/log/lifecycle rules, acceptance ratchet, setup script, README
+* [CP-0012 Modular boundaries, ports and the LLM provider wire port](cp-0012-modular-boundaries-and-llm-wire-port.md) - Layer the backend into ports, adapters, core, modules and a composition root; enforce the boundaries in CI; make an LLM provider a configuration change
 * [CP-0011 Calls close properly and callers rate them](cp-0011-call-ending-and-feedback.md) - Hand-off, farewell, silence and max length end calls; thumbs up/down after a call feeds Insights
 * [CP-0010 Simpler Test call page and a spoken welcome in voice calls](cp-0010-simpler-test-call-and-voice-welcome.md) - No use-case cards, Talk | Type in the call card, technical details behind a switch, the agent speaks first in Talk mode
 * [CP-0009 Simplified UI - left navigation, focused dashboard, Echo Mind branding](cp-0009-simplified-ui-sidebar-and-branding.md) - Left sidebar replaces the top header, four-tile dashboard (calls, containment, escalated to human, response time), product named Echo Mind Voice Agent Studio

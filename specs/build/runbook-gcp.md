@@ -45,5 +45,5 @@ With `DB_INSTANCE` set, the script attaches the instance and sets `DATABASE_URL=
 
 # Verify
 
-* `curl https://<url>/healthz` shows `status: ok` and the configured providers.
+* `curl https://<url>/healthz` shows `status: ok` and one boolean per provider declared in `apps/api/config/models.yaml`, plus `deepgram`.
 * Open the URL, pick a tenant, run Act 1 of the [demo script](/product/demo-script.md) in Type mode, then Talk mode.

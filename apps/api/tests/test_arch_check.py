@@ -197,6 +197,11 @@ def test_relationship_in_tables_fails(tmp_path):
     _pkg(tmp_path, {"modules/conversation/tables.py": "agent_id = mapped_column(ForeignKey('agents.id'))\n"})
     assert not _errors(tmp_path)
 
+    # the word in a docstring explaining the rule is not itself a breach of it
+    doc = f'"""Tables.\n\nSpec: {SPEC}\n\nNo relationship() may cross a module boundary.\n"""\n'
+    _pkg(tmp_path, {"modules/conversation/tables.py": doc})
+    assert not _errors(tmp_path)
+
 
 # ---------------------------------------------------------------- the real package
 def test_real_package_satisfies_every_rule():

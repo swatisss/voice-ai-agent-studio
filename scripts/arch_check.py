@@ -130,6 +130,18 @@ def spec_targets(tree: ast.AST) -> list[str] | None:
     return SPEC_PATH_RE.findall(match.group(1))
 
 
+def calls_relationship(tree: ast.AST) -> bool:
+    """True when this module actually calls relationship(), however it was imported."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+        if name == "relationship":
+            return True
+    return False
+
+
 def find_cycle(graph: dict[str, set[str]]) -> list[str] | None:
     """One cycle in a directed graph, as the path that closes it, or None."""
     state: dict[str, int] = {}
@@ -185,8 +197,9 @@ def check(rep: Report) -> None:
                 if name in CONFINED:
                     rep.err(f"MOD-04 {rel(path)}:{line}: imports {name}; only {VOICE_DIRS[0]}/ may")
 
-        # MOD-07: cross-module ORM relationships.
-        if path.name == TABLES and re.search(r"\brelationship\s*\(", path.read_text(encoding="utf-8")):
+        # MOD-07: cross-module ORM relationships. Matched on the parse tree, not the file text, so
+        # that the word in a docstring explaining the rule is not itself reported as a violation.
+        if path.name == TABLES and calls_relationship(tree):
             rep.err(f"MOD-07 {rel(path)}: relationship() in {TABLES}; link modules by id column instead")
 
         if layer == "modules" and module:

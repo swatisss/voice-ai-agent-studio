@@ -22,7 +22,7 @@ Code lives in one of five layers. The layer decides what a file may import, and 
 | `ports/` | Protocols and the data classes they pass. No behaviour, no I/O. | standard library, pydantic, `ports` |
 | `adapters/` | One implementation of one port against one external thing. | `ports`, `core.config`, `core.errors` |
 | `core/` | Cross-cutting infrastructure with no domain knowledge: settings, database, errors, tenancy, prompt loading, the event bus accessor, the job queue, the LLM gateway. | `ports`, `adapters`, `core` |
-| `modules/` | The product, in eight modules. Each owns its tables, its rules and its HTTP surface. | `ports`, `core`, other modules **through their `contract` module only** |
+| `modules/` | The product, in eight modules. Each owns its rules, its HTTP surface and a documented set of tables. | `ports`, `core`, other modules **through their `contract` module only** |
 | `composition/` | The assembly: it builds the FastAPI app, chooses every adapter from configuration, registers job handlers and seeds demo data. | everything |
 
 Only `composition/` knows which adapter is in use. A module names a capability it needs; it never names the thing that provides it.
@@ -34,7 +34,7 @@ Each module is a folder with the same shape. Not every module needs every file.
 | File | Holds |
 |---|---|
 | `domain.py` | Pure rules and value objects. No database, no network, no clock. |
-| `tables.py` | The module's ORM tables. |
+| `tables.py` | The module's own ORM tables, once it has them — see **Tables** below. |
 | `repo.py` | Row access. Every helper for a tenant-owned table takes `tenant_id` as a required argument. |
 | `service.py` | Use cases. All business logic lives here, never in a route handler. |
 | `api.py` | A thin FastAPI router: parse, call the service, serialise. |
@@ -52,6 +52,19 @@ Each module is a folder with the same shape. Not every module needs every file.
 | `businessmock` | The simulated insurer and healthcare systems the demo calls. It stands in for systems outside the product, so nothing in the product may depend on it. | — |
 
 `tenants` and `jobs` belong to `core`, not to a module.
+
+# Tables
+
+The table column above is **ownership, not file layout**. All twenty tables are declared centrally in `core/tables.py` today, and that is deliberate.
+
+Splitting them into a `tables.py` per module was tried and reverted. The reason is concrete: twenty-eight places read another module's tables, and almost all of them are SQL joins — the call explorer joins four tables across three modules, the dashboard joins three across three. Routing those through contracts turns one join into several round-trips, which is a real performance change dressed as a refactor, and it buys nothing until a module actually leaves the process. On the day one does, its tables move with it and its callers lose the join they can no longer make anyway.
+
+What holds now, and keeps that day cheap:
+
+* Ownership is written down above, so there is no argument about which module a table belongs to.
+* A module reads another's tables only to **read**. Writing another module's table goes through that module's `contract` — `apply_fix_and_publish` exists for exactly this reason.
+* Cross-table links are id columns with string `ForeignKey` targets. There is not one `relationship()` in the codebase, which is what makes a later split a move rather than a redesign. MOD-07 holds that line from the moment a module gets its own `tables.py`.
+* `core/db.register_tables()` names every table module explicitly, because a table module nobody imports vanishes from the schema with no error. The table count asserted in `tests/test_agents_tenancy.py` is the guard.
 
 Escalation *triggers* (the safety screen, the repeated-no-answer and tool-failure rules) stay inside `conversation`'s turn loop. They cannot leave it. `handoff` begins where a human does.
 
@@ -90,7 +103,7 @@ Post-call analysis MUST NOT be triggered through the event bus. The bus drops ev
 
 # Extraction order
 
-When a module does leave the process, these come out most easily first, because each already depends only on ports, contracts and its own tables: `businessmock`, then `knowledge`, then `voice` (ADR-0005 already names a sticky voice tier), then `learning`. Anything before that needs the horizontal-scaling CP that ADR-0005 requires: a durable event bus, a separate worker, and session affinity.
+When a module does leave the process, these come out most easily first, because each already depends only on ports and contracts for everything but reads: `businessmock`, then `knowledge`, then `voice` (ADR-0005 already names a sticky voice tier), then `learning`. Anything before that needs the horizontal-scaling CP that ADR-0005 requires: a durable event bus, a separate worker, and session affinity.
 
 # Acceptance
 
@@ -100,5 +113,5 @@ When a module does leave the process, these come out most easily first, because 
 - **MOD-04** — Given a Pipecat import anywhere outside the voice module, when `arch_check` runs, then it fails.
 - **MOD-05** — Given a non-empty module whose docstring has no `Spec:` line, or whose `Spec:` line names a spec file that does not exist, when `arch_check` runs, then it fails and names the file.
 - **MOD-06** — Given a module other than `businessmock` that imports `businessmock`, even through its `contract`, when `arch_check` runs, then it fails; and given the same import from `composition/`, then it passes.
-- **MOD-07** — Given a `relationship()` in a module's `tables.py`, when `arch_check` runs, then it fails and says to link modules by id column instead.
+- **MOD-07** — Given a module's `tables.py` that calls `relationship()`, when `arch_check` runs, then it fails and says to link modules by id column instead; and given the word only in prose, then it passes.
 - **MOD-08** — Given the application is built, when the registered job handlers are inspected, then they are exactly the kinds the service declares, and a declared kind whose module failed to register raises at start-up instead of failing silently when the job runs.

@@ -20,13 +20,18 @@ Full workflow: `specs/process/sdd-workflow.md`. Writing rules: `specs/process/co
 |---|---|
 | `specs/` | OKF spec bundle (process, changes, product, architecture, data, api, prompts, ui, decisions, demo-data, build, verification) |
 | `apps/api/` | Python 3.12 FastAPI service, package `voiceai` (uv project) |
-| `apps/api/voiceai/` | `routes/`, `runtime/`, `voice/`, `llm/`, `knowledge/`, `learning/`, `mock/`, `seed/`, `db.py`, `models.py`, `events.py`, `jobs.py` |
+| `apps/api/voiceai/ports/` | Protocols only. The contracts an adapter implements |
+| `apps/api/voiceai/adapters/` | One implementation of one port against one external thing (`llm/`, `embeddings/`, `tools/`, `eventbus/`, `callerdirectory/`) |
+| `apps/api/voiceai/core/` | Cross-cutting infrastructure: `config`, `db`, `errors`, `tenancy`, `prompts`, `events`, `jobs`, `tables`, `llm/gateway` |
+| `apps/api/voiceai/modules/` | The product, one folder per future service: `agentcfg`, `conversation`, `voice`, `knowledge`, `handoff`, `learning`, `analytics`, `businessmock` |
+| `apps/api/voiceai/composition/` | The app factory, adapter wiring, job registration and demo seeding |
 | `apps/api/config/models.yaml` | LLM roles → provider/model refs, prices |
 | `apps/api/tests/` | pytest suite (fake LLM, hash embedder, temp SQLite) |
 | `apps/web/` | Next.js static-export web app (Tailwind) |
 | `infra/` | Dockerfile and Cloud Run deploy script |
 | `scripts/spec_check.py` | OKF lint, index/link/acceptance checks, spec-first rule |
-| `.githooks/` | pre-commit and commit-msg hooks running `spec_check.py` |
+| `scripts/arch_check.py` | Module boundary rules: contracts, ports, adapters, Pipecat confinement, spec docstrings |
+| `.githooks/` | pre-commit and commit-msg hooks running `spec_check.py` and `arch_check.py` |
 
 ## Commands
 
@@ -34,6 +39,7 @@ Full workflow: `specs/process/sdd-workflow.md`. Writing rules: `specs/process/co
 python scripts/setup.py --install            # new machine: hooks, apps/api/.env, dependencies
 python scripts/spec_check.py --ci --base origin/main   # exactly what CI enforces (spec-first, log, lifecycle, coverage ratchet)
 python scripts/spec_check.py                 # quick spec lint (repo root)
+python scripts/arch_check.py                 # module boundary rules
 cd apps/api && uv sync && uv run pytest      # backend tests
 python scripts/dev.py                        # whole stack: web :3000 + API :8000, prefixed logs, Ctrl+C stops all
 cd apps/api && uv run voiceai serve          # API only (+ built web) on :8000
@@ -51,7 +57,9 @@ cd apps/web && npm run build                 # static export to apps/web/out
 
 ## Code conventions
 
-* Python: async everywhere on request paths; type hints; Pydantic models for API I/O; repository helpers always take `tenant_id`; no network in unit tests.
-* Pipecat imports only inside `voiceai/voice/`.
+* Python: async everywhere on request paths; type hints; Pydantic models for API I/O; no network in unit tests.
+* **Module boundaries are enforced** by `scripts/arch_check.py` — read [/architecture/modular-structure.md](specs/architecture/modular-structure.md) before adding a file. In short: a module reaches another only through its `contract`; it depends on a Protocol in `ports/` rather than on an adapter; only `composition/` builds adapters; the module graph stays acyclic.
+* Tenant-owned rows are fetched through `core.db.get_owned`, which requires a `tenant_id`.
+* Pipecat imports only inside `voiceai/modules/voice/`.
 * Web: client components only (static export); query-string routes for details; `lib/api.ts` for all HTTP; `// Spec: /ui/<page>.md` at the top of page files.
 * Never hard-code model IDs in code — use roles via `voiceai.llm.gateway`.

@@ -24,6 +24,7 @@ from voiceai.core.tables import AgentVersion, Call, CallAnalysis, CallEvent, Cal
 from voiceai.modules.agentcfg.contract import TurnDetectionPatch
 from voiceai.core.toolcalling import tool_caller
 from voiceai.core.voicecontrol import voice_control
+from voiceai.modules.conversation import repo
 from voiceai.modules.conversation.serializers import analysis_out, call_summary, feedback_out
 from voiceai.modules.conversation.session import AgentSession, create_call
 from voiceai.core.tenancy import current_tenant, resolve_tenant
@@ -159,47 +160,23 @@ async def list_calls(
     feedback: Literal["up", "down", "none"] | None = None,
     include_seed: bool = True, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session),
 ) -> dict:
-    q = (
-        select(Call, CallAnalysis, AgentVersion.version, CallFeedback.rating)
-        .outerjoin(CallAnalysis, CallAnalysis.call_id == Call.id)
-        .outerjoin(CallFeedback, CallFeedback.call_id == Call.id)
-        .outerjoin(AgentVersion, AgentVersion.id == Call.agent_version_id)
-        .where(Call.tenant_id == tenant_id, Call.is_eval.is_(False))  # API-04
-        .order_by(Call.started_at.desc())
-        .limit(500)
-    )
-    if agent_id:
-        q = q.where(Call.agent_id == agent_id)
-    if outcome:
-        q = q.where(Call.outcome == outcome)
-    if channel:
-        q = q.where(Call.channel == channel)
-    if direction:
-        q = q.where(Call.direction == direction)
-    if feedback == "none":  # FB-05
-        q = q.where(CallFeedback.rating.is_(None))
-    elif feedback:
-        q = q.where(CallFeedback.rating == feedback)
-    if not include_seed:
-        q = q.where(Call.is_seed.is_(False))
-    rows = (await s.execute(q)).all()
+    rows = await repo.explorer_rows(s, tenant_id, repo.CallFilter(
+        agent_id=agent_id, outcome=outcome, channel=channel, direction=direction,
+        feedback=feedback, include_seed=include_seed,
+    ))
     return {"items": [call_summary(c, a, v, f) for c, a, v, f in rows]}
 
 
 @router.get("/calls/{call_id}")
 async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    call = await s.scalar(select(Call).where(Call.id == call_id, Call.tenant_id == tenant_id))
-    if not call:
+    d = await repo.detail(s, tenant_id, call_id)
+    if d is None:
         raise ApiError(404, "call_not_found", "Call not found")
-    events = (await s.scalars(select(CallEvent).where(CallEvent.call_id == call_id).order_by(CallEvent.seq))).all()
-    analysis = await s.scalar(select(CallAnalysis).where(CallAnalysis.call_id == call_id))
-    version = await s.get(AgentVersion, call.agent_version_id)
-    fb = await s.scalar(select(CallFeedback).where(CallFeedback.call_id == call_id))
     return {
-        **call_summary(call, analysis, version.version if version else None, fb.rating if fb else None),
-        "feedback": feedback_out(fb),  # detail carries the object; the summary carries just the rating
-        "events": [{"seq": e.seq, "at": e.at.isoformat(), "kind": e.kind, "text": e.text, "data": e.data} for e in events],
+        **call_summary(d.call, d.analysis, d.version, d.feedback.rating if d.feedback else None),
+        "feedback": feedback_out(d.feedback),  # detail carries the object; the summary carries just the rating
+        "events": [{"seq": e.seq, "at": e.at.isoformat(), "kind": e.kind, "text": e.text, "data": e.data} for e in d.events],
         "escalation": await handoff_desk().for_call(s, tenant_id, call_id),
-        "analysis": analysis_out(analysis),
-        "settings": await effective_settings(s, call),
+        "analysis": analysis_out(d.analysis),
+        "settings": await effective_settings(s, d.call),
     }

@@ -106,6 +106,16 @@ async def publish(
     return version
 
 
+async def agents_using_personas(s: AsyncSession, tenant_id: str) -> dict[str, list[str]]:
+    """Persona id -> names of the agents whose draft uses it, so one in use cannot be deleted (PER-05)."""
+    used: dict[str, list[str]] = {}
+    for a in (await s.scalars(select(Agent).where(Agent.tenant_id == tenant_id))).all():
+        pid = (a.draft_config or {}).get("persona_id")
+        if pid:
+            used.setdefault(pid, []).append(a.name)
+    return used
+
+
 async def apply_fix(s: AsyncSession, agent: Agent, fix: Any) -> None:
     """Fold a FixSpec into the agent's draft config.
 

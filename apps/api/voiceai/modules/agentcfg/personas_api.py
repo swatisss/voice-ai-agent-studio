@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.core.db import get_session
 from voiceai.core.errors import ApiError
-from voiceai.modules.agentcfg.settings import persona_dict
+from voiceai.modules.agentcfg.service import agents_using_personas as _agents_using
+from voiceai.modules.agentcfg.contract import get_persona, persona_dict
 from voiceai.core.tables import Agent, Persona
 from voiceai.modules.agentcfg.domain import PersonaIn
 from voiceai.core.tenancy import current_tenant
@@ -20,17 +21,8 @@ from voiceai.core.tenancy import current_tenant
 router = APIRouter(prefix="/api")
 
 
-async def _agents_using(s: AsyncSession, tenant_id: str) -> dict[str, list[str]]:
-    used: dict[str, list[str]] = {}
-    for a in (await s.scalars(select(Agent).where(Agent.tenant_id == tenant_id))).all():
-        pid = (a.draft_config or {}).get("persona_id")
-        if pid:
-            used.setdefault(pid, []).append(a.name)
-    return used
-
-
 async def _get(s: AsyncSession, tenant_id: str, persona_id: str) -> Persona:
-    p = await s.scalar(select(Persona).where(Persona.id == persona_id, Persona.tenant_id == tenant_id))
+    p = await get_persona(s, tenant_id, persona_id)
     if not p:
         raise ApiError(404, "persona_not_found", "Persona not found")
     return p

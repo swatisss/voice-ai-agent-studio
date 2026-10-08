@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     human_cost_per_call: float = 9.50
     ai_cost_per_call: float = 1.20
 
+    eval_caller_directory: str = "businessmock"  # businessmock | anonymous (/architecture/evaluation.md)
     ev_max_cluster_cases: int = 6
     ev_concurrency: int = 4
 

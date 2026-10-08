@@ -5,9 +5,9 @@ import json
 
 from fastapi import FastAPI, Request
 
-from voiceai.runtime.state import CallState
+from voiceai.modules.conversation.state import CallState
 from voiceai.core.toolcalling import tool_caller
-from voiceai.runtime.tools import MAX_RESULT_CHARS, ToolExecutor, render_url, truncate
+from voiceai.modules.conversation.tools import MAX_RESULT_CHARS, ToolExecutor, render_url, truncate
 
 echo = FastAPI()
 SEEN: list[dict] = []

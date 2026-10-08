@@ -5,7 +5,7 @@ import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from voiceai.voice.serializer import RawPCMSerializer
+from voiceai.modules.voice.serializer import RawPCMSerializer
 
 
 async def test_serializer_round_trip():
@@ -50,7 +50,7 @@ def test_pipeline_builds_without_network():
     """Covers: VO-06"""
     from types import SimpleNamespace
 
-    from voiceai.voice.pipeline import build
+    from voiceai.modules.voice.pipeline import build
 
     class FakeWS:
         headers: dict = {}
@@ -58,8 +58,8 @@ def test_pipeline_builds_without_network():
     from pipecat.frames.frames import TTSUpdateSettingsFrame
     from pipecat.services.deepgram.tts import DeepgramTTSService
 
-    from voiceai.live import LiveControls
-    from voiceai.voice.turn_detection import TurnSettings
+    from voiceai.modules.voice.controls import LiveControls
+    from voiceai.modules.voice.turn_detection import TurnSettings
 
     session = SimpleNamespace(config={"persona": {"voice": "aura-2-thalia-en", "speed": 1.1}}, history=[], turn_settings=lambda: TurnSettings())
     controls = LiveControls(turn=TurnSettings())

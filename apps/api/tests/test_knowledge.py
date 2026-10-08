@@ -5,10 +5,10 @@ import io
 import zipfile
 
 from voiceai.core.db import sessionmaker
-from voiceai.knowledge import okf
-from voiceai.knowledge.chunking import MAX_CHARS, chunk_markdown
-from voiceai.knowledge.ingest import create_doc
-from voiceai.knowledge.search import search
+from voiceai.modules.knowledge import okf
+from voiceai.modules.knowledge.chunking import MAX_CHARS, chunk_markdown
+from voiceai.modules.knowledge.service import create_doc
+from voiceai.modules.knowledge.search import search
 from voiceai.core.tables import Tenant
 
 

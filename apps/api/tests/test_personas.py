@@ -9,10 +9,10 @@ from typing import Any
 from sqlalchemy import select
 
 from voiceai.core.db import sessionmaker
-from voiceai.live import LIVE, LiveControls
+from voiceai.modules.voice.controls import LIVE, LiveControls
 from voiceai.core.llm.gateway import FakeReply
 from voiceai.core.tables import AgentVersion, CallEvent
-from voiceai.voice.turn_detection import TurnSettings
+from voiceai.modules.voice.turn_detection import TurnSettings
 
 M = {"X-Tenant-Id": "evergreen-care"}
 P = {"X-Tenant-Id": "evergreen-sandbox"}

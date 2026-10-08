@@ -14,13 +14,13 @@ from sqlalchemy import func, select
 
 from tests.conftest import script
 from voiceai.core.db import sessionmaker
-from voiceai.live import LiveControls
+from voiceai.modules.voice.controls import LiveControls
 from voiceai.core.llm.gateway import FakeReply
 from voiceai.core.tables import Call, CallAnalysis, CallFeedback, Cluster, Escalation, Job
-from voiceai.runtime import endings
-from voiceai.runtime.session import AgentSession
-from voiceai.voice.processors import BrainProcessor
-from voiceai.voice.turn_detection import TurnSettings
+from voiceai.modules.conversation import endings
+from voiceai.modules.conversation.session import AgentSession
+from voiceai.modules.voice.processors import BrainProcessor
+from voiceai.modules.voice.turn_detection import TurnSettings
 
 H = {"X-Tenant-Id": "evergreen-care"}
 
@@ -101,7 +101,7 @@ def test_policy_timer_bounds_are_validated():
     """Covers: CE-07"""
     from pydantic import ValidationError
 
-    from voiceai.schemas import Policy
+    from voiceai.modules.agentcfg.domain import Policy
 
     assert (Policy().silence_reminder_s, Policy().silence_end_s, Policy().max_call_seconds) == (10, 30, 600)
     for bad in ({"silence_reminder_s": 2}, {"silence_end_s": 500}, {"max_call_seconds": 30}, {"silence_reminder_s": 40, "silence_end_s": 40}):
@@ -243,7 +243,7 @@ async def test_end_reason_is_reported_after_the_closing_speech(app, database, se
 
 
 async def _make_call(seeded) -> str:  # noqa: ANN001
-    from voiceai.runtime.session import create_call
+    from voiceai.modules.conversation.session import create_call
 
     async with sessionmaker()() as s:
         call = await create_call(s, "evergreen-care", seeded["care"]["agent_id"], "voice")
@@ -316,7 +316,7 @@ async def test_thumbs_down_queues_one_more_analysis_and_it_sees_the_feedback(cli
                 "resolution_summary": "Answered", "sentiment_start": "neutral", "sentiment_end": "neutral"}
 
     fake_llm(analysis)
-    from voiceai.learning.analyze import analyze_call
+    from voiceai.modules.learning.analyze import analyze_call
 
     await analyze_call("evergreen-care", {"call_id": call_id})
     assert "Caller feedback after the call: thumbs down: Too slow, again" in seen[0]
@@ -327,7 +327,7 @@ async def test_thumbs_down_queues_one_more_analysis_and_it_sees_the_feedback(cli
 
 async def test_thumbs_down_resolved_call_joins_a_cluster_and_counts_toward_readiness(client, seeded, fake_llm):
     """Covers: FB-04"""
-    from voiceai.learning.analyze import analyze_call
+    from voiceai.modules.learning.analyze import analyze_call
 
     fake_llm(lambda role, m, t: {"outcome": "resolved", "intent": "payment_status", "root_cause": "missing_knowledge",
                                    "gap_summary": "Explaining the grace period on an overdue payment", "caller_goal": "Ask about an overdue payment",

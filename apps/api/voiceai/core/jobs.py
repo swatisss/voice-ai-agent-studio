@@ -46,7 +46,7 @@ def install_handlers() -> None:
     cluster -> proposal chain with it. Every entry point that drains or works the queue calls
     this, so a missing handler is a start-up error instead.
     """
-    from voiceai.learning import analyze, evaluate, propose  # noqa: F401
+    from voiceai.modules.learning import analyze, evaluate, propose  # noqa: F401
 
     missing = [kind for kind in DECLARED_KINDS if kind not in HANDLERS]
     if missing:

@@ -18,9 +18,9 @@ from pipecat.frames.frames import (
     VADUserStoppedSpeakingFrame,
 )
 
-from voiceai.live import LiveControls
-from voiceai.voice.processors import BrainProcessor, TurnAggregator, UserTurnFrame
-from voiceai.voice.turn_detection import TurnSettings
+from voiceai.modules.voice.controls import LiveControls
+from voiceai.modules.voice.processors import BrainProcessor, TurnAggregator, UserTurnFrame
+from voiceai.modules.voice.turn_detection import TurnSettings
 
 WELCOME = "Thanks for calling Evergreen Health member services, this is Ava. I'm a virtual assistant."
 

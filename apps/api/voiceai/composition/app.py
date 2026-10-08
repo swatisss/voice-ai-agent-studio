@@ -18,21 +18,34 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 
 from voiceai.composition import jobs as job_wiring
+from voiceai.composition.ops_api import router as ops_router
 from voiceai.composition.webfiles import WebFiles
 from voiceai.core import db
+from voiceai.core.events_api import router as events_router
+from voiceai.core.tenancy_api import router as tenants_router
 from voiceai.core.config import get_settings
 from voiceai.core.errors import ApiError, install_handlers
 from voiceai.core.jobs import worker
 from voiceai.core.tables import Tenant
-from voiceai.mock.routes import router as mock_router
-from voiceai.routes import agents, calls, console, dashboard, insights, knowledge, meta, personas, usecases
-from voiceai.runtime import escalation
+from voiceai.modules.agentcfg.api import router as agents_router
+from voiceai.modules.agentcfg.personas_api import router as personas_router
+from voiceai.modules.analytics.api import router as analytics_router
+from voiceai.modules.businessmock.api import router as businessmock_router
+from voiceai.modules.agentcfg.usecases_api import router as usecases_router
+from voiceai.modules.conversation.api import router as calls_router
+from voiceai.modules.conversation.outbound_api import router as outbound_router
+from voiceai.modules.handoff.api import router as handoff_router
+from voiceai.modules.knowledge.api import router as knowledge_router
+from voiceai.modules.learning.api import router as insights_router
+from voiceai.modules.voice.api import router as voice_router
+from voiceai.modules.handoff import service as handoff_service
+
 
 log = logging.getLogger("voiceai")
 
 ROUTERS = (
-    meta.router, agents.router, personas.router, knowledge.router, calls.router,
-    usecases.router, console.router, insights.router, dashboard.router, mock_router,
+    tenants_router, ops_router, events_router, agents_router, personas_router, knowledge_router, calls_router, voice_router,
+    usecases_router, outbound_router, handoff_router, insights_router, analytics_router, businessmock_router,
 )
 
 
@@ -45,7 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with db.sessionmaker()() as s:
             empty = (await s.scalar(select(func.count()).select_from(Tenant))) == 0
         if empty:
-            from voiceai.seed.loader import seed  # lazy: seeding reaches across every module
+            from voiceai.composition.seed.loader import seed  # lazy: seeding reaches across every module
 
             log.info("empty database: seeding demo data")
             await seed(reset=False)
@@ -53,7 +66,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await worker.start()
     yield
     await worker.stop()
-    await escalation.wait_packets()
+    await handoff_service.wait_packets()
 
 
 def create_app() -> FastAPI:

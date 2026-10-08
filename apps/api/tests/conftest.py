@@ -34,7 +34,7 @@ get_settings.cache_clear()
 @pytest.fixture(autouse=True)
 def fresh_business_data() -> None:
     """Mock business records are module state (policies, onboarding, requests): start every test from the seed state."""
-    from voiceai.mock import data
+    from voiceai.modules.businessmock import data
 
     data.reset()
 
@@ -43,13 +43,13 @@ def fresh_business_data() -> None:
 async def database(tmp_path: Path) -> AsyncIterator[None]:
     db.configure(f"sqlite+aiosqlite:///{(tmp_path / 'db.sqlite').as_posix()}")
     await db.init_db()
-    from voiceai.knowledge.search import invalidate
-    from voiceai.runtime.session import REGISTRY
+    from voiceai.modules.knowledge.search import invalidate
+    from voiceai.modules.conversation.session import REGISTRY
 
     invalidate()
     REGISTRY.clear()
     yield
-    from voiceai.runtime.escalation import wait_packets
+    from voiceai.modules.handoff.service import wait_packets
 
     await wait_packets()
     gw.set_fake(None)
@@ -58,7 +58,7 @@ async def database(tmp_path: Path) -> AsyncIterator[None]:
 
 @pytest.fixture
 async def seeded(database: None) -> dict[str, Any]:
-    from voiceai.seed.loader import seed
+    from voiceai.composition.seed.loader import seed
 
     return await seed()
 

@@ -9,7 +9,7 @@ from voiceai.core.db import sessionmaker
 from voiceai.core.events import bus
 from voiceai.core.llm.gateway import FakeReply
 from voiceai.core.tables import Escalation
-from voiceai.runtime.escalation import wait_packets
+from voiceai.modules.handoff.service import wait_packets
 
 H = {"X-Tenant-Id": "evergreen-care"}
 ESC = ("escalate_to_human", {"reason_category": "policy_required", "reason_detail": "Caller wants to appeal"})

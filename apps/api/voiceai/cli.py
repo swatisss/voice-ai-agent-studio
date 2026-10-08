@@ -18,7 +18,7 @@ def _serve(args: argparse.Namespace) -> None:
 
 async def _seed(args: argparse.Namespace) -> None:
     from voiceai.core import db
-    from voiceai.seed.loader import seed
+    from voiceai.composition.seed.loader import seed
 
     db.configure()
     await db.init_db(drop=args.reset)
@@ -30,7 +30,7 @@ async def _reindex(_: argparse.Namespace) -> None:
     from sqlalchemy import select
 
     from voiceai.core import db
-    from voiceai.knowledge.ingest import rechunk
+    from voiceai.modules.knowledge.service import rechunk
     from voiceai.core.tables import KnowledgeDoc
 
     db.configure()
@@ -44,7 +44,7 @@ async def _reindex(_: argparse.Namespace) -> None:
 
 async def _chat(args: argparse.Namespace) -> None:
     from voiceai.core import db, jobs
-    from voiceai.runtime.session import AgentSession, create_call
+    from voiceai.modules.conversation.session import AgentSession, create_call
 
     db.configure()
     jobs.install_handlers()  # the post-call analysis this drains at the end needs its handler
@@ -69,7 +69,7 @@ async def _eval_scenarios(args: argparse.Namespace) -> None:
     from sqlalchemy import select
 
     from voiceai.core import db
-    from voiceai.learning.evaluate import judge, passed, simulate
+    from voiceai.modules.learning.evaluate import judge, passed, simulate
     from voiceai.core.tables import Agent, AgentVersion, EvalScenario, Tenant
 
     db.configure()

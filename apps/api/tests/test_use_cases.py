@@ -4,7 +4,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 
 from voiceai.core.db import sessionmaker
-from voiceai.knowledge.search import search
+from voiceai.modules.knowledge.search import search
 from voiceai.core.tables import Agent, EvalScenario, KnowledgeDoc, Persona, Tool
 
 H = {"X-Tenant-Id": "evergreen-care"}

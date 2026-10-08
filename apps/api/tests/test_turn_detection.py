@@ -9,9 +9,9 @@ import asyncio
 import pytest
 from pipecat.frames.frames import TranscriptionFrame, VADUserStartedSpeakingFrame, VADUserStoppedSpeakingFrame
 
-from voiceai.live import LiveControls
-from voiceai.voice.processors import BrainProcessor, TurnAggregator, UserTurnFrame
-from voiceai.voice.turn_detection import TurnEvaluator, TurnSettings, expected_slots, heuristic_verdict
+from voiceai.modules.voice.controls import LiveControls
+from voiceai.modules.voice.processors import BrainProcessor, TurnAggregator, UserTurnFrame
+from voiceai.modules.voice.turn_detection import TurnEvaluator, TurnSettings, expected_slots, heuristic_verdict
 
 H = {"X-Tenant-Id": "evergreen-care"}
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 from sqlalchemy import func, inspect, select
 
 from voiceai.core.db import engine, sessionmaker
-from voiceai.knowledge.ingest import create_doc
+from voiceai.modules.knowledge.service import create_doc
 from voiceai.core.tables import AgentVersion, KnowledgeChunk, KnowledgeDoc
 
 M = {"X-Tenant-Id": "evergreen-care"}

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from voiceai.mock import data
+from voiceai.modules.businessmock import data
 
 MARIA = {"X-Member-Ref": "EVG-482913"}
 JAMES = {"X-Member-Ref": "EVG-337120"}

@@ -8,8 +8,8 @@ from tests.conftest import script
 from voiceai.core.db import sessionmaker
 from voiceai.core.llm.gateway import FakeReply
 from voiceai.core.tables import Call, CallEvent
-from voiceai.runtime.outbound import render_opening
-from voiceai.runtime.session import AgentSession
+from voiceai.modules.conversation.outbound import render_opening
+from voiceai.modules.conversation.session import AgentSession
 from voiceai.core.toolcalling import ToolCaller, tool_caller
 
 H = {"X-Tenant-Id": "evergreen-care"}
@@ -71,7 +71,7 @@ async def test_outbound_callee_must_verify_before_account_tools(client, seeded, 
 
     assert isinstance(Recording(), ToolCaller)
     # the route imported tool_caller by name, so patch it where it is used
-    monkeypatch.setattr("voiceai.routes.calls.tool_caller", lambda app=None: Recording())
+    monkeypatch.setattr("voiceai.modules.conversation.api.tool_caller", lambda app=None: Recording())
     fake_llm(script(FakeReply(tool_calls=[QUOTE]), FakeReply(tool_calls=[VERIFY_JAMES]), FakeReply(tool_calls=[QUOTE]), FakeReply(text="It renews at $738.70.")))
     call_id = (await _outbound_call(client, seeded)).json()["call_id"]
     out = await client.post(f"/api/calls/{call_id}/messages", headers=H, json={"text": "Yes, speaking. It's November 2nd 1979."})

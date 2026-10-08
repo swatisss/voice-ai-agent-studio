@@ -11,11 +11,11 @@ from sqlalchemy import func, select
 from voiceai.core import jobs
 from voiceai.core.db import sessionmaker
 from voiceai.core.events import bus
-from voiceai.learning.analyze import save_analysis
-from voiceai.learning.evaluate import passed
+from voiceai.modules.learning.analyze import save_analysis
+from voiceai.modules.learning.evaluate import passed
 from voiceai.core.llm.gateway import FakeReply
 from voiceai.core.tables import Agent, AgentVersion, Call, CallAnalysis, CallEvent, Cluster, EvalResult, Job, KnowledgeDoc
-from voiceai.schemas import AnalysisOut, JudgeOut
+from voiceai.modules.learning.domain import AnalysisOut, JudgeOut
 
 H = {"X-Tenant-Id": "evergreen-care"}
 ARTICLE = {

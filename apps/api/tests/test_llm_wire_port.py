@@ -213,7 +213,7 @@ def test_usage_quirk_is_declared_in_yaml_not_coded(monkeypatch):
     assert quirky._usage_from(standard) == {"prompt_tokens": 4, "completion_tokens": 1}  # the standard field wins
 
     assert "x_groq" not in (PKG / "core" / "llm" / "gateway.py").read_text(encoding="utf-8")
-    assert "groq" not in (PKG / "routes" / "meta.py").read_text(encoding="utf-8")
+    assert "groq" not in (PKG / "composition" / "ops_api.py").read_text(encoding="utf-8")
 
 
 async def test_gateway_estimates_usage_when_the_wire_reports_none(monkeypatch, tmp_path, pretend_wire):

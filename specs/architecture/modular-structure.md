@@ -46,7 +46,7 @@ Each module is a folder with the same shape. Not every module needs every file.
 | `conversation` | The turn loop, call lifecycle, tool execution, transcripts, caller feedback. Shared by voice, text and simulation. | `calls`, `call_events`, `call_feedback` |
 | `voice` | The Pipecat pipeline, turn aggregation, live voice controls. The only module with a volatile third-party blast radius. | — |
 | `knowledge` | Ingestion, chunking, embedding, search with a no-answer threshold. | `knowledge_docs`, `knowledge_chunks` |
-| `handoff` | The human console: queue, packet, accept, resolve. | `escalations` |
+| `handoff` | The human console: queue, groundwork packet, accept, resolve. Implements the `HandoffDesk` port the turn loop announces to. | `escalations` |
 | `learning` | Analysis, clustering, impact, fix drafting, evaluation. | `call_analyses`, `clusters`, `fix_proposals`, `eval_runs`, `eval_results`, `eval_scenarios` |
 | `analytics` | Dashboard read model. It reads across modules and owns no tables — which is exactly why it has a name: without one, the dashboard reaches into another module's internals. | — |
 | `businessmock` | The simulated insurer and healthcare systems the demo calls. It stands in for systems outside the product, so nothing in the product may depend on it. | — |
@@ -69,11 +69,15 @@ Both are declared boundaries; the difference is which way the dependency points.
 | `toolcaller.ToolCaller` | Executing an agent's HTTP tool. Also where a future MCP transport plugs in. | `http`, `asgi`, `routing` |
 | `eventbus.EventBus` | Fan-out of live updates. Sync, non-blocking and best-effort by contract, so a remote adapter must buffer locally instead of adding latency to a turn or awaiting inside an open transaction. | `inprocess` |
 | `postcall.PostCallAnalysis` | Asking for a finished call to be analysed. | `learning` |
-| `conversation.SimulationRunner` | Running a simulated call against a candidate config. | `conversation` |
+| `handoff.HandoffDesk` | Handing a live call to a human, and reading what became of it. Carries the category vocabulary, since the caller must name one. | `handoff` |
 | `callerdirectory.CallerDirectory` | Identities for simulated callers. | `businessmock`, `anonymous` |
-| `voicecontrol.VoiceControl` | Changing voice or turn detection on a running call. | `inprocess` |
+| `voicecontrol.VoiceControl` | Changing voice or turn detection on a running call. | `voice` |
 
-`postcall` is a port rather than a contract for a structural reason: `learning` names `conversation` (it drives simulated calls), so `conversation` must not name `learning`, or the module graph has a cycle. The asymmetry is the design, not an accident.
+Three of these are ports for the same structural reason: `conversation` is upstream of everything that reacts to a call. `learning` names it (to drive simulated calls and read transcripts), `handoff` names it (to build a packet from a transcript), and `voice` names it (to run the brain). So `conversation` must name none of them back, or the module graph cycles — and each thing it genuinely needs from them is a port instead. The asymmetry is the design, not an accident.
+
+Running a simulated call, by contrast, is a plain `conversation` **contract** call: the dependency points the way it already points, and that function is what becomes an HTTP client if fleet learning is extracted. A port there would have been ceremony.
+
+Note what a port costs: the capability is reached through an accessor in `core/` rather than by importing the implementing module. That indirection is the price of the acyclic graph, and `arch_check` is what makes it non-optional.
 
 Post-call analysis MUST NOT be triggered through the event bus. The bus drops events when a subscriber is full, which is right for a live feed and wrong for durable work.
 

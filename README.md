@@ -14,6 +14,7 @@ The demo domain is **Evergreen Health**, a fictional health insurer whose busine
 
 ## Contents
 
+- [Demo video](#demo-video)
 - [Run it](#run-it)
 - [Spec-driven development](#spec-driven-development)
 - [Starting on a new machine](#starting-on-a-new-machine)
@@ -21,6 +22,15 @@ The demo domain is **Evergreen Health**, a fictional health insurer whose busine
 - [Keeping specs up to date (enforcement)](#keeping-specs-up-to-date-enforcement)
 - [Repo map and commands](#repo-map-and-commands)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Demo video
+
+<!-- DEMO-VIDEO-PLACEHOLDER: replace the blockquote below with the uploaded video URL on its own line
+     (GitHub renders a bare github.com/user-attachments/assets/... link as an inline player). -->
+
+> 🎬 **Demo video coming soon.**
 
 ---
 

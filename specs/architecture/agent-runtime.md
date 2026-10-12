@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent runtime
 description: The shared brain used by voice calls, text chat and simulations - turn loop, prompt assembly, built-in tools, call state, safety screen and escalation triggers.
-status: stable
+status: draft
 tags: [architecture, runtime]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -14,10 +14,11 @@ One implementation of "how the agent behaves", used by three channels:
 | Channel | Driver | Output |
 |---|---|---|
 | `voice` | [Voice pipeline](/architecture/voice-pipeline.md) | text chunks → TTS |
+| `video` | [Voice pipeline](/architecture/voice-pipeline.md) | text chunks → TTS, plus the camera the agent may ask to look at |
 | `text` | `POST /api/calls/{id}/messages` | full reply text |
 | `simulation` | [Evaluation](/architecture/evaluation.md) | full reply text |
 
-Behavior MUST NOT differ between channels except: voice may emit a short *filler* line before slow tool calls, and voice/text replies are kept short and speakable (no markdown, no lists).
+Behavior MUST NOT differ between channels except: voice may emit a short *filler* line before slow tool calls, voice/text replies are kept short and speakable (no markdown, no lists), and a `video` call additionally offers the `look_at_camera` built-in. A `video` call with no camera behaves exactly as `voice` (VI-14).
 
 # Session API (`voiceai.runtime.session.AgentSession`)
 
@@ -61,8 +62,11 @@ If the LLM fails after gateway fallback, yield `"I'm sorry, I'm having trouble r
 | `search_knowledge` | `query: string` | Searches the agent's knowledge docs ([/architecture/knowledge.md](/architecture/knowledge.md)). Returns results or `{"no_answer": true}`. |
 | `escalate_to_human` | `reason_category` (enum, see escalation spec), `reason_detail: string` | Marks the call escalated and returns `{"status":"escalated","say":<handoff_message>}`. The runtime then speaks the handoff message itself and ends the turn without another LLM round (deterministic wording, no extra latency); the call then ends with reason `handoff` (CE-01). |
 | `end_call` | `summary: string` | Marks the call for ending after the reply. If the model produced no goodbye text in that turn, the runtime says "Thank you for calling. Take care!" |
+| `look_at_camera` | `asset_hint: string` (optional) | **Video calls only.** Captures one frame from the caller's camera, describes it and pins it as evidence ([/architecture/visual-intake.md](/architecture/visual-intake.md)). Returns the observation (`description`, `items`, `confidence`, `safety_flag`, `asked_for`) or `{"status":"declined","reason":...}` when there is no frame to take. It is offered to the model only on a `video` call; on every other channel the schema is absent, so the model cannot call it. |
 
 Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-skills.md](/architecture/tools-and-skills.md). Name collisions with built-ins are rejected at tool creation.
+
+`look_at_camera` is the one built-in that reaches another module: the runtime calls the `evidence` module's contract, which owns the frame, the vision call and the pinning ([/architecture/modular-structure.md](/architecture/modular-structure.md)). An observation whose `safety_flag` is `injury` or `unsafe_premises` escalates in the same turn, by the same path as the safety screen (VI-11).
 
 # Call state (`CallState`)
 
@@ -91,3 +95,4 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 - **RT-07** — Given the same agent version and the same scripted LLM responses, when run via text and via simulation, then the stored event sequences are identical apart from channel and timestamps.
 - **RT-08** — Given a session, when `end()` is called twice, then only one `analyze_call` job exists for the call.
 - **RT-09** — Given a turn that used the LLM, when it completes, then the call's token counts and `llm_cost_usd` increase by the gateway-reported usage.
+- **RT-10** — Given a `voice`, `text` or `simulation` call, when the tool schemas for a turn are built, then `look_at_camera` is not among them; and given a `video` call, then it is, and a `video` call whose caller never enables the camera produces the same event sequence a `voice` call would (VI-14).

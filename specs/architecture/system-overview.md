@@ -2,7 +2,7 @@
 type: Architecture
 title: System overview
 description: Components, deployment shape and the three core flows (resolve, escalate, learn) of the voice AI agent platform.
-status: stable
+status: draft
 tags: [architecture, overview]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -30,7 +30,7 @@ External: Groq, OpenRouter, OpenAI (LLM) · Deepgram (STT/TTS)
 
 # Components
 
-One process, but not one blob: the package is layered into ports, adapters, core, eight modules and a composition root, with the dependency rules checked in CI ([/architecture/modular-structure.md](/architecture/modular-structure.md)). The components below map onto those modules.
+One process, but not one blob: the package is layered into ports, adapters, core, nine modules and a composition root, with the dependency rules checked in CI ([/architecture/modular-structure.md](/architecture/modular-structure.md)). The components below map onto those modules.
 
 | Component | Responsibility | Spec |
 |---|---|---|

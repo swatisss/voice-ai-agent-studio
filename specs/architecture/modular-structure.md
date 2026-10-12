@@ -1,8 +1,8 @@
 ---
 type: Architecture
 title: Modular structure
-description: "The backend's layers, the eight modules, the ports and contracts between them, and the CI rules that keep the boundaries where a service could later be cut."
-status: stable
+description: "The backend's layers, the nine modules, the ports and contracts between them, and the CI rules that keep the boundaries where a service could later be cut."
+status: draft
 tags: [architecture, modularity, ports, boundaries]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-08T00:00:00Z" }
 ---
@@ -22,7 +22,7 @@ Code lives in one of five layers. The layer decides what a file may import, and 
 | `ports/` | Protocols and the data classes they pass. No behaviour, no I/O. | standard library, pydantic, `ports` |
 | `adapters/` | One implementation of one port against one external thing. | `ports`, `core.config`, `core.errors` |
 | `core/` | Cross-cutting infrastructure with no domain knowledge: settings, database, errors, tenancy, prompt loading, the event bus accessor, the job queue, the LLM gateway. | `ports`, `adapters`, `core` |
-| `modules/` | The product, in eight modules. Each owns its rules, its HTTP surface and a documented set of tables. | `ports`, `core`, other modules **through their `contract` module only** |
+| `modules/` | The product, in nine modules. Each owns its rules, its HTTP surface and a documented set of tables. | `ports`, `core`, other modules **through their `contract` module only** |
 | `composition/` | The assembly: it builds the FastAPI app, chooses every adapter from configuration, registers job handlers and seeds demo data. | everything |
 
 Only `composition/` knows which adapter is in use. A module names a capability it needs; it never names the thing that provides it.
@@ -48,6 +48,7 @@ Each module is a folder with the same shape. Not every module needs every file.
 | `knowledge` | Ingestion, chunking, embedding, search with a no-answer threshold. | `knowledge_docs`, `knowledge_chunks` |
 | `handoff` | The human console: queue, groundwork packet, accept, resolve. Implements the `HandoffDesk` port the turn loop announces to. | `escalations` |
 | `learning` | Analysis, clustering, impact, fix drafting, evaluation. | `call_analyses`, `clusters`, `fix_proposals`, `eval_runs`, `eval_results`, `eval_scenarios` |
+| `evidence` | Visual intake: the frame, the vision call, the pinned observation, the case and its routing. | `media_objects`, `call_evidence`, `visual_cases` |
 | `analytics` | Dashboard read model. It reads across modules and owns no tables — which is exactly why it has a name: without one, the dashboard reaches into another module's internals. | — |
 | `businessmock` | The simulated insurer and healthcare systems the demo calls. It stands in for systems outside the product, so nothing in the product may depend on it. | — |
 
@@ -55,7 +56,7 @@ Each module is a folder with the same shape. Not every module needs every file.
 
 # Tables
 
-The table column above is **ownership, not file layout**. All twenty tables are declared centrally in `core/tables.py` today, and that is deliberate.
+The table column above is **ownership, not file layout**. All twenty-three tables are declared centrally in `core/tables.py` today, and that is deliberate.
 
 Splitting them into a `tables.py` per module was tried and reverted. The reason is concrete: twenty-eight places read another module's tables, and almost all of them are SQL joins — the call explorer joins four tables across three modules, the dashboard joins three across three. Routing those through contracts turns one join into several round-trips, which is a real performance change dressed as a refactor, and it buys nothing until a module actually leaves the process. On the day one does, its tables move with it and its callers lose the join they can no longer make anyway.
 
@@ -85,8 +86,12 @@ Both are declared boundaries; the difference is which way the dependency points.
 | `handoff.HandoffDesk` | Handing a live call to a human, and reading what became of it. Carries the category vocabulary, since the caller must name one. | `handoff` |
 | `callerdirectory.CallerDirectory` | Identities for simulated callers. | `businessmock`, `anonymous` |
 | `voicecontrol.VoiceControl` | Changing voice or turn detection on a running call. | `voice` |
+| `blobstore.BlobStore` | Storing, fetching and deleting bytes by key. It does not list and does not sign URLs ([/architecture/media-storage.md](/architecture/media-storage.md)). | `local`, `gcs` |
+| `framesource.FrameSource` | Asking a live call for one camera frame. `evidence` needs a frame and must not know that a WebSocket, or Pipecat, is what produces one. | `voice` |
 
 Three of these are ports for the same structural reason: `conversation` is upstream of everything that reacts to a call. `learning` names it (to drive simulated calls and read transcripts), `handoff` names it (to build a packet from a transcript), and `voice` names it (to run the brain). So `conversation` must name none of them back, or the module graph cycles — and each thing it genuinely needs from them is a port instead. The asymmetry is the design, not an accident.
+
+`FrameSource` is the fourth, and it is the clearest case yet. The turn loop calls `evidence` through its contract, so `conversation → evidence`; `voice` already names `conversation` to run the brain. Had `evidence` named `voice` back to fetch a frame, the graph would close into `conversation → evidence → voice → conversation` and MOD-01 would fail — correctly, because the cycle is real. So `evidence` names the capability "give me one frame from this call" and `voice` implements it.
 
 Running a simulated call, by contrast, is a plain `conversation` **contract** call: the dependency points the way it already points, and that function is what becomes an HTTP client if fleet learning is extracted. A port there would have been ceremony.
 

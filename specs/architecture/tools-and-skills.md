@@ -2,14 +2,14 @@
 type: Component Spec
 title: Tools and skills
 description: HTTP tool definitions and execution (in-process for relative URLs), the identity verification gate, result shaping, and the skill format rendered into the system prompt.
-status: stable
+status: draft
 tags: [architecture, tools, skills]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
 
 # Tool definition
 
-Schema in [/data/agent-config.md](/data/agent-config.md). Key fields: `name` (snake_case, unique per tenant, not a built-in name), `description`, `method` (`GET`/`POST`), `url` (template), `parameters` (JSON Schema object), `requires_verification`, `is_verification`, `timeout_s` (default 8).
+Schema in [/data/agent-config.md](/data/agent-config.md). Key fields: `name` (snake_case, unique per tenant, not a built-in name — the built-ins are `search_knowledge`, `escalate_to_human`, `end_call` and `look_at_camera`, [/architecture/agent-runtime.md](/architecture/agent-runtime.md)), `description`, `method` (`GET`/`POST`), `url` (template), `parameters` (JSON Schema object), `requires_verification`, `is_verification`, `timeout_s` (default 8).
 
 # Execution
 

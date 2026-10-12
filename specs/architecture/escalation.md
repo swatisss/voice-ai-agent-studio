@@ -2,7 +2,7 @@
 type: Component Spec
 title: Escalation
 description: When and how calls are handed to humans - triggers, reason categories, the groundwork packet, the safety screen, and the human console lifecycle.
-status: stable
+status: draft
 tags: [architecture, escalation, handoff]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -26,6 +26,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 |---|---|---|
 | Model decision | Model calls `escalate_to_human` | as given |
 | Safety screen | Caller text matches a safety phrase (below) | `safety` |
+| Visual safety flag | An observation returns `safety_flag` `injury` or `unsafe_premises` ([/architecture/visual-intake.md](/architecture/visual-intake.md)) | `safety` |
 | No-answer streak | `no_answer_streak` ≥ 2 | `knowledge_gap` |
 | Tool-error streak | `tool_error_streak` ≥ 2 | `tool_failure` |
 | Max turns | `turns` ≥ `policy.max_turns` (default 16) | `other` |
@@ -61,6 +62,8 @@ Evaluation (simulated) calls also create an escalation row so judging can see th
 
 Allowed sentiment values: `positive`, `neutral`, `frustrated`, `angry`, `distressed`; trend: `improving`, `stable`, `declining`.
 
+A call that pinned visual evidence adds `visual_evidence`: the entries in order, each `{media_id, source, description, confidence, asked_for}`, plus the case's `kind`, `routing` and `routing_reason` when one exists ([/architecture/visual-intake.md](/architecture/visual-intake.md)). It is appended deterministically from the stored rows, not drafted, so it survives a fallback packet — a `safety` hand-off from a visual call is exactly the case where the LLM packet is least likely to have been waited for and the human most needs to see what the agent saw.
+
 **Fallback packet** (no LLM): `summary` = last two caller utterances joined; `intent` = `unknown`; `entities` = `{member_ref}` if verified; `already_tried` = `tools_used[].summary`; reason from the escalation row; sentiment `neutral/neutral/stable`; `suggested_next_action` = "Review the transcript and confirm the caller's request."
 
 # Console lifecycle
@@ -81,3 +84,4 @@ The `resolution_note` is required (min 10 characters) — it is the evidence fle
 - **ES-06** — Given an escalation in `waiting`, when resolve is called without accept, then the API returns 409.
 - **ES-07** — Given resolve with a note shorter than 10 characters, then the API returns 422.
 - **ES-08** — Given the model calls `escalate_to_human` twice, then only one escalation row exists.
+- **ES-09** — Given a call with two pinned observations, when a hand-off is opened, then the packet carries `visual_evidence` with both entries in order and their confidences, and it is present on the fallback packet as well as the drafted one.

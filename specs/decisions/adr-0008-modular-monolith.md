@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0008 Modular monolith with ports and adapters
 description: "One deployable still, but layered into ports, adapters, core, eight modules and a composition root, with the dependency rules enforced in CI."
-status: stable
+status: draft
 tags: [decision, architecture, modularity]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-08T00:00:00Z" }
 ---
@@ -43,3 +43,9 @@ Keep one deployable. Layer the package into `ports/`, `adapters/`, `core/`, `mod
 * Cross-module calls go through a `contract` function, which is what later becomes an HTTP client.
 * New code costs more ceremony: a capability needs a Protocol and a wiring line, not just an import. That is the price of the seam, and `arch_check` makes it non-optional.
 * Horizontal scaling is still out of scope and still needs the CP ADR-0005 asks for. This decision builds the seams that CP will plug into; it does not deliver it. Database migrations are likewise untouched — `init_db` still creates tables.
+
+# Amendment (CP-0013)
+
+A ninth module, `evidence`, joins the eight. It is drawn the same way the others were — where a service would be cut — and it arrived with the two ports it needs rather than a direct import: `BlobStore`, because storing bytes is the thing being swapped between a local directory and a bucket, and `FrameSource`, because `evidence` must not know that a WebSocket produces a camera frame. The second one is also what keeps the graph acyclic, since `voice` already names `conversation` and the turn loop names `evidence` ([/architecture/modular-structure.md](/architecture/modular-structure.md)).
+
+Nothing in the decision changes. The ninth module is evidence that the rules hold under a feature that touches the turn loop, the transport, a new model role and the first byte storage in the product, without any of them reaching across a boundary.

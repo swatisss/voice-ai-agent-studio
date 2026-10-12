@@ -2,7 +2,7 @@
 type: Component Spec
 title: LLM gateway
 description: "Maps LLM roles to provider models over a pluggable wire adapter, with streaming, tool calls, JSON outputs, fallback and cost accounting."
-status: stable
+status: draft
 tags: [architecture, llm, groq, openrouter, openai]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -17,6 +17,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `simulator` | Simulated callers | cheap, fast | `groq:openai/gpt-oss-20b` |
 | `judge` | Eval grading | JSON output | `groq:openai/gpt-oss-120b` |
 | `turn` | Semantic turn detection (LLM evaluator) | tiny JSON verdict in under a second | `groq:openai/gpt-oss-20b` |
+| `vision` | Describing a captured frame ([/architecture/visual-intake.md](/architecture/visual-intake.md)) | image input, JSON output | `openai:gpt-4.1-mini` |
+
+`vision` is the one role whose primary model is not a Groq text model, because the role needs image input and the default text models have none. It is also the one role that may be **unresolvable**: a deployment with no vision-capable ref is a deployment where video calls degrade to voice (VI-01), which is why `POST /api/calls` reports it rather than failing.
 
 # Configuration — `apps/api/config/models.yaml`
 
@@ -32,8 +35,8 @@ models:            # price per 1M tokens (USD) for cost accounting
   "groq:openai/gpt-oss-120b":       { input: 0.15, output: 0.60, json_schema: true, reasoning_effort: true }
   "groq:openai/gpt-oss-20b":        { input: 0.10, output: 0.50, json_schema: true, reasoning_effort: true }
   "openrouter:openai/gpt-oss-120b": { input: 0.15, output: 0.60, json_schema: false }
-  "openai:gpt-4.1-mini":            { input: 0.40, output: 1.60, json_schema: true }   # confirm IDs and prices in the OpenAI console
-  "openai:gpt-4.1-nano":            { input: 0.10, output: 0.40, json_schema: true }
+  "openai:gpt-4.1-mini":            { input: 0.40, output: 1.60, json_schema: true, vision: true }   # confirm IDs and prices in the OpenAI console
+  "openai:gpt-4.1-nano":            { input: 0.10, output: 0.40, json_schema: true, vision: true }
 roles:
   realtime:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0.3, max_tokens: 800 },
                fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
@@ -42,9 +45,11 @@ roles:
   simulator: { model: "groq:openai/gpt-oss-20b",  params: { reasoning_effort: low, temperature: 0.7 }, fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-nano"] }
   judge:     { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0 }, fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
   turn:      { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }, fallback: ["openrouter:openai/gpt-oss-20b", "openai:gpt-4.1-nano"] }
+  vision:    { model: "openai:gpt-4.1-mini", params: { temperature: 0, max_tokens: 500 }, fallback: ["openai:gpt-4.1-nano"] }
 ```
 
 * A **model ref** is `<provider>:<model id>`. Any OpenRouter model may be used by adding it under `models`, and any non-reasoning OpenAI chat model likewise.
+* `vision: true` on a model entry declares that the model accepts image parts. A ref without it is **skipped for the `vision` role** exactly like a missing API key, so a role whose whole chain lacks the flag resolves to nothing and video degrades to voice. The flag is a claim about the model, so adding a vision-capable Groq or OpenRouter model as a cheaper primary is a `models.yaml` change and nothing more.
 * `wire` names the HTTP protocol the provider speaks and selects the adapter that speaks it. It defaults to `openai`, so an entry that omits it keeps working. `options` is passed to that adapter untouched and is where per-provider quirks are declared instead of being coded; the gateway never reads it. For the `openai` wire: `stream_usage` asks for usage on the final stream chunk, and `usage_extra_key` names a vendor extension carrying usage when the standard field is absent.
 * Every role's fallback chain **ends with an `openai:` model**, so a deployment that has only `OPENAI_API_KEY` works with no `LLM_ROLE_*` line: providers without a key are skipped, Groq and OpenRouter first, and OpenAI answers. Each provider's key is read from the variable its own `api_key_env` names — from the process environment or, failing that, from a line in `apps/api/.env`. No provider or key name appears in Python.
 * Agents may override `realtime` via `config.models.realtime` ([/data/agent-config.md](/data/agent-config.md)). `GET /api/models` lists selectable refs.
@@ -65,6 +70,9 @@ Model IDs still live only in `apps/api/config/models.yaml`, never in code ([/arc
 | `stream_chat(role, messages, tools, override=None)` | Async iterator of events: `text` deltas, then a final `done` event carrying the assembled tool calls (id, name, JSON args), finish reason and usage. |
 | `complete_json(role, messages, schema: type[BaseModel])` | Returns a validated Pydantic object. Uses `response_format={"type":"json_schema",...}` when the model supports it, else `json_object` plus the schema in the prompt. On validation failure retries once with the error appended. |
 | `usage_cost(model_ref, usage)` | USD from the price table; unknown models cost 0 and log a warning. |
+| `role_available(role)` | Whether any ref in the role's chain resolves — a key that is present, a wire that has an adapter, and for `vision` the `vision: true` flag. What `POST /api/calls` asks before promising a video call. |
+
+A message's `content` may be a **list of parts** instead of a string: `{"type":"text","text":...}` and `{"type":"image","mime":"image/jpeg","data":"<base64>"}`. The gateway passes parts through to the wire adapter, which maps them onto the provider's shape — for the `openai` wire, an `image_url` part carrying a `data:` URI. Image bytes are never logged, and a part is only ever built by the `evidence` module from a frame it just stored.
 
 The `turn` role is optional in practice: if it fails or times out, semantic turn detection uses its local heuristic ([/architecture/turn-detection.md](/architecture/turn-detection.md)).
 
@@ -107,3 +115,5 @@ A scripted in-memory responder is selected with `LLM_FAKE=1` or installed by a t
 - **LG-13** — Given `models.yaml` declaring N providers, when `/healthz` is requested, then `providers` has exactly those N names plus `deepgram`, each `true` only when its key resolves.
 - **LG-14** — Given a role whose primary ref names a `wire` with no adapter module, when a stream starts, then that ref is skipped like a missing key and the next ref answers; and a `wire` value that is not a plain lowercase identifier is rejected rather than imported.
 - **LG-15** — Given a provider entry declaring `options.usage_extra_key`, when a stream's chunk carries usage only under that key, then the usage is read from it; given no such declaration the key is ignored, the standard usage field always wins, and usage the provider never reports is estimated as characters ÷ 4.
+- **LG-16** — Given a `vision` role whose chain contains a ref with `vision: true` and a resolvable key, when `complete_json` is called with a message whose content holds a text part and an image part, then the `openai` wire adapter sends the image as an `image_url` data URI, the result is validated against the schema, and the usage is priced from the table; and given no ref in the chain declares `vision: true`, then `role_available("vision")` is false and no request is made.
+- **LG-17** — Given a request carrying an image part, when it is logged at debug level, then the base64 payload does not appear in the log output.

@@ -7,5 +7,6 @@
 * [Personas](personas.md) - Create and edit the tenant's personas and try one in a test call
 * [Test call](test-call.md) - Pick an agent, talk or type to it with a live transcript; spoken welcome in voice; technical details on demand
 * [Calls](calls.md) - Call explorer and call detail with transcript, packet and analysis
+* [Visual evidence and cases](visual-case.md) - The camera control and evidence strip in a video call, the case card, and the sample-image path when there is no webcam
 * [Agent console](agent-console.md) - Human escalation queue with groundwork packets
 * [Insights](insights.md) - Clusters, fix proposals, evaluation results and approval

@@ -2,7 +2,7 @@
 type: UI Spec
 title: Calls
 description: Call explorer with filters and a call detail page showing transcript, tool calls, escalation packet and analysis.
-status: stable
+status: draft
 tags: [ui, calls]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -14,6 +14,7 @@ Filters: agent, outcome, channel, direction, feedback (Any · Not helpful · Hel
 # Detail (`/calls/detail/?id=…`)
 
 * Header: outcome badge, channel, version, start/end, duration, end reason, cost, tokens.
+* For a call with visual evidence: the **Evidence** strip and the **Case** card, read-only, under the transcript ([/ui/visual-case.md](/ui/visual-case.md)). The channel filter includes **Video**.
 * Transcript (same rendering as test call) with tool calls inline as expandable rows (`JsonView` of args/result).
 * **Escalation** card (if any): status, reason, disposition, resolution note, packet (same component as the console).
 * **Caller feedback** card (when given): the rating as "Helpful" / "Not helpful", the comment and when it was given.

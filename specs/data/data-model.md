@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: stable
+status: draft
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -33,7 +33,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **knowledge_chunks** — `id`, `tenant_id`, `doc_id` (FK, cascade delete), `ordinal`, `heading`, `content`, `embedding` JSON (list of float)
 
-**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `direction` (`inbound`|`outbound`|`internal`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason` (`end_call`|`farewell`|`handoff`|`idle`|`max_duration`|`hangup`|`error`), `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON (`state`, `history`, the live overrides `live.persona_id` and `live.turn_detection`, and `context` for outbound calls)
+**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`video`|`text`|`simulation`), `direction` (`inbound`|`outbound`|`internal`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason` (`end_call`|`farewell`|`handoff`|`idle`|`max_duration`|`hangup`|`error`), `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON (`state`, `history`, the live overrides `live.persona_id` and `live.turn_detection`, and `context` for outbound calls)
 
 **call_feedback** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `rating` (`up`|`down`), `comment` (nullable, ≤ 300 chars), `created_at`, `updated_at`; one row per call, replaced when the caller answers again; never created for simulation calls ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md))
 
@@ -57,11 +57,19 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **jobs** — `id`, `tenant_id`, `kind`, `payload` JSON, `dedupe_key` (nullable, indexed), `status` (`queued`|`running`|`done`|`failed`), `attempts`, `last_error`, `run_after`, `created_at`, `updated_at`
 
+**media_objects** — `id`, `tenant_id`, `call_id` (indexed), `kind` (`frame`), `store_key` (the blob-store key), `content_type`, `bytes` int, `width` int, `height` int, `source` (`camera`|`sample`), `deleted_at` (nullable, set by retention), `created_at` ([/architecture/media-storage.md](/architecture/media-storage.md)). The row outlives the bytes: retention deletes the object and sets `deleted_at`, and the row stays so the UI can say the image expired rather than that it never existed.
+
+**call_evidence** — `id`, `tenant_id`, `call_id` (indexed), `seq` int (1..n per call), `media_id` (nullable, id of a `media_objects` row), `source` (`camera`|`sample`), `description` text, `items` JSON list of `{label, detail}`, `confidence` (`confirmed`|`unclear`|`not_confirmed`), `safety_flag` (`none`|`injury`|`unsafe_premises`), `asked_for` (nullable), `caller_words` text, `created_at` ([/architecture/visual-intake.md](/architecture/visual-intake.md)). Append-only: nothing updates a row after it is written, which is what makes the evidence list reviewable.
+
+**visual_cases** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `kind` (`facility_fault`|`claim`), `narrative` text, `missing` JSON list, `routing` (`needs_docs`|`ready_for_review`|`siu_review`|`escalate`), `routing_reason`, `ticket_ref` (nullable), `sample_evidence` bool, `created_at`, `updated_at`. At most one per call (VI-08).
+
 # Relationships
 
 ```
 tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
         │         │                         ├─ escalation
+        │         │                         ├─ call_evidence ── media_object
+        │         │                         ├─ visual_case
         │         │                         └─ call_analysis ── cluster ── fix_proposal ── eval_run ── eval_result
         │         └─ eval_scenario
         ├─ tool, skill, knowledge_doc ── knowledge_chunk
@@ -70,6 +78,7 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 20 tables exist; given an existing database without `call_feedback`, when the app starts, then that table is created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 23 tables exist; given an existing database without `call_feedback`, when the app starts, then that table is created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.
+- **DM-06** — Given a `call_evidence` row, when retention deletes its media object, then the evidence row is unchanged and still carries its `description`, `confidence` and `caller_words`, while the `media_objects` row has `deleted_at` set; and given a second case is attempted for a call that already has one, then the write is rejected by the unique constraint on `visual_cases.call_id`.

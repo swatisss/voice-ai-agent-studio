@@ -1,7 +1,7 @@
 # Architecture
 
 * [System overview](system-overview.md) - Components, deployment shape and the three core flows
-* [Modular structure](modular-structure.md) - Layers, the eight modules, the ports and contracts between them, and the CI rules that hold the boundaries
+* [Modular structure](modular-structure.md) - Layers, the nine modules, the ports and contracts between them, and the CI rules that hold the boundaries
 * [Tech stack](tech-stack.md) - Languages, frameworks, providers and version policy
 * [Agent runtime](agent-runtime.md) - The shared brain: turn loop, state, built-in tools, guards
 * [Voice pipeline](voice-pipeline.md) - Browser audio over WebSocket through Pipecat: VAD, STT, turn detection, TTS, interruptions
@@ -12,6 +12,9 @@
 * [Personas](personas.md) - Tenant persona library, snapshot resolution, per-call overrides and live switching
 * [Call modes](call-modes.md) - Inbound, outbound and internal modes, call context, outbound targets and opening
 * [Call ending and feedback](call-ending-and-feedback.md) - How calls close (goodbye, farewell, hand-off, silence, max length) and the thumbs up/down feedback that feeds Insights
+* [Visual evidence intake](visual-intake.md) - Frames captured on demand, an observation with a confidence it may withhold, pinned evidence, the case and its routing
+* [Media storage](media-storage.md) - The blob-store port, bounded frames, the retention window and authorised access only
+* [Reference and sample imagery](imagery.md) - The seeded synthetic images offered when there is no camera, and why nothing is generated at runtime
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios

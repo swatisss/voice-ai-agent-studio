@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -61,14 +61,19 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Calls
 | Method | Path | Body → Result |
 |---|---|---|
-| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings}`; 409 if agent unpublished. For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
+| POST | `/api/calls` | `{agent_id, channel: "voice"\|"video"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings, video_unavailable?}`; 409 if agent unpublished. `channel: "video"` is a voice call that can carry camera stills ([/architecture/visual-intake.md](/architecture/visual-intake.md)); when no vision-capable model ref resolves the call is created as `voice` and `video_unavailable: {reason}` is returned (VI-01). For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
 | POST | `/api/calls/{id}/messages` | `{text}` → `{reply, call_status, ended, escalated}` (text channel only) |
 | POST | `/api/calls/{id}/end` | → `{status, outcome}` |
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |
 | PATCH | `/api/calls/{id}/live` | `{persona_id?, turn_detection?}` → `{settings}`; changes persona and/or turn detection of a running call (404 unknown, 409 ended, 422 invalid). See [/architecture/personas.md](/architecture/personas.md), [/architecture/turn-detection.md](/architecture/turn-detection.md). |
-| GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `direction?`, `feedback?` (`up`\|`down`\|`none`), `include_seed=true` → `{items: [call summary]}` (eval calls excluded); each summary carries `feedback` (`"up"`, `"down"` or `null`) |
-| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) |
+| GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?` (incl. `video`), `direction?`, `feedback?` (`up`\|`down`\|`none`), `include_seed=true` → `{items: [call summary]}` (eval calls excluded); each summary carries `feedback` (`"up"`, `"down"` or `null`) |
+| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `evidence` (`[{seq, media_id, source, description, items, confidence, asked_for, caller_words, at}]`, empty for calls without looks) + `case` (`{kind, narrative, missing, routing, routing_reason, ticket_ref}` or `null`) |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
+
+## Media
+| Method | Path | Result |
+|---|---|---|
+| GET | `/api/media/{media_id}` | the stored frame's bytes with its content type; 404 for an unknown id, for another tenant's id, and for an object retention has removed ([/architecture/media-storage.md](/architecture/media-storage.md)). There is no endpoint that returns a public or signed URL. |
 
 ## Use cases and outbound
 | Method | Path | Result |
@@ -113,3 +118,4 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 - **API-02** — Given a text call, when `POST /messages` is made on a voice call id, then the response is 409 `wrong_channel`.
 - **API-03** — Given any validation failure, then the response is 422 with `{error, detail}`.
 - **API-04** — Given `GET /api/calls`, then simulation calls created by evaluations never appear.
+- **API-05** — Given a call with two looks and a case, when `GET /api/calls/{id}` is requested, then `evidence` lists both entries in `seq` order with their confidence and `caller_words` and `case` carries the narrative, `missing`, `routing` and `routing_reason`; and given a call with no looks, then `evidence` is empty and `case` is null.

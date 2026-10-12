@@ -2,7 +2,7 @@
 type: API Contract
 title: Mock healthcare and insurance business API
 description: Synthetic member, claims, provider, policy, coverage, document, Green Card, renewal, onboarding, outreach and internal-reference endpoints the demo agents call as tools.
-status: stable
+status: draft
 tags: [api, mock, healthcare, insurance]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -44,12 +44,18 @@ Served by the platform at `/mock/*` (no `/api` prefix, no tenant header needed).
 |---|---|---|---|
 | GET | `/authorization-limits` | `role?`, `claim_type?` | with both: `{role, claim_type, limit, cosign_required_above}`; with `role` only: its limits; without: all roles. Unknown role 404 |
 | GET | `/contacts` | `topic` | `{topic, team, contact, extension, hours, email}`; unknown topic 404 with the list of topics |
+| GET | `/assets/{asset_tag}` | `asset_tag` | `{asset_tag, kind, ward, bed, model, in_service}`; unknown tag 404 ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)) |
+| POST | `/facility-faults` | `location`, `summary`, `severity` (`low`\|`medium`\|`high`), `asset_tag?`, `evidence_ref?` | `{reference: "FF-#####", status: "open", queue}`; 422 on an unknown severity |
+
+Claim intake sits with the other insurance endpoints: `POST /mock/insurance/claims/intake` takes `policy_id`, `item`, `summary`, `incident_date` and an optional `evidence_ref`, and returns `{reference: "C-#####", status: "received", next_step}`. It requires the member header like every other member-specific write, returns 409 `policy_not_active` for a policy that is not active, and 422 for an `incident_date` in the future.
+
+`evidence_ref` on either write is the case id the product holds, so a ticket can be traced back to the evidence without the business system storing an image ([/architecture/visual-intake.md](/architecture/visual-intake.md)).
 
 # Normalization rules
 
 * `member_id`: strip everything except letters/digits, uppercase; accept with or without the `EVG` prefix (`482913`, `EVG-482913`, `evg 482913` all match `EVG-482913`).
 * `date_of_birth`: accept `YYYY-MM-DD`, `MM/DD/YYYY`, `M/D/YYYY`, and month-name forms like `April 12 1986` / `12 April 1986`.
-* `claim_id` / `auth_id` / `policy_id` / `step_id`: case-insensitive, optional dash (`c20931` → `C-20931`, `hp100231` → `HP-100231`).
+* `claim_id` / `auth_id` / `policy_id` / `step_id` / `asset_tag`: case-insensitive, optional dash (`c20931` → `C-20931`, `hp100231` → `HP-100231`, `bed 4012` → `BED-4012`).
 * `specialty`, `benefit`, `topic`, `country`: case-insensitive; `benefit` also accepts spaces (`mental health` → `mental_health`).
 
 # Acceptance
@@ -66,3 +72,6 @@ Served by the platform at `/mock/*` (no `/api` prefix, no tenant header needed).
 - **MOCK-10** — Given Aisha's onboarding checklist, when `confirm_contact_details` is already done and `communication_preferences` is completed with `email`, then `remaining` drops by one; an invalid preference returns 422 and an unknown step 404.
 - **MOCK-11** — Given the outreach endpoints, then renewals list James, Maria and Robert in that order and drop a policy once its renewal is decided; onboarding lists only members with open steps.
 - **MOCK-12** — Given the internal endpoints, then they work without a member header; `claims_handler` inpatient limit is 5,000; an unknown topic returns 404 listing the valid topics.
+- **MOCK-13** — Given the seeded ward assets, when `BED-4012` is requested, then it returns ward 4 bed 12 and needs no member header; an unknown tag returns 404.
+- **MOCK-14** — Given a fault report with a location, a summary and severity `high`, when it is filed, then the response carries an `FF-` reference and status `open`; an unknown severity returns 422.
+- **MOCK-15** — Given James's active motor policy, when a claim intake is filed with an `evidence_ref`, then it returns a `C-` reference with status `received`; given an inactive policy 409 `policy_not_active`, and given a future `incident_date` 422.

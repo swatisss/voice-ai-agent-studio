@@ -2,7 +2,7 @@
 type: Component Spec
 title: Voice pipeline
 description: Browser microphone audio over a WebSocket through a Pipecat pipeline - VAD, Deepgram STT, turn aggregation, the agent runtime, Deepgram TTS - with barge-in.
-status: stable
+status: draft
 tags: [architecture, voice, pipecat]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -23,6 +23,8 @@ browser speaker ◀─PCM16 24k── transport.output()
 
 Wire format and control messages: [/api/voice-protocol.md](/api/voice-protocol.md). Only `voiceai/voice/` imports Pipecat ([/decisions/adr-0002-voice-pipeline.md](/decisions/adr-0002-voice-pipeline.md)).
 
+A `video` call runs this same pipeline, unchanged. The camera is not a Pipecat concern: a still is requested and received as a JSON control message on the same socket, outside the audio path, and handed to the `evidence` module as bytes ([ADR-0009](/decisions/adr-0009-video-channel.md), [/architecture/visual-intake.md](/architecture/visual-intake.md)). No Pipecat video transport, no second transport, and nothing in the audio topology above moves.
+
 # Pipeline processors
 
 1. **Transport input** — `FastAPIWebsocketTransport` with a custom `RawPCMSerializer` (binary in → `InputAudioRawFrame` 16 kHz mono; JSON text → control). VAD: Silero, `stop_secs` 0.2 (`VOICE_VAD_STOP_SECS`); the longer silence a turn needs is applied by the TurnAggregator. Interruptions follow `allow_interruptions` ([/architecture/turn-detection.md](/architecture/turn-detection.md)).
@@ -39,7 +41,8 @@ Wire format and control messages: [/api/voice-protocol.md](/api/voice-protocol.m
 
 # Lifecycle
 
-* The call row must exist (`POST /api/calls` with `channel: voice`) before the WebSocket opens; unknown or ended `call_id` → close with code 4404.
+* The call row must exist (`POST /api/calls` with `channel: voice` or `channel: video`) before the WebSocket opens; unknown or ended `call_id` → close with code 4404.
+* On a `video` call the socket also tracks the camera state the client reports and answers `look_at_camera` by asking for one frame; the state starts `off` and only the client can change it. The server holds a still between receiving it and storing it, and keeps no standing frame buffer (VI-02, VI-03).
 * Browser `hangup` message or socket close → `AgentSession.end("hangup")` and pipeline teardown.
 * A `LiveControls` object is registered for the call when the socket is accepted and removed at teardown.
 * Missing Deepgram key → the WebSocket closes with code 4500 and reason `voice_unavailable`; the UI suggests the Type tab.

@@ -8,3 +8,5 @@
 * [ADR-0006 Turn detection on Pipecat](adr-0006-turn-detection.md) - Own normal/semantic turn detection instead of adopting LiveKit's turn detector
 * [ADR-0007 OpenAI as a third LLM provider](adr-0007-openai-provider.md) - OpenAI beside Groq and OpenRouter; Groq stays primary, OpenAI is every role's last fallback and a one-line switch
 * [ADR-0008 Modular monolith with ports and adapters](adr-0008-modular-monolith.md) - One deployable still, layered into ports, adapters, core, eight modules and a composition root, enforced in CI
+* [ADR-0009 Video channel without a media server](adr-0009-video-channel.md) - Camera stills captured on demand over the existing call WebSocket, instead of WebRTC or a LiveKit room
+* [ADR-0010 Store captured frames, with a clock on every object](adr-0010-media-retention.md) - The first byte storage in the product, kept narrow: one port, bounded frames, a retention window, and observation text that outlives the image

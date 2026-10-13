@@ -20,7 +20,7 @@ from voiceai.ports.llm import ChatClient, ChatResult, ProviderConfig, Usage
 
 REPO = Path(__file__).resolve().parents[3]
 PKG = REPO / "apps" / "api" / "voiceai"
-ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn")
+ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn", "vision")
 
 
 def _yaml(tmp_path: Path, providers: dict, models: dict, roles: dict) -> Path:

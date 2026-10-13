@@ -27,7 +27,7 @@ CONCURRENCY = 2
 POLL_SECONDS = 1.0
 
 
-DECLARED_KINDS = ("analyze_call", "draft_fix", "run_eval")  # every job kind this service runs
+DECLARED_KINDS = ("analyze_call", "draft_fix", "run_eval", "prune_media")  # every job kind this service runs
 
 
 def register(kind: str) -> Callable[[Handler], Handler]:
@@ -46,6 +46,7 @@ def install_handlers() -> None:
     cluster -> proposal chain with it. Every entry point that drains or works the queue calls
     this, so a missing handler is a start-up error instead.
     """
+    from voiceai.modules.evidence import retention  # noqa: F401
     from voiceai.modules.learning import analyze, evaluate, propose  # noqa: F401
 
     missing = [kind for kind in DECLARED_KINDS if kind not in HANDLERS]

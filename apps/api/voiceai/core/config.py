@@ -54,6 +54,19 @@ class Settings(BaseSettings):
     ev_max_cluster_cases: int = 6
     ev_concurrency: int = 4
 
+    llm_role_vision: str | None = None
+
+    # Video calls (/decisions/adr-0009-video-channel.md). Unset -> video degrades to voice (VI-01).
+    livekit_url: str | None = None
+    livekit_api_key: str | None = None
+    livekit_api_secret: str | None = None
+
+    # Captured frames (/architecture/media-storage.md)
+    media_backend: str = "local"  # local | gcs
+    media_dir: str = str(API_DIR / "data" / "media")
+    media_bucket: str | None = None
+    media_retention_days: int = 30
+
     voice_vad_stop_secs: float = 0.2
     deepgram_stt_model: str = "nova-3"
 

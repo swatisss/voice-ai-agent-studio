@@ -18,9 +18,13 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
+import logging
+
 import openai
 
-from voiceai.ports.llm import BadRequest, ChatResult, ProviderConfig, Retryable, ToolCall, Usage
+from voiceai.ports.llm import BadRequest, ChatResult, ProviderConfig, Retryable, ToolCall, Usage, redact
+
+log = logging.getLogger("voiceai.llm.wire")
 
 FIRST_TOKEN_TIMEOUT_S = 8.0
 JSON_TIMEOUT_S = 60.0
@@ -36,6 +40,38 @@ RETRY_ERRORS = (
 
 def build(cfg: ProviderConfig) -> OpenAICompatibleClient:
     return OpenAICompatibleClient(cfg)
+
+
+def to_wire(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Map provider-neutral message parts onto this wire's shape (LG-16).
+
+    A string content is sent unchanged, which keeps every existing call site byte-identical. A
+    multi-part content becomes OpenAI's content-array, where an image part is an `image_url`
+    carrying a `data:` URI - this wire has no way to send raw bytes.
+    """
+    out: list[dict[str, Any]] = []
+    for message in messages:
+        content = message.get("content")
+        if not isinstance(content, list):
+            out.append(message)
+            continue
+        parts: list[dict[str, Any]] = []
+        for part in content:
+            if not isinstance(part, dict):
+                parts.append({"type": "text", "text": str(part)})
+            elif part.get("type") == "image":
+                url = f"data:{part.get('mime') or 'image/jpeg'};base64,{part.get('data') or ''}"
+                parts.append({"type": "image_url", "image_url": {"url": url}})
+            else:
+                parts.append(part)
+        out.append({**message, "content": parts})
+    return out
+
+
+def _log_request(model: str, messages: list[dict[str, Any]]) -> None:
+    """Debug-log the request without its image payloads (LG-17)."""
+    if log.isEnabledFor(logging.DEBUG):
+        log.debug("request model=%s messages=%s", model, redact(messages))
 
 
 class OpenAICompatibleClient:
@@ -69,7 +105,8 @@ class OpenAICompatibleClient:
         tools: list[dict[str, Any]] | None,
         params: dict[str, Any],
     ) -> AsyncIterator[dict[str, Any]]:
-        kwargs: dict[str, Any] = {"model": model, "messages": messages, "stream": True, **params}
+        _log_request(model, messages)
+        kwargs: dict[str, Any] = {"model": model, "messages": to_wire(messages), "stream": True, **params}
         if tools:
             kwargs["tools"] = tools
         if self.cfg.options.get("stream_usage"):
@@ -125,7 +162,8 @@ class OpenAICompatibleClient:
         schema: dict[str, Any] | None,
         params: dict[str, Any],
     ) -> tuple[str, Usage]:
-        kwargs: dict[str, Any] = {"model": model, "messages": messages, **params}
+        _log_request(model, messages)
+        kwargs: dict[str, Any] = {"model": model, "messages": to_wire(messages), **params}
         kwargs["response_format"] = (
             {"type": "json_schema", "json_schema": {"name": schema.get("title") or "Out", "schema": schema, "strict": False}}
             if schema

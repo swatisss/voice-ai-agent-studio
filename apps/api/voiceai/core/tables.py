@@ -1,4 +1,4 @@
-"""ORM models - the 20 tables of the data model.
+"""ORM models - the 23 tables of the data model.
 
 Spec: /data/data-model.md
 """
@@ -325,5 +325,66 @@ class Job(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     run_after: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+# ---------------------------------------------------------------- visual evidence (CP-0013)
+# Owned by the evidence module (/architecture/modular-structure.md).
+class MediaObject(Base):
+    """A stored frame. The row outlives the bytes: retention deletes the object and sets
+    `deleted_at`, so the UI can say the image expired rather than that it never existed (DM-06)."""
+
+    __tablename__ = "media_objects"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    call_id: Mapped[str] = mapped_column(String(32), index=True)
+    kind: Mapped[str] = mapped_column(String(16), default="frame")
+    store_key: Mapped[str] = mapped_column(String(200))
+    content_type: Mapped[str] = mapped_column(String(60), default="image/jpeg")
+    bytes: Mapped[int] = mapped_column(Integer, default=0)
+    width: Mapped[int] = mapped_column(Integer, default=0)
+    height: Mapped[int] = mapped_column(Integer, default=0)
+    source: Mapped[str] = mapped_column(String(16), default="camera")  # camera | sample
+    deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = _created()
+
+
+class CallEvidence(Base):
+    """One look, pinned. Append-only: nothing updates a row after it is written, which is what
+    makes the evidence list reviewable (/architecture/visual-intake.md)."""
+
+    __tablename__ = "call_evidence"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    call_id: Mapped[str] = mapped_column(String(32), index=True)
+    seq: Mapped[int] = mapped_column(Integer, default=1)
+    media_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source: Mapped[str] = mapped_column(String(16), default="camera")
+    description: Mapped[str] = mapped_column(Text, default="")
+    items: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    confidence: Mapped[str] = mapped_column(String(16), default="unclear")
+    safety_flag: Mapped[str] = mapped_column(String(20), default="none")
+    asked_for: Mapped[str | None] = mapped_column(Text, nullable=True)
+    caller_words: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = _created()
+
+
+class VisualCase(Base):
+    """At most one per call (VI-08), enforced by the unique constraint on `call_id`."""
+
+    __tablename__ = "visual_cases"
+    __table_args__ = (UniqueConstraint("call_id", name="uq_visual_case_call"),)
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    call_id: Mapped[str] = mapped_column(String(32), index=True)
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    kind: Mapped[str] = mapped_column(String(20), default="facility_fault")  # facility_fault | claim
+    narrative: Mapped[str] = mapped_column(Text, default="")
+    missing: Mapped[list[str]] = mapped_column(JSON, default=list)
+    routing: Mapped[str] = mapped_column(String(20), default="needs_docs")
+    routing_reason: Mapped[str] = mapped_column(Text, default="")
+    ticket_ref: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    sample_evidence: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)

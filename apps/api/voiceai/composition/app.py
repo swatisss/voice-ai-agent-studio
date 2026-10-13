@@ -34,6 +34,7 @@ from voiceai.modules.businessmock.api import router as businessmock_router
 from voiceai.modules.agentcfg.usecases_api import router as usecases_router
 from voiceai.modules.conversation.api import router as calls_router
 from voiceai.modules.conversation.outbound_api import router as outbound_router
+from voiceai.modules.evidence.api import router as media_router
 from voiceai.modules.handoff.api import router as handoff_router
 from voiceai.modules.knowledge.api import router as knowledge_router
 from voiceai.modules.learning.api import router as insights_router
@@ -46,6 +47,7 @@ log = logging.getLogger("voiceai")
 ROUTERS = (
     tenants_router, ops_router, events_router, agents_router, personas_router, knowledge_router, calls_router, voice_router,
     usecases_router, outbound_router, handoff_router, insights_router, analytics_router, businessmock_router,
+    media_router,
 )
 
 

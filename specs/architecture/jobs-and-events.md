@@ -16,9 +16,11 @@ Table `jobs` ([/data/data-model.md](/data/data-model.md)). One worker task runs 
 | `analyze_call` | `{call_id}` | [/architecture/fleet-learning.md](/architecture/fleet-learning.md) §1–2 |
 | `draft_fix` | `{cluster_id}` | fleet learning §4 |
 | `run_eval` | `{proposal_id, eval_run_id}` | [/architecture/evaluation.md](/architecture/evaluation.md) |
-| `prune_media` | `{}` | [/architecture/media-storage.md](/architecture/media-storage.md) — deletes stored frames past the retention window |
+| `prune_media` | `{}` | [/architecture/media-storage.md](/architecture/media-storage.md) — deletes stored frames past the retention window, for the job's own tenant |
 
-`prune_media` is the one recurring job, and it recurs without a scheduler: the handler deletes what has expired and then enqueues the next run with `run_after = now + 6 h` under the fixed dedupe key `prune_media`, so a duplicate can never pile up and a restart that re-enqueues it is harmless. The composition root enqueues it once at start-up. This is deliberately not a new mechanism — a cron facility for one job would be more machinery than the job is worth, and `run_after` plus a dedupe key is already exactly what the queue does.
+`prune_media` is the one recurring job, and it recurs without a scheduler: the handler deletes what has expired and then enqueues the next run with `run_after = now + 6 h` under the dedupe key `prune_media:{tenant_id}`, so a duplicate can never pile up and a restart that re-enqueues it is harmless. It re-arms even when pruning raised, because one object that cannot be deleted must not stop retention forever. The composition root arms one per tenant at start-up.
+
+It is **queued per tenant**, like every other job, so retention reads and deletes within one tenant and there is no query in the service that sweeps media across all of them. This is deliberately not a new mechanism — a cron facility for one job would be more machinery than the job is worth, and `run_after` plus a dedupe key is already exactly what the queue does.
 
 Handlers are registered by the composition root from a declared list of kinds, and a declared kind whose module failed to register is a start-up error ([/architecture/modular-structure.md](/architecture/modular-structure.md), MOD-08). Every entry point that works or drains the queue — the API process and the `chat` command alike — performs that registration, so a drained job always has its handler.
 
@@ -55,4 +57,4 @@ The bus is per process; v1 runs one instance ([/decisions/adr-0005-single-servic
 - **JB-03** — Given a job left `running` at shutdown, when the app starts, then it is `queued` again.
 - **JB-04** — Given `enqueue` twice with the same dedupe key, then one job exists.
 - **JB-05** — Given a subscriber to `console` for tenant A, when tenant B creates an escalation, then the subscriber receives nothing.
-- **JB-06** — Given `prune_media` runs, when it finishes, then exactly one queued `prune_media` job exists with `run_after` about six hours ahead, and running it again does not create a second one.
+- **JB-06** — Given `prune_media` runs for a tenant, when it finishes, then exactly one queued `prune_media` job exists for that tenant with `run_after` about six hours ahead, and running it again does not create a second one; and given the service starts with two tenants, then one is armed for each.

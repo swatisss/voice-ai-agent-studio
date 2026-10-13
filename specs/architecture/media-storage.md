@@ -40,7 +40,7 @@ Exceeding the per-call cap does not fail the call: `look_at_camera` returns a de
 
 # Retention
 
-Every stored object has a tenant, a call and a creation time. A `prune_media` job deletes objects older than the retention window and re-enqueues itself, so retention needs no scheduler ([/architecture/jobs-and-events.md](/architecture/jobs-and-events.md)); the default window is 30 days and it is configuration, not code.
+Every stored object has a tenant, a call and a creation time. A `prune_media` job, queued once per tenant, deletes that tenant's objects older than the retention window and re-enqueues itself, so retention needs no scheduler and stays inside one tenant ([/architecture/jobs-and-events.md](/architecture/jobs-and-events.md)); the default window is 30 days and it is configuration, not code.
 
 **The observation text is not subject to retention.** Deleting a frame leaves its evidence entry intact, with the description, the confidence and the caller's words. A case therefore stays readable and auditable after its images expire, which is the behaviour a reviewer needs and the opposite of what a cascade delete would give.
 
@@ -57,5 +57,5 @@ The seeded demo cases ship with synthetic images generated for this repo — a d
 - **MS-01** — Given the blob-store port, when the service starts with no media configuration, then the `local` adapter is in use; and when the cloud adapter is selected by configuration without its bucket set, then start-up fails with a message naming the missing setting rather than storing to a local path.
 - **MS-02** — Given a decoded frame larger than the bounds, when it is stored, then it is re-encoded within 1280 px on its longest edge and under 1 MB; and given one that still will not fit, then nothing is written and the caller receives a declined status.
 - **MS-03** — Given a call that has already stored twelve frames, when the agent looks again, then no frame is stored, the tool returns a declined status saying enough has been captured, and the call continues.
-- **MS-04** — Given stored media older than the retention window, when the retention job runs, then the objects are deleted and their evidence entries remain readable with description, confidence and the caller's words intact.
+- **MS-04** — Given stored media older than the retention window, when the retention job runs, then the objects are deleted, their `media_objects` rows remain with `deleted_at` set, and their evidence entries remain readable with description, confidence and the caller's words intact; and given another tenant's expired media, then that tenant's run leaves it alone.
 - **MS-05** — Given a stored object, when it is requested by id by its own tenant, then the bytes are returned; when requested by another tenant, then the response is not found; and there exists no endpoint that returns a public or signed URL for it.

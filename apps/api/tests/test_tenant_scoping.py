@@ -61,7 +61,7 @@ async def test_cross_tenant_fetch_is_a_404_over_http(client, seeded):
 def test_declared_job_handlers_are_registered(app):
     """Covers: MOD-08"""
     assert set(jobs.DECLARED_KINDS) <= set(jobs.HANDLERS)
-    assert set(jobs.DECLARED_KINDS) == {"analyze_call", "draft_fix", "run_eval"}
+    assert set(jobs.DECLARED_KINDS) == {"analyze_call", "draft_fix", "run_eval", "prune_media"}
     for kind in jobs.DECLARED_KINDS:
         assert callable(jobs.HANDLERS[kind]), kind
 

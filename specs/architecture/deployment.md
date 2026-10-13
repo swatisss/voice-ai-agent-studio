@@ -2,7 +2,7 @@
 type: Component Spec
 title: Deployment
 description: Local zero-infrastructure development and the GCP Cloud Run deployment topology, configuration and constraints.
-status: stable
+status: draft
 tags: [architecture, deployment, gcp]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -29,7 +29,7 @@ One container image (multi-stage `infra/Dockerfile`): stage 1 builds the web exp
 | `--timeout` | 3600 | long WebSocket voice calls and SSE |
 | `--session-affinity` | on | sticky WebSockets |
 | CPU / memory | 2 vCPU / 2 GiB | VAD + embeddings |
-| Secrets | Secret Manager → env `GROQ_API_KEY`, `DEEPGRAM_API_KEY`; optional `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (attached only when the secret exists) | LiveKit unset → video calls degrade to voice (VI-01) |
+| Secrets | Secret Manager → env `GROQ_API_KEY`, `DEEPGRAM_API_KEY`; optional `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `SIMLI_API_KEY`, `SIMLI_FACE_ID` (attached only when the secret exists) | LiveKit unset → video calls degrade to voice (VI-01); Simli unset → video calls have no face (AV-01) |
 
 Database options:
 

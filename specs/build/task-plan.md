@@ -2,7 +2,7 @@
 type: Task Plan
 title: Task plan for CP-0001
 description: Ordered implementation tasks for the initial platform build, each with governing specs, acceptance IDs, and status.
-status: stable
+status: draft
 tags: [build, tasks, cp-0001]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -39,3 +39,7 @@ Work top to bottom; each task ends green (`spec_check`, tests, web build where r
 | T26 | LiveKit video channel: room and token, the LiveKit transport beside the WebSocket one, the frame tap behind `FrameSource`, degradation to voice | [/api/media-protocol.md](/api/media-protocol.md), [/architecture/voice-pipeline.md](/architecture/voice-pipeline.md), [/api/rest-api.md](/api/rest-api.md) | VI-01, VI-14, VI-15, API-05 | done |
 | T27 | Facilities Intake agent, the three new tools and mock endpoints, seeded assets and imagery | [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md), [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md) | UC-01, UC-02, UC-06, UC-07, MOCK-13…15, IMG-01…06 | done |
 | T28 | Web: `livekit-client` room join, camera control, evidence strip, case card, sample picker; evidence on Calls and in the console | [/ui/visual-case.md](/ui/visual-case.md), [/api/media-protocol.md](/api/media-protocol.md) | UI-38…45, ES-09 | done |
+| T29 | Avatar settings and availability: the `simli` extra, `SIMLI_*` and `AVATAR_VIDEO_*` settings, `VideoRoom.avatar_enabled()`, `media.avatar` on the call response | [/architecture/avatar.md](/architecture/avatar.md), [/api/rest-api.md](/api/rest-api.md) | AV-01 | planned |
+| T30 | The avatar processor in `build_room()`, `video_out_enabled` only when on, interruption through to the service, pass-through of the agent's speech on failure | [/architecture/avatar.md](/architecture/avatar.md), [/architecture/voice-pipeline.md](/architecture/voice-pipeline.md) | AV-02…AV-05 | planned |
+| T31 | Avatar session lifetime, voice and text calls never construct it, evidence untouched, the key never leaves the process | [/architecture/avatar.md](/architecture/avatar.md) | AV-06…AV-08 | planned |
+| T32 | Web: the agent's video track, the agent tile with the AI agent label, the caller's self-view, the placeholder tile | [/ui/visual-case.md](/ui/visual-case.md), [/api/media-protocol.md](/api/media-protocol.md) | UI-39, UI-46…UI-48 | planned |

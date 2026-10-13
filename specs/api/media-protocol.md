@@ -2,7 +2,7 @@
 type: API Contract
 title: Media room protocol
 description: "The LiveKit room contract for a video call: how the room and tokens are scoped, which tracks each side publishes, and how the call starts and ends."
-status: stable
+status: draft
 tags: [api, video, livekit, webrtc]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---
@@ -34,11 +34,11 @@ The API key and secret never leave the server. The browser receives only the min
 | Participant | Publishes | Subscribes to |
 |---|---|---|
 | `caller` (browser) | microphone audio; camera video **only after the caller turns it on** | the agent's audio |
-| `agent` (server) | audio (Deepgram TTS output) | the caller's audio and, when present, the caller's camera video |
+| `agent` (server) | audio (Deepgram TTS output, or the avatar's re-timed audio on an avatar call); **one video track, its face, only on an avatar call** | the caller's audio and, when present, the caller's camera video |
 
-The agent publishes **no video track** in this change. The room supports one — that is the point of choosing LiveKit — and the avatar that would fill it is a later change proposal ([/product/scope.md](/product/scope.md)).
+The agent publishes a video track **only on an avatar call**, and that track is its own face rendered by the avatar service ([/architecture/avatar.md](/architecture/avatar.md), AV-03). On any other video call the agent publishes no video at all. `POST /api/calls` says which case a call is in with `media.avatar`, so the browser knows whether to expect an agent track or draw a placeholder ([/api/rest-api.md](/api/rest-api.md), AV-01).
 
-**The camera is the caller's.** The agent MUST NOT be able to enable it: nothing in this protocol, the REST API or the tool surface publishes a camera track on the caller's behalf, and the absence is the contract (VI-02). The caller unpublishes the track to turn it off, and the agent's next look is declined.
+**The camera is the caller's.** The agent MUST NOT be able to enable it: nothing in this protocol, the REST API or the tool surface publishes a camera track on the caller's behalf, and the absence is the contract (VI-02). The agent's own face track is a different thing and is never the caller's camera. The caller unpublishes the track to turn it off, and the agent's next look is declined.
 
 # Lifecycle
 
@@ -62,7 +62,7 @@ A queue here would hand the model a stale frame and grow without bound, which is
 * `livekit-client`. Connect with the returned `url`, `room` and `token`; enable the microphone on connect.
 * Camera: `setCameraEnabled(true)` **only** when the caller presses the camera control, never on connect. `setCameraEnabled(false)` unpublishes it.
 * Capture at 1280×720 or below. The server re-bounds anyway and does not trust the client ([/architecture/media-storage.md](/architecture/media-storage.md)).
-* Attach the agent's audio track to an element for playback; show a local preview of the camera track without uploading anything extra.
+* Attach the agent's audio track to an element for playback. When `media.avatar` is true, attach the agent's **video** track to the main tile as well, and show the caller's own camera as a small self-view without uploading anything extra ([/ui/visual-case.md](/ui/visual-case.md), UI-46).
 * Disconnect on hang-up and release the devices.
 
 # Unavailable

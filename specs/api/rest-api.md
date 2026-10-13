@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -61,7 +61,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Calls
 | Method | Path | Body → Result |
 |---|---|---|
-| POST | `/api/calls` | `{agent_id, channel: "voice"\|"video"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings, media?, video_unavailable?}`; 409 if agent unpublished. `channel: "video"` is a voice call on a LiveKit room whose camera the agent may ask to look at ([/architecture/visual-intake.md](/architecture/visual-intake.md)); the response carries `media: {url, room, token, identity}` ([/api/media-protocol.md](/api/media-protocol.md)) and the agent pipeline is started for it. When LiveKit or a vision-capable model ref is unconfigured, the call is created as `voice` and `video_unavailable: {reason}` is returned instead of `media` (VI-01). For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
+| POST | `/api/calls` | `{agent_id, channel: "voice"\|"video"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings, media?, video_unavailable?}`; 409 if agent unpublished. `channel: "video"` is a voice call on a LiveKit room whose camera the agent may ask to look at ([/architecture/visual-intake.md](/architecture/visual-intake.md)); the response carries `media: {url, room, token, identity, avatar}` ([/api/media-protocol.md](/api/media-protocol.md)), where `avatar` is true when the agent will publish a face ([/architecture/avatar.md](/architecture/avatar.md), AV-01) and the agent pipeline is started for it. When LiveKit or a vision-capable model ref is unconfigured, the call is created as `voice` and `video_unavailable: {reason}` is returned instead of `media` (VI-01). For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
 | POST | `/api/calls/{id}/messages` | `{text}` → `{reply, call_status, ended, escalated}` (text channel only) |
 | POST | `/api/calls/{id}/end` | → `{status, outcome}` |
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |

@@ -2,6 +2,7 @@
 
 * [CP-0001 Initial platform build](cp-0001-initial-platform.md) - Build the v1 platform: builder, voice and text test calls, escalation with groundwork packets, fleet learning with eval-gated fixes
 * [CP-0002 Spec enforcement in CI and contributor onboarding](cp-0002-spec-enforcement-and-onboarding.md) - CI gate, PR-level spec-first/log/lifecycle rules, acceptance ratchet, setup script, README
+* [CP-0014 A talking avatar for video calls](cp-0014-simli-avatar-for-video-calls.md) - The agent appears as a live Simli face in the LiveKit video call, with a self-view for the caller and a quiet fallback when no avatar is configured
 * [CP-0013 Visual evidence intake](cp-0013-visual-evidence-intake.md) - A video channel, frames captured on demand, an observation with a confidence it may withhold, pinned evidence, cases with a routing decision
 * [CP-0012 Modular boundaries, ports and the LLM provider wire port](cp-0012-modular-boundaries-and-llm-wire-port.md) - Layer the backend into ports, adapters, core, modules and a composition root; enforce the boundaries in CI; make an LLM provider a configuration change
 * [CP-0011 Calls close properly and callers rate them](cp-0011-call-ending-and-feedback.md) - Hand-off, farewell, silence and max length end calls; thumbs up/down after a call feeds Insights

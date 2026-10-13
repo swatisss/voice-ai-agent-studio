@@ -10,3 +10,4 @@
 * [ADR-0008 Modular monolith with ports and adapters](adr-0008-modular-monolith.md) - One deployable still, layered into ports, adapters, core, eight modules and a composition root, enforced in CI
 * [ADR-0009 LiveKit Cloud for the video channel](adr-0009-video-channel.md) - Video calls run on a LiveKit Cloud room with Pipecat's LiveKit transport; voice calls keep the plain WebSocket
 * [ADR-0010 Store captured frames, with a clock on every object](adr-0010-media-retention.md) - The first byte storage in the product, kept narrow: one port, bounded frames, a retention window, and observation text that outlives the image
+* [ADR-0011 Simli for the agent's talking face](adr-0011-avatar-simli.md) - A live face for the agent via Simli's Pipecat service, published through the existing LiveKit room; no uploaded faces

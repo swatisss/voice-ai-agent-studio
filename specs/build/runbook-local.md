@@ -2,7 +2,7 @@
 type: Runbook
 title: Local runbook
 description: Install prerequisites, configure keys, run the API and web app, seed data and run checks on a developer machine (Windows, macOS, Linux).
-status: stable
+status: draft
 tags: [build, runbook, local]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -14,6 +14,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Windows note: if `winget install astral-sh.uv` stalls on an admin prompt, `py -3.12 -m pip install --user uv` and run uv as `py -m uv`.
 * Keys: an LLM key (`GROQ_API_KEY` by default, or `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`), `DEEPGRAM_API_KEY` (voice). The other LLM keys are optional fallbacks and model switching.
 * Video calls additionally need `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` from a LiveKit Cloud project (the free tier is enough), **and** a vision-capable model — `OPENAI_API_KEY` by default, since the Groq text models take no images. Without either, the Video option still appears but a video call is created as a voice call and says why (VI-01).
+* For a talking face on video calls, also `SIMLI_API_KEY` and `SIMLI_FACE_ID` from a Simli account (an installed `pipecat-ai[simli]`, which `uv sync` brings). Optional: without them the call has no face and shows a placeholder for the agent ([/architecture/avatar.md](/architecture/avatar.md)).
 
 # First run
 

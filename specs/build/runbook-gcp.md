@@ -2,7 +2,7 @@
 type: Runbook
 title: GCP runbook
 description: Build the single container and deploy it to Cloud Run with Secret Manager keys, optionally backed by Cloud SQL Postgres.
-status: stable
+status: draft
 tags: [build, runbook, gcp, cloud-run]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -21,9 +21,11 @@ printf '%s' "$OPENAI_API_KEY"     | gcloud secrets create OPENAI_API_KEY --data-
 printf '%s' "$LIVEKIT_URL"        | gcloud secrets create LIVEKIT_URL --data-file=-          # optional (video)
 printf '%s' "$LIVEKIT_API_KEY"    | gcloud secrets create LIVEKIT_API_KEY --data-file=-      # optional (video)
 printf '%s' "$LIVEKIT_API_SECRET" | gcloud secrets create LIVEKIT_API_SECRET --data-file=-   # optional (video)
+printf '%s' "$SIMLI_API_KEY"      | gcloud secrets create SIMLI_API_KEY --data-file=-        # optional (avatar)
+printf '%s' "$SIMLI_FACE_ID"      | gcloud secrets create SIMLI_FACE_ID --data-file=-        # optional (avatar)
 ```
 
-`OPENROUTER_API_KEY`, `OPENAI_API_KEY` and the three `LIVEKIT_*` values are optional: the deploy script attaches a secret only if it exists in Secret Manager. Without the LiveKit trio, video calls are created as voice calls and the UI says video is unavailable ([/architecture/visual-intake.md](/architecture/visual-intake.md), VI-01); nothing else changes.
+`OPENROUTER_API_KEY`, `OPENAI_API_KEY` and the three `LIVEKIT_*` values are optional: the deploy script attaches a secret only if it exists in Secret Manager. Without the LiveKit trio, video calls are created as voice calls and the UI says video is unavailable ([/architecture/visual-intake.md](/architecture/visual-intake.md), VI-01); nothing else changes. `SIMLI_API_KEY` and `SIMLI_FACE_ID` add a talking face to video calls and are likewise optional. **Do not deploy with them set until the avatar's WebRTC connection to the vendor has been tried from Cloud Run's UDP egress** — it is unverified there ([ADR-0011](/decisions/adr-0011-avatar-simli.md)).
 
 Grant the Cloud Run runtime service account `roles/secretmanager.secretAccessor`.
 

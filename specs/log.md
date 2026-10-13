@@ -1,5 +1,16 @@
 # Directory Update Log
 
+## 2026-10-13 (CP-0014 talking avatar for video calls — proposed, awaiting review)
+
+* **Creation**: [CP-0014](changes/cp-0014-simli-avatar-for-video-calls.md) (`cp_state: proposed`), [talking avatar](architecture/avatar.md), [ADR-0011](decisions/adr-0011-avatar-simli.md); new acceptance prefix `AV` (AV-01…AV-08), plus UI-46…UI-48. No code.
+* **Update**: [media room protocol](api/media-protocol.md) (the agent may publish one video track, its face; `media.avatar`), [voice pipeline](architecture/voice-pipeline.md) (the avatar processor and `video_out_enabled` on video calls), [visual intake](architecture/visual-intake.md) (VI-02 reworded), [imagery](architecture/imagery.md) (IMG-01 narrowed), [healthcare compliance](product/healthcare-compliance.md) (rule 11 narrowed, new rule 13, a production gap for the avatar vendor), [scope](product/scope.md), [ADR-0009](decisions/adr-0009-video-channel.md) (amendment), [REST API](api/rest-api.md) (`media.avatar`), [modular structure](architecture/modular-structure.md), [deployment](architecture/deployment.md), [tech stack](architecture/tech-stack.md), both runbooks, [visual case UI](ui/visual-case.md) (the agent tile, the self-view, the placeholder; UI-39 reworded), [test call](ui/test-call.md), [conventions](process/conventions.md), [task plan](build/task-plan.md) (T29…T32).
+* **Why it exists**: the first real run of CP-0013 showed a video call with the caller's own camera and nothing for the agent. The request was a proper video call with the agent visible.
+* **Checked against the pinned Pipecat 1.12.0 before choosing**: Simli's service is a pipeline processor that returns lip-synced video and the matching audio, so our own `LiveKitTransport` publishes it from one room. HeyGen opens its own session; Tavus and LemonSlice require the Daily transport this product does not use. Chosen with the requester.
+* **Left out on purpose**: creating a face from an uploaded photo. Unverified (the SDK's published documentation never mentions it) and a likeness-of-a-person question that needs consent and impersonation rules, so it would be its own proposal. A face per persona is also deferred: it touches the data model, the persona editor and the seeder.
+* **Found while drafting**: IMG-01 and compliance rule 11 said the product produces no image, which a video avatar plainly contradicts; both are narrowed to what they were protecting, that nothing can manufacture *evidence*. The `VideoRoom` port from CP-0013 had never been added to the port table in modular structure; it is added here.
+* **Unverified, and flagged in the CP**: our server opens a WebRTC connection to Simli, which is the very traffic ADR-0002 avoided on Cloud Run, so the avatar must not be deployed there until tried; the vendor's frame size and per-minute cost; and the whole media path, which no offline test reaches.
+* **Not implemented.** Spec-only under rule 1 of [AGENTS.md](../AGENTS.md): every touched spec is `status: draft` and the CP is `proposed`. Implementation waits for `cp_state: accepted`.
+
 ## 2026-10-13 (CP-0013 implemented)
 
 * **Closed**: [CP-0013](changes/cp-0013-visual-evidence-intake.md) is `cp_state: implemented` and all 38 touched specs are `status: stable`. T23–T28 are done; [task plan](build/task-plan.md) updated.

@@ -2,7 +2,7 @@
 type: Decision Record
 title: Tech stack
 description: Languages, frameworks, providers and the version policy for the platform; the single reference for dependencies.
-status: stable
+status: draft
 tags: [architecture, stack, dependencies]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -21,6 +21,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | Vector search | NumPy cosine similarity in-process ([/decisions/adr-0004-storage-and-vectors.md](/decisions/adr-0004-storage-and-vectors.md)) |
 | Voice | `pipecat-ai` with extras `deepgram`, `silero`, `websocket`, `livekit` |
 | Video | LiveKit Cloud room via Pipecat's LiveKit transport; `Pillow` encodes a captured frame to JPEG ([ADR-0009](/decisions/adr-0009-video-channel.md)) |
+| Avatar | `pipecat-ai[simli]` (`simli-ai`, bringing `aiortc` and `av>=13`); optional ([ADR-0011](/decisions/adr-0011-avatar-simli.md)) |
 | Docs parsing | `pypdf` for PDFs; stdlib `html.parser` for URLs; `pyyaml` for frontmatter |
 | Tests | `pytest`, `pytest-asyncio`, fake LLM provider |
 

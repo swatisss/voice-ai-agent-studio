@@ -2,7 +2,7 @@
 type: UI Spec
 title: Visual evidence and cases
 description: "The camera control and evidence strip in a video test call, the case card, the sample-image path when there is no webcam, and how evidence reads back on Calls and in the console."
-status: stable
+status: draft
 tags: [ui, video, evidence, cases]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---
@@ -14,13 +14,22 @@ The call card's channel switch becomes **Talk | Video | Type** ([/ui/test-call.m
 * The switch offers **Video** only for agents whose use cases advertise the channel. For other agents it is present but disabled, with the hint "This agent does not take visual reports".
 * If the call response carries `video_unavailable`, the call runs as Talk and a notice names the reason — "Video is unavailable: the media service is not configured" or "… no vision model is configured" — and says the call is running as voice. The tester is not left guessing why the camera control is missing.
 
+# The call layout
+
+A video call is laid out like one ([/architecture/avatar.md](/architecture/avatar.md)).
+
+* **The agent tile** is the main area: the agent's video when the call has an avatar, otherwise a **placeholder** with the persona's name and a speaking indicator that moves while the agent talks. Either way it is labelled with the persona's name and **AI agent**, always visible, so the face is never mistaken for a person (UI-46, compliance rule 13).
+* **The caller's own camera** is a small **self-view** in a corner of the tile, never a full-width strip above the transcript.
+* When the call has no avatar because none is configured, the placeholder carries a quiet line, "No avatar is configured", so a tester is not left wondering. When the avatar failed mid-call the tile falls back to the placeholder with "Avatar unavailable — the agent can still be heard" (UI-47). The speaking indicator works in both cases (UI-48).
+* The transcript, evidence strip and case card are unchanged.
+
 # The camera control
 
 A **Camera** button sits beside the mic button, **off when the call starts**. Nothing in the page lets the agent turn it on — only this button does.
 
 * **Off**: the label reads "Camera off". No video is captured and nothing is sent.
-* **On**: the camera track is published to the room and a local preview appears above the input area at a size that does not push the transcript off screen (a 160 px-tall strip on wide viewports, collapsible on narrow ones).
-* While the camera is on, a **"Your camera is live. The agent looks only when it asks."** hint sits under the preview. It is the honest wording for this transport: video is flowing while the camera is on ([ADR-0009](/decisions/adr-0009-video-channel.md)), and what the agent is shown is only the frames a look asked for.
+* **On**: the camera track is published to the room and a local **self-view** appears in the corner of the agent tile.
+* While the camera is on, a **"Your camera is live. The agent looks only when it asks."** hint sits under the tile. It is the honest wording for this transport: video is flowing while the camera is on ([ADR-0009](/decisions/adr-0009-video-channel.md)), and what the agent is shown is only the frames a look asked for.
 * Turning the camera off mid-call is immediate and needs no confirmation. Looks already pinned stay pinned.
 * Turning it off unpublishes the track. When permission is refused or no camera exists, the button is replaced by **Use a sample image** (below) and the transcript shows "No camera available — you can send a sample image instead."
 
@@ -67,10 +76,13 @@ The picker is headed "Synthetic demo images" and every entry it produces is tagg
 # Acceptance
 
 - **UI-38** — Given a video-capable agent, when **Video** is selected and the call starts, then the camera is off, the Camera button reads "Camera off", and no preview is shown; and given an agent whose use cases do not advertise video, the Video option is disabled with its hint.
-- **UI-39** — Given a running video call, when the camera is turned on, then the track is published, a local preview appears with the "Your camera is live" hint, and turning the camera off again unpublishes it.
+- **UI-39** — Given a running video call, when the camera is turned on, then the track is published, a self-view of it appears in the corner of the agent tile with the "Your camera is live" hint, and turning the camera off again unpublishes it and removes the self-view.
 - **UI-40** — Given the camera is on, when the agent looks, then the preview flashes, a "The agent looked" notice appears in the transcript, and an Evidence entry appears with its thumbnail, confidence chip, description and the quoted caller turn.
 - **UI-41** — Given an observation with confidence `not_confirmed`, then its chip reads "Not confirmed" in the neutral tone (not the danger tone), its description is shown, and the "Agent asked for" line names the better look.
 - **UI-42** — Given a case with `routing: siu_review`, then the Case card shows "Specialist review" with its reason, and neither the transcript nor any caller-facing text contains "fraud" or "special investigations".
 - **UI-43** — Given a browser with no camera, then the Camera button is replaced by "Use a sample image", and an image chosen from the picker produces an Evidence entry tagged **Sample**.
 - **UI-44** — Given a call whose media has passed the retention window, when its detail is opened on Calls, then each thumbnail is a placeholder reading "Image expired" while the description, confidence and caller's words are still shown.
 - **UI-45** — Given `video_unavailable` in the call response, then the call runs as Talk, the notice names the reason, and no camera control is offered.
+- **UI-46** — Given a video call whose response has `media.avatar` true, when the agent's video track arrives, then it fills the main tile, which is labelled with the persona's name and "AI agent", and the caller's camera, when on, is a small self-view in a corner and not a full-width strip.
+- **UI-47** — Given a video call with `media.avatar` false, or an avatar that fails mid-call, then the main tile shows the placeholder with the persona's name and "AI agent", the line "No avatar is configured" or "Avatar unavailable — the agent can still be heard", and the call carries on with the agent audible.
+- **UI-48** — Given the agent is speaking, when the call has no avatar track, then the placeholder shows a speaking indicator while it speaks and not while it is silent.

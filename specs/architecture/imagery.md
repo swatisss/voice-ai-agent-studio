@@ -2,7 +2,7 @@
 type: Component Spec
 title: Reference and sample imagery
 description: "The seeded synthetic images the agent offers when there is no camera, and the demo path that feeds one through the look pipeline — both labelled so neither can pass as evidence."
-status: stable
+status: draft
 tags: [architecture, imagery, demo, evidence]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---
@@ -18,7 +18,7 @@ Both use images shipped in this repository. Neither may end up indistinguishable
 
 # No image is generated at runtime
 
-The agent never generates an image. Not of the damage, not of an example, not of an avatar.
+The agent never generates an image **of what the caller is reporting**. Not of the damage, not of an example. The agent's own talking face on a video call ([/architecture/avatar.md](/architecture/avatar.md)) is the one rendered image in the product: it presents the agent, is never offered as evidence, is never stored or pinned, and is never of the caller's subject (AV-06).
 
 This is not a cost decision. The discipline the whole feature rests on is that the agent does not claim more than it can see ([/architecture/visual-intake.md](/architecture/visual-intake.md)). A product that can synthesise a convincing picture of a cracked footplate, inside the flow whose output is an insurance case, is one careless prompt away from manufacturing the evidence it is supposed to be checking. The images are therefore fixed, few, reviewed and checked in.
 
@@ -52,7 +52,7 @@ Every image in this repository is generated for it. No photograph of a real pers
 
 # Acceptance
 
-- **IMG-01** — Given any code path in the product, when it is searched for image generation, then there is none: no adapter, no role and no tool produces an image.
+- **IMG-01** — Given any code path in the product, when it is searched for image generation, then there is none that produces an image of the caller's subject or any image that could be offered as evidence: no role and no tool produces one, and the only video the product renders is the agent's own avatar face, which is never stored, pinned or sent to a model (AV-06).
 - **IMG-02** — Given a video call with no camera and a caller describing a fault, when the agent offers help identifying it, then it offers at most three seeded reference images by description, and selecting one adds a stated similarity to the case narrative with no `confidence` and no evidence entry.
 - **IMG-03** — Given a reference image, when the call ends, then nothing was written to the blob store for it and no evidence entry names it.
 - **IMG-04** — Given a sample image chosen in a video call, when the agent looks, then an observation is produced by the same path a captured frame takes and the evidence entry records `source: sample`.

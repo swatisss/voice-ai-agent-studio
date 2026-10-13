@@ -2,7 +2,7 @@
 type: Component Spec
 title: Visual evidence intake
 description: "How a caller's camera becomes grounded evidence: frames captured on demand, a described observation with a confidence it is allowed to withhold, pinned evidence, a case and a routing decision."
-status: stable
+status: draft
 tags: [architecture, video, vision, evidence, cases]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---
@@ -108,7 +108,7 @@ This matters for the demo and for degradation. No path through this spec is reac
 # Acceptance
 
 - **VI-01** — Given a published agent, when `POST /api/calls` is called with `channel: "video"`, then a call is created with channel `video` and the response carries the room name `call-<call_id>` and a token scoped to that room; and given LiveKit or a vision-capable model ref unconfigured, then the call is created as `voice` and the response carries `video_unavailable` with a reason instead of `media`.
-- **VI-02** — Given a video call, when it starts, then the agent publishes no camera track, its own token grants it no way to publish one for the caller, and no API or tool enables the caller's camera; the caller publishing the track is the only way a frame ever arrives.
+- **VI-02** — Given a video call, when it starts, then the agent publishes no track that carries the caller's camera (its only video track, if any, is its own avatar face), its own token grants it no way to publish one for the caller, and no API or tool enables the caller's camera; the caller publishing the track is the only way a frame ever arrives.
 - **VI-03** — Given a video call with the camera on, when the agent does not call `look_at_camera`, then no frame is encoded, stored or sent to any model, no video frame passes the tap to the rest of the pipeline, and the tap holds at most one frame however many arrive.
 - **VI-04** — Given a video call with the camera off, when the agent calls `look_at_camera`, then the tap is empty, the result is a declined status with no observation, and the agent's next turn asks the caller to turn the camera on rather than describing anything.
 - **VI-05** — Given a frame, when `look_at_camera` runs, then exactly one observation is produced with `description`, `items`, `confidence` and `safety_flag`, validated against the schema, and a response that fails validation is retried once before the tool reports failure.

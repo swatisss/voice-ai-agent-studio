@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0009 LiveKit Cloud for the video channel
 description: "Carry video calls on a LiveKit Cloud room with Pipecat's LiveKit transport, keeping the plain WebSocket for voice-only calls."
-status: stable
+status: draft
 tags: [decision, video, vision, transport, livekit]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---
@@ -53,3 +53,7 @@ Because the continuous stream cannot be avoided, the rules it affects are rewrit
 * **ADR-0005 is unaffected.** One instance, session affinity, process-local live-call state. A LiveKit room does not make the service horizontally scalable; the room is shared state held by the vendor, while the pipeline and the frame buffer are still process-local.
 * **Telephony video is not addressed.** Neither was telephony audio ([/product/scope.md](/product/scope.md)).
 * A caller who never enables the camera, or whose browser refuses it, degrades to an ordinary voice call on the same room (VI-14).
+
+# Amendment (CP-0014)
+
+The avatar this decision deferred now exists: [ADR-0011](/decisions/adr-0011-avatar-simli.md) renders the agent's face with Simli and publishes it through this same room, which is what LiveKit was chosen to make possible. Two statements above are therefore narrowed rather than wrong: the agent no longer publishes *no* video on every video call (it publishes its own face on an avatar call), and the pipeline's `video_out_enabled` is no longer always off. The camera is still the caller's and the agent still cannot publish it for them (VI-02).

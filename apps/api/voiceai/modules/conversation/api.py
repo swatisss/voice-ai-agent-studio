@@ -71,10 +71,14 @@ def _video_unavailable() -> dict[str, str] | None:
     One degradation path for both causes - no media service and no vision-capable model - because
     two would be two things to get wrong in the UI.
     """
-    if not video_room().available():
-        return {"reason": "media_unconfigured", "detail": "The media service is not configured."}
+    why = video_room().unavailable_reason()
+    if why:
+        log.warning("video call downgraded to voice: %s", why)
+        return {"reason": "media_unconfigured", "detail": f"The media service is unavailable: {why}"}
     if not gateway().role_available("vision"):
-        return {"reason": "vision_unconfigured", "detail": "No vision-capable model is configured."}
+        why = "no model in the vision role is usable - set its provider key (e.g. OPENAI_API_KEY) and restart the API."
+        log.warning("video call downgraded to voice: %s", why)
+        return {"reason": "vision_unconfigured", "detail": f"No vision-capable model is available: {why}"}
     return None
 
 

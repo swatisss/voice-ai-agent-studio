@@ -35,6 +35,10 @@ class VideoRoom(Protocol):
         """Whether a video call can be served at all: configured, and the SDK present."""
         ...
 
+    def unavailable_reason(self) -> str | None:
+        """Why `available()` is false, in words an operator can act on, or None when it is true."""
+        ...
+
     def avatar_enabled(self) -> bool:
         """Whether the agent will publish a face on this deployment's video calls (AV-01).
 

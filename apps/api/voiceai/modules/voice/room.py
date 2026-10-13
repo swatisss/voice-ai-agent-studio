@@ -61,15 +61,21 @@ def _mint(room: str, identity: str, ttl: timedelta) -> str:
 class LiveKitVideoRoom:
     """Implements `ports/videoroom.py` against LiveKit Cloud."""
 
-    def available(self) -> bool:
-        if not configured():
-            return False
+    def unavailable_reason(self) -> str | None:
+        s = get_settings()
+        missing = [n for n, v in (("LIVEKIT_URL", s.livekit_url), ("LIVEKIT_API_KEY", s.livekit_api_key),
+                                  ("LIVEKIT_API_SECRET", s.livekit_api_secret)) if not v]
+        if missing:
+            return f"{', '.join(missing)} not set in apps/api/.env (restart the API after editing it)."
         try:
             import livekit.api  # noqa: F401
             import livekit.rtc  # noqa: F401
         except ImportError:  # the extra is not installed in this image
-            return False
-        return True
+            return "the livekit package is not installed in the API environment (run `uv sync` in apps/api)."
+        return None
+
+    def available(self) -> bool:
+        return self.unavailable_reason() is None
 
     def avatar_enabled(self) -> bool:
         from voiceai.modules.voice.avatar import avatar_available

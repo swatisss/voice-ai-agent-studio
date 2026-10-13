@@ -1,5 +1,10 @@
 # Directory Update Log
 
+## 2026-10-13 (VI-01 follow-up: say why video fell back to voice)
+
+* **Reported**: a video call "still falls back to the audio call". The notice only said the media service "is not configured", which conflated three different causes (a `LIVEKIT_*` setting unset, the `livekit` package not installed in the API's environment, no usable vision key).
+* **Changed** (diagnostics only; the fallback itself is unchanged): `VideoRoom.unavailable_reason()` names the cause, the `video_unavailable.detail` carries it, and the API logs it as a warning. [visual case UI](ui/visual-case.md) wording updated; VI-01 behaviour is the same.
+
 ## 2026-10-13 (CP-0014 follow-up: a hung avatar could silence the agent)
 
 * **Reported**: a video call with the avatar enabled "stuck". The API log showed the VAD hearing the caller continuously and a stray `ENDFRAME:1068` line - which is printed by the Simli SDK (`simli/events.py`), so the vendor session had connected - and nothing after it.

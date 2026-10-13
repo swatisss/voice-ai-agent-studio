@@ -95,7 +95,7 @@ async def test_no_media_service_degrades_to_voice(client, seeded, vision_ok, mon
 
     assert "media" not in body
     assert body["video_unavailable"]["reason"] == "media_unconfigured"
-    assert "not configured" in body["video_unavailable"]["detail"]
+    assert "LIVEKIT_API_SECRET" in body["video_unavailable"]["detail"]  # names the cause, not just "not configured"
     async with sessionmaker()() as s:
         call = await s.scalar(select(Call).where(Call.id == body["call_id"]))
     assert call.channel == "voice"  # the call still happens, as a voice call
@@ -117,6 +117,9 @@ async def test_no_vision_model_degrades_to_voice(client, seeded, livekit, monkey
 class _Unavailable:
     def available(self) -> bool:
         return False
+
+    def unavailable_reason(self) -> str:
+        return "LIVEKIT_API_SECRET not set in apps/api/.env (restart the API after editing it)."
 
 
 def test_unconfigured_livekit_is_simply_unavailable(monkeypatch) -> None:  # noqa: ANN001

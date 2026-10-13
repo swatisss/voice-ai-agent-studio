@@ -12,7 +12,7 @@ generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 The call card's channel switch becomes **Talk | Video | Type** ([/ui/test-call.md](/ui/test-call.md)). **Video** starts a call with `channel: "video"`, then joins the LiveKit room the response names using `livekit-client` ([/api/media-protocol.md](/api/media-protocol.md)). Everything else about the page is unchanged, because a video call is a voice call that can see ([/architecture/visual-intake.md](/architecture/visual-intake.md)); the microphone is published on connect and the agent's audio track is attached for playback.
 
 * The switch offers **Video** only for agents whose use cases advertise the channel. For other agents it is present but disabled, with the hint "This agent does not take visual reports".
-* If the call response carries `video_unavailable`, the call runs as Talk and a notice names the reason — "Video is unavailable: the media service is not configured" or "… no vision model is configured" — and says the call is running as voice. The tester is not left guessing why the camera control is missing.
+* If the call response carries `video_unavailable`, the call runs as Talk and a notice names the specific cause — which `LIVEKIT_*` setting is unset, that the `livekit` package is not installed, or that no vision model has a usable key — and says the call is running as voice. The tester is not left guessing why the camera control is missing.
 
 # The call layout
 

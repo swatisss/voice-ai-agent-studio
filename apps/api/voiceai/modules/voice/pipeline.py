@@ -226,6 +226,10 @@ async def run_room(call_id: str, tenant_id: str) -> None:
             log.warning("video call %s continues without the avatar: %s", call_id, reason)
 
         avatar = make_avatar(_avatar_failed)
+    else:
+        from voiceai.modules.voice.avatar import avatar_unavailable_reason
+
+        log.info("video call %s has no avatar: %s", call_id, avatar_unavailable_reason())
 
     task, transport, brain = build_room(
         session, key, str(settings.livekit_url), rooms.agent_token(call_id, max_seconds),

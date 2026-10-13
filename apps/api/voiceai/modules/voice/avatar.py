@@ -50,15 +50,24 @@ MAX_PENDING_BYTES = 4_000_000
 _RENDERED = (TTSAudioRawFrame, TTSStoppedFrame, InterruptionFrame, UserStartedSpeakingFrame)
 
 
+def avatar_unavailable_reason() -> str | None:
+    """Why there is no avatar on this deployment, or None when there is one (AV-01)."""
+    s = get_settings()
+    missing = [n for n, v in (("SIMLI_API_KEY", s.simli_api_key), ("SIMLI_FACE_ID", s.simli_face_id)) if not v]
+    if missing:
+        return f"{', '.join(missing)} not set in apps/api/.env (restart the API after editing it)"
+    absent = [n for n in ("simli", "av") if importlib.util.find_spec(n) is None]
+    if absent:
+        return f"python package(s) {', '.join(absent)} not installed (run `uv sync` in apps/api)"
+    return None
+
+
 def avatar_available() -> bool:
     """Both Simli settings present and the SDK installed (AV-01).
 
     Anything less is not an error: the call is an ordinary video call with no face.
     """
-    s = get_settings()
-    if not (s.simli_api_key and s.simli_face_id):
-        return False
-    return all(importlib.util.find_spec(name) is not None for name in ("simli", "av"))
+    return avatar_unavailable_reason() is None
 
 
 def scrub(text: str) -> str:

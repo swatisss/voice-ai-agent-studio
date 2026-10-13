@@ -67,6 +67,7 @@ def _parts(session: AgentSession, deepgram_key: str, controls: LiveControls) -> 
 def _assemble(
     transport: Any, session: AgentSession, controls: LiveControls, parts: dict[str, Any],
     middle: list[Any] | None = None, serializer: RawPCMSerializer | None = None,
+    after_tts: list[Any] | None = None,
 ) -> tuple[PipelineTask, BrainProcessor]:
     task_holder: dict[str, Any] = {}
 
@@ -88,7 +89,7 @@ def _assemble(
     controls.on_voice = apply_voice
     pipeline = Pipeline(
         [transport.input(), *(middle or []), parts["vad"], parts["stt"], parts["turns"], brain,
-         parts["tts"], transport.output()]
+         parts["tts"], *(after_tts or []), transport.output()]
     )
     task = PipelineTask(pipeline, params=PipelineParams(audio_in_sample_rate=IN_RATE, audio_out_sample_rate=OUT_RATE))
     task_holder["task"] = task
@@ -149,14 +150,15 @@ async def run(websocket: WebSocket, session: AgentSession, deepgram_key: str, co
 # ---------------------------------------------------------------- video: the LiveKit transport
 def build_room(
     session: AgentSession, deepgram_key: str, url: str, token: str, room: str,
-    controls: LiveControls | None = None, holder: Any | None = None,
+    controls: LiveControls | None = None, holder: Any | None = None, avatar: Any | None = None,
 ) -> tuple[PipelineTask, Any, BrainProcessor]:
     """Construct the LiveKit pipeline without network I/O (VO-06, now for both transports).
 
-    `video_in_enabled` is on and no video track is published: the agent subscribes to the caller's
-    camera and sends none of its own. An avatar track would go here, and is a separate CP
-    ([/product/scope.md](/product/scope.md)).
+    `video_in_enabled` is on. The agent publishes a video track only when it has an `avatar`: the
+    stage sits after TTS and before the transport output, and `video_out_enabled` is on. Without
+    one the processor order and transport settings are exactly those of CP-0013 (AV-02).
     """
+    from voiceai.core.config import get_settings
     from pipecat.transports.livekit.transport import LiveKitParams, LiveKitTransport
 
     controls = controls or LiveControls(turn=session.turn_settings())
@@ -169,13 +171,20 @@ def build_room(
             audio_out_enabled=True,
             audio_out_sample_rate=OUT_RATE,
             video_in_enabled=True,
-            video_out_enabled=False,
+            video_out_enabled=avatar is not None,
+            # The avatar streams continuously, so frames are published as they arrive rather than
+            # repeated at a fixed rate. Size and rate are configuration: they cost CPU on the single
+            # instance, and the vendor's native size is unverified (/architecture/avatar.md).
+            video_out_is_live=avatar is not None,
+            video_out_width=get_settings().avatar_video_size,
+            video_out_height=get_settings().avatar_video_size,
+            video_out_framerate=get_settings().avatar_video_fps,
             vad_analyzer=None,
         ),
     )
     task, brain = _assemble(
         transport, session, controls, _parts(session, deepgram_key, controls),
-        middle=[FrameTap(holder)],
+        middle=[FrameTap(holder)], after_tts=[avatar] if avatar is not None else None,
     )
     return task, transport, brain
 
@@ -206,14 +215,29 @@ async def run_room(call_id: str, tenant_id: str) -> None:
     holder = frame_tap.register(call_id)
     joined = asyncio.Event()
 
+    # The face is optional, and only a video call ever gets here, so a voice or text call never
+    # constructs the service or contacts the vendor (AV-07).
+    avatar = None
+    if rooms.avatar_enabled():
+        from voiceai.modules.voice.avatar import make_avatar
+
+        async def _avatar_failed(reason: str) -> None:
+            log.warning("video call %s continues without the avatar: %s", call_id, reason)
+
+        avatar = make_avatar(_avatar_failed)
+
     task, transport, brain = build_room(
         session, key, str(settings.livekit_url), rooms.agent_token(call_id, max_seconds),
-        room_name(call_id), controls, holder,
+        room_name(call_id), controls, holder, avatar,
     )
 
     @transport.event_handler("on_first_participant_joined")
     async def _joined(_transport, participant_id: str) -> None:  # noqa: ANN001
         joined.set()
+        if avatar is not None:
+            # Someone is here: only now does the vendor session open, so an empty room costs
+            # nothing. If it fails the stage turns transparent and the welcome is heard as usual.
+            await avatar.open_avatar()
         await brain.greet()
 
     @transport.event_handler("on_participant_disconnected")
@@ -245,6 +269,8 @@ async def run_room(call_id: str, tenant_id: str) -> None:
         raise
     finally:
         watchdog.cancel()
+        if avatar is not None:
+            await avatar.close_avatar()  # never outlives the call (AV-07)
         frame_tap.release(call_id)
         LIVE.pop(call_id, None)
         await session.end("hangup")

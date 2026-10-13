@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     livekit_api_key: str | None = None
     livekit_api_secret: str | None = None
 
+    # The agent's talking face on video calls (/architecture/avatar.md). Both unset -> no face.
+    simli_api_key: str | None = None
+    simli_face_id: str | None = None
+    avatar_video_size: int = 512   # square; the vendor's native size is unverified, so configurable
+    avatar_video_fps: int = 25
+
     # Captured frames (/architecture/media-storage.md)
     media_backend: str = "local"  # local | gcs
     media_dir: str = str(API_DIR / "data" / "media")

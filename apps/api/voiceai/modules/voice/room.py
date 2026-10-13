@@ -71,6 +71,11 @@ class LiveKitVideoRoom:
             return False
         return True
 
+    def avatar_enabled(self) -> bool:
+        from voiceai.modules.voice.avatar import avatar_available
+
+        return avatar_available()
+
     def grant(self, call_id: str, max_call_seconds: int) -> RoomGrant:
         settings = get_settings()
         room = room_name(call_id)

@@ -35,6 +35,14 @@ class VideoRoom(Protocol):
         """Whether a video call can be served at all: configured, and the SDK present."""
         ...
 
+    def avatar_enabled(self) -> bool:
+        """Whether the agent will publish a face on this deployment's video calls (AV-01).
+
+        Separate from `available()`: a video call without an avatar is a normal video call, so an
+        absent avatar is never a reason to refuse or degrade one.
+        """
+        ...
+
     def grant(self, call_id: str, max_call_seconds: int) -> RoomGrant:
         """Mint the caller's room token, scoped to this call's room and no other (VI-13)."""
         ...

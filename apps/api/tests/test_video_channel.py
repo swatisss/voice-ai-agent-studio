@@ -153,17 +153,41 @@ def test_token_lifetime_covers_the_call_and_little_more(monkeypatch) -> None:  #
 
 
 # ---------------------------------------------------------------- VI-02: the agent has no camera
-def test_the_agent_publishes_no_video_track() -> None:
-    """Covers: VI-02"""
+def test_the_agent_never_publishes_the_callers_camera() -> None:
+    """Covers: VI-02
+
+    CP-0014 reworded VI-02: the agent may publish one video track, its own avatar face, but never a
+    track that carries the caller's camera, and nothing lets it enable the caller's.
+    """
     from pathlib import Path
 
+    from voiceai.modules.voice import frames, pipeline
+
     source = Path(room_mod.__file__).read_text(encoding="utf-8")
-    assert "can_publish_data=False" in source
-    pipeline_source = Path(
-        Path(room_mod.__file__).parent / "pipeline.py"
-    ).read_text(encoding="utf-8")
-    assert "video_out_enabled=False" in pipeline_source
-    assert "video_in_enabled=True" in pipeline_source
+    assert "can_publish_data=False" in source          # no second control surface in the room
+
+    class S:
+        call_id = "c-vi2"
+        config = {"persona": {}, "policy": {}}
+        history: list = []
+
+        def turn_settings(self):  # noqa: ANN202
+            from voiceai.modules.agentcfg.contract import TurnSettings
+
+            return TurnSettings.from_dict({})
+
+    holder = frames.register("c-vi2")
+    try:
+        _, plain, _ = pipeline.build_room(S(), "dg", "wss://x", "t", "call-vi2", holder=holder)
+        assert plain._params.video_in_enabled is True        # noqa: SLF001 - it subscribes to the caller's camera
+        assert plain._params.video_out_enabled is False      # noqa: SLF001 - and with no avatar publishes no video at all
+    finally:
+        frames.release("c-vi2")
+
+    # nothing in the tool surface or the room protocol can turn the caller's camera on
+    from voiceai.modules.conversation import tools as conv_tools
+
+    assert set(conv_tools.LOOK_SCHEMA["function"]["parameters"]["properties"]) == {"asset_hint"}
 
 
 # ---------------------------------------------------------------- VO-06: both pipelines construct

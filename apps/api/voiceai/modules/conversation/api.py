@@ -20,7 +20,7 @@ from voiceai.core import jobs
 from voiceai.core.db import utcnow
 from voiceai.core.handoff import handoff_desk
 from voiceai.core.postcall import post_call_analysis
-from voiceai.core.tables import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Persona
+from voiceai.core.tables import Agent, AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Persona
 from voiceai.modules.agentcfg.contract import TurnDetectionPatch
 from voiceai.core.toolcalling import tool_caller
 from voiceai.core.voicecontrol import voice_control
@@ -28,6 +28,8 @@ from voiceai.modules.conversation import repo
 from voiceai.modules.evidence.contract import case_for_call, evidence_for_call
 from voiceai.modules.conversation.serializers import analysis_out, call_summary, feedback_out
 from voiceai.modules.conversation.session import AgentSession, create_call
+from voiceai.core.llm.gateway import gateway
+from voiceai.core.videoroom import video_room
 from voiceai.core.tenancy import current_tenant, resolve_tenant
 
 log = logging.getLogger("voiceai.calls")
@@ -36,7 +38,7 @@ router = APIRouter(prefix="/api")
 
 class CallCreate(BaseModel):
     agent_id: str
-    channel: Literal["voice", "text"] = "text"
+    channel: Literal["voice", "video", "text"] = "text"
     persona_id: str | None = None
     turn_detection: TurnDetectionPatch | None = None
     context: dict[str, Any] | None = None  # outbound agents: {member_ref} of a listed target (OB-01)
@@ -63,6 +65,19 @@ class FeedbackBody(BaseModel):
     comment: str | None = Field(default=None, max_length=300)
 
 
+def _video_unavailable() -> dict[str, str] | None:
+    """Why a video call cannot be served here, or None when it can (VI-01).
+
+    One degradation path for both causes - no media service and no vision-capable model - because
+    two would be two things to get wrong in the UI.
+    """
+    if not video_room().available():
+        return {"reason": "media_unconfigured", "detail": "The media service is not configured."}
+    if not gateway().role_available("vision"):
+        return {"reason": "vision_unconfigured", "detail": "No vision-capable model is configured."}
+    return None
+
+
 @router.post("/calls")
 async def start_call(body: CallCreate, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     live: dict = {}
@@ -71,13 +86,37 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
         live["persona_id"] = body.persona_id
     if body.turn_detection:
         live["turn_detection"] = body.turn_detection.model_dump(exclude_none=True)
-    call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None, context=body.context, caller=tool_caller(request.app))
+
+    channel = body.channel
+    unavailable = _video_unavailable() if channel == "video" else None
+    if unavailable:  # VI-01: created as a voice call, with the reason said out loud
+        channel = "voice"
+
+    call = await create_call(s, tenant_id, body.agent_id, channel, live=live or None, context=body.context, caller=tool_caller(request.app))
     await s.commit()
     greeting = None
-    if body.channel == "text":
+    if channel == "text":
         session = await AgentSession.open(call.id, tenant_id, caller=tool_caller(request.app))
         greeting = await session.start()
-    return {"call_id": call.id, "greeting": greeting, "settings": await effective_settings(s, call)}
+
+    out: dict[str, Any] = {"call_id": call.id, "greeting": greeting, "settings": await effective_settings(s, call)}
+    if unavailable:
+        out["video_unavailable"] = unavailable
+    elif channel == "video":
+        policy = (await _published_policy(s, tenant_id, body.agent_id)) or {}
+        rooms = video_room()
+        out["media"] = rooms.grant(call.id, int(policy.get("max_call_seconds") or 600)).as_dict()
+        rooms.start_agent(call.id, tenant_id)  # joins the room and waits for the caller
+    return out
+
+
+async def _published_policy(s: AsyncSession, tenant_id: str, agent_id: str) -> dict[str, Any] | None:
+    """The published policy of the agent this call runs, for the token's lifetime."""
+    agent = await s.scalar(select(Agent).where(Agent.id == agent_id, Agent.tenant_id == tenant_id))
+    if agent is None or not agent.published_version_id:
+        return None
+    version = await s.get(AgentVersion, agent.published_version_id)
+    return (version.config or {}).get("policy") if version else None
 
 
 @router.patch("/calls/{call_id}/live")

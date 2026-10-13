@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.12.*"
 
 [[package]]
@@ -536,6 +536,54 @@ wheels = [
 ]
 
 [[package]]
+name = "livekit"
+version = "1.1.20"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiofiles" },
+    { name = "numpy" },
+    { name = "protobuf" },
+    { name = "types-protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e4/dd/651c7ad31d8f80b43511b2cb9ee1a8f5bf50a31ed4399182d09e70777e90/livekit-1.1.20.tar.gz", hash = "sha256:93f0ed9e8ee9ef356da6cbf71f98edcc891678da6872946a87e34e1458528c9c", size = 394319, upload-time = "2026-09-23T20:33:57.147Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d8/96/2c0ab8b78779f9241017a6e1980dd24c95e7509870d9d3de9bd4acf4f739/livekit-1.1.20-py3-none-macosx_10_15_x86_64.whl", hash = "sha256:253e4d15a78bbb408e926d0b317c7a47c2ca3f6bb9f9d2c7d10528a49f9b4fd9", size = 10485365, upload-time = "2026-09-23T20:33:43.35Z" },
+    { url = "https://files.pythonhosted.org/packages/08/73/9d35e3ffec6e428b040d3b599d4e1ddf554d2046dacfffeae1c20c972f8f/livekit-1.1.20-py3-none-macosx_11_0_arm64.whl", hash = "sha256:a29120a0278a20ede380ac719cd084e39241546cfd3b415aa503c7b8a21afb4e", size = 9307974, upload-time = "2026-09-23T20:33:47.143Z" },
+    { url = "https://files.pythonhosted.org/packages/75/55/dd84369c741eb04a8ca92f7c586f6d24aa0491d4bcb81fa275d91568681c/livekit-1.1.20-py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:c29a5f966806db961a0607ca8e2e4957e6900bbd44710f5f618b284043be584c", size = 10602682, upload-time = "2026-09-23T20:33:49.514Z" },
+    { url = "https://files.pythonhosted.org/packages/cc/15/a53a370dc5b1f2a7c3806f24f1543fbad98bcadb0588f28f938fc338a627/livekit-1.1.20-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:83c0ea54d7ff505e92c3e88943e050e54825b0bf0f7e90652fb126eb447b3d76", size = 11832028, upload-time = "2026-09-23T20:33:51.835Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/bf/dccec2015a5594eedf26c605fe4a2682d152fabcae0cce4b71d1412efbd2/livekit-1.1.20-py3-none-win_amd64.whl", hash = "sha256:64ea60b3293e3ce92c60592ff32c518bb7c278548b97de8026c1d0617510af4d", size = 10991380, upload-time = "2026-09-23T20:33:54.775Z" },
+]
+
+[[package]]
+name = "livekit-api"
+version = "1.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "livekit-protocol" },
+    { name = "protobuf" },
+    { name = "pyjwt" },
+    { name = "types-protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/da/0d/ff9502faa5e9785563e9648313a030fab65ed7f6ff8cf52d7bc6c9e01c97/livekit_api-1.2.1.tar.gz", hash = "sha256:eee78dba493b736bc8422660debc7cf89340f1b80c63890a36a18d99c938045c", size = 21780, upload-time = "2026-08-27T14:06:57.419Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/c8/bc29cf16427fc446aa4487c552503cef42eebfcb920902bb54b7180e40d3/livekit_api-1.2.1-py3-none-any.whl", hash = "sha256:aa15b0a194c9e8167d4261bc61381682df23f98bc6d77760fcded93d2ce4b4ca", size = 27586, upload-time = "2026-08-27T14:06:56.286Z" },
+]
+
+[[package]]
+name = "livekit-protocol"
+version = "1.1.27"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf" },
+    { name = "types-protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/15/f3/5572f2b58f04534e22e266e113cb49b4f0b2a4e1d2abf385267cb51559ab/livekit_protocol-1.1.27.tar.gz", hash = "sha256:740a4c6e438da763d204f2a6b0fc8f7f33ca96e27b17ce9abc6557dbb0a28dbd", size = 124650, upload-time = "2026-09-16T12:43:25.761Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/04/12a047d5ec0ea5099426d071a0147118767cb231d270cb1d0bece266eb01/livekit_protocol-1.1.27-py3-none-any.whl", hash = "sha256:765bbe0c9c6b626519f6f5952793f81eaf3f5b8c9bd1e1b03994f3177774aa10", size = 151314, upload-time = "2026-09-16T12:43:24.327Z" },
+]
+
+[[package]]
 name = "llvmlite"
 version = "0.50.0"
 source = { registry = "https://pypi.org/simple" }
@@ -810,6 +858,12 @@ wheels = [
 deepgram = [
     { name = "deepgram-sdk" },
 ]
+livekit = [
+    { name = "livekit" },
+    { name = "livekit-api" },
+    { name = "pyjwt" },
+    { name = "tenacity" },
+]
 websocket = [
     { name = "fastapi" },
 ]
@@ -957,6 +1011,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/49/2e/ced460408999b33da6b31b0021b0f37d329e202d4169aeb164493778f25b/pygments-2.21.0.tar.gz", hash = "sha256:610ca751c9bc2492b38eb9a38a7fbc93edbbb2d7182edaf34e66ae493dee5c8c", size = 5005329, upload-time = "2026-08-17T08:02:48.824Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/71/46/17f022dd3e953bf20a04a028a21ec746d942f8d2af30fa0f124fa0e6a684/pygments-2.21.0-py3-none-any.whl", hash = "sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9", size = 1250147, upload-time = "2026-08-17T08:02:44.912Z" },
+]
+
+[[package]]
+name = "pyjwt"
+version = "2.15.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/43/ea/5194e52748b0da83d71e082d75496eaec6e58f419f5e184786ded517e6a9/pyjwt-2.15.1.tar.gz", hash = "sha256:4f259e80cdfb6b3fc18a7de51fd1ef9ec79652f25019bae68975ca2468a34df8", size = 121252, upload-time = "2026-09-28T18:40:42.598Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/ca/44de4e75f8aadc457f0634be3b542815078ded46dca30efb960edeecad6e/pyjwt-2.15.1-py3-none-any.whl", hash = "sha256:42d59d631f7768a1028a64c7ff581a9bf7519804daf91fc5b6c56e30eec5e193", size = 33860, upload-time = "2026-09-28T18:40:41.429Z" },
 ]
 
 [[package]]
@@ -1172,6 +1235,15 @@ wheels = [
 ]
 
 [[package]]
+name = "tenacity"
+version = "9.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/9e/497c1c8ebe5a5b5d1d4a7511aea22c0bb1a97e3170d98abdef0e1b34265a/tenacity-9.2.1.tar.gz", hash = "sha256:a606b5c808d0cded4a359d5b9932d867ff2a6a6b64d37350260fd01bbdf83839", size = 58261, upload-time = "2026-10-07T12:13:01.633Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d6/26/1ff2b0721ac66a3ec5b1402b333110b352ab0a8724052ac279a7b82d40c4/tenacity-9.2.1-py3-none-any.whl", hash = "sha256:9e56f17539296baab7beabb08b92f6ee3d7be92d8be72d763360677c2ad6580e", size = 32310, upload-time = "2026-10-07T12:13:00.102Z" },
+]
+
+[[package]]
 name = "tokenizers"
 version = "0.23.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1217,6 +1289,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/53/a3/1585216310e344e8102c22482f6060c7a6ea0322b63e026372e6dcefcfd6/truststore-0.10.4.tar.gz", hash = "sha256:9d91bd436463ad5e4ee4aba766628dd6cd7010cf3e2461756b3303710eebc301", size = 26169, upload-time = "2025-08-12T18:49:02.73Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/19/97/56608b2249fe206a67cd573bc93cd9896e1efb9e98bce9c163bcdc704b88/truststore-0.10.4-py3-none-any.whl", hash = "sha256:adaeaecf1cbb5f4de3b1959b42d41f6fab57b2b1666adb59e89cb0b53361d981", size = 18660, upload-time = "2025-08-12T18:49:01.46Z" },
+]
+
+[[package]]
+name = "types-protobuf"
+version = "7.35.1.20260906"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e1/6c/e3e5b3e10bc328126a39637c138f9ebfd734bf14342b9f3540039b4ab995/types_protobuf-7.35.1.20260906.tar.gz", hash = "sha256:efd1a3862d4c967dad5512ef8d56b1530ac84f182c41735b94004756518c4998", size = 69895, upload-time = "2026-09-06T06:35:28.308Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/4e/f63e826c68f77ef875506d72f225918800346545ee99847bc28f3394f18d/types_protobuf-7.35.1.20260906-py3-none-any.whl", hash = "sha256:5155e48569e0dabff303fdf578db96cd31ea9a4a63b18018a4ceac6b0ae17462", size = 86419, upload-time = "2026-09-06T06:35:27.247Z" },
 ]
 
 [[package]]
@@ -1298,7 +1379,7 @@ dependencies = [
     { name = "httpx" },
     { name = "numpy" },
     { name = "openai" },
-    { name = "pipecat-ai", extra = ["deepgram", "websocket"] },
+    { name = "pipecat-ai", extra = ["deepgram", "livekit", "websocket"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pypdf" },
@@ -1323,7 +1404,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openai", specifier = ">=1.40" },
-    { name = "pipecat-ai", extras = ["deepgram", "silero", "websocket"], specifier = ">=1.0" },
+    { name = "pipecat-ai", extras = ["deepgram", "silero", "websocket", "livekit"], specifier = ">=1.0" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-settings", specifier = ">=2.3" },
     { name = "pypdf", specifier = ">=4.2" },

@@ -25,14 +25,17 @@ from pipecat.frames.frames import (
     OutputTransportMessageUrgentFrame,
     StartFrame,
     TranscriptionFrame,
+    UserImageRawFrame,
     VADUserStartedSpeakingFrame,
     VADUserStoppedSpeakingFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 from voiceai.modules.voice.controls import LiveControls
+from voiceai.modules.voice.frames import FrameHolder
 from voiceai.modules.conversation.contract import IDLE_LINE, MAX_DURATION_LINE, REMINDER_LINE, AgentSession
 from voiceai.modules.voice.turn_detection import VAD_STOP_MS, TurnEvaluator
+from voiceai.ports.framesource import RawFrame
 
 log = logging.getLogger("voiceai.voice")
 
@@ -376,4 +379,29 @@ class BrainProcessor(FrameProcessor):
             await self._cancel_task()
         elif isinstance(frame, InterruptionFrame):
             pass
+        await self.push_frame(frame, direction)
+
+
+class FrameTap(FrameProcessor):
+    """Keeps a video call's newest camera frame and consumes the rest.
+
+    Spec: /architecture/visual-intake.md, /decisions/adr-0009-video-channel.md
+
+    Pipecat 1.12.0's LiveKit transport has no single-frame fetch, so `video_in_enabled` pushes
+    every inbound frame down the pipeline. This sits directly after `transport.input()`, stores
+    the newest frame in the call's holder, and does **not** forward it: VAD, STT and the brain
+    never see video (VI-03). One frame deep, because a queue would hand the model a stale frame
+    and grow without bound.
+    """
+
+    def __init__(self, holder: FrameHolder) -> None:
+        super().__init__()
+        self.holder = holder
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        if isinstance(frame, UserImageRawFrame):
+            width, height = frame.size
+            self.holder.put(RawFrame(frame.image, width, height, frame.format or "RGB"))
+            return  # consumed: nothing downstream wants video
         await self.push_frame(frame, direction)

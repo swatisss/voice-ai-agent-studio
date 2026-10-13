@@ -39,7 +39,9 @@ from voiceai.modules.handoff.api import router as handoff_router
 from voiceai.modules.knowledge.api import router as knowledge_router
 from voiceai.modules.learning.api import router as insights_router
 from voiceai.modules.voice.api import router as voice_router
+from voiceai.modules.evidence import retention as media_retention
 from voiceai.modules.handoff import service as handoff_service
+from voiceai.modules.voice import room as video_rooms
 
 
 log = logging.getLogger("voiceai")
@@ -66,9 +68,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await seed(reset=False)
     if settings.jobs_enabled:
         await worker.start()
+        await media_retention.arm_all()  # one self-re-enqueueing retention job per tenant (JB-06)
     yield
     await worker.stop()
     await handoff_service.wait_packets()
+    await video_rooms.wait_agents()
 
 
 def create_app() -> FastAPI:

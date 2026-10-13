@@ -18,7 +18,7 @@ dependencies = [
     "pypdf>=4.2",
     "pyyaml>=6.0",
     "python-multipart>=0.0.9",
-    "pipecat-ai[deepgram,silero,websocket]>=1.0",
+    "pipecat-ai[deepgram,silero,websocket,livekit]>=1.0",
 ]
 
 [project.scripts]

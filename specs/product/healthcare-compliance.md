@@ -2,7 +2,7 @@
 type: Compliance Note
 title: Healthcare compliance rules
 description: Safety, privacy, verification and disclosure rules every healthcare agent on the platform must follow, and the production gaps v1 leaves open.
-status: draft
+status: stable
 tags: [product, healthcare, compliance, safety]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

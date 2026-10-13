@@ -66,3 +66,10 @@ UI-42
 UI-43
 UI-44
 UI-45
+
+# CP-0014 talking avatar: the agent tile and its placeholder, checked in the browser. UI-46 additionally needs a
+# real Simli key and face id, and every one of these needs a LiveKit project -- no automated test reaches the
+# vendor, which is the part CI cannot see (/decisions/adr-0011-avatar-simli.md, "Consequences").
+UI-46
+UI-47
+UI-48

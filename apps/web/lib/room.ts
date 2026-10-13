@@ -10,6 +10,7 @@ import {
   Track,
   type RemoteTrack,
   type RemoteTrackPublication,
+  type RemoteVideoTrack,
 } from "livekit-client";
 
 export type RoomGrant = { url: string; room: string; token: string; identity: string };
@@ -17,6 +18,8 @@ export type RoomGrant = { url: string; room: string; token: string; identity: st
 export type RoomHandlers = {
   onReady?: () => void;
   onSpeaking?: (speaking: boolean) => void;
+  /** The agent's face, when the call has an avatar; null when it goes away (UI-46, UI-47). */
+  onAgentVideo?: (track: RemoteVideoTrack | null) => void;
   onCamera?: (on: boolean) => void;
   onEnd?: (reason: string) => void;
   onError?: (message: string) => void;
@@ -44,7 +47,13 @@ export class RoomClient {
         this.audio = (track as RemoteAudioTrack).attach();
         this.audio.autoplay = true;
         document.body.appendChild(this.audio);
+      } else if (track.kind === Track.Kind.Video) {
+        // Only the agent publishes video that is not ours: this is its avatar face.
+        this.h.onAgentVideo?.(track as RemoteVideoTrack);
       }
+    });
+    room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+      if (track.kind === Track.Kind.Video) this.h.onAgentVideo?.(null);
     });
     room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
       this.h.onSpeaking?.(speakers.some((p) => p.identity !== room.localParticipant.identity));

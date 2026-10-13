@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0014 A talking avatar for video calls
 description: "Give the agent a live face in a video call using Simli, published through the existing LiveKit room, and make the call look like a call: the agent large, the caller's own camera small."
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [video, avatar, simli, livekit, ui]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-13T00:00:00Z" }
 ---

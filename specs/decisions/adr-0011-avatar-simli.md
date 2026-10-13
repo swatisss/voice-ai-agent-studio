@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0011 Simli for the agent's talking face
 description: "Render the agent as a live face in a video call with Simli's Pipecat service, publishing the result through the existing LiveKit room; no uploaded faces."
-status: draft
+status: stable
 tags: [decision, video, avatar, simli, livekit]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-13T00:00:00Z" }
 ---

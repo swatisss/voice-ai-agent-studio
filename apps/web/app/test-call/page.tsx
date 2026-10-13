@@ -16,6 +16,8 @@ import { LiveControlsCard } from "@/components/live-controls";
 import { DEFAULT_TURN, type TurnDetection } from "@/lib/voices";
 import { CaseCard, EvidenceStrip, type EvidenceEntry, type VisualCase } from "@/components/evidence";
 import { RoomClient } from "@/lib/room";
+import { AgentTile } from "@/components/agent-tile";
+import type { LocalVideoTrack, RemoteVideoTrack } from "livekit-client";
 
 type Mode = "talk" | "video" | "type";
 
@@ -62,8 +64,10 @@ function TestCall() {
   const voice = useRef<VoiceClient | null>(null);
   const room = useRef<RoomClient | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
-  const preview = useRef<HTMLVideoElement>(null);
   const [cameraOn, setCameraOn] = useState(false);
+  const [selfTrack, setSelfTrack] = useState<LocalVideoTrack | null>(null);
+  const [agentTrack, setAgentTrack] = useState<RemoteVideoTrack | null>(null);
+  const [avatar, setAvatar] = useState(false);  // media.avatar: is the agent expected to publish a face?
   const [cameraAvailable, setCameraAvailable] = useState(true);
   const [videoNote, setVideoNote] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidenceEntry[]>([]);
@@ -102,12 +106,8 @@ function TestCall() {
     if (agentDetail && !callId) setTurn({ ...DEFAULT_TURN, ...(agentDetail.draft_config?.voice?.turn_detection ?? {}) });
   }, [agentDetail, callId]);
   useEffect(() => () => { voice.current?.hangup(); room.current?.hangup(); }, []);
-  useEffect(() => {  // UI-39: the preview <video> only exists once the camera is on, so attach after render
-    const el = preview.current;
-    const track = cameraOn ? room.current?.cameraTrack() : null;
-    if (!el || !track) return;
-    track.attach(el);
-    return () => { track.detach(el); };
+  useEffect(() => {  // UI-39: hand the tile the caller's own track once the camera is publishing
+    setSelfTrack(cameraOn ? room.current?.cameraTrack() ?? null : null);
   }, [cameraOn]);
   useEffect(() => {  // the Technical details choice survives reloads; the page works without storage
     try { setTechnicalState(localStorage.getItem(TECH_KEY) === "1"); } catch { /* storage unavailable */ }
@@ -124,6 +124,7 @@ function TestCall() {
     room.current = null;
     setCallId(null); setEvents([]); setCall(null); setStatus("idle"); setEscalated(false); setLevel(0); setSpeaking(false);
     setCameraOn(false); setCameraAvailable(true); setVideoNote(null); setEvidence([]); setVisualCase(null);
+    setSelfTrack(null); setAgentTrack(null); setAvatar(false);
   }
 
   async function toggleCamera() {
@@ -149,9 +150,11 @@ function TestCall() {
           setVideoNote(`Video is unavailable: ${r.video_unavailable.detail} The call is running as voice.`);
         }
         if (r.media) {
+          setAvatar(Boolean(r.media.avatar));
           const client = new RoomClient({
             onReady: () => setStatus("active"),
             onSpeaking: setSpeaking,
+            onAgentVideo: setAgentTrack,
             onCamera: setCameraOn,
             onError: (m) => { setCameraAvailable(false); toast(m, "bad"); },
             onEnd: () => { setStatus("ended"); setSpeaking(false); sync(r.call_id); },
@@ -209,6 +212,7 @@ function TestCall() {
 
   if (agents && !published.length) return <EmptyState title="No published agents">Publish an agent in <Link className="text-accent" href="/agents/">Agents</Link> first.</EmptyState>;
   if (!agent) return <Spinner />;
+  const personaName: string = (personas?.items ?? []).find((p) => p.id === personaId)?.name ?? agentDetail?.draft_config?.persona?.name ?? agent.name;
   const outcome = call?.outcome ?? (escalated ? "escalated" : null);
   const busy = status === "active" || status === "connecting";
   const direction: string = call?.direction ?? agent.mode ?? "inbound";
@@ -267,7 +271,11 @@ function TestCall() {
           {videoNote && (
             <div className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{videoNote}</div>
           )}
-          <div className="flex h-[52vh] flex-col">
+          {mode === "video" && (status === "active" || status === "connecting") && (  /* UI-46..48 */
+            <AgentTile name={personaName} agentTrack={agentTrack} selfTrack={selfTrack} avatar={avatar}
+              connected={status === "active"} speaking={speaking} />
+          )}
+          <div className={cx("flex flex-col", mode === "video" ? "h-[64vh]" : "h-[52vh]")}>
             <div className="flex-1 space-y-2 overflow-y-auto pr-1">
               {status === "idle" && !events.length && <div className="pt-10 text-center text-sm text-muted">{outbound ? "Place the call: the agent opens the conversation, then you answer as the callee." : mode === "talk" ? "Start a call: the agent welcomes you first, then speak into your microphone (a headset works best)." : "Start a chat and type as the caller."}</div>}
               <Transcript events={events} />
@@ -290,11 +298,8 @@ function TestCall() {
             )}
             {(mode === "talk" || mode === "video") && (status === "active" || status === "connecting") && (
               <div className="mt-3 space-y-3">
-                {mode === "video" && cameraOn && (  /* UI-39: a local preview, and honest wording */
-                  <div className="space-y-1">
-                    <video ref={preview} autoPlay playsInline muted className="h-40 w-full rounded-lg bg-black object-cover" />
-                    <p className="text-center text-xs text-muted">Your camera is live. The agent looks only when it asks.</p>
-                  </div>
+                {mode === "video" && cameraOn && (  /* UI-39: honest wording, the self-view is in the tile */
+                  <p className="text-center text-xs text-muted">Your camera is live. The agent looks only when it asks.</p>
                 )}
                 <div className="flex items-center justify-center gap-6">
                   <div className={cx("flex h-16 w-16 items-center justify-center rounded-full bg-accent text-on-accent", speaking && "speaking")}

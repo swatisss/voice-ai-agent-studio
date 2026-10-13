@@ -2,7 +2,7 @@
 type: Component Spec
 title: Reference and sample imagery
 description: "The seeded synthetic images the agent offers when there is no camera, and the demo path that feeds one through the look pipeline — both labelled so neither can pass as evidence."
-status: draft
+status: stable
 tags: [architecture, imagery, demo, evidence]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---

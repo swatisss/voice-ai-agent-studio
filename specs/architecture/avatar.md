@@ -2,7 +2,7 @@
 type: Component Spec
 title: Talking avatar
 description: "How the agent appears as a live face in a video call: where the Simli service sits in the pipeline, what the caller sees and hears, what happens when it is unavailable or fails, and why its frames are never evidence."
-status: draft
+status: stable
 tags: [architecture, video, avatar, simli]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-13T00:00:00Z" }
 ---

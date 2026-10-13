@@ -2,7 +2,7 @@
 type: UI Spec
 title: Visual evidence and cases
 description: "The camera control and evidence strip in a video test call, the case card, the sample-image path when there is no webcam, and how evidence reads back on Calls and in the console."
-status: draft
+status: stable
 tags: [ui, video, evidence, cases]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---

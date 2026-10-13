@@ -2,7 +2,7 @@
 type: Convention
 title: Spec writing conventions
 description: Frontmatter fields, normative language, acceptance criteria format, linking and code traceability rules for this bundle.
-status: draft
+status: stable
 tags: [process, sdd, okf]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

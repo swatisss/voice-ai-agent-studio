@@ -2,7 +2,7 @@
 type: API Contract
 title: Media room protocol
 description: "The LiveKit room contract for a video call: how the room and tokens are scoped, which tracks each side publishes, and how the call starts and ends."
-status: draft
+status: stable
 tags: [api, video, livekit, webrtc]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---

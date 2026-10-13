@@ -2,7 +2,7 @@
 type: Runbook
 title: GCP runbook
 description: Build the single container and deploy it to Cloud Run with Secret Manager keys, optionally backed by Cloud SQL Postgres.
-status: draft
+status: stable
 tags: [build, runbook, gcp, cloud-run]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

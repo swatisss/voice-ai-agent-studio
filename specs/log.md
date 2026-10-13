@@ -1,5 +1,11 @@
 # Directory Update Log
 
+## 2026-10-13 (dev launcher: a call restarted the server it ran on)
+
+* **Reported**: during a video call the log showed `watchfiles: 1 change detected` several times, then Simli's `RATE LIMIT REACHED` and a burst of `Websocket closed`.
+* **Found**: `uvicorn --reload` watches the whole working directory, `apps/api`, which holds the SQLite database and the media store. Reproduced: touching `data/voiceai.db`, `data/voiceai.db-wal` or any file under `data/media` restarts the server. Every call writes to those, so a call killed its own server; the room dropped and the avatar vendor's session was left open until it timed out, and enough of those exhausted the vendor's concurrent-session limit.
+* **Fixed**: the reloader watches only `voiceai/` and `config/`. New [DEV-07](build/dev-launcher.md), one test. Not a product behavior change.
+
 ## 2026-10-13 (VI-01 follow-up: say why video fell back to voice)
 
 * **Reported**: a video call "still falls back to the audio call". The notice only said the media service "is not configured", which conflated three different causes (a `LIVEKIT_*` setting unset, the `livekit` package not installed in the API's environment, no usable vision key).

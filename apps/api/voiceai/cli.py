@@ -10,10 +10,26 @@ import logging
 import sys
 
 
+def reload_dirs() -> list[str]:
+    """What `--reload` watches: the source and the model config, and nothing the app itself writes.
+
+    By default uvicorn watches the whole working directory, which holds the SQLite database and
+    the media store. Every call writes to both, so a call restarted the server it was running on,
+    dropping the room and leaving the avatar vendor's session open (DEV-07).
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    return [str(root / "voiceai"), str(root / "config")]
+
+
 def _serve(args: argparse.Namespace) -> None:
     import uvicorn
 
-    uvicorn.run("voiceai.main:app", host=args.host, port=args.port, reload=args.reload, log_level="info")
+    uvicorn.run(
+        "voiceai.main:app", host=args.host, port=args.port, reload=args.reload, log_level="info",
+        reload_dirs=reload_dirs() if args.reload else None,
+    )
 
 
 async def _seed(args: argparse.Namespace) -> None:

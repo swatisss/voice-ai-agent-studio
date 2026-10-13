@@ -180,3 +180,16 @@ def test_fake_mode_uses_separate_database():
     assert env["LLM_FAKE"] == "1" and env["EMBEDDINGS_PROVIDER"] == "hash" and env["DATABASE_URL"].endswith("/data/fake.db")
     kept = dev.make_plan(ns(fake=True), ["uv"], "npm", environ={"DATABASE_URL": "sqlite+aiosqlite:///x.db"}).services[0].env
     assert "DATABASE_URL" not in kept  # an explicit DATABASE_URL is left alone
+
+
+def test_reload_watches_source_not_runtime_data() -> None:
+    """Covers: DEV-07"""
+    from pathlib import Path
+
+    from voiceai.cli import reload_dirs
+
+    dirs = [Path(d) for d in reload_dirs()]
+    assert {d.name for d in dirs} == {"voiceai", "config"}
+    assert all(d.is_dir() for d in dirs)
+    data = Path(dirs[0]).parent / "data"
+    assert not any(data == d or data in d.parents for d in dirs)  # the db and media store are outside

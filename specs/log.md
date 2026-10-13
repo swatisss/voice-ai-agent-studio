@@ -1,5 +1,12 @@
 # Directory Update Log
 
+## 2026-10-13 (CP-0014 follow-up: a hung avatar could silence the agent)
+
+* **Reported**: a video call with the avatar enabled "stuck". The API log showed the VAD hearing the caller continuously and a stray `ENDFRAME:1068` line - which is printed by the Simli SDK (`simli/events.py`), so the vendor session had connected - and nothing after it.
+* **Found in my own code**: CP-0014 handled a vendor that *fails*, but not one that *hangs*. Opening the Simli session ran before the welcome with no time limit, so a slow or hung vendor held the greeting; and once open, the stage consumed the agent's speech and waited for the vendor to hand it back, so a vendor that connected and returned nothing silenced the agent for the rest of the call. Nothing raised, so the pass-through-on-failure guarantee never triggered. This is a defect against [AV-05](architecture/avatar.md), not a new feature.
+* **Fixed**: the open is limited to 15 s and runs in the background so the welcome never waits for it (the stage is transparent until the session is actually up); speech sent to the vendor must come back within 5 s, otherwise the stage fails over and the speech it had swallowed is delivered late rather than never. New [AV-09](architecture/avatar.md) records it; 4 new tests, 19 in `tests/test_avatar.py`.
+* **Not established**: whether a hang is what the reporter hit. Their log lacks the non-DEBUG lines, so the actual cause is unconfirmed; the fix closes a real gap either way.
+
 ## 2026-10-13 (CP-0014 talking avatar for video calls — proposed, awaiting review)
 
 * **Creation**: [CP-0014](changes/cp-0014-simli-avatar-for-video-calls.md) (`cp_state: proposed`), [talking avatar](architecture/avatar.md), [ADR-0011](decisions/adr-0011-avatar-simli.md); new acceptance prefix `AV` (AV-01…AV-08), plus UI-46…UI-48. No code.

@@ -218,6 +218,7 @@ async def run_room(call_id: str, tenant_id: str) -> None:
     # The face is optional, and only a video call ever gets here, so a voice or text call never
     # constructs the service or contacts the vendor (AV-07).
     avatar = None
+    avatar_tasks: set[asyncio.Task] = set()
     if rooms.avatar_enabled():
         from voiceai.modules.voice.avatar import make_avatar
 
@@ -236,8 +237,12 @@ async def run_room(call_id: str, tenant_id: str) -> None:
         joined.set()
         if avatar is not None:
             # Someone is here: only now does the vendor session open, so an empty room costs
-            # nothing. If it fails the stage turns transparent and the welcome is heard as usual.
-            await avatar.open_avatar()
+            # nothing. It opens in the background and the welcome does not wait for it: until the
+            # session is up the stage is transparent, so a slow or hung vendor never delays or
+            # silences the agent (AV-05).
+            avatar_open = asyncio.create_task(avatar.open_avatar())
+            avatar_tasks.add(avatar_open)
+            avatar_open.add_done_callback(avatar_tasks.discard)
         await brain.greet()
 
     @transport.event_handler("on_participant_disconnected")

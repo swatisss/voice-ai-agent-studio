@@ -17,8 +17,10 @@ extra, or with the avatar unconfigured, never loads it (AV-07).
 """
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from functools import lru_cache
 from typing import Any
@@ -37,6 +39,12 @@ from voiceai.core.config import get_settings
 log = logging.getLogger("voiceai.voice")
 
 OnFailure = Callable[[str], Awaitable[None]]
+
+#: A vendor that hangs is a failure too. Without these limits an avatar that connects but never
+#: answers would hold the welcome, or swallow the agent's speech, forever (AV-05).
+OPEN_TIMEOUT_S = 15.0      # opening the vendor session
+RETURN_TIMEOUT_S = 5.0     # speech sent to the vendor must come back, lip-synced, within this
+MAX_PENDING_BYTES = 4_000_000
 
 #: The frames a rendering avatar consumes or acts on. When it is not rendering they are forwarded.
 _RENDERED = (TTSAudioRawFrame, TTSStoppedFrame, InterruptionFrame, UserStartedSpeakingFrame)
@@ -72,9 +80,16 @@ class PassThroughOnFailure:
     concrete service supplies `_start_avatar` and `_stop_avatar`.
     """
 
-    _avatar_open = False
+    _avatar_open = False       # the vendor session has been asked for (so it must be closed with the call)
+    _avatar_ready = False      # ... and has actually come up: only then does the stage consume speech
     _avatar_failed = False
     _on_failure: OnFailure | None = None
+    _pending: list | None = None          # speech sent to the vendor that has not come back yet
+    _pending_bytes = 0
+    _pending_since: float | None = None
+    _returned = 0                         # count of audio frames the vendor has handed back
+    _flushing = False
+    _watch_task: asyncio.Task | None = None
 
     def configure_failure(self, on_failure: OnFailure | None) -> None:
         self._on_failure = on_failure
@@ -93,13 +108,19 @@ class PassThroughOnFailure:
             return
         self._avatar_open = True
         try:
-            await self._start_avatar()
+            await asyncio.wait_for(self._start_avatar(), OPEN_TIMEOUT_S)
+            self._avatar_ready = not self._avatar_failed
+        except TimeoutError:
+            await self._fail(f"opening the avatar session took longer than {OPEN_TIMEOUT_S:g}s")
         except Exception as exc:  # noqa: BLE001 - a vendor failure must never end a call
             await self._fail(exc)
 
     async def close_avatar(self) -> None:
         was_open = self._avatar_open
         self._avatar_open = False
+        self._avatar_ready = False
+        if self._watch_task is not None and not self._watch_task.done():
+            self._watch_task.cancel()
         if not was_open:
             return
         try:
@@ -118,8 +139,10 @@ class PassThroughOnFailure:
         if self._avatar_failed:
             return
         self._avatar_failed = True
+        self._avatar_ready = False
         reason = exc if isinstance(exc, str) else f"{type(exc).__name__}: {exc}"
         log.warning("avatar unavailable, passing the agent's speech through: %s", scrub(reason))
+        await self._flush_pending()  # speech the vendor swallowed is heard late rather than never
         try:
             await self._stop_avatar()  # best effort: stop paying for a session that is not working
         except Exception:  # noqa: BLE001
@@ -139,18 +162,63 @@ class PassThroughOnFailure:
         await super().push_error(scrub(error_msg), safe, **kwargs)  # type: ignore[misc]
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
-        if isinstance(frame, _RENDERED) and (self._avatar_failed or not self._avatar_open):
+        if isinstance(frame, _RENDERED) and (self._avatar_failed or not self._avatar_ready):
             # Not rendering, so these are not ours to consume. Base bookkeeping still runs; the
             # vendor logic does not.
             await FrameProcessor.process_frame(self, frame, direction)  # type: ignore[arg-type]
             await self.push_frame(frame, direction)  # type: ignore[attr-defined]
             return
+        returned_before = self._returned
         try:
             await super().process_frame(frame, direction)  # type: ignore[misc]
         except Exception as exc:  # noqa: BLE001
             await self._fail(exc)
             if isinstance(frame, TTSAudioRawFrame):
                 await self.push_frame(frame, direction)  # type: ignore[attr-defined]  # the agent must still be heard
+            return
+        if isinstance(frame, TTSAudioRawFrame) and not self._avatar_failed and self._returned == returned_before:
+            self._remember(frame)  # consumed: held until the vendor hands the speech back
+
+    # -- the watchdog: speech sent to the vendor must come back (AV-05)
+    async def push_frame(self, frame: Frame, direction: FrameDirection = FrameDirection.DOWNSTREAM) -> None:
+        if direction == FrameDirection.DOWNSTREAM and isinstance(frame, TTSAudioRawFrame) and not self._flushing:
+            # Audio leaving this stage is either the vendor's re-timed speech coming back, or a
+            # pass-through. Either way what we were holding has been delivered.
+            self._returned += 1
+            self._pending, self._pending_bytes, self._pending_since = [], 0, None
+        await super().push_frame(frame, direction)  # type: ignore[misc]
+
+    def _remember(self, frame: TTSAudioRawFrame) -> None:
+        if self._pending is None:
+            self._pending = []
+        self._pending.append(frame)
+        self._pending_bytes += len(frame.audio)
+        while self._pending_bytes > MAX_PENDING_BYTES and self._pending:
+            self._pending_bytes -= len(self._pending.pop(0).audio)
+        if self._pending_since is None:
+            self._pending_since = time.monotonic()
+        if self._watch_task is None or self._watch_task.done():
+            self._watch_task = asyncio.get_running_loop().create_task(self._watch())
+
+    async def _watch(self) -> None:
+        while self._pending and not self._avatar_failed:
+            await asyncio.sleep(0.25)
+            since = self._pending_since
+            if self._pending and since is not None and time.monotonic() - since >= RETURN_TIMEOUT_S:
+                await self._fail(f"the avatar returned no audio within {RETURN_TIMEOUT_S:g}s")
+                return
+
+    async def _flush_pending(self) -> None:
+        frames, self._pending = self._pending or [], []
+        self._pending_bytes, self._pending_since = 0, None
+        if not frames:
+            return
+        self._flushing = True
+        try:
+            for held in frames:
+                await self.push_frame(held, FrameDirection.DOWNSTREAM)
+        finally:
+            self._flushing = False
 
 
 @lru_cache(maxsize=1)

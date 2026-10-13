@@ -1,9 +1,10 @@
 """The talking avatar: a stage that can never make the agent harder to hear.
 
-Covers: AV-01, AV-02, AV-03, AV-04, AV-05, AV-06, AV-07, AV-08
+Covers: AV-01, AV-02, AV-03, AV-04, AV-05, AV-06, AV-07, AV-08, AV-09
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -36,20 +37,32 @@ def _video() -> OutputImageRawFrame:
 
 
 class Recorder:
-    """Collects what a processor pushes downstream, in place of a linked pipeline."""
+    """Collects what a processor pushes, in place of a linked pipeline.
+
+    Patches `FrameProcessor.push_frame` at class level, not on the instance, so the avatar mixin's
+    own `push_frame` (which notices the vendor handing speech back) still runs and then reaches here.
+    """
 
     def __init__(self, processor: FrameProcessor) -> None:
         self.frames: list = []     # what travels downstream, towards the caller
         self.upstream: list = []   # what travels back up the pipeline (errors)
         self.processor = processor
 
-        async def capture(frame, direction=FrameDirection.DOWNSTREAM):  # noqa: ANN001, ANN202
-            (self.frames if direction == FrameDirection.DOWNSTREAM else self.upstream).append(frame)
+        async def capture(owner, frame, direction=FrameDirection.DOWNSTREAM):  # noqa: ANN001, ANN202
+            if owner is processor:
+                (self.frames if direction == FrameDirection.DOWNSTREAM else self.upstream).append(frame)
 
-        processor.push_frame = capture  # type: ignore[method-assign]
+        FrameProcessor.push_frame = capture  # type: ignore[method-assign]
 
     async def feed(self, frame) -> None:  # noqa: ANN001
         await self.processor.process_frame(frame, FrameDirection.DOWNSTREAM)
+
+
+@pytest.fixture(autouse=True)
+def _restore_push_frame():  # noqa: ANN202
+    original = FrameProcessor.push_frame
+    yield
+    FrameProcessor.push_frame = original  # type: ignore[method-assign]
 
 
 class FakeService(FrameProcessor):
@@ -60,6 +73,7 @@ class FakeService(FrameProcessor):
         self.sent = 0
         self.cleared = 0
         self.explode = False
+        self.silent = False       # consumes speech and never hands anything back
 
     async def process_frame(self, frame, direction):  # noqa: ANN001, ANN201
         await super().process_frame(frame, direction)
@@ -67,6 +81,8 @@ class FakeService(FrameProcessor):
             if self.explode:
                 raise ConnectionError(f"vendor dropped the connection (key {KEY})")
             self.sent += 1
+            if self.silent:
+                return                                           # swallowed: the vendor hung
             await self.push_frame(_video())                      # the face ...
             await self.push_frame(_audio(b"\x02\x00" * 160))     # ... and the speech, re-timed
             return                                               # the original audio is consumed
@@ -80,9 +96,12 @@ class StubAvatar(PassThroughOnFailure, FakeService):
         super().__init__()
         self.started = 0
         self.stopped = 0
+        self.hang_on_open = False
 
     async def _start_avatar(self) -> None:
         self.started += 1
+        if self.hang_on_open:
+            await asyncio.sleep(3600)
 
     async def _stop_avatar(self) -> None:
         self.stopped += 1
@@ -229,6 +248,7 @@ async def test_the_real_simli_stage_clears_its_buffer_on_interruption(configured
     fake = FakeClient()
     avatar._simli_client = fake  # noqa: SLF001
     avatar._avatar_open = True   # noqa: SLF001 - as if a participant had joined
+    avatar._avatar_ready = True  # noqa: SLF001 - and the vendor session had come up
     out = Recorder(avatar)
     await out.feed(InterruptionFrame())
     assert fake.cleared == 1
@@ -393,3 +413,70 @@ async def test_the_vendor_key_never_reaches_a_log_line(caplog, configured) -> No
         await out.feed(_audio())
     assert caplog.text, "the failure should be logged"
     assert KEY not in caplog.text
+
+
+# ---------------------------------------------------------------- AV-05: a hung vendor is a failure too
+async def test_a_vendor_that_never_opens_cannot_hold_the_agent(monkeypatch) -> None:  # noqa: ANN001
+    """Covers: AV-05, AV-09"""
+    monkeypatch.setattr(avatar_mod, "OPEN_TIMEOUT_S", 0.1)
+    avatar = StubAvatar()
+    avatar.hang_on_open = True
+    out = Recorder(avatar)
+
+    await asyncio.wait_for(avatar.open_avatar(), 2)     # returns: the hang is cut short
+    assert avatar.avatar_failed is True and not avatar._avatar_ready  # noqa: SLF001
+
+    heard = _audio()
+    await out.feed(heard)
+    assert out.frames == [heard]                        # and the agent is heard
+
+
+async def test_the_welcome_is_heard_while_the_vendor_is_still_opening() -> None:
+    """Covers: AV-05, AV-09"""
+    avatar = StubAvatar()
+    avatar.hang_on_open = True
+    out = Recorder(avatar)
+
+    opening = asyncio.create_task(avatar.open_avatar())  # the join handler does this and moves on
+    await asyncio.sleep(0)
+    assert avatar.avatar_open and not avatar._avatar_ready  # noqa: SLF001 - asked for, not up yet
+
+    welcome = _audio(b"\x09\x00" * 160)
+    await out.feed(welcome)
+    assert out.frames == [welcome]                       # not consumed: the stage is transparent until ready
+    assert avatar.sent == 0
+    opening.cancel()
+
+
+async def test_speech_the_vendor_swallows_is_heard_late_not_never(monkeypatch) -> None:  # noqa: ANN001
+    """Covers: AV-05, AV-09"""
+    monkeypatch.setattr(avatar_mod, "RETURN_TIMEOUT_S", 0.3)
+    avatar = StubAvatar()
+    avatar.silent = True                                 # connected, but hands nothing back
+    out = Recorder(avatar)
+    await avatar.open_avatar()
+
+    first = _audio(b"\x0a\x00" * 160)
+    await out.feed(first)
+    assert out.frames == []                              # consumed, waiting for the vendor
+    await asyncio.sleep(0.9)                             # longer than the return timeout
+
+    assert avatar.avatar_failed is True
+    assert out.frames == [first]                         # the swallowed speech is given back, late
+
+    nxt = _audio(b"\x0b\x00" * 160)
+    await out.feed(nxt)
+    assert out.frames[-1] is nxt                         # and everything after passes straight through
+
+
+async def test_a_healthy_avatar_is_not_failed_by_the_watchdog(monkeypatch) -> None:  # noqa: ANN001
+    """Covers: AV-05, AV-09"""
+    monkeypatch.setattr(avatar_mod, "RETURN_TIMEOUT_S", 0.3)
+    avatar = StubAvatar()
+    out = Recorder(avatar)
+    await avatar.open_avatar()
+
+    await out.feed(_audio())                             # the vendor answers at once
+    await asyncio.sleep(0.9)
+    assert avatar.avatar_failed is False
+    assert not (avatar._pending)                         # noqa: SLF001 - nothing is held back

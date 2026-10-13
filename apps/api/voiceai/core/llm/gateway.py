@@ -22,12 +22,16 @@ from pydantic import BaseModel, ValidationError
 
 from voiceai.adapters.llm.registry import DEFAULT_WIRE, UnknownWire, client_for
 from voiceai.core.config import get_settings
-from voiceai.ports.llm import BadRequest, ChatClient, ChatResult, ProviderConfig, Retryable, ToolCall, Usage
+from voiceai.ports.llm import BadRequest, ChatClient, ChatResult, ProviderConfig, Retryable, ToolCall, Usage, text_of
 
 log = logging.getLogger("voiceai.llm")
 T = TypeVar("T", bound=BaseModel)
 
-ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn")
+ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn", "vision")
+
+# Roles that need a model capability beyond text: a ref whose models.yaml entry does not declare
+# the flag is skipped for that role exactly like a provider with no API key (LG-16).
+ROLE_CAPABILITY = {"vision": "vision"}
 
 __all__ = [
     "ROLES", "ChatResult", "FakeReply", "Gateway", "LLMError", "LLMJsonError", "ToolCall", "Usage",
@@ -99,11 +103,29 @@ class Gateway:
     def refs_for(self, role: str, override: str | None = None) -> list[str]:
         spec = self.roles[role]
         refs = [override or spec["model"], *spec.get("fallback", [])]
+        capability = ROLE_CAPABILITY.get(role)
         seen: list[str] = []
         for r in refs:
-            if r and r not in seen:
-                seen.append(r)
+            if not r or r in seen:
+                continue
+            if capability and not self.models.get(r, {}).get(capability):
+                continue  # LG-16: the model cannot do what this role needs
+            seen.append(r)
         return seen
+
+    def role_available(self, role: str) -> bool:
+        """Whether any ref for this role could actually answer: the model has the capability the
+        role needs, the provider is known, and its key resolves. What `POST /api/calls` asks before
+        promising a video call (VI-01)."""
+        if role not in self.roles:
+            return False
+        if fake_active():
+            return True
+        for ref in self.refs_for(role):
+            provider = ref.split(":", 1)[0]
+            if provider in self.providers and self.provider_configured(provider):
+                return True
+        return False
 
     def api_key(self, provider: str) -> str | None:
         """The provider's key, from its declared `api_key_env` variable or the .env line of the
@@ -192,7 +214,7 @@ class Gateway:
                 result = ev["result"]
                 result.model_ref = ref
         if not result.usage.input_tokens:  # the provider reported none: estimate from characters
-            result.usage.input_tokens = sum(len(str(m.get("content") or "")) for m in messages) // 4
+            result.usage.input_tokens = sum(len(text_of(m.get("content"))) for m in messages) // 4
             result.usage.output_tokens = (len(result.text) + sum(len(c.arguments) for c in result.tool_calls)) // 4
         result.usage.cost_usd = self.usage_cost(ref, result.usage)
         yield {"type": "done", "result": result}

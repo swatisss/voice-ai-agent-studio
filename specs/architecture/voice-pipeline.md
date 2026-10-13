@@ -23,7 +23,9 @@ browser speaker ◀─PCM16 24k── transport.output()
 
 Wire format and control messages: [/api/voice-protocol.md](/api/voice-protocol.md). Only `voiceai/voice/` imports Pipecat ([/decisions/adr-0002-voice-pipeline.md](/decisions/adr-0002-voice-pipeline.md)).
 
-A `video` call runs this same pipeline, unchanged. The camera is not a Pipecat concern: a still is requested and received as a JSON control message on the same socket, outside the audio path, and handed to the `evidence` module as bytes ([ADR-0009](/decisions/adr-0009-video-channel.md), [/architecture/visual-intake.md](/architecture/visual-intake.md)). No Pipecat video transport, no second transport, and nothing in the audio topology above moves.
+A `video` call runs this same pipeline with **one substitution**: Pipecat's `LiveKitTransport` replaces `FastAPIWebsocketTransport` at both ends, so audio and video travel over a LiveKit room instead of the WebSocket ([/api/media-protocol.md](/api/media-protocol.md), [ADR-0009](/decisions/adr-0009-video-channel.md)). Everything between the two ends — VAD, STT, TurnAggregator, BrainProcessor, TTS — is the same objects in the same order, which is the point: there is one brain and one turn loop, not two.
+
+The transport is configured with `video_in_enabled` and publishes no video track of its own. One processor is added directly after `transport.input()`: a **frame tap** that keeps the most recent `UserImageRawFrame` for the call and consumes it, so no video reaches VAD, STT or the brain. The tap is what the `FrameSource` port reads when the agent looks ([/architecture/visual-intake.md](/architecture/visual-intake.md), VI-03).
 
 # Pipeline processors
 
@@ -41,8 +43,9 @@ A `video` call runs this same pipeline, unchanged. The camera is not a Pipecat c
 
 # Lifecycle
 
-* The call row must exist (`POST /api/calls` with `channel: voice` or `channel: video`) before the WebSocket opens; unknown or ended `call_id` → close with code 4404.
-* On a `video` call the socket also tracks the camera state the client reports and answers `look_at_camera` by asking for one frame; the state starts `off` and only the client can change it. The server holds a still between receiving it and storing it, and keeps no standing frame buffer (VI-02, VI-03).
+* **Voice calls**: the call row must exist (`POST /api/calls` with `channel: voice`) before the WebSocket opens; unknown or ended `call_id` → close with code 4404, and a `video` call id → 4400.
+* **Video calls**: no WebSocket. `POST /api/calls` starts the pipeline as a background task that joins the room and waits; the welcome is spoken on the first participant joining, and if nobody joins within 60 s the call ends with reason `hangup` rather than leaving a pipeline running for nobody ([/api/media-protocol.md](/api/media-protocol.md)).
+* A `LiveControls` object is registered for a video call the same way, so persona and turn-detection switching work identically on both channels.
 * Browser `hangup` message or socket close → `AgentSession.end("hangup")` and pipeline teardown.
 * A `LiveControls` object is registered for the call when the socket is accepted and removed at teardown.
 * Missing Deepgram key → the WebSocket closes with code 4500 and reason `voice_unavailable`; the UI suggests the Type tab.

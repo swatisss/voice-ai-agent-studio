@@ -59,6 +59,53 @@ class ProviderConfig:
     options: dict[str, Any] = field(default_factory=dict)  # wire-specific; opaque to the gateway
 
 
+def text_part(text: str) -> dict[str, Any]:
+    """A text part of a multi-part message content."""
+    return {"type": "text", "text": text}
+
+
+def image_part(mime: str, data: str) -> dict[str, Any]:
+    """An image part of a multi-part message content: base64 `data`, provider-neutral.
+
+    A message's `content` may be a string or a list of these parts. The wire adapter maps them
+    onto whatever the provider wants (the `openai` wire sends a `data:` URI). Only a model whose
+    `models.yaml` entry declares `vision: true` is asked to read one (/architecture/llm-gateway.md).
+    """
+    return {"type": "image", "mime": mime, "data": data}
+
+
+def redact(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Messages with image payloads replaced by their size, safe to log (LG-17).
+
+    Image bytes are caller content and must never reach a log line, so anything that logs a
+    request body goes through this.
+    """
+    out: list[dict[str, Any]] = []
+    for m in messages:
+        content = m.get("content")
+        if not isinstance(content, list):
+            out.append(m)
+            continue
+        parts: list[Any] = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "image":
+                parts.append({"type": "image", "mime": part.get("mime"), "bytes": len(part.get("data") or "")})
+            else:
+                parts.append(part)
+        out.append({**m, "content": parts})
+    return out
+
+
+def text_of(content: Any) -> str:
+    """The text of a message content, string or multi-part, ignoring images.
+
+    The gateway estimates usage from character counts; counting base64 would inflate it wildly.
+    """
+    if isinstance(content, list):
+        return " ".join(str(p.get("text") or "") for p in content if isinstance(p, dict) and p.get("type") == "text")
+    return str(content or "")
+
+
 class Retryable(Exception):
     """Try the next model ref: connection error, timeout, HTTP 429 or 5xx (LG-01)."""
 

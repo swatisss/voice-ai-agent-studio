@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0002 Voice pipeline
 description: Use Pipecat for transport, VAD, STT and TTS over a plain WebSocket, with our own turn aggregator and a brain processor wrapping the shared agent runtime.
-status: stable
+status: draft
 tags: [decision, voice, pipecat]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -27,3 +27,11 @@ Option 3. Pipecat provides the transport, Silero VAD, Deepgram STT/TTS and inter
 * Pipecat usage is confined to `voiceai/voice/`, limiting the blast radius of its frequent API changes; a smoke test guards construction.
 * Echo cancellation relies on the browser; a headset is recommended for demos.
 * Telephony later: swap the serializer for a Twilio/Telnyx media-stream serializer; the rest of the pipeline stays.
+
+# Amendment (CP-0013)
+
+This decision stands for `channel: "voice"`, which still runs raw PCM over a plain WebSocket with the hand-written browser client. It does **not** extend to video.
+
+The reasoning above — "WebRTC needs UDP, which Cloud Run does not support without a TURN server" — assumed we would have to run TURN ourselves. A managed SFU removes that: LiveKit Cloud provides TURN over TLS on 443 and negotiates down to it, so the Cloud Run objection does not apply to it. Option 1 of this ADR was also rejected partly for setup and debugging cost, which is a fair price for video and was not for audio.
+
+So `channel: "video"` runs on a LiveKit room and `channel: "voice"` does not ([ADR-0009](/decisions/adr-0009-video-channel.md)). The pipeline, the turn aggregator and the brain processor are shared between them; only the transport differs ([/architecture/voice-pipeline.md](/architecture/voice-pipeline.md)).

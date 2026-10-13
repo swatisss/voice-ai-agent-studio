@@ -87,7 +87,7 @@ Both are declared boundaries; the difference is which way the dependency points.
 | `callerdirectory.CallerDirectory` | Identities for simulated callers. | `businessmock`, `anonymous` |
 | `voicecontrol.VoiceControl` | Changing voice or turn detection on a running call. | `voice` |
 | `blobstore.BlobStore` | Storing, fetching and deleting bytes by key. It does not list and does not sign URLs ([/architecture/media-storage.md](/architecture/media-storage.md)). | `local`, `gcs` |
-| `framesource.FrameSource` | Asking a live call for one camera frame. `evidence` needs a frame and must not know that a WebSocket, or Pipecat, is what produces one. | `voice` |
+| `framesource.FrameSource` | Asking a live call for its most recent camera frame, encoded. `evidence` needs a frame and must not know that a LiveKit room, or Pipecat, is what produces one. | `voice` |
 
 Three of these are ports for the same structural reason: `conversation` is upstream of everything that reacts to a call. `learning` names it (to drive simulated calls and read transcripts), `handoff` names it (to build a packet from a transcript), and `voice` names it (to run the brain). So `conversation` must name none of them back, or the module graph cycles — and each thing it genuinely needs from them is a port instead. The asymmetry is the design, not an accident.
 

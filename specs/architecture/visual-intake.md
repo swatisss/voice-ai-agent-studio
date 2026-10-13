@@ -13,17 +13,14 @@ Two use cases need the caller to *show* the agent something rather than describe
 
 The hard part is not seeing. It is **not over-claiming**. A caller who says "there is a big crack" and an agent that agrees because agreeing is easy produces a case that falls apart at the first review, and in a healthcare product that is the failure that matters. So the observation carries a confidence it is allowed to withhold, and the agent is required to ask for a better look instead of guessing ([/product/healthcare-compliance.md](/product/healthcare-compliance.md)).
 
-How a frame reaches the server: [/api/voice-protocol.md](/api/voice-protocol.md) and [ADR-0009](/decisions/adr-0009-video-channel.md). Where the bytes live: [/architecture/media-storage.md](/architecture/media-storage.md). The work belongs to the `evidence` module ([/architecture/modular-structure.md](/architecture/modular-structure.md)).
+How a frame reaches the server: [/api/media-protocol.md](/api/media-protocol.md) and [ADR-0009](/decisions/adr-0009-video-channel.md). Where the bytes live: [/architecture/media-storage.md](/architecture/media-storage.md). The work belongs to the `evidence` module ([/architecture/modular-structure.md](/architecture/modular-structure.md)).
 
 # Flow
 
 ```
-caller enables camera ──▶ camera stays in the browser; nothing is sent
-                                                      │
-agent decides to look ──▶ look_at_camera ──▶ voice module asks for one frame
-                                                      │ one JPEG, base64, on the call socket
-                                                      ▼
-                                              evidence module
+caller enables camera ──▶ room video track ──▶ voice module: frame tap, one frame, replaced
+                                                      │ contract call, on demand only
+agent decides to look ──▶ look_at_camera ────────────▶ evidence module
                                                       │  1. store the frame
                                                       │  2. describe it: gateway "vision" role
                                                       │  3. pin it: media + observation + caller's words
@@ -39,18 +36,22 @@ agent decides to look ──▶ look_at_camera ──▶ voice module asks for o
 
 # Looking is an act, not a stream
 
-The agent sees a frame **only when it calls `look_at_camera`**, a built-in tool alongside `search_knowledge`, `escalate_to_human` and `end_call` ([/architecture/agent-runtime.md](/architecture/agent-runtime.md)). Nothing streams to a model, and nothing streams to the server either.
+The agent sees a frame **only when it calls `look_at_camera`**, a built-in tool alongside `search_knowledge`, `escalate_to_human` and `end_call` ([/architecture/agent-runtime.md](/architecture/agent-runtime.md)). Nothing streams to a model.
+
+Video *does* stream to the server while the camera is on, because the transport gives us no way to ask for a single frame ([ADR-0009](/decisions/adr-0009-video-channel.md)). That is the cost of the transport, and it is written down rather than glossed: frames reach LiveKit Cloud's SFU and then our process, and all but the latest are dropped on arrival. What this section promises is narrower and still worth holding — **no frame is encoded, stored, or put in front of a model unless a look asked for it.**
 
 This is a deliberate constraint, for four reasons that all point the same way:
 
 * **Cost and latency.** A described frame is one vision call. A stream is a vision call per frame, and the caller is waiting.
 * **Grounding.** An observation is anchored to a moment and to what the caller had just said. "The frame I looked at when you said that" is reviewable; "the model's impression of the last thirty seconds" is not.
-* **Consent.** The caller can see when the agent looked, because the agent says so and the evidence strip gains an entry ([/ui/visual-case.md](/ui/visual-case.md)). Between looks the camera feed does not leave their machine.
+* **Consent.** The caller can see when the agent looked, because the agent says so and the evidence strip gains an entry ([/ui/visual-case.md](/ui/visual-case.md)). They turn the camera on, and only they can.
 * **The turn loop is unchanged.** A tool call is what the runtime already does, so turn detection, interruption, cost accounting and the fake-LLM test path all keep working.
 
-The camera is **off until the caller turns it on**. The agent MAY ask; it MUST NOT be able to enable the camera itself, and neither the API nor the protocol offers a way to do so. The browser reports the camera's state; the server never requests a frame while that state is off.
+The camera is **off until the caller turns it on**. The agent MAY ask; it MUST NOT be able to enable the camera itself, and neither the API, the room protocol nor the tool surface offers a way to publish a camera track on the caller's behalf ([/api/media-protocol.md](/api/media-protocol.md)).
 
-A look that cannot produce a frame returns a **declined** result — camera off, the browser did not answer within 2 s, capture failed, or the per-call cap is spent ([/architecture/media-storage.md](/architecture/media-storage.md)). A declined look carries no observation, and the agent MUST then say what it needs rather than describe anything.
+The voice module keeps a **frame tap**: one decoded frame per call, replaced as frames arrive, never queued, and dropped from the pipeline so nothing downstream sees video. A queue would hand the model a stale frame and grow without bound. Frames do not leave the voice module as Pipecat objects — it hands over one encoded still through the `FrameSource` port, which is what keeps MOD-04 true ([/architecture/modular-structure.md](/architecture/modular-structure.md)).
+
+A look that cannot produce a frame returns a **declined** result — the camera is off, no frame has arrived yet, or the per-call cap is spent ([/architecture/media-storage.md](/architecture/media-storage.md)). A declined look carries no observation, and the agent MUST then say what it needs rather than describe anything.
 
 # The observation
 
@@ -106,10 +107,10 @@ This matters for the demo and for degradation. No path through this spec is reac
 
 # Acceptance
 
-- **VI-01** — Given a published agent, when `POST /api/calls` is called with `channel: "video"`, then a call is created with channel `video`; and given no vision-capable model ref resolves, then the call is created as `voice` and the response carries `video_unavailable` with a reason.
-- **VI-02** — Given a video call, when it starts, then the camera is off, and there is no API, protocol message or tool by which the agent can enable it; the caller enabling it is the only way a frame ever arrives.
-- **VI-03** — Given a video call with the camera on, when the agent does not call `look_at_camera`, then no frame is requested, no frame leaves the browser, and no image is sent to any model.
-- **VI-04** — Given a video call with the camera off, when the agent calls `look_at_camera`, then no frame is requested, the result is a declined status with no observation, and the agent's next turn asks the caller to turn the camera on rather than describing anything.
+- **VI-01** — Given a published agent, when `POST /api/calls` is called with `channel: "video"`, then a call is created with channel `video` and the response carries the room name `call-<call_id>` and a token scoped to that room; and given LiveKit or a vision-capable model ref unconfigured, then the call is created as `voice` and the response carries `video_unavailable` with a reason instead of `media`.
+- **VI-02** — Given a video call, when it starts, then the agent publishes no camera track, its own token grants it no way to publish one for the caller, and no API or tool enables the caller's camera; the caller publishing the track is the only way a frame ever arrives.
+- **VI-03** — Given a video call with the camera on, when the agent does not call `look_at_camera`, then no frame is encoded, stored or sent to any model, no video frame passes the tap to the rest of the pipeline, and the tap holds at most one frame however many arrive.
+- **VI-04** — Given a video call with the camera off, when the agent calls `look_at_camera`, then the tap is empty, the result is a declined status with no observation, and the agent's next turn asks the caller to turn the camera on rather than describing anything.
 - **VI-05** — Given a frame, when `look_at_camera` runs, then exactly one observation is produced with `description`, `items`, `confidence` and `safety_flag`, validated against the schema, and a response that fails validation is retried once before the tool reports failure.
 - **VI-06** — Given the caller describes damage the frame does not show, when the agent looks, then `confidence` is `not_confirmed`, `asked_for` names the better look required, the spoken reply states what is visible instead, and the case does not record the caller's characterisation as fact.
 - **VI-07** — Given two looks in one call, when the evidence is read, then both are pinned in order with their observation, their confidence and the caller's words from the prompting turn, including the look that returned `not_confirmed`; and a declined look pins nothing.
@@ -120,4 +121,4 @@ This matters for the demo and for degradation. No path through this spec is reac
 - **VI-12** — Given a case ready to file, when the business-system tool succeeds, then `ticket_ref` holds the returned id; and when it fails, then the case stays open with `ticket_ref` empty and the spoken reply says the report is recorded but not filed.
 - **VI-13** — Given a case and its media belonging to one tenant, when another tenant requests them by id, then the result is indistinguishable from not found.
 - **VI-14** — Given a video call where the caller never enables the camera, when the call runs to its end, then it behaves as a voice call throughout and completes with a normal end reason.
-- **VI-15** — Given the agent asks for a frame and the browser does not answer within 2 s, when the tool returns, then the result is a declined status, the call continues, and a frame arriving after the timeout is discarded rather than stored or described.
+- **VI-15** — Given a video call whose camera was turned on and then off, when the agent looks, then the tap no longer offers the stale frame, the result is a declined status, and the call continues.

@@ -2,7 +2,7 @@
 type: Decision Record
 title: Tech stack
 description: Languages, frameworks, providers and the version policy for the platform; the single reference for dependencies.
-status: stable
+status: draft
 tags: [architecture, stack, dependencies]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -19,7 +19,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | HTTP client | `httpx` (also used in-process via ASGI transport for relative tool URLs) |
 | Embeddings | `fastembed` with `BAAI/bge-small-en-v1.5` (384-d, local CPU); deterministic `hash` embedder for tests |
 | Vector search | NumPy cosine similarity in-process ([/decisions/adr-0004-storage-and-vectors.md](/decisions/adr-0004-storage-and-vectors.md)) |
-| Voice | `pipecat-ai` with extras `deepgram`, `silero`, `websocket` |
+| Voice | `pipecat-ai` with extras `deepgram`, `silero`, `websocket`, `livekit` |
+| Video | LiveKit Cloud room via Pipecat's LiveKit transport; `Pillow` encodes a captured frame to JPEG ([ADR-0009](/decisions/adr-0009-video-channel.md)) |
 | Docs parsing | `pypdf` for PDFs; stdlib `html.parser` for URLs; `pyyaml` for frontmatter |
 | Tests | `pytest`, `pytest-asyncio`, fake LLM provider |
 
@@ -32,6 +33,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | UI | React 19, Tailwind CSS 4, hand-written small components (no component CLI), `lucide-react` icons |
 | Charts | `recharts` |
 | Voice client | Hand-written: `getUserMedia` + AudioWorklet (16 kHz PCM16 out) + WebAudio playback (24 kHz PCM16 in) |
+| Video client | `livekit-client` for `channel: "video"` calls only; voice calls keep the hand-written client ([/api/media-protocol.md](/api/media-protocol.md)) |
 | Data fetching | `fetch` wrappers + `EventSource` for SSE; no state library |
 
 # Providers
@@ -48,4 +50,4 @@ Model IDs MUST be confirmed against the provider console during the spike ([/ver
 
 * Lock files (`uv.lock`, `package-lock.json`) are committed; installs are reproducible.
 * Upgrades are `[no-spec]` commits unless they change behavior.
-* Pipecat moves fast: its usage is confined to `voiceai/voice/` and verified by `tests/test_voice_smoke.py`.
+* Pipecat moves fast: its usage is confined to `voiceai/voice/` and verified by `tests/test_voice_smoke.py`, which now constructs both transports. The `livekit` extra brings a ~28 MB native library into the image.

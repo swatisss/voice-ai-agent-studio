@@ -2,7 +2,7 @@
 type: Runbook
 title: GCP runbook
 description: Build the single container and deploy it to Cloud Run with Secret Manager keys, optionally backed by Cloud SQL Postgres.
-status: stable
+status: draft
 tags: [build, runbook, gcp, cloud-run]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -18,9 +18,12 @@ printf '%s' "$GROQ_API_KEY"       | gcloud secrets create GROQ_API_KEY --data-fi
 printf '%s' "$DEEPGRAM_API_KEY"   | gcloud secrets create DEEPGRAM_API_KEY --data-file=-
 printf '%s' "$OPENROUTER_API_KEY" | gcloud secrets create OPENROUTER_API_KEY --data-file=-   # optional
 printf '%s' "$OPENAI_API_KEY"     | gcloud secrets create OPENAI_API_KEY --data-file=-       # optional
+printf '%s' "$LIVEKIT_URL"        | gcloud secrets create LIVEKIT_URL --data-file=-          # optional (video)
+printf '%s' "$LIVEKIT_API_KEY"    | gcloud secrets create LIVEKIT_API_KEY --data-file=-      # optional (video)
+printf '%s' "$LIVEKIT_API_SECRET" | gcloud secrets create LIVEKIT_API_SECRET --data-file=-   # optional (video)
 ```
 
-`OPENROUTER_API_KEY` and `OPENAI_API_KEY` are optional: the deploy script attaches a secret only if it exists in Secret Manager.
+`OPENROUTER_API_KEY`, `OPENAI_API_KEY` and the three `LIVEKIT_*` values are optional: the deploy script attaches a secret only if it exists in Secret Manager. Without the LiveKit trio, video calls are created as voice calls and the UI says video is unavailable ([/architecture/visual-intake.md](/architecture/visual-intake.md), VI-01); nothing else changes.
 
 Grant the Cloud Run runtime service account `roles/secretmanager.secretAccessor`.
 

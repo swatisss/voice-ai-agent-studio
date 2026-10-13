@@ -28,12 +28,12 @@ The port stores and fetches bytes by key and deletes by key. It does not list, a
 
 # Frames are bounded on the way in
 
-A frame arrives as one JPEG the browser already downscaled ([/api/voice-protocol.md](/api/voice-protocol.md)). The browser is not trusted for it: the bounds below are applied again on the server, before anything is written.
+A frame is stored as JPEG, encoded by the `evidence` module from the decoded video frame the tap held ([/api/media-protocol.md](/api/media-protocol.md)) rather than passed through. The browser's capture resolution is a hint, not a guarantee, so the bounds below are applied on the server before anything is written.
 
 | Bound | Value | Why |
 |---|---|---|
 | Longest edge | 1280 px | Enough for a vision model to describe damage; past this, cost rises and nothing improves. |
-| Encoded size | 1 MB | A frame that will not fit is re-encoded at lower quality once, then rejected. A payload arriving above 4 MB is refused before it is decoded. |
+| Encoded size | 1 MB | A frame that will not fit is re-encoded at lower quality once, then rejected. |
 | Frames per call | 12 | A look is an act, not a stream ([/architecture/visual-intake.md](/architecture/visual-intake.md)). Twelve is generous for one report and finite. |
 
 Exceeding the per-call cap does not fail the call: `look_at_camera` returns a declined status saying enough has been captured, and the agent moves on to the case.

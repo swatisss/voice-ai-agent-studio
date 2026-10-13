@@ -9,20 +9,20 @@ generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 
 # Starting a video call (`/test-call/`)
 
-The call card's channel switch becomes **Talk | Video | Type** ([/ui/test-call.md](/ui/test-call.md)). **Video** starts a call with `channel: "video"`; everything else about the page is unchanged, because a video call is a voice call that can see ([/architecture/visual-intake.md](/architecture/visual-intake.md)).
+The call card's channel switch becomes **Talk | Video | Type** ([/ui/test-call.md](/ui/test-call.md)). **Video** starts a call with `channel: "video"`, then joins the LiveKit room the response names using `livekit-client` ([/api/media-protocol.md](/api/media-protocol.md)). Everything else about the page is unchanged, because a video call is a voice call that can see ([/architecture/visual-intake.md](/architecture/visual-intake.md)); the microphone is published on connect and the agent's audio track is attached for playback.
 
 * The switch offers **Video** only for agents whose use cases advertise the channel. For other agents it is present but disabled, with the hint "This agent does not take visual reports".
-* If the call response carries `video_unavailable`, the call runs as Talk and a notice reads "Video is unavailable: no vision model is configured. The call is running as voice." The tester is not left guessing why the camera control is missing.
+* If the call response carries `video_unavailable`, the call runs as Talk and a notice names the reason — "Video is unavailable: the media service is not configured" or "… no vision model is configured" — and says the call is running as voice. The tester is not left guessing why the camera control is missing.
 
 # The camera control
 
 A **Camera** button sits beside the mic button, **off when the call starts**. Nothing in the page lets the agent turn it on — only this button does.
 
 * **Off**: the label reads "Camera off". No video is captured and nothing is sent.
-* **On**: the browser preview appears above the input area at a size that does not push the transcript off screen (a 160 px-tall strip on wide viewports, collapsible on narrow ones). The preview is local; it is not uploaded.
-* While the camera is on, a **"The agent can ask to look"** hint sits under the preview. It is the honest wording: the agent cannot see the preview, only the frames it asks for.
+* **On**: the camera track is published to the room and a local preview appears above the input area at a size that does not push the transcript off screen (a 160 px-tall strip on wide viewports, collapsible on narrow ones).
+* While the camera is on, a **"Your camera is live. The agent looks only when it asks."** hint sits under the preview. It is the honest wording for this transport: video is flowing while the camera is on ([ADR-0009](/decisions/adr-0009-video-channel.md)), and what the agent is shown is only the frames a look asked for.
 * Turning the camera off mid-call is immediate and needs no confirmation. Looks already pinned stay pinned.
-* When permission is refused or no camera exists, the button is replaced by **Use a sample image** (below) and the transcript shows "No camera available — you can send a sample image instead."
+* Turning it off unpublishes the track. When permission is refused or no camera exists, the button is replaced by **Use a sample image** (below) and the transcript shows "No camera available — you can send a sample image instead."
 
 Each time the agent looks, a **shutter flash on the preview and a "The agent looked" system notice** appear in the transcript. The caller always knows a frame was taken, which is the consent property the architecture requires.
 
@@ -67,7 +67,7 @@ The picker is headed "Synthetic demo images" and every entry it produces is tagg
 # Acceptance
 
 - **UI-38** — Given a video-capable agent, when **Video** is selected and the call starts, then the camera is off, the Camera button reads "Camera off", and no preview is shown; and given an agent whose use cases do not advertise video, the Video option is disabled with its hint.
-- **UI-39** — Given a running video call, when the camera is turned on, then a local preview appears with the "The agent can ask to look" hint, and nothing is uploaded until the agent looks.
+- **UI-39** — Given a running video call, when the camera is turned on, then the track is published, a local preview appears with the "Your camera is live" hint, and turning the camera off again unpublishes it.
 - **UI-40** — Given the camera is on, when the agent looks, then the preview flashes, a "The agent looked" notice appears in the transcript, and an Evidence entry appears with its thumbnail, confidence chip, description and the quoted caller turn.
 - **UI-41** — Given an observation with confidence `not_confirmed`, then its chip reads "Not confirmed" in the neutral tone (not the danger tone), its description is shown, and the "Agent asked for" line names the better look.
 - **UI-42** — Given a case with `routing: siu_review`, then the Case card shows "Specialist review" with its reason, and neither the transcript nor any caller-facing text contains "fraud" or "special investigations".

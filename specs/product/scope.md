@@ -13,7 +13,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Agent builder: persona, policy, knowledge, tools, skills, model choice; publish immutable versions.
 * Knowledge ingestion: pasted text/Markdown, file upload (`.md`, `.txt`, `.pdf`), URL, and **OKF bundle import**.
 * HTTP tools with JSON-schema parameters, plus built-in tools (knowledge search, escalate, end call).
-* **Test call from the browser** — voice (mic → agent → speaker), video (the caller's camera, which the agent may ask to look at) and text chat against the same agent runtime.
+* **Test call from the browser** — voice (mic → agent → speaker over a WebSocket), video (a LiveKit Cloud room carrying mic and camera, which the agent may ask to look at) and text chat, all against the same agent runtime.
 * **Visual evidence intake** — the agent takes one frame when it calls `look_at_camera`, describes it with a confidence it may withhold, pins it as evidence, and leaves a case with a routing decision and a business-system ticket ([/architecture/visual-intake.md](/architecture/visual-intake.md)). Captured frames are stored under a 30-day retention window ([ADR-0010](/decisions/adr-0010-media-retention.md)).
 * Escalation engine with deterministic triggers and LLM judgment; groundwork packet; human agent console with accept/resolve and disposition.
 * Fleet learning: per-call analysis, gap clustering, impact estimate, fix drafting (knowledge article or skill + tool), evaluation by simulated replay with a judge, approval → new agent version.
@@ -29,8 +29,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Telephony: SIP trunks, IVR/CCaaS connectors (Genesys, Amazon Connect, Twilio), phone numbers, warm transfer of live audio to a human.
 * Authentication, SSO, RBAC (a tenant switcher stands in).
 * Audio recording storage and playback. Storing *frames the agent looked at* is in scope and is not a precedent for storing the call ([ADR-0010](/decisions/adr-0010-media-retention.md)).
-* **A talking avatar.** Uploading a face, animating it and sending the agent's video back to the caller. Sending a live video track down to the browser is the requirement that forces a media server, which is exactly what [ADR-0009](/decisions/adr-0009-video-channel.md) declines to add for a feature that needs a handful of stills in one direction. It needs its own change proposal, its own ADR and an avatar vendor.
-* **A live video stream to a model.** The agent looks on demand, by design, not continuously ([/architecture/visual-intake.md](/architecture/visual-intake.md)).
+* **A talking avatar.** Uploading a face, animating it and sending the agent's video back to the caller. [ADR-0009](/decisions/adr-0009-video-channel.md) chose LiveKit partly so this stays reachable — the room already supports an agent video track and the pinned Pipecat carries a HeyGen transport that joins one — but it needs its own change proposal and an avatar vendor, and nothing here publishes an agent video track.
+* **A live video stream to a model.** The agent looks on demand ([/architecture/visual-intake.md](/architecture/visual-intake.md)). Video does reach the service continuously while the camera is on, which [ADR-0009](/decisions/adr-0009-video-channel.md) and compliance rule 9 state plainly; no frame reaches a model unasked.
 * **Generating images.** No code path in the product produces an image; the reference and sample images are checked in ([/architecture/imagery.md](/architecture/imagery.md), IMG-01).
 * PHI redaction pipeline, BAAs, audit log export, data deletion on request. v1 has a retention *window* for media and no deletion-on-request path.
 * Languages other than English.

@@ -75,6 +75,19 @@ TOOLS: list[dict[str, Any]] = [
           _params(["role"], role="claims_handler, senior_handler, team_leader or claims_manager", claim_type="inpatient, outpatient or dental")),
     _tool("get_escalation_contact", "Who to contact internally for a topic: fraud, complaints, legal, data_protection, it_service_desk or medical_director.",
           "GET", "/mock/internal/contacts", _params(["topic"], topic="fraud, complaints, legal, data_protection, it_service_desk or medical_director")),
+    _tool("get_asset", "Look up a ward asset by its tag, for example BED-4012, to confirm the ward and bed before filing a fault.",
+          "GET", "/mock/internal/assets/{asset_tag}", _params(["asset_tag"], asset_tag="The asset tag printed on the equipment, for example BED-4012")),
+    _tool("report_facility_fault", "File a ward fault report. Give the location, what is wrong and a severity of low, medium or high.",
+          "POST", "/mock/internal/facility-faults",
+          _params(["location", "summary", "severity"], location="Ward and bed, for example ward 4 bed 12",
+                  summary="What is wrong, in one or two sentences, from what you could see",
+                  severity="low, medium or high", asset_tag="The asset tag, if known",
+                  evidence_ref="The case reference from look_at_camera, if there is one")),
+    _tool("open_claim_intake", "Open a claim for a damaged insured item. Needs the policy number, the item, what happened and the incident date.",
+          "POST", "/mock/insurance/claims/intake",
+          _params(["policy_id", "item", "summary", "incident_date"], policy_id="The policy the item is insured under",
+                  item="What was damaged, for example rear car door", summary="What happened and what is visibly damaged",
+                  incident_date="When it happened, YYYY-MM-DD", evidence_ref="The case reference from look_at_camera, if there is one"), verify=True),
 ]
 
 # ---- skills
@@ -212,6 +225,36 @@ INTERNAL_SKILLS: list[dict[str, Any]] = [
      "required_tools": ["get_escalation_contact"], "escalate_when": ""},
 ]
 
+FACILITIES_SKILLS: list[dict[str, Any]] = [
+    {"name": "Ward asset fault report",
+     "description": "A staff member reports a damaged, broken or unsafe ward asset - a bed, hoist, footplate, chair or fixture.",
+     "instructions": (
+         "1. Ask what is wrong and where it is. No member identity is involved in this call, so never ask for one.\n"
+         "2. Ask them to show you with the camera, then call look_at_camera.\n"
+         "3. If the confidence is not 'confirmed', say what you can see and ask for the better look the result names. "
+         "Never describe damage the frame does not show, and never suggest the caller is wrong.\n"
+         "4. Call get_asset with the tag printed on the equipment to confirm the ward and bed.\n"
+         "5. Call report_facility_fault with the location, what you saw, a severity, and the case reference.\n"
+         "6. Read back the reference and anything the case still needs."),
+     "required_tools": ["get_asset", "report_facility_fault"],
+     "escalate_when": "The observation flags an injury or unsafe premises, or the asset cannot be identified."},
+]
+
+VISUAL_CLAIM_SKILL = {
+    "name": "Visual claim intake",
+    "description": "A member reports a damaged insured item and can show it on camera.",
+    "instructions": (
+        "1. Verify identity first, then find the policy the item sits under with get_member_policies.\n"
+        "2. Ask them to show the damage, then call look_at_camera.\n"
+        "3. If the confidence is not 'confirmed', say what is visible and ask for the look the result names. "
+        "Never record the caller's description as fact.\n"
+        "4. Call open_claim_intake with the policy, the item, what you saw and the incident date.\n"
+        "5. Give the reference and say what the claim still needs. If the call failed, say the report is "
+        "recorded but not yet filed - never invent a reference."),
+    "required_tools": ["get_member_policies", "open_claim_intake"],
+    "escalate_when": "The member is injured, or the item is not covered by an active policy.",
+}
+
 # ---- persona library: (name, description, voice, speed, greeting, disclosure, opening, style)
 PERSONAS: list[dict[str, Any]] = [
     {"name": "Ava", "description": "Warm, calm and concise; the default for customer calls.", "voice": "aura-2-thalia-en", "speed": 1.0,
@@ -228,6 +271,9 @@ PERSONAS: list[dict[str, Any]] = [
      "greeting": "Evergreen Health member services, this is Maya.", "disclosure": f"{DISCLOSURE} How can I help?",
      "opening": "Hi {first_name}, this is Maya from Evergreen Health. I'm calling to welcome you and help you get set up.",
      "style": "Friendly and encouraging. Celebrate small steps, keep explanations short, check the person is comfortable before moving on."},
+    {"name": "Rowan", "description": "Practical and unhurried; checks before it writes.", "voice": "aura-2-atlas-en", "speed": 1.0,
+     "greeting": "Evergreen facilities intake.", "disclosure": "I'm a virtual assistant. What needs fixing?", "opening": "",
+     "style": "Practical and unhurried. Confirms what it can see before writing anything down."},
     {"name": "Sage", "description": "Neutral and precise; short answers for staff.", "voice": "aura-2-orion-en", "speed": 1.0,
      "greeting": "Evergreen internal knowledge assistant.", "disclosure": "I'm a virtual assistant. What do you need to know?", "opening": "",
      "style": "Neutral and precise. Short answers: the step, the limit or the contact, then stop."},
@@ -242,8 +288,9 @@ AGENTS: list[dict[str, Any]] = [
         "description": "Policy inquiries, claims status, documents and Green Card, and coverage questions for Evergreen Health members.",
         "turn_detection": {"mode": "semantic", "min_silence_ms": 700, "max_extra_wait_ms": 1500, "evaluator": "heuristic", "allow_interruptions": True},
         "tools": ["verify_member", "get_member_policies", "get_policy_details", "get_member_claims", "get_claim_status", "get_benefits",
-                  "get_coverage_detail", "find_providers", "list_documents", "request_document"],
-        "skills": CARE_SKILLS,
+                  "get_coverage_detail", "find_providers", "list_documents", "request_document", "open_claim_intake"],
+        "skills": [*CARE_SKILLS, VISUAL_CLAIM_SKILL],
+        "visual": {"case_kind": "claim"},
         "policy": {
             "rules": [
                 "Verify identity with member ID and date of birth before sharing any policy, claim, document or benefit information.",
@@ -308,6 +355,26 @@ AGENTS: list[dict[str, Any]] = [
             "escalate_when": ["The question is not covered by internal knowledge."],
             "never": ["Disclose individual member or claim data.", "Guess a procedure, limit or deadline."],
             "max_turns": 16, "handoff_message": "I can't answer that reliably, so I'll flag it to the knowledge team.",
+        },
+    },
+    {
+        # Its own agent rather than a skill on the knowledge assistant: a fault report involves no
+        # member and no verification, it writes rather than answers, and the assistant's
+        # knowledge-isolation guarantee (UC-03) is load-bearing. It has no documents at all (UC-07).
+        "key": "facilities", "name": "Facilities Intake Agent", "mode": "internal", "persona": "Rowan", "kb": None,
+        "description": "Takes ward asset fault reports from staff, looking at what they show on camera.",
+        "turn_detection": {"mode": "vad", "min_silence_ms": 700, "max_extra_wait_ms": 1500, "evaluator": "heuristic", "allow_interruptions": True},
+        "tools": ["get_asset", "report_facility_fault"],
+        "skills": FACILITIES_SKILLS,
+        "visual": {"case_kind": "facility_fault"},
+        "policy": {
+            "rules": [
+                "No member identity is involved in a fault report: never ask for a member ID or date of birth.",
+                "Say only what you could actually see. If a look is not confirmed, ask for a better one.",
+            ],
+            "escalate_when": ["An observation flags an injury or unsafe premises.", "The asset cannot be identified."],
+            "never": ["Describe damage a frame did not show.", "Invent a ticket reference."],
+            "max_turns": 16, "handoff_message": "I'll get a facilities supervisor onto this right away.",
         },
     },
 ]
@@ -378,4 +445,19 @@ USE_CASES: list[dict[str, Any]] = [
      "sample_utterances": ["How much of my dental allowance is left, and is there a waiting period?", "What's my specialist copay?", "Do I need pre-authorization for an MRI?", "Find me a dentist near 94110."],
      "demo_callers": [_caller("Priya Nair", "559804", "July 23, 1992", "Dental limit remaining and waiting period"),
                       _caller("Daniel Kim", "801456", "March 8, 2001", "Specialist copay and deductible")]},
+    # The two visual use cases. Only these advertise `video` (UC-06).
+    {"agent": "facilities", "title": "Ward Asset Fault Report", "channels": ["voice", "chat", "video"],
+     "summary": "Ward staff report a damaged bed, hoist or fixture and show it on camera; the agent says what it can actually see and files a facilities ticket.",
+     "sample_utterances": ["One of the bed rails on ward 4 is bent and I can't get it to latch.",
+                           "The footplate on bed 4012 is cracked.",
+                           "There's water staining the ceiling tile above bay 3.",
+                           "Can I show you? The hoist strap is frayed."],
+     "demo_callers": []},
+    {"agent": "care", "title": "Visual Claim Intake", "channels": ["voice", "chat", "video"],
+     "summary": "A member reports a damaged insured item and shows it on camera, so the claim opens with the damage on the record instead of a photo request afterwards.",
+     "sample_utterances": ["I reversed into a bollard and the rear door of my car is dented - can I show you?",
+                           "My phone screen is cracked, I want to claim.",
+                           "There's water damage in my kitchen.",
+                           "Can I show you the damage now?"],
+     "demo_callers": [_caller("James Carter", "337120", "November 3, 1979", "Motor policy MP-200415, dented car door")]},
 ]

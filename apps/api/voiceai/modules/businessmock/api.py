@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from voiceai.modules.businessmock import data
 
@@ -434,3 +434,75 @@ async def contacts(topic: str) -> dict[str, Any] | JSONResponse:
         return err(404, "topic_not_found", "Unknown topic", topics=sorted(data.CONTACTS))  # MOCK-12
     team, ext, hours, email = data.CONTACTS[key]
     return {"topic": key, "team": team, "contact": team, "extension": ext, "hours": hours, "email": email}
+
+
+# ================================================================ facilities and visual intake
+class FacilityFault(BaseModel):
+    location: str = Field(min_length=1, max_length=200)
+    summary: str = Field(min_length=1, max_length=2000)
+    severity: str = "medium"
+    asset_tag: str | None = None
+    evidence_ref: str | None = None  # the product's case id, so a ticket traces back (VI-12)
+
+
+class ClaimIntake(BaseModel):
+    policy_id: str
+    item: str = Field(min_length=1, max_length=200)
+    summary: str = Field(min_length=1, max_length=2000)
+    incident_date: str
+    evidence_ref: str | None = None
+
+
+@router.get("/internal/assets/{asset_tag}", response_model=None)
+async def ward_asset(asset_tag: str) -> dict[str, Any] | JSONResponse:
+    """A ward asset by its tag. Needs no member header: no member is involved (MOCK-13)."""
+    key = re.sub(r"[\s_]+", "-", asset_tag.strip().upper())
+    asset = data.WARD_ASSETS.get(key)
+    if asset is None:
+        return err(404, "asset_not_found", "Unknown asset tag", assets=sorted(data.WARD_ASSETS))
+    return {"asset_tag": key, **asset}
+
+
+@router.post("/internal/facility-faults", response_model=None)
+async def report_facility_fault(body: FacilityFault) -> dict[str, Any] | JSONResponse:
+    """File a ward fault report (MOCK-14)."""
+    severity = norm_key(body.severity)
+    if severity not in data.FAULT_SEVERITIES:
+        return err(422, "invalid_severity", "Severity must be low, medium or high", severities=list(data.FAULT_SEVERITIES))
+    tag = re.sub(r"[\s_]+", "-", body.asset_tag.strip().upper()) if body.asset_tag else None
+    reference = f"FF-{10000 + data.next_id('fault')}"
+    record = {
+        "reference": reference, "asset_tag": tag, "location": body.location, "summary": body.summary,
+        "severity": severity, "evidence_ref": body.evidence_ref, "status": "open",
+        "queue": data.FAULT_QUEUES[severity],
+    }
+    data.FACILITY_FAULTS.append(record)
+    return {"reference": reference, "status": "open", "queue": record["queue"]}
+
+
+@router.post("/insurance/claims/intake", response_model=None)
+async def open_claim_intake(body: ClaimIntake, x_member_ref: str | None = Header(default=None)) -> dict[str, Any] | JSONResponse:
+    """Open a claim for a damaged insured item (MOCK-15)."""
+    if x_member_ref not in data.MEMBERS:
+        return unverified()
+    pid, policy = _owned_policy(body.policy_id, x_member_ref)
+    if policy is None:
+        return err(404, "policy_not_found", "No policy with that number for this member")
+    if policy["status"] != "active":
+        return err(409, "policy_not_active", "That policy is not active, so a claim cannot be opened")
+    incident = parse_date(body.incident_date)
+    if incident is None:
+        return err(422, "invalid_incident_date", "Could not read the incident date")
+    if incident > date.today():
+        return err(422, "incident_date_in_future", "The incident date cannot be in the future")
+    reference = f"C-{40000 + data.next_id('intake')}"
+    record = {
+        "reference": reference, "member_ref": x_member_ref, "policy_id": pid, "item": body.item,
+        "summary": body.summary, "incident_date": incident.isoformat(),
+        "evidence_ref": body.evidence_ref, "status": "received",
+    }
+    data.CLAIM_INTAKES.append(record)
+    return {
+        "reference": reference, "status": "received",
+        "next_step": "An assessor will review the report and contact you within two business days.",
+    }

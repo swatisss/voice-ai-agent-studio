@@ -73,6 +73,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Media
 | Method | Path | Result |
 |---|---|---|
+| GET | `/api/media/samples/catalog` | `{samples: [{key, label}], references: [{key, label}]}` — the synthetic images shipped in the repository, at most three references ([/architecture/imagery.md](/architecture/imagery.md)). Listed, never uploaded, never generated (IMG-01). |
 | GET | `/api/media/{media_id}` | the stored frame's bytes with its content type; 404 for an unknown id, for another tenant's id, and for an object retention has removed ([/architecture/media-storage.md](/architecture/media-storage.md)). There is no endpoint that returns a public or signed URL. |
 
 ## Use cases and outbound

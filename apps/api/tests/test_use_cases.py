@@ -1,4 +1,7 @@
-"""Customer Support & Channels seed data and use-case catalog. Covers: UC-01, UC-02, UC-03, UC-04, UC-05"""
+"""Customer Support & Channels seed data and use-case catalog.
+
+Covers: UC-01, UC-02, UC-03, UC-04, UC-05, UC-06, UC-07
+"""
 from __future__ import annotations
 
 from sqlalchemy import func, select
@@ -13,7 +16,10 @@ SANDBOX = {"X-Tenant-Id": "evergreen-sandbox"}
 TITLES = [
     "Policy Inquiry & Status", "Claims Status Tracking", "Document Center & Green Card", "Outbound Renewal Calls",
     "Policyholder Onboarding", "Internal Knowledge Assistant", "Coverage Information Support",
+    "Ward Asset Fault Report", "Visual Claim Intake",
 ]
+#: Only the two visual use cases offer video (UC-06).
+VIDEO_TITLES = {"Ward Asset Fault Report", "Visual Claim Intake"}
 
 
 async def test_seeded_business_units(client, seeded):
@@ -23,18 +29,25 @@ async def test_seeded_business_units(client, seeded):
     assert {n: a["mode"] for n, a in by_name.items()} == {
         "Customer Care Agent": "inbound", "Renewal Outreach Agent": "outbound",
         "Welcome & Onboarding Agent": "outbound", "Internal Knowledge Assistant": "internal",
+        "Facilities Intake Agent": "internal",
     }
     assert all(a["published_version"]["version"] == 1 for a in agents)
     async with sessionmaker()() as s:
-        assert await s.scalar(select(func.count()).select_from(Tool).where(Tool.tenant_id == "evergreen-care")) == 16
+        assert await s.scalar(select(func.count()).select_from(Tool).where(Tool.tenant_id == "evergreen-care")) == 19
         names = {p.name for p in (await s.scalars(select(Persona).where(Persona.tenant_id == "evergreen-care"))).all()}
-    assert names == {"Ava", "Grace", "Leo", "Maya", "Sage"}
-    expected = {"Customer Care Agent": ("Ava", 10), "Renewal Outreach Agent": ("Leo", 3), "Welcome & Onboarding Agent": ("Maya", 4), "Internal Knowledge Assistant": ("Sage", 2)}
+    assert names == {"Ava", "Grace", "Leo", "Maya", "Sage", "Rowan"}
+    expected = {
+        "Customer Care Agent": ("Ava", 11), "Renewal Outreach Agent": ("Leo", 3),
+        "Welcome & Onboarding Agent": ("Maya", 4), "Internal Knowledge Assistant": ("Sage", 2),
+        "Facilities Intake Agent": ("Rowan", 2),
+    }
     for name, (persona, tools) in expected.items():
         detail = (await client.get(f"/api/agents/{by_name[name]['id']}/versions", headers=H)).json()["items"][0]
         assert detail["version"] == 1
         draft = (await client.get(f"/api/agents/{by_name[name]['id']}", headers=H)).json()["draft_config"]
-        assert len(draft["tool_ids"]) == tools and draft["knowledge_doc_ids"]
+        assert len(draft["tool_ids"]) == tools
+        # UC-07: the facilities agent files reports and answers no questions, so it has no documents
+        assert bool(draft["knowledge_doc_ids"]) is (name != "Facilities Intake Agent")
         assert (await client.get(f"/api/agents/{by_name[name]['id']}", headers=H)).json()["draft_config"]["persona"]["name"] == persona
     outbound = (await client.get(f"/api/agents/{by_name['Renewal Outreach Agent']['id']}", headers=H)).json()["draft_config"]
     assert outbound["outbound"]["targets_url"] == "/mock/insurance/outreach/renewals"
@@ -44,15 +57,19 @@ async def test_seeded_business_units(client, seeded):
 
 
 async def test_use_case_catalog(client, seeded):
-    """Covers: UC-02"""
+    """Covers: UC-02, UC-06"""
     items = (await client.get("/api/use-cases", headers=H)).json()["items"]
     assert [u["title"] for u in items] == TITLES
     agents = {a["id"]: a for a in (await client.get("/api/agents", headers=H)).json()["items"]}
     for u in items:
-        assert u["category"] == "Customer Support & Channels" and u["channels"] == ["voice", "chat"]
+        assert u["category"] == "Customer Support & Channels"
         assert u["agent_id"] in agents and u["published"] is True and u["agent_name"] == agents[u["agent_id"]]["name"]
         assert u["mode"] == agents[u["agent_id"]]["mode"]
         assert len(u["sample_utterances"]) >= 2
+        # UC-06: exactly the two visual use cases advertise video; the other seven do not
+        expected = ["voice", "chat", "video"] if u["title"] in VIDEO_TITLES else ["voice", "chat"]
+        assert u["channels"] == expected, u["title"]
+    assert {u["title"] for u in items if "video" in u["channels"]} == VIDEO_TITLES
     renewal = items[3]
     assert renewal["mode"] == "outbound" and renewal["demo_callers"][0]["name"] == "James Carter"
     assert renewal["demo_callers"][0]["member_id"] == "337120" and renewal["demo_callers"][0]["date_of_birth"] == "November 2, 1979"

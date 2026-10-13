@@ -170,12 +170,24 @@ CONTACTS = {
 
 NURSE_LINE = "1-800-555-0142"
 
+# Ward assets a facilities fault report can name (/demo-data/evergreen-health.md).
+WARD_ASSETS = {
+    "BED-4012": {"kind": "electric profiling bed", "ward": 4, "bed": 12, "model": "CareFlex 300", "in_service": True},
+    "BED-4015": {"kind": "electric profiling bed", "ward": 4, "bed": 15, "model": "CareFlex 300", "in_service": True},
+    "HOIST-2203": {"kind": "ceiling hoist", "ward": 2, "bed": None, "model": "LiftAssist C2", "in_service": True},
+    "CHAIR-1140": {"kind": "day-room chair", "ward": 1, "bed": None, "model": "Comfort R1", "in_service": False},
+}
+FAULT_SEVERITIES = ("low", "medium", "high")
+FAULT_QUEUES = {"low": "Facilities backlog", "medium": "Facilities scheduled", "high": "Facilities urgent"}
+
 # ---------------------------------------------------------------- mutable, date-relative state
 POLICIES: dict[str, dict[str, Any]] = {}
 ONBOARDING: dict[str, dict[str, Any]] = {}
 DOCUMENT_REQUESTS: list[dict[str, Any]] = []
 RENEWAL_DECISIONS: list[dict[str, Any]] = []
-_counters = {"doc": 0, "renewal": 0}
+FACILITY_FAULTS: list[dict[str, Any]] = []
+CLAIM_INTAKES: list[dict[str, Any]] = []
+_counters = {"doc": 0, "renewal": 0, "fault": 0, "intake": 0}
 
 
 def today() -> date:
@@ -213,7 +225,9 @@ def reset() -> None:
     })
     DOCUMENT_REQUESTS.clear()
     RENEWAL_DECISIONS.clear()
-    _counters.update(doc=0, renewal=0)
+    FACILITY_FAULTS.clear()
+    CLAIM_INTAKES.clear()
+    _counters.update(doc=0, renewal=0, fault=0, intake=0)
 
 
 def next_id(kind: str) -> int:

@@ -17,7 +17,8 @@ from voiceai.modules.evidence.service import LookResult, _Context
 
 __all__ = [
     "LookResult", "case_for_call", "case_kind_for", "evidence_for_call", "look_at_camera",
-    "open_case", "packet_evidence", "record_ticket", "states_reporting_intent",
+    "look_at_sample", "note_reference_choice", "open_case", "packet_evidence", "record_ticket",
+    "reference_catalog", "sample_catalog", "states_reporting_intent",
 ]
 
 case_kind_for = service.case_kind_for
@@ -40,6 +41,28 @@ def _context(
 async def look_at_camera(session: AsyncSession, **ctx: Any) -> LookResult:
     """Take one frame, describe it, pin it, keep the case current (VI-05, VI-07, VI-08)."""
     return await service.look(session, _context(**ctx))
+
+
+async def look_at_sample(session: AsyncSession, sample_key: str, **ctx: Any) -> LookResult:
+    """Look at a seeded synthetic image, tagged `sample` the whole way down (IMG-04, IMG-05)."""
+    return await service.look_at_sample(session, _context(**ctx), sample_key)
+
+
+async def note_reference_choice(session: AsyncSession, reference_key: str, **ctx: Any) -> dict[str, Any]:
+    """Record a caller's "it looks like this" against a reference image (IMG-02, IMG-03)."""
+    return await service.note_reference_choice(session, _context(**ctx), reference_key)
+
+
+def sample_catalog() -> list[dict[str, str]]:
+    from voiceai.modules.evidence import assets
+
+    return assets.sample_catalog()
+
+
+def reference_catalog() -> list[dict[str, str]]:
+    from voiceai.modules.evidence import assets
+
+    return assets.reference_catalog()
 
 
 async def open_case(session: AsyncSession, **ctx: Any) -> dict[str, Any]:

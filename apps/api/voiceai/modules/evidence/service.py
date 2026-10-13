@@ -154,6 +154,65 @@ async def look(session: AsyncSession, ctx: _Context) -> LookResult:
     return LookResult("ok", "", observation, stored.id, case)
 
 
+async def look_at_sample(session: AsyncSession, ctx: _Context, sample_key: str) -> LookResult:
+    """Look at a seeded synthetic image instead of a camera frame (IMG-04).
+
+    It goes through the ordinary path - bounded, stored, described, pinned - and differs in one
+    field the whole way down: `source` is `sample`, so nothing here can produce an untagged entry
+    that might later pass as camera evidence (IMG-05).
+    """
+    from voiceai.modules.evidence import assets
+
+    path = assets.sample_path(sample_key)
+    if path is None:
+        return LookResult("declined", "failed")
+    if await repo.frames_stored(session, ctx.tenant_id, ctx.call_id) >= MAX_FRAMES_PER_CALL:
+        return LookResult("declined", "cap_reached")
+    try:
+        from PIL import Image
+
+        image = Image.open(path).convert("RGB")
+        frame = encode_bounded(image.tobytes(), image.width, image.height, "RGB")
+    except (FrameTooLarge, OSError, ValueError) as exc:
+        log.warning("could not read sample %s: %s", sample_key, exc)
+        return LookResult("declined", "failed")
+
+    try:
+        observation = await describe(frame.data, ctx)
+    except LLMError as exc:
+        log.warning("vision role failed on sample %s: %s", sample_key, exc)
+        return LookResult("declined", "failed")
+
+    stored = await media.store_frame(
+        session, tenant_id=ctx.tenant_id, call_id=ctx.call_id, frame=frame, source="sample"
+    )
+    await repo.add_evidence(
+        session, tenant_id=ctx.tenant_id, call_id=ctx.call_id, media_id=stored.id, source="sample",
+        description=observation.description, items=[i.model_dump() for i in observation.items],
+        confidence=observation.confidence, safety_flag=observation.safety_flag,
+        asked_for=observation.asked_for, caller_words=ctx.caller_words,
+    )
+    case = None
+    if observation.confidence == "confirmed" or await repo.case_for(session, ctx.tenant_id, ctx.call_id):
+        case = await _open_and_draft(session, ctx)
+    return LookResult("ok", "", observation, stored.id, case)
+
+
+async def note_reference_choice(session: AsyncSession, ctx: _Context, reference_key: str) -> dict[str, Any]:
+    """Record that the caller said their fault resembles a reference image (IMG-02, IMG-03).
+
+    A reference is never pinned and never stored - it is already in the repository, and nothing
+    was looked at, so there is no confidence to report. It contributes a stated similarity to the
+    case, which keeps `missing` honest: a photograph is still outstanding.
+    """
+    from voiceai.modules.evidence import assets
+
+    label = dict(assets.REFERENCES).get(reference_key)
+    similarity = (label[1] if label else reference_key)
+    ctx.transcript = f"{ctx.transcript}\nCaller: it resembles \u201c{similarity}\u201d".strip()
+    return await _open_and_draft(session, ctx)
+
+
 async def describe(jpeg: bytes, ctx: _Context) -> Observation:
     """One frame in, one validated observation out (VI-05)."""
     prompt = prompts.render(
@@ -193,10 +252,15 @@ async def _open_and_draft(session: AsyncSession, ctx: _Context) -> dict[str, Any
     return as_dict(row)
 
 
+PHOTO_OUTSTANDING = "A photograph of the damage"
+
+
 async def draft_case(ctx: _Context, pinned: list[Any]) -> CaseDraft | None:
-    """Draft the narrative, what is missing, and the routing (VI-09)."""
-    if not pinned:
-        return None
+    """Draft the narrative, what is missing, and the routing (VI-09).
+
+    A case with no pinned evidence is drafted too - that is the reference-image path, where the
+    caller pointed at a picture of a *kind* of fault and nothing was looked at.
+    """
     observations = json.dumps(
         [
             {
@@ -219,7 +283,15 @@ async def draft_case(ctx: _Context, pinned: list[Any]) -> CaseDraft | None:
         log.warning("case drafting failed on call %s: %s", ctx.call_id, exc)
         return None
     # The model may not decide this: it is a fact about the evidence (IMG-05).
-    draft.sample_evidence = all(e.source == "sample" for e in pinned)
+    draft.sample_evidence = bool(pinned) and all(e.source == "sample" for e in pinned)
+    if not pinned:
+        # Nothing was looked at, so a photograph is still outstanding and the case cannot be
+        # ready for review however the draft reads (IMG-02). Enforced here rather than asked of
+        # the model, because it is a fact about the case and not a judgement.
+        if not any(PHOTO_OUTSTANDING.lower() in item.lower() or "photo" in item.lower() for item in draft.missing):
+            draft.missing = [PHOTO_OUTSTANDING, *draft.missing]
+        if draft.routing == "ready_for_review":
+            draft.routing = "needs_docs"
     return draft
 
 

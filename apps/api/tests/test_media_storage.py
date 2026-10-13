@@ -257,7 +257,8 @@ def test_the_api_offers_no_url_minting_route(app) -> None:  # noqa: ANN001
     from voiceai.modules.evidence import api as media_api
 
     paths = {r.path for r in media_api.router.routes}
-    assert paths == {"/api/media/{media_id}"}
+    # Exactly one way to read bytes, plus the read-only catalog of images shipped in the repo.
+    assert paths == {"/api/media/{media_id}", "/api/media/samples/catalog"}
     source = Path(media_api.__file__).read_text(encoding="utf-8")
     for forbidden in ("generate_signed_url", "signed_url", "make_public", "public_url"):
         assert forbidden not in source

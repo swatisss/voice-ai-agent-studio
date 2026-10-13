@@ -32,7 +32,7 @@ A reference image:
 * contributes the caller's selection to the case `narrative` as a stated similarity ("the caller says it resembles a snapped side-rail"), never as an observation;
 * does not produce a `confidence`, because nothing was looked at.
 
-A case built this way reaches `missing` with a photo still outstanding, and its `routing` is `needs_docs` until someone supplies one. That is the honest answer: a description plus a pointed-at picture is a report, not evidence.
+A case built this way reaches `missing` with a photo still outstanding, and its `routing` is `needs_docs` until someone supplies one. Both are enforced in code rather than asked of the drafting model, because they are facts about the case and not judgements. That is the honest answer: a description plus a pointed-at picture is a report, not evidence.
 
 # Sample images
 

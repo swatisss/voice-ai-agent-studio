@@ -57,7 +57,12 @@ async def seed(reset: bool = False) -> dict[str, Any]:
             skills = [Skill(tenant_id=care, **k) for k in ad["skills"]]
             s.add_all(skills)
             await s.flush()
-            docs = await import_okf(s, care, okf.read_dir(kb_root / ad["kb"]), f"specs/demo-data/kb/{ad['kb']}")
+            # An agent may have no document set at all: the facilities agent files reports and
+            # answers no questions, so search_knowledge finds nothing for it (UC-07).
+            docs = (
+                await import_okf(s, care, okf.read_dir(kb_root / ad["kb"]), f"specs/demo-data/kb/{ad['kb']}")
+                if ad.get("kb") else []
+            )
             persona = personas[ad["persona"]]
             cfg: dict[str, Any] = {
                 "mode": ad["mode"],
@@ -70,6 +75,8 @@ async def seed(reset: bool = False) -> dict[str, Any]:
             }
             if ad["mode"] == "outbound":
                 cfg["outbound"] = {"targets_url": ad["targets_url"]}
+            if ad.get("visual"):
+                cfg["visual"] = ad["visual"]  # which kind of case a visual call opens
             agent = Agent(tenant_id=care, name=ad["name"], description=ad["description"], draft_config=cfg)
             s.add(agent)
             await s.flush()
@@ -87,7 +94,8 @@ async def seed(reset: bool = False) -> dict[str, Any]:
         for i, uc in enumerate(catalog.USE_CASES, 1):
             s.add(UseCase(
                 tenant_id=care, agent_id=agents[uc["agent"]].id, category=catalog.CATEGORY, title=uc["title"], summary=uc["summary"],
-                channels=["voice", "chat"], sample_utterances=uc["sample_utterances"], demo_callers=uc["demo_callers"], sort=i,
+                channels=uc.get("channels") or ["voice", "chat"], sample_utterances=uc["sample_utterances"],
+                demo_callers=uc["demo_callers"], sort=i,
             ))
         summary["use_cases"] = len(catalog.USE_CASES)
         summary["history_calls"] = await _seed_history(s, care_agent)

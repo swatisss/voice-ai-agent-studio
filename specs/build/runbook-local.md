@@ -2,7 +2,7 @@
 type: Runbook
 title: Local runbook
 description: Install prerequisites, configure keys, run the API and web app, seed data and run checks on a developer machine (Windows, macOS, Linux).
-status: draft
+status: stable
 tags: [build, runbook, local]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

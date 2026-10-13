@@ -2,7 +2,7 @@
 type: Prompt
 title: Visual case draft prompt
 description: "Turns pinned observations and the transcript into the case narrative, the list of what is still missing, and a routing decision with a reason."
-status: draft
+status: stable
 tags: [prompt, evidence, cases]
 llm_role: drafting
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }

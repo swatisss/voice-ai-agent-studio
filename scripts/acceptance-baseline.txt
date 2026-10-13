@@ -53,3 +53,16 @@ CE-03
 # Live voice: needs a Deepgram key, a microphone and speakers (spike S1 in specs/verification/spikes.md)
 VO-01
 VO-03
+
+# CP-0013 visual intake, checked in the browser against a scratch database. UI-39, UI-40 and
+# UI-43 additionally need a webcam (or its absence, for UI-43), and every one of these needs a
+# LiveKit project and a vision-capable model key -- the media path is the part CI cannot reach
+# (/decisions/adr-0009-video-channel.md, "Consequences").
+UI-38
+UI-39
+UI-40
+UI-41
+UI-42
+UI-43
+UI-44
+UI-45

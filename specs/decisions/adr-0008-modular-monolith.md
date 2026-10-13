@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0008 Modular monolith with ports and adapters
 description: "One deployable still, but layered into ports, adapters, core, eight modules and a composition root, with the dependency rules enforced in CI."
-status: draft
+status: stable
 tags: [decision, architecture, modularity]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-08T00:00:00Z" }
 ---

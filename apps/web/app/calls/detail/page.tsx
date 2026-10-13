@@ -1,4 +1,4 @@
-// Spec: /ui/calls.md (Detail)
+// Spec: /ui/calls.md, /ui/visual-case.md (Detail)
 "use client";
 
 import Link from "next/link";
@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import { FeedbackBadge } from "@/components/feedback";
 import { PacketCard } from "@/components/packet";
 import { useTenant } from "@/components/shell";
+import { CaseCard, EvidenceStrip } from "@/components/evidence";
 import { Transcript } from "@/components/transcript";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { useApi } from "@/lib/api";
@@ -44,7 +45,11 @@ function CallDetail() {
         <div><div className="text-xs text-muted">Tokens</div>{c.tokens_in + c.tokens_out}</div>
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2" title="Transcript"><Transcript events={c.events} /></Card>
+        <div className="space-y-4 lg:col-span-2">
+          <Card title="Transcript"><Transcript events={c.events} /></Card>
+          <EvidenceStrip entries={c.evidence ?? []} />
+          <CaseCard visualCase={c.case ?? null} />
+        </div>
         <div className="space-y-4">
           {e && (
             <Card title="Escalation" actions={<Badge tone={e.status === "resolved" ? "ok" : "warn"}>{label(e.status)}</Badge>}>

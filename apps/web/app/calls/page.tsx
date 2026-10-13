@@ -29,7 +29,7 @@ export default function CallsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Select className="w-56" value={agent} onChange={(e) => setAgent(e.target.value)}><option value="">All agents</option>{agents?.items.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
         <Select className="w-40" value={outcome} onChange={(e) => setOutcome(e.target.value)}><option value="">All outcomes</option><option value="resolved">Resolved</option><option value="escalated">Escalated</option><option value="abandoned">Abandoned</option></Select>
-        <Select className="w-36" value={channel} onChange={(e) => setChannel(e.target.value)}><option value="">All channels</option><option value="voice">Voice</option><option value="text">Text</option></Select>
+        <Select className="w-36" value={channel} onChange={(e) => setChannel(e.target.value)}><option value="">All channels</option><option value="voice">Voice</option><option value="video">Video</option><option value="text">Text</option></Select>
         <Select className="w-36" value={direction} onChange={(e) => setDirection(e.target.value)}><option value="">All directions</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option><option value="internal">Internal</option></Select>
         <Select className="w-44" aria-label="Feedback" value={feedback} onChange={(e) => setFeedback(e.target.value)}><option value="">Any feedback</option><option value="down">Not helpful</option><option value="up">Helpful</option><option value="none">No answer</option></Select>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={seed} onChange={(e) => setSeed(e.target.checked)} />Include seeded history</label>

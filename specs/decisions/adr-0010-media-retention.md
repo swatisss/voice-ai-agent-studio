@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0010 Store captured frames, with a clock on every object
 description: "Accept the first byte storage in the product, narrowly: a blob-store port, bounded frames, a retention window, no public URLs, and observation text that outlives the image."
-status: draft
+status: stable
 tags: [decision, media, storage, retention, compliance]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Visual evidence intake
 description: "How a caller's camera becomes grounded evidence: frames captured on demand, a described observation with a confidence it is allowed to withhold, pinned evidence, a case and a routing decision."
-status: draft
+status: stable
 tags: [architecture, video, vision, evidence, cases]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---

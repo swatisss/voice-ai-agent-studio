@@ -2,7 +2,7 @@
 type: Architecture
 title: Modular structure
 description: "The backend's layers, the nine modules, the ports and contracts between them, and the CI rules that keep the boundaries where a service could later be cut."
-status: draft
+status: stable
 tags: [architecture, modularity, ports, boundaries]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-08T00:00:00Z" }
 ---

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Media storage
 description: "Where captured frames live: a blob-store port with a local and a cloud adapter, bounded frame sizes, time-limited retention, and authorised access only."
-status: draft
+status: stable
 tags: [architecture, media, storage, retention]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---

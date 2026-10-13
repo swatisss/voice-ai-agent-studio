@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0013 Visual evidence intake
 description: "Add a video channel and a look-on-demand vision tool, so a caller can show the agent a damaged asset or insured item and the call ends with reviewable evidence, a case and a ticket."
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [video, vision, evidence, cases, storage, livekit]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---

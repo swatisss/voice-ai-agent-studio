@@ -2,7 +2,7 @@
 type: Prompt
 title: Vision observation prompt
 description: "Describes one captured frame and returns a confidence the model is explicitly allowed to withhold, with the better look it would need."
-status: draft
+status: stable
 tags: [prompt, vision, evidence]
 llm_role: vision
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }

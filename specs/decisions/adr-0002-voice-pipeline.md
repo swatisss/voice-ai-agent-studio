@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0002 Voice pipeline
 description: Use Pipecat for transport, VAD, STT and TTS over a plain WebSocket, with our own turn aggregator and a brain processor wrapping the shared agent runtime.
-status: draft
+status: stable
 tags: [decision, voice, pipecat]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

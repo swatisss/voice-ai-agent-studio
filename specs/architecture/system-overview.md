@@ -2,7 +2,7 @@
 type: Architecture
 title: System overview
 description: Components, deployment shape and the three core flows (resolve, escalate, learn) of the voice AI agent platform.
-status: draft
+status: stable
 tags: [architecture, overview]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

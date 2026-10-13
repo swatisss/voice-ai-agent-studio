@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0009 LiveKit Cloud for the video channel
 description: "Carry video calls on a LiveKit Cloud room with Pipecat's LiveKit transport, keeping the plain WebSocket for voice-only calls."
-status: draft
+status: stable
 tags: [decision, video, vision, transport, livekit]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---

@@ -1,7 +1,7 @@
-// Spec: /ui/test-call.md
+// Spec: /ui/test-call.md, /ui/visual-case.md
 "use client";
 
-import { ChevronDown, ChevronRight, Mic, PhoneOff, PhoneOutgoing, Send } from "lucide-react";
+import { Camera, CameraOff, ChevronDown, ChevronRight, Images, Mic, PhoneOff, PhoneOutgoing, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -14,8 +14,12 @@ import { VoiceClient } from "@/lib/voice";
 import { FeedbackPrompt } from "@/components/feedback";
 import { LiveControlsCard } from "@/components/live-controls";
 import { DEFAULT_TURN, type TurnDetection } from "@/lib/voices";
+import { CaseCard, EvidenceStrip, type EvidenceEntry, type VisualCase } from "@/components/evidence";
+import { RoomClient } from "@/lib/room";
 
-type Mode = "talk" | "type";
+type Mode = "talk" | "video" | "type";
+
+const MODE_LABELS: Record<Mode, string> = { talk: "Talk", video: "Video", type: "Type" };
 
 const TECH_KEY = "test-call-technical";  // UI-32: remembered per browser, off by default
 
@@ -56,7 +60,16 @@ function TestCall() {
   const [personaId, setPersonaId] = useState(params.get("persona") ?? "");
   const [turn, setTurn] = useState<TurnDetection>(DEFAULT_TURN);
   const voice = useRef<VoiceClient | null>(null);
+  const room = useRef<RoomClient | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const preview = useRef<HTMLVideoElement>(null);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraAvailable, setCameraAvailable] = useState(true);
+  const [videoNote, setVideoNote] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<EvidenceEntry[]>([]);
+  const [visualCase, setVisualCase] = useState<VisualCase | null>(null);
+  // Only the agents whose use cases advertise video can be called that way (UI-38, UC-06).
+  const videoCapable = agentUcs.some((u) => (u.channels ?? []).includes("video"));
 
   const merge = useCallback((incoming: CallEvent[]) => {
     setEvents((prev) => {
@@ -70,6 +83,8 @@ function TestCall() {
     const d = await api(`/api/calls/${id}`);
     setCall(d);
     merge(d.events);
+    setEvidence(d.evidence ?? []);
+    setVisualCase(d.case ?? null);
     if (d.escalation) setEscalated(true);
     if (d.ended_at) setStatus("ended");
   }, [merge]);
@@ -78,13 +93,15 @@ function TestCall() {
     if (e.type === "call.event") merge([e.data]);
     if (e.type === "call.escalated") setEscalated(true);
     if (e.type === "call.ended" && callId) { setStatus("ended"); sync(callId); }
+    // a look stores its evidence server-side, so refresh the strip when a tool result lands
+    if (e.type === "call.event" && e.data?.kind === "tool_result" && e.data?.data?.name === "look_at_camera" && callId) sync(callId);
   }, tenant);
 
   useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth" }); }, [events.length]);
   useEffect(() => {  // the agent's own defaults seed the controls whenever no call is running
     if (agentDetail && !callId) setTurn({ ...DEFAULT_TURN, ...(agentDetail.draft_config?.voice?.turn_detection ?? {}) });
   }, [agentDetail, callId]);
-  useEffect(() => () => voice.current?.hangup(), []);
+  useEffect(() => () => { voice.current?.hangup(); room.current?.hangup(); }, []);
   useEffect(() => {  // the Technical details choice survives reloads; the page works without storage
     try { setTechnicalState(localStorage.getItem(TECH_KEY) === "1"); } catch { /* storage unavailable */ }
   }, []);
@@ -96,19 +113,51 @@ function TestCall() {
   function reset() {
     voice.current?.hangup();
     voice.current = null;
+    room.current?.hangup();
+    room.current = null;
     setCallId(null); setEvents([]); setCall(null); setStatus("idle"); setEscalated(false); setLevel(0); setSpeaking(false);
+    setCameraOn(false); setCameraAvailable(true); setVideoNote(null); setEvidence([]); setVisualCase(null);
+  }
+
+  async function toggleCamera() {
+    if (!room.current) return;
+    const on = await room.current.setCamera(!cameraOn);
+    setCameraOn(on);
+    if (on) {
+      const track = room.current.cameraTrack();
+      if (track && preview.current) track.attach(preview.current);
+    }
   }
 
   async function start() {
     reset();
     setStatus("connecting");
     try {
-      const r = await api("/api/calls", { method: "POST", json: { agent_id: agentId, channel: mode === "talk" ? "voice" : "text", persona_id: personaId || undefined, turn_detection: mode === "talk" ? turn : undefined, context: outbound ? { member_ref: target?.member_ref } : undefined } });
+      const channel = mode === "talk" ? "voice" : mode === "video" ? "video" : "text";
+      const r = await api("/api/calls", { method: "POST", json: { agent_id: agentId, channel, persona_id: personaId || undefined, turn_detection: mode === "type" ? undefined : turn, context: outbound ? { member_ref: target?.member_ref } : undefined } });
       setCallId(r.call_id);
       if (mode === "type") {
         await sync(r.call_id);
         setStatus("active");
         return;
+      }
+      if (mode === "video") {
+        if (r.video_unavailable) {  // UI-45: it runs as a voice call, and says why
+          setVideoNote(`Video is unavailable: ${r.video_unavailable.detail} The call is running as voice.`);
+        }
+        if (r.media) {
+          const client = new RoomClient({
+            onReady: () => setStatus("active"),
+            onSpeaking: setSpeaking,
+            onCamera: setCameraOn,
+            onError: (m) => { setCameraAvailable(false); toast(m, "bad"); },
+            onEnd: () => { setStatus("ended"); setSpeaking(false); sync(r.call_id); },
+          });
+          room.current = client;
+          await client.start(r.media);
+          return;
+        }
+        // degraded: fall through to the ordinary voice client below
       }
       const client = new VoiceClient({
         onReady: () => setStatus("active"),
@@ -149,6 +198,7 @@ function TestCall() {
   async function hangup() {
     if (!callId) return;
     if (voice.current) { voice.current.hangup(); voice.current = null; }
+    else if (room.current) { room.current.hangup(); room.current = null; await api(`/api/calls/${callId}/end`, { method: "POST" }).catch(() => undefined); }
     else await api(`/api/calls/${callId}/end`, { method: "POST" }).catch(() => undefined);
     setStatus("ended");
     setTimeout(() => sync(callId), 400);  // UI-09
@@ -159,7 +209,7 @@ function TestCall() {
   const outcome = call?.outcome ?? (escalated ? "escalated" : null);
   const busy = status === "active" || status === "connecting";
   const direction: string = call?.direction ?? agent.mode ?? "inbound";
-  const startLabel = outbound ? "Place outbound call" : mode === "talk" ? "Start call" : "Start chat";
+  const startLabel = outbound ? "Place outbound call" : mode === "talk" ? "Start call" : mode === "video" ? "Start video call" : "Start chat";
   const canFill = mode === "type" && status === "active" && !escalated;  // a starting phrase fills the message box only while a chat runs
 
   return (
@@ -182,13 +232,19 @@ function TestCall() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2" title={
           <div className="flex gap-1" role="group" aria-label="Call type">  {/* UI-31: Talk | Type lives in the call card */}
-            {(["talk", "type"] as Mode[]).map((m) => (
-              <button key={m} aria-pressed={mode === m} disabled={busy} title={busy ? "End the call to switch" : undefined} onClick={() => setMode(m)}
-                className={cx("min-h-9 rounded-full px-4 py-1 text-sm font-semibold transition disabled:cursor-not-allowed",
-                  mode === m ? "bg-accent text-on-accent" : "text-muted hover:bg-accent-soft disabled:hover:bg-transparent")}>
-                {m === "talk" ? "Talk" : "Type"}
-              </button>
-            ))}
+            {(["talk", "video", "type"] as Mode[]).map((m) => {
+              const blocked = m === "video" && !videoCapable;  // UI-38
+              return (
+                <button key={m} aria-pressed={mode === m} disabled={busy || blocked}
+                  title={blocked ? "This agent does not take visual reports" : busy ? "End the call to switch" : undefined}
+                  onClick={() => setMode(m)}
+                  className={cx("min-h-9 rounded-full px-4 py-1 text-sm font-semibold transition disabled:cursor-not-allowed",
+                    mode === m ? "bg-accent text-on-accent" : "text-muted hover:bg-accent-soft disabled:hover:bg-transparent",
+                    blocked && "opacity-40")}>
+                  {MODE_LABELS[m]}
+                </button>
+              );
+            })}
           </div>
         } actions={
           busy
@@ -204,6 +260,9 @@ function TestCall() {
               {!targets?.items?.length && <div className="text-xs text-muted">No one is due a call right now.</div>}
               <div className="text-xs text-muted">The agent speaks first. Answer as {target?.first_name ?? "the callee"}.</div>
             </div>
+          )}
+          {videoNote && (
+            <div className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{videoNote}</div>
           )}
           <div className="flex h-[52vh] flex-col">
             <div className="flex-1 space-y-2 overflow-y-auto pr-1">
@@ -226,18 +285,37 @@ function TestCall() {
                 <Button variant="primary" onClick={send} disabled={escalated || waiting || !text.trim()}><Send size={14} /></Button>
               </div>
             )}
-            {mode === "talk" && (status === "active" || status === "connecting") && (
-              <div className="mt-3 flex items-center justify-center gap-6">
-                <div className={cx("flex h-16 w-16 items-center justify-center rounded-full bg-accent text-on-accent", speaking && "speaking")}
-                  style={{ transform: `scale(${1 + Math.min(level * 4, 0.35)})` }}><Mic size={26} /></div>
-                <div className="text-sm text-muted">{status === "connecting" ? "Connecting…" : speaking ? "Agent speaking" : "Listening"}</div>
+            {(mode === "talk" || mode === "video") && (status === "active" || status === "connecting") && (
+              <div className="mt-3 space-y-3">
+                {mode === "video" && cameraOn && (  /* UI-39: a local preview, and honest wording */
+                  <div className="space-y-1">
+                    <video ref={preview} autoPlay playsInline muted className="h-40 w-full rounded-lg bg-black object-cover" />
+                    <p className="text-center text-xs text-muted">Your camera is live. The agent looks only when it asks.</p>
+                  </div>
+                )}
+                <div className="flex items-center justify-center gap-6">
+                  <div className={cx("flex h-16 w-16 items-center justify-center rounded-full bg-accent text-on-accent", speaking && "speaking")}
+                    style={{ transform: `scale(${1 + Math.min(level * 4, 0.35)})` }}><Mic size={26} /></div>
+                  <div className="text-sm text-muted">{status === "connecting" ? "Connecting…" : speaking ? "Agent speaking" : "Listening"}</div>
+                  {mode === "video" && room.current && (
+                    cameraAvailable ? (
+                      <Button variant={cameraOn ? "danger" : "ghost"} onClick={toggleCamera}>
+                        {cameraOn ? <><CameraOff size={14} />Camera on</> : <><Camera size={14} />Camera off</>}
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" disabled title="No camera available"><Images size={14} />Use a sample image</Button>
+                    )
+                  )}
+                </div>
               </div>
             )}
           </div>
         </Card>
         <div className="space-y-4">
-          <LiveControlsCard callId={callId} active={status === "active"} voiceCall={mode === "talk"} personas={personas?.items ?? []}
+          <LiveControlsCard callId={callId} active={status === "active"} voiceCall={mode !== "type"} personas={personas?.items ?? []}
             personaId={personaId} onPersona={setPersonaId} turn={turn} onTurn={setTurn} />
+          <EvidenceStrip entries={evidence} />
+          <CaseCard visualCase={visualCase} />
           {agentUcs.length > 0 && (  // UI-24: one starting phrase per use case; callers' IDs live in the demo data
             <Card title={<button className="flex items-center gap-1" aria-expanded={scriptOpen} onClick={() => setScriptOpen(!scriptOpen)}>{scriptOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}Test script</button>}>
               {scriptOpen && (

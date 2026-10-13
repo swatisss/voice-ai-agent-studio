@@ -2,7 +2,7 @@
 type: Scope
 title: v1 scope
 description: What the v1 (hackathon) platform includes, what it excludes, and the non-goals.
-status: draft
+status: stable
 tags: [product, scope]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

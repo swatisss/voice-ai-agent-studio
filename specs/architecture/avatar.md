@@ -37,6 +37,7 @@ Pipecat, and with it Simli's service, stays inside the voice module (MOD-04). No
 |---|---|
 | `SIMLI_API_KEY` | The vendor key. Never returned by any API and never logged (AV-08). |
 | `SIMLI_FACE_ID` | Which stock face to render. One face serves every agent in this change. |
+| `AVATAR_MAX_SESSIONS` | How many vendor sessions this process may hold at once (default 1). Keep it at or below the Simli plan's limit. A call over it is an ordinary video call with a placeholder tile (AV-11). |
 | `AVATAR_VIDEO_SIZE`, `AVATAR_VIDEO_FPS` | The published track's size and frame rate. Configuration because they cost CPU on the single instance and because the vendor's native size is unverified; the defaults are a starting point and the first real run confirms them. |
 
 An avatar is **available** when both Simli values are set and the SDK is installed. Anything less makes it unavailable; that is not an error. `POST /api/calls` reports it as `media.avatar`, true or false, and a video call is created either way.
@@ -56,9 +57,12 @@ An avatar must never make the agent harder to hear than no avatar would.
 * **Fails to start or fails mid-call**: the agent's speech is **passed through unchanged** so the caller still hears it, the call continues, the failure is logged, and the UI falls back to the placeholder tile with a notice. A failed avatar never ends a call and never silences the agent (AV-05).
 * **Hangs**: a vendor that connects and then says nothing is a failure too, and without a limit it would be the worst one, because nothing raises. Opening the session is limited to 15 s and runs in the background, so **the welcome never waits for it**: until the session is up the stage is transparent and the agent is heard directly. Speech sent to the vendor must come back, lip-synced, within 5 s; if it does not, the stage fails over, and the speech it had swallowed is **delivered late rather than never** (AV-09).
 
+* **Refused**: a vendor that refuses the session (a rate limit, too many concurrent sessions) does not raise; it drops the connection. The stage listens for the vendor's error event and waits up to 5 s after opening for the first video frame, so a refusal fails the stage **before** it has consumed a word of speech (AV-10). No frame and no refusal is trusted, not failed.
+* **Over our own cap**: see `AVATAR_MAX_SESSIONS`; the call never contacts the vendor (AV-11).
+
 # Lifetime and cost
 
-The Simli session opens when the first participant joins the room and closes when the call ends, for any reason, within 5 s. It is never opened at call creation, and if nobody joins within the 60 s the room waits ([/api/media-protocol.md](/api/media-protocol.md)) it is never opened at all (AV-07). The call's maximum duration bounds it.
+The Simli session opens when the first participant joins the room and closes when the call ends, for any reason, within 5 s. It is never opened at call creation, and if nobody joins within the 60 s the room waits ([/api/media-protocol.md](/api/media-protocol.md)) it is never opened at all (AV-07). The call's maximum duration bounds it. Shutting the API down closes every session still open (AV-12).
 
 # What an avatar frame is not
 
@@ -77,3 +81,6 @@ The Simli session opens when the first participant joins the room and closes whe
 - **AV-07** — Given a `voice` or `text` call, then no avatar service is constructed; and given a video call, then the avatar session opens only after a participant has joined, closes within 5 s of the call ending for any reason, and is never opened when nobody joins within 60 s.
 - **AV-08** — Given any API response, log line or call event produced during an avatar call, then `SIMLI_API_KEY` appears in none of them.
 - **AV-09** — Given a vendor session that never comes up, or that comes up and never hands speech back, when the time limit passes (15 s to open, 5 s for speech to return), then the stage fails over to pass-through, the call continues, and speech the vendor had swallowed is delivered to the caller late; and given the session is still opening when the welcome is due, then the welcome is spoken directly and is not delayed by it.
+- **AV-10** — Given a vendor that reports an error or limit after the connection opens, when the stage is still waiting for the first frame, then it fails before consuming any speech and the agent is heard directly; and given a session that shows no frame and reports no error, then it is trusted and becomes ready; and given the first frame arrives, then it is ready at once.
+- **AV-11** — Given `AVATAR_MAX_SESSIONS` sessions already open in this process, when another video call's avatar is asked to open, then it never contacts the vendor, the agent is heard directly, and the slot is available again once an open session closes or fails.
+- **AV-12** — Given avatar sessions open when the API shuts down, then every one is closed.

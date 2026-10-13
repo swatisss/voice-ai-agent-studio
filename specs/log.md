@@ -1,5 +1,11 @@
 # Directory Update Log
 
+## 2026-10-13 (CP-0015 avatar admission control and fast refusal — implemented)
+
+* **Creation**: [CP-0015](changes/cp-0015-avatar-admission-and-fast-refusal.md). **Update**: [avatar](architecture/avatar.md) (AV-10…AV-12, `AVATAR_MAX_SESSIONS`), [task plan](build/task-plan.md) (T33).
+* **Why**: a Simli refusal does not raise; the SDK drops the connection, so the stage swallowed the agent's first words until the 5 s watchdog. Now an error event or a missing first frame is checked at open, a per-process cap keeps a busy deployment under the vendor's limit, and shutdown closes every session.
+* **Not established**: behaviour against the real vendor; wired from the SDK source and tested with stubs only.
+
 ## 2026-10-13 (dev launcher: a call restarted the server it ran on)
 
 * **Reported**: during a video call the log showed `watchfiles: 1 change detected` several times, then Simli's `RATE LIMIT REACHED` and a burst of `Websocket closed`.

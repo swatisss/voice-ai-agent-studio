@@ -28,6 +28,7 @@ from typing import Any
 from pipecat.frames.frames import (
     Frame,
     InterruptionFrame,
+    OutputImageRawFrame,
     TTSAudioRawFrame,
     TTSStoppedFrame,
     UserStartedSpeakingFrame,
@@ -45,6 +46,13 @@ OnFailure = Callable[[str], Awaitable[None]]
 OPEN_TIMEOUT_S = 15.0      # opening the vendor session
 RETURN_TIMEOUT_S = 5.0     # speech sent to the vendor must come back, lip-synced, within this
 MAX_PENDING_BYTES = 4_000_000
+#: After the session opens, how long to wait for the vendor's first video frame before trusting it
+#: anyway. A refusal (rate limit, bad face) shows up inside this window as an error or stop event,
+#: and fails the stage before it has swallowed a word (AV-10).
+READY_PROOF_S = 5.0
+
+#: Avatars that hold, or are acquiring, a vendor session in this process (AV-11, AV-12).
+_LIVE: set["PassThroughOnFailure"] = set()
 
 #: The frames a rendering avatar consumes or acts on. When it is not rendering they are forwarded.
 _RENDERED = (TTSAudioRawFrame, TTSStoppedFrame, InterruptionFrame, UserStartedSpeakingFrame)
@@ -99,6 +107,7 @@ class PassThroughOnFailure:
     _returned = 0                         # count of audio frames the vendor has handed back
     _flushing = False
     _watch_task: asyncio.Task | None = None
+    _first_video: asyncio.Event | None = None
 
     def configure_failure(self, on_failure: OnFailure | None) -> None:
         self._on_failure = on_failure
@@ -115,19 +124,49 @@ class PassThroughOnFailure:
     async def open_avatar(self) -> None:
         if self._avatar_open or self._avatar_failed:
             return
+        limit = get_settings().avatar_max_sessions
+        if len(_LIVE) >= limit:
+            # Our own cap, set below the vendor's, so a busy deployment degrades to an ordinary
+            # video call instead of being refused by the vendor mid-welcome (AV-11).
+            await self._fail(f"already {limit} avatar session(s) open in this process")
+            return
         self._avatar_open = True
+        _LIVE.add(self)
+        self._first_video = asyncio.Event()
         try:
             await asyncio.wait_for(self._start_avatar(), OPEN_TIMEOUT_S)
+            await self._await_proof_of_life()
             self._avatar_ready = not self._avatar_failed
         except TimeoutError:
             await self._fail(f"opening the avatar session took longer than {OPEN_TIMEOUT_S:g}s")
         except Exception as exc:  # noqa: BLE001 - a vendor failure must never end a call
             await self._fail(exc)
 
+    async def _await_proof_of_life(self) -> None:
+        """Give an explicit refusal the chance to arrive before the stage starts consuming speech.
+
+        Returns as soon as the vendor shows a frame or the stage has failed. If neither happens the
+        session is trusted anyway: silence does not prove a refusal, and a false failure would
+        cost every call its face (AV-10).
+        """
+        assert self._first_video is not None
+        deadline = time.monotonic() + READY_PROOF_S
+        while not self._first_video.is_set() and not self._avatar_failed and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+
+    def vendor_ended(self, reason: str) -> None:
+        """The vendor said the session is over (an error, a rate limit, a close). Never raises.
+
+        Called from the vendor SDK's event callbacks, so it only schedules the failure.
+        """
+        if self._avatar_open and not self._avatar_failed:
+            asyncio.get_running_loop().create_task(self._fail(reason))
+
     async def close_avatar(self) -> None:
         was_open = self._avatar_open
         self._avatar_open = False
         self._avatar_ready = False
+        _LIVE.discard(self)
         if self._watch_task is not None and not self._watch_task.done():
             self._watch_task.cancel()
         if not was_open:
@@ -149,6 +188,7 @@ class PassThroughOnFailure:
             return
         self._avatar_failed = True
         self._avatar_ready = False
+        _LIVE.discard(self)  # a failed session no longer counts against the cap
         reason = exc if isinstance(exc, str) else f"{type(exc).__name__}: {exc}"
         log.warning("avatar unavailable, passing the agent's speech through: %s", scrub(reason))
         await self._flush_pending()  # speech the vendor swallowed is heard late rather than never
@@ -190,6 +230,8 @@ class PassThroughOnFailure:
 
     # -- the watchdog: speech sent to the vendor must come back (AV-05)
     async def push_frame(self, frame: Frame, direction: FrameDirection = FrameDirection.DOWNSTREAM) -> None:
+        if isinstance(frame, OutputImageRawFrame) and self._first_video is not None:
+            self._first_video.set()  # the vendor is rendering: the session is real
         if direction == FrameDirection.DOWNSTREAM and isinstance(frame, TTSAudioRawFrame) and not self._flushing:
             # Audio leaving this stage is either the vendor's re-timed speech coming back, or a
             # pass-through. Either way what we were holding has been delivered.
@@ -245,6 +287,23 @@ def _guarded_simli_class() -> type:
             await SimliVideoService._start_connection(self)
             if not self._initialized:  # the stock service swallows the error and pushes it
                 raise RuntimeError("the avatar connection did not start")
+            self._listen_for_vendor_end()
+
+        def _listen_for_vendor_end(self) -> None:
+            """The SDK turns a rate limit or error into an ERROR event and lets the socket die, without
+            raising anywhere. Listen for it so the stage fails over at once, not after 5 s (AV-10).
+
+            STOP is deliberately not listened to: the SDK also maps its `ENDFRAME` marker to it, which
+            appears to be the end of an utterance, not of the session."""
+            from simli.events import SimliEvent
+
+            async def ended() -> None:
+                self.vendor_ended("the avatar service reported an error or a limit")
+
+            try:
+                self._simli_client.registerEventCallback(SimliEvent.ERROR, ended)
+            except Exception as exc:  # noqa: BLE001 - listening is best effort; the watchdog still guards
+                log.warning("could not listen for avatar errors: %s", scrub(str(exc)))
 
         async def _stop_avatar(self) -> None:
             await self._stop_connection()
@@ -258,3 +317,13 @@ def make_avatar(on_failure: OnFailure | None = None) -> PassThroughOnFailure:
     avatar = _guarded_simli_class()(api_key=s.simli_api_key, face_id=s.simli_face_id)
     avatar.configure_failure(on_failure)
     return avatar
+
+
+async def close_all_avatars() -> None:
+    """Close every vendor session this process still holds (AV-12). Idempotent."""
+    for avatar in list(_LIVE):
+        try:
+            await avatar.close_avatar()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("avatar did not close at shutdown: %s", scrub(f"{type(exc).__name__}: {exc}"))
+    _LIVE.clear()

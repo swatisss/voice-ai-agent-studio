@@ -1,6 +1,6 @@
 """The talking avatar: a stage that can never make the agent harder to hear.
 
-Covers: AV-01, AV-02, AV-03, AV-04, AV-05, AV-06, AV-07, AV-08, AV-09
+Covers: AV-01, AV-02, AV-03, AV-04, AV-05, AV-06, AV-07, AV-08, AV-09, AV-10, AV-11, AV-12
 """
 from __future__ import annotations
 
@@ -59,9 +59,12 @@ class Recorder:
 
 
 @pytest.fixture(autouse=True)
-def _restore_push_frame():  # noqa: ANN202
+def _restore_push_frame(monkeypatch):  # noqa: ANN001, ANN202
     original = FrameProcessor.push_frame
+    monkeypatch.setattr(avatar_mod, "READY_PROOF_S", 0.05)   # the stub shows no frame; do not wait 5 s for one
+    avatar_mod._LIVE.clear()  # noqa: SLF001
     yield
+    avatar_mod._LIVE.clear()  # noqa: SLF001
     FrameProcessor.push_frame = original  # type: ignore[method-assign]
 
 
@@ -480,3 +483,73 @@ async def test_a_healthy_avatar_is_not_failed_by_the_watchdog(monkeypatch) -> No
     await asyncio.sleep(0.9)
     assert avatar.avatar_failed is False
     assert not (avatar._pending)                         # noqa: SLF001 - nothing is held back
+
+
+# ---------------------------------------------------------------- AV-10..12: refusal, cap, shutdown
+async def test_a_refusal_after_connecting_fails_the_stage_before_it_swallows_speech(monkeypatch) -> None:  # noqa: ANN001
+    """Covers: AV-10"""
+    monkeypatch.setattr(avatar_mod, "READY_PROOF_S", 2.0)
+    avatar = StubAvatar()
+    out = Recorder(avatar)
+
+    opening = asyncio.create_task(avatar.open_avatar())
+    await asyncio.sleep(0.1)                       # connected; waiting for proof of life
+    avatar.vendor_ended("rate limit")              # the SDK's ERROR event arrives
+    await asyncio.wait_for(opening, 1)
+
+    assert avatar.avatar_failed and not avatar._avatar_ready  # noqa: SLF001
+    heard = _audio()
+    await out.feed(heard)
+    assert out.frames == [heard] and avatar.sent == 0   # heard directly, never sent to the vendor
+
+
+async def test_a_session_with_no_frame_yet_is_trusted_not_failed() -> None:
+    """Covers: AV-10"""
+    avatar = StubAvatar()                          # connects, shows nothing, reports nothing
+    await avatar.open_avatar()
+    assert avatar._avatar_ready and not avatar.avatar_failed  # noqa: SLF001 - silence is not a refusal
+
+
+async def test_a_first_frame_marks_the_session_ready_at_once(monkeypatch) -> None:  # noqa: ANN001
+    """Covers: AV-10"""
+    monkeypatch.setattr(avatar_mod, "READY_PROOF_S", 30.0)
+    avatar = StubAvatar()
+    Recorder(avatar)
+    opening = asyncio.create_task(avatar.open_avatar())
+    await asyncio.sleep(0.1)
+    await avatar.push_frame(_video())              # the vendor renders its first frame
+    await asyncio.wait_for(opening, 1)
+    assert avatar._avatar_ready  # noqa: SLF001
+
+
+async def test_calls_over_the_session_cap_get_no_avatar_and_no_vendor_contact(configured, monkeypatch) -> None:  # noqa: ANN001
+    """Covers: AV-11"""
+    monkeypatch.setattr(avatar_mod, "get_settings", lambda: configured.model_copy(update={"avatar_max_sessions": 1}))
+    first, second = StubAvatar(), StubAvatar()
+    out = Recorder(second)
+
+    await first.open_avatar()
+    await second.open_avatar()
+
+    assert first.started == 1 and first._avatar_ready  # noqa: SLF001
+    assert second.started == 0 and second.avatar_failed   # never contacted the vendor
+    heard = _audio()
+    await out.feed(heard)
+    assert out.frames == [heard]                        # and the agent is still heard
+
+    await first.close_avatar()                          # the slot comes back
+    third = StubAvatar()
+    await third.open_avatar()
+    assert third.started == 1 and not third.avatar_failed
+
+
+async def test_shutdown_closes_every_open_session(configured) -> None:  # noqa: ANN001
+    """Covers: AV-12"""
+    a = StubAvatar()
+    await a.open_avatar()
+    assert a.stopped == 0
+
+    await room_mod.close_avatars()
+
+    assert a.stopped == 1 and not a.avatar_open
+    assert not avatar_mod._LIVE  # noqa: SLF001

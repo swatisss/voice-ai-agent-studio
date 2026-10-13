@@ -123,3 +123,10 @@ async def wait_agents() -> None:
     """Await in-flight video pipelines (tests, shutdown)."""
     while _AGENT_TASKS:
         await asyncio.gather(*list(_AGENT_TASKS), return_exceptions=True)
+
+
+async def close_avatars() -> None:
+    """Close any avatar vendor sessions still open, so none outlives the process (AV-12)."""
+    from voiceai.modules.voice.avatar import close_all_avatars
+
+    await close_all_avatars()

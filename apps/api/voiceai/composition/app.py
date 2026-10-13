@@ -73,6 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await worker.stop()
     await handoff_service.wait_packets()
     await video_rooms.wait_agents()
+    await video_rooms.close_avatars()  # a vendor session must not outlive the process (AV-12)
 
 
 def create_app() -> FastAPI:

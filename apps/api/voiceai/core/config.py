@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     simli_face_id: str | None = None
     avatar_video_size: int = 512   # square; the vendor's native size is unverified, so configurable
     avatar_video_fps: int = 25
+    avatar_max_sessions: int = 1   # our own cap on live vendor sessions; keep it at or below the vendor plan's limit
 
     # Captured frames (/architecture/media-storage.md)
     media_backend: str = "local"  # local | gcs

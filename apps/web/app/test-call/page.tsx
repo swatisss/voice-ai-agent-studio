@@ -102,6 +102,13 @@ function TestCall() {
     if (agentDetail && !callId) setTurn({ ...DEFAULT_TURN, ...(agentDetail.draft_config?.voice?.turn_detection ?? {}) });
   }, [agentDetail, callId]);
   useEffect(() => () => { voice.current?.hangup(); room.current?.hangup(); }, []);
+  useEffect(() => {  // UI-39: the preview <video> only exists once the camera is on, so attach after render
+    const el = preview.current;
+    const track = cameraOn ? room.current?.cameraTrack() : null;
+    if (!el || !track) return;
+    track.attach(el);
+    return () => { track.detach(el); };
+  }, [cameraOn]);
   useEffect(() => {  // the Technical details choice survives reloads; the page works without storage
     try { setTechnicalState(localStorage.getItem(TECH_KEY) === "1"); } catch { /* storage unavailable */ }
   }, []);
@@ -122,11 +129,7 @@ function TestCall() {
   async function toggleCamera() {
     if (!room.current) return;
     const on = await room.current.setCamera(!cameraOn);
-    setCameraOn(on);
-    if (on) {
-      const track = room.current.cameraTrack();
-      if (track && preview.current) track.attach(preview.current);
-    }
+    setCameraOn(on);  // the effect below attaches the track once the <video> has rendered
   }
 
   async function start() {
@@ -248,7 +251,7 @@ function TestCall() {
           </div>
         } actions={
           busy
-            ? <Button variant="danger" onClick={hangup}><PhoneOff size={14} />{mode === "talk" ? "Hang up" : "End chat"}</Button>
+            ? <Button variant="danger" onClick={hangup}><PhoneOff size={14} />{mode === "type" ? "End chat" : "Hang up"}</Button>
             : <Button variant="primary" onClick={start} disabled={outbound && !target}>{outbound && <PhoneOutgoing size={14} />}{startLabel}</Button>
         }>
           {outbound && !busy && (

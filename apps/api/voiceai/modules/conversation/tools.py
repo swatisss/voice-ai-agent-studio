@@ -59,6 +59,35 @@ BUILTIN_SCHEMAS: list[dict[str, Any]] = [
 ]
 
 
+#: Offered only on a `video` call, so on every other channel the model cannot call it (RT-10).
+LOOK_SCHEMA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "look_at_camera",
+        "description": (
+            "Look at one frame from the caller's camera and describe what is visible. Use it when "
+            "the caller is showing you something. The result carries a confidence: when it is not "
+            "'confirmed', say what is visible and ask for the better look it names - never describe "
+            "damage the frame does not show."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "asset_hint": {
+                    "type": "string",
+                    "description": "What you believe you are looking at, e.g. 'ward bed' or 'insured vehicle'",
+                }
+            },
+            "required": [],
+        },
+    },
+}
+
+BUILTIN_NAMES: frozenset[str] = frozenset(
+    [s["function"]["name"] for s in BUILTIN_SCHEMAS] + [LOOK_SCHEMA["function"]["name"]]
+)
+
+
 def tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
     return {
         "type": "function",
@@ -66,8 +95,10 @@ def tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def all_schemas(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return BUILTIN_SCHEMAS + [tool_schema(t) for t in tools]
+def all_schemas(tools: list[dict[str, Any]], channel: str = "text") -> list[dict[str, Any]]:
+    """The schemas one turn offers. `look_at_camera` exists only on a video call (RT-10)."""
+    builtins = [*BUILTIN_SCHEMAS, LOOK_SCHEMA] if channel == "video" else BUILTIN_SCHEMAS
+    return builtins + [tool_schema(t) for t in tools]
 
 
 def render_url(url: str, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:

@@ -25,6 +25,7 @@ from voiceai.modules.agentcfg.contract import TurnDetectionPatch
 from voiceai.core.toolcalling import tool_caller
 from voiceai.core.voicecontrol import voice_control
 from voiceai.modules.conversation import repo
+from voiceai.modules.evidence.contract import case_for_call, evidence_for_call
 from voiceai.modules.conversation.serializers import analysis_out, call_summary, feedback_out
 from voiceai.modules.conversation.session import AgentSession, create_call
 from voiceai.core.tenancy import current_tenant, resolve_tenant
@@ -178,5 +179,8 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
         "events": [{"seq": e.seq, "at": e.at.isoformat(), "kind": e.kind, "text": e.text, "data": e.data} for e in d.events],
         "escalation": await handoff_desk().for_call(s, tenant_id, call_id),
         "analysis": analysis_out(d.analysis),
+        # API-05: empty and null for a call that never looked at anything.
+        "evidence": await evidence_for_call(s, tenant_id, call_id),
+        "case": await case_for_call(s, tenant_id, call_id),
         "settings": await effective_settings(s, d.call),
     }

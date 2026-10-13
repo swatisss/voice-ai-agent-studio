@@ -40,7 +40,7 @@ class TurnSettings:
 
 
 # ---------------------------------------------------------------- configuration schema
-BUILTIN_TOOLS = {"search_knowledge", "escalate_to_human", "end_call"}
+BUILTIN_TOOLS = {"search_knowledge", "escalate_to_human", "end_call", "look_at_camera"}
 
 
 VOICE_RE = re.compile(r"aura-2-[a-z]+-en")

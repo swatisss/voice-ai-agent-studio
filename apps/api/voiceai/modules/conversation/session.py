@@ -284,7 +284,7 @@ class AgentSession:
 
         handoff = policy.get("handoff_message") or "I'm connecting you with a specialist."
         override = (self.config.get("models") or {}).get("realtime")
-        schemas = all_schemas(self.config.get("tools", []))
+        schemas = all_schemas(self.config.get("tools", []), self.channel)
         spoken = ""
         rounds = 0
         filler_done = False
@@ -377,6 +377,45 @@ class AgentSession:
             return "other", "Maximum number of turns reached"
         return None
 
+    async def _look(self, asset_hint: str) -> dict[str, Any]:
+        """The `look_at_camera` built-in: one frame, described and pinned (VI-05, VI-07).
+
+        The evidence module owns the frame, the vision call and the case; it is handed everything
+        it needs about this call so it never names the conversation module back
+        (/architecture/modular-structure.md).
+        """
+        from voiceai.modules.evidence.contract import look_at_camera, transcript_of
+
+        caller_words = next(
+            (str(m.get("content") or "") for m in reversed(self.history) if m.get("role") == "user"), ""
+        )
+        async with sessionmaker()() as s:
+            look = await look_at_camera(
+                s,
+                tenant_id=self.tenant_id, call_id=self.call_id, agent_id=self.agent_id,
+                case_kind=self._case_kind(), caller_words=caller_words, asset_hint=asset_hint,
+                transcript=transcript_of(self.history),
+                caller_verified=self.state.verified,
+                entities={"member_ref": self.state.verified_member_ref} if self.state.verified_member_ref else {},
+            )
+            await s.commit()
+        self.state.tools_used.append({
+            "name": "look_at_camera", "ok": look.status == "ok",
+            "summary": (
+                f"Looked at the camera: {look.observation.confidence}" if look.observation
+                else f"Look declined: {look.reason}"
+            ),
+        })
+        # VI-11: an injury or unsafe premises hands off in this turn, whatever the case state.
+        if look.unsafe and not self.state.escalated:
+            await self.escalate("safety", f"Visual observation flagged {look.observation.safety_flag}")
+        return look.for_model()
+
+    def _case_kind(self) -> str:
+        from voiceai.modules.evidence.contract import case_kind_for
+
+        return case_kind_for(self.config, str(self.config.get("mode") or "inbound"))
+
     async def _run_tool(self, call_id: str, name: str, arguments: str) -> str:
         try:
             args = json.loads(arguments or "{}")
@@ -406,6 +445,8 @@ class AgentSession:
         elif name == "end_call":
             self.state.end_requested = True
             result = {"status": "ending"}
+        elif name == "look_at_camera":
+            result = await self._look((args or {}).get("asset_hint") or "")
         else:
             result, ok = await self.tools.execute(name, arguments)
             if name in self.tools.tools:

@@ -16,6 +16,7 @@ from voiceai.core.db import sessionmaker, utcnow
 from voiceai.core.errors import ApiError
 from voiceai.core.events import bus
 from voiceai.core.llm.gateway import gateway
+from voiceai.modules.evidence.contract import packet_evidence
 from voiceai.core.tables import Call, CallEvent, Escalation
 from voiceai.core.postcall import post_call_analysis
 from voiceai.modules.conversation.contract import transcript_lines
@@ -114,6 +115,12 @@ async def build_packet(escalation_id: str, tools_used: list[dict[str, Any]], ver
         except Exception as exc:  # noqa: BLE001 - ES-05 any failure -> deterministic packet
             log.warning("packet LLM failed for %s: %s", escalation_id, exc)
             esc.packet, esc.packet_status = fallback_packet(esc, events, tools_used, verified_ref), "fallback"
+        # ES-09: appended deterministically from the stored rows, so it is present on a fallback
+        # packet too - a safety hand-off from a visual call is exactly where the drafted packet is
+        # least likely to have been waited for, and the human most needs to see what the agent saw.
+        visual = await packet_evidence(s, esc.tenant_id, esc.call_id)
+        if visual and isinstance(esc.packet, dict):
+            esc.packet = {**esc.packet, **visual}
         await s.commit()
         bus.publish(esc.tenant_id, "console", "escalation.updated", summary(esc))
 

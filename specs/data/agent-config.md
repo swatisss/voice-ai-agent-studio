@@ -2,7 +2,7 @@
 type: Config Schema
 title: Agent configuration schemas
 description: JSON shapes of the agent draft config, persona, policy, tool and skill definitions, and the immutable version snapshot.
-status: stable
+status: draft
 tags: [data, config, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -34,12 +34,14 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
   "tool_ids": ["..."],
   "skill_ids": ["..."],
   "knowledge_doc_ids": ["..."],
-  "models": { "realtime": null }
+  "models": { "realtime": null },
+  "visual": { "case_kind": "facility_fault" }
 }
 ```
 
 | Field | Rules |
 |---|---|
+| `visual.case_kind` | Optional: `facility_fault` or `claim`, the kind of case a visual call opens ([/architecture/visual-intake.md](/architecture/visual-intake.md)). Omitted or unrecognised falls back to the agent's mode — `facility_fault` for `internal`, `claim` otherwise — which is what the two visual use cases need without every agent having to declare it. |
 | `persona.name` | 1–40 chars |
 | `persona.voice` | Deepgram Aura voice id; default `aura-2-thalia-en` |
 | `persona.greeting`, `persona.disclosure` | required, ≤ 300 chars each |

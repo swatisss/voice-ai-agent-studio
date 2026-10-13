@@ -81,6 +81,7 @@ Updated:
 * [/architecture/escalation.md](/architecture/escalation.md) - the visual safety trigger, `visual_evidence` on the packet, ES-09
 * [/architecture/tools-and-skills.md](/architecture/tools-and-skills.md) - `look_at_camera` joins the reserved built-in names
 * [/data/data-model.md](/data/data-model.md) - `media_objects`, `call_evidence`, `visual_cases`; `channel` gains `video`; DM-01 to 23 tables; DM-06
+* [/data/agent-config.md](/data/agent-config.md) - optional `visual.case_kind`, falling back to the agent's mode
 * [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md) - ward assets, facility faults, claim intake, MOCK-13…15
 * [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md) - the Facilities Intake agent and the Rowan persona, three new tools (19), the seeded imagery and ward assets, nine use-case rows; UC-01 reworded, UC-07
 * [/ui/test-call.md](/ui/test-call.md) - the channel switch becomes Talk | Video | Type

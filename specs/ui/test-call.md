@@ -2,7 +2,7 @@
 type: UI Spec
 title: Test call
 description: Pick a published agent, then talk or type to it with a live transcript; the agent opens a voice call with its spoken welcome, and technical details are shown on demand.
-status: stable
+status: draft
 tags: [ui, voice, test-call]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -23,6 +23,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 # Talk | Type
 
 The switch sits in the call card header and reads **Talk | Video | Type**. It can be changed before a call starts and after it ends; while a call runs it is disabled with the hint "End the call to switch". It sets the call's channel (voice, video or text) and the start button label (**Start call**, **Start video call** or **Start chat**).
+
+On the Live engine ([/architecture/live-session.md](/architecture/live-session.md)) the turn-detection and persona switches are hidden for a video call, because turn-taking and the voice belong to the session (LV-06).
 
 **Video** is a voice call whose caller can turn on a camera the agent may ask to look at. It is offered only for agents whose use cases advertise the channel, and everything it adds — the agent's tile and the caller's self-view, the camera control, the evidence strip, the case card — is specified in [/ui/visual-case.md](/ui/visual-case.md).
 

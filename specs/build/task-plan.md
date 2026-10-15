@@ -2,7 +2,7 @@
 type: Task Plan
 title: Task plan for CP-0001
 description: Ordered implementation tasks for the initial platform build, each with governing specs, acceptance IDs, and status.
-status: stable
+status: draft
 tags: [build, tasks, cp-0001]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -46,3 +46,10 @@ Work top to bottom; each task ends green (`spec_check`, tests, web build where r
 | T33 | Avatar: refusal detected at open, `AVATAR_MAX_SESSIONS` admission cap, sessions closed at shutdown | [/architecture/avatar.md](/architecture/avatar.md) | AV-10…AV-12 | done |
 | T34 | Avatar video without lag: output in latest-frame mode, vendor readers started at open, `AVATAR_VIDEO_FPS` default 30 | [/architecture/avatar.md](/architecture/avatar.md) | AV-13, AV-14 | done |
 | T35 | Avatar ready before the welcome: session opens at pipeline start, the welcome waits up to 5 s for the face | [/architecture/avatar.md](/architecture/avatar.md) | AV-07, AV-09, AV-15 | done |
+| T36 | Spike: confirm Vertex access, model id, avatar options and names, MP4 shape, tool behaviour and measured latency; write up under `specs/verification/` and amend CP-0018. Gates T37-T42 | [/architecture/live-session.md](/architecture/live-session.md), [/decisions/adr-0012-gemini-live-avatar.md](/decisions/adr-0012-gemini-live-avatar.md) | - | todo |
+| T37 | `LiveAgent` port, Vertex adapter, settings and `.env.example`, `arch_check` confinement | [/architecture/live-session.md](/architecture/live-session.md), [/architecture/modular-structure.md](/architecture/modular-structure.md) | GL-02, GL-13, GL-14 | todo |
+| T38 | The relay, engine selection and `media` on `POST /api/calls`, the WebSocket endpoint | [/architecture/live-session.md](/architecture/live-session.md), [/api/live-protocol.md](/api/live-protocol.md) | GL-01, GL-03, GL-04, GL-05, GL-12, LV-01…LV-06 | todo |
+| T39 | Tools, transcripts, safety screen, welcome, ending and clocks on the Live session, usage and cost | [/architecture/live-session.md](/architecture/live-session.md) | GL-06…GL-10, GL-15 | todo |
+| T40 | Camera pull: `frame_request`, `FrameSource` over the socket | [/architecture/live-session.md](/architecture/live-session.md) | GL-11 | todo |
+| T41 | Web: socket client, microphone capture, MediaSource player, voice fallback, camera answers | [/ui/visual-case.md](/ui/visual-case.md), [/api/live-protocol.md](/api/live-protocol.md) | UI-49…UI-51 | todo |
+| T42 | Runbooks, deployment (service account, region), compliance and demo notes | [/architecture/deployment.md](/architecture/deployment.md), [/product/healthcare-compliance.md](/product/healthcare-compliance.md) | - | todo |

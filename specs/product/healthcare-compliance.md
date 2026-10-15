@@ -2,7 +2,7 @@
 type: Compliance Note
 title: Healthcare compliance rules
 description: Safety, privacy, verification and disclosure rules every healthcare agent on the platform must follow, and the production gaps v1 leaves open.
-status: stable
+status: draft
 tags: [product, healthcare, compliance, safety]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -25,7 +25,11 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 13. **The face is an AI agent, never a real person.** On a video call the agent may appear as a stock face rendered by the avatar service ([/architecture/avatar.md](/architecture/avatar.md)). It is labelled **AI agent** wherever it is shown, in addition to the spoken disclosure of rule 2, and it is never a real person's likeness: faces are chosen from the vendor's stock set, and creating one from an uploaded photograph is out of scope. The avatar service receives the agent's synthesised speech, which can contain member information read back to the caller; a deployment that cannot accept that leaves `SIMLI_API_KEY` unset and gets a video call with no face.
 12. **Captured frames expire; the finding does not.** Stored frames are deleted after the retention window (30 days by default) while the description, confidence and the caller's words remain, so a case stays auditable after its images are gone ([ADR-0010](/decisions/adr-0010-media-retention.md)). Media we store is readable only through one authorised, tenant-checked endpoint — there is no public or signed URL (MS-05). Room access is scoped the same way: a call's token admits its bearer to `call-<call_id>` and to no other room, in this tenant or any other ([/api/media-protocol.md](/api/media-protocol.md), VI-13). What LiveKit Cloud itself retains of the transiting media is the provider's to state, not ours, and is a question a production deployment must answer before it carries real patients.
 
+14. **On the Live engine, the caller's speech goes to Google, and the camera does not.** A video call on the Gemini Live engine streams the caller's microphone to a Gemini Live session on Vertex AI for the whole call, and the agent's face and voice come back from it ([/architecture/live-session.md](/architecture/live-session.md), [ADR-0012](/decisions/adr-0012-gemini-live-avatar.md)). That replaces Deepgram for these calls rather than adding to it. The camera is stricter than on the LiveKit engine (rule 9): nothing streams to anyone; the browser sends one still only when the agent calls `look_at_camera`, to our server, and it goes to the `vision` role like any other (GL-11, VI-03). **The wording of the safety message (rule 6) is recorded and shown exactly but is spoken by a model that is instructed to say it, so the audio is not guaranteed verbatim** (GL-08). The face is labelled **AI agent** as in rule 13. A deployment that cannot send call audio to Google leaves `VIDEO_ENGINE` on `livekit` or the Vertex settings unset.
+
 # Production gaps (not in v1)
+
+* A Business Associate Agreement with Google for Vertex AI, before the Live engine carries real patients' speech.
 
 * Business Associate Agreements with every processor (LLM, STT, TTS, cloud).
 * PHI redaction before transcripts reach analytics, clustering or LLM drafting.

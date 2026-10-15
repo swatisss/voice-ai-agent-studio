@@ -2,7 +2,7 @@
 type: Component Spec
 title: Talking avatar
 description: "How the agent appears as a live face in a video call: where the Simli service sits in the pipeline, what the caller sees and hears, what happens when it is unavailable or fails, and why its frames are never evidence."
-status: stable
+status: draft
 tags: [architecture, video, avatar, simli]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-13T00:00:00Z" }
 ---
@@ -10,6 +10,8 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-13T00:00:00Z" }
 # What this is for
 
 A video call should look like a call with someone. The caller already sees themselves; this gives the agent a face on the other side, speaking in sync with what it says. The decision and the alternatives are in [ADR-0011](/decisions/adr-0011-avatar-simli.md).
+
+This spec describes the avatar of the `livekit` engine (Simli). On the `gemini_live` engine the face is rendered by the Live session and arrives muxed with its voice ([/architecture/live-session.md](/architecture/live-session.md)); the AV criteria below govern the LiveKit engine only.
 
 It is presentation only. The brain, the tools, the escalation rules and the visual-intake flow ([/architecture/visual-intake.md](/architecture/visual-intake.md)) are unchanged, and a call with no avatar behaves exactly as a video call does today.
 

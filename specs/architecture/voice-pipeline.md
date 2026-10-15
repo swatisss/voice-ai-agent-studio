@@ -2,7 +2,7 @@
 type: Component Spec
 title: Voice pipeline
 description: Browser microphone audio over a WebSocket through a Pipecat pipeline - VAD, Deepgram STT, turn aggregation, the agent runtime, Deepgram TTS - with barge-in.
-status: stable
+status: draft
 tags: [architecture, voice, pipecat]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -26,6 +26,8 @@ Wire format and control messages: [/api/voice-protocol.md](/api/voice-protocol.m
 A `video` call runs this same pipeline with **one substitution**: Pipecat's `LiveKitTransport` replaces `FastAPIWebsocketTransport` at both ends, so audio and video travel over a LiveKit room instead of the WebSocket ([/api/media-protocol.md](/api/media-protocol.md), [ADR-0009](/decisions/adr-0009-video-channel.md)). Everything between the two ends — VAD, STT, TurnAggregator, BrainProcessor, TTS — is the same objects in the same order, which is the point: there is one brain and one turn loop, not two.
 
 The transport is configured with `video_in_enabled`. It publishes no video track of its own **unless the call has an avatar**, in which case `video_out_enabled` is on and the agent's face is published ([/architecture/avatar.md](/architecture/avatar.md)); in that case a Simli avatar processor is also placed after TTS and before the transport output, and the audio the caller hears is the avatar's re-timed audio. Without an avatar the processor order and transport settings are unchanged (AV-02). One processor is added directly after `transport.input()`: a **frame tap** that keeps the most recent `UserImageRawFrame` for the call and consumes it, so no video reaches VAD, STT or the brain. The tap is what the `FrameSource` port reads when the agent looks ([/architecture/visual-intake.md](/architecture/visual-intake.md), VI-03).
+
+A `video` call on the **Live engine** does not run this pipeline at all: one Gemini Live session replaces the speech-to-text, turn aggregation, model, text-to-speech and avatar stages, and a relay in this module connects it to the browser's WebSocket ([/architecture/live-session.md](/architecture/live-session.md), [ADR-0012](/decisions/adr-0012-gemini-live-avatar.md)). Everything below describes `voice` calls and the `livekit` engine.
 
 # Pipeline processors
 

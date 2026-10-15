@@ -2,12 +2,14 @@
 type: API Contract
 title: Media room protocol
 description: "The LiveKit room contract for a video call: how the room and tokens are scoped, which tracks each side publishes, and how the call starts and ends."
-status: stable
+status: draft
 tags: [api, video, livekit, webrtc]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---
 
 # Where this applies
+
+Only `channel: "video"` calls **on the `livekit` engine**. A video call on the `gemini_live` engine has no room and no token; it uses the WebSocket in [/api/live-protocol.md](/api/live-protocol.md) ([/architecture/live-session.md](/architecture/live-session.md)).
 
 Only `channel: "video"` calls. A `channel: "voice"` call uses the WebSocket in [/api/voice-protocol.md](/api/voice-protocol.md) and is unaffected by anything here ([ADR-0009](/decisions/adr-0009-video-channel.md)).
 

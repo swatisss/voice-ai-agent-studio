@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent runtime
 description: The shared brain used by voice calls, text chat and simulations - turn loop, prompt assembly, built-in tools, call state, safety screen and escalation triggers.
-status: stable
+status: draft
 tags: [architecture, runtime]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -17,6 +17,8 @@ One implementation of "how the agent behaves", used by three channels:
 | `video` | [Voice pipeline](/architecture/voice-pipeline.md) | text chunks → TTS, plus the camera the agent may ask to look at |
 | `text` | `POST /api/calls/{id}/messages` | full reply text |
 | `simulation` | [Evaluation](/architecture/evaluation.md) | full reply text |
+
+A `video` call on the Live engine is driven by a Gemini Live session instead of this turn loop: the model is the brain, but tools run through this module's executor, transcripts are recorded as the same events, and the safety screen, escalation and ending rules are applied on top of it ([/architecture/live-session.md](/architecture/live-session.md)). Turn-detection modes and live persona switching do not apply to it.
 
 Behavior MUST NOT differ between channels except: voice may emit a short *filler* line before slow tool calls, voice/text replies are kept short and speakable (no markdown, no lists), and a `video` call additionally offers the `look_at_camera` built-in. A `video` call with no camera behaves exactly as `voice` (VI-14).
 

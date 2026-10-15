@@ -1,5 +1,14 @@
 # Directory Update Log
 
+## 2026-10-15 (CP-0018 Gemini Live avatar channel — proposed, awaiting review)
+
+* **Creation**: [CP-0018](changes/cp-0018-gemini-live-avatar-channel.md) (`cp_state: proposed`), [live session engine](architecture/live-session.md) (GL-01…GL-15), [live session protocol](api/live-protocol.md) (LV-01…LV-06), [ADR-0012](decisions/adr-0012-gemini-live-avatar.md), [live session addendum](prompts/live-session-addendum.md); new acceptance prefixes `GL` and `LV`, plus UI-49…UI-51. No code.
+* **Update** (set to `draft`): [voice pipeline](architecture/voice-pipeline.md), [media protocol](api/media-protocol.md), [agent runtime](architecture/agent-runtime.md), [avatar](architecture/avatar.md), [REST API](api/rest-api.md), [healthcare compliance](product/healthcare-compliance.md) (rule 14, a production gap), [modular structure](architecture/modular-structure.md) (the `LiveAgent` port), [tech stack](architecture/tech-stack.md), [deployment](architecture/deployment.md), [test call UI](ui/test-call.md), [visual case UI](ui/visual-case.md), [conventions](process/conventions.md), [task plan](build/task-plan.md) (T36…T42).
+* **Why it exists**: after CP-0016 and CP-0017 the video call no longer drifted and loaded its face early, but still did not feel live, because five hops sit in series (speech-to-text, model, text-to-speech, Simli, LiveKit). The requester pointed to a reference implementation that feels instant.
+* **Established by reading its code** ([awesome-llm-apps PR #1203](https://github.com/Shubhamsaboo/awesome-llm-apps/pull/1203)): one Gemini Live session on Vertex AI with `response_modalities: VIDEO` and an `avatar_config` returns a fragmented MP4 carrying face and voice as one stream; the server relays it over a WebSocket and the browser plays it with MediaSource; tools are non-blocking; the avatar path needs Application Default Credentials, not an API key.
+* **Not established**: that a stock avatar works on an ordinary project (the README states an allowlist only for custom portraits), the model id and options against Google's own reference, latency, price. The first task is a spike that settles these before any code.
+* **Judgement calls to review**: a second engine, not a replacement; the camera is pulled on demand rather than streamed (stronger than today); the safety message is instructed, not guaranteed verbatim; turn-detection modes and live persona switching do not apply to this engine; the reference's incident-sketch generation is excluded by IMG-01.
+
 ## 2026-10-15 (CP-0017 avatar ready before the welcome — implemented)
 
 * **Creation**: [CP-0017](changes/cp-0017-avatar-ready-before-the-welcome.md). **Update**: [avatar](architecture/avatar.md) (lifetime, hangs, AV-07 and AV-09 reworded, AV-15), [task plan](build/task-plan.md) (T35).

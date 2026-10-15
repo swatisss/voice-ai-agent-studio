@@ -1,5 +1,13 @@
 # Directory Update Log
 
+## 2026-10-15 (CP-0016 avatar video without lag — implemented)
+
+* **Creation**: [CP-0016](changes/cp-0016-avatar-video-without-lag.md). **Update**: [avatar](architecture/avatar.md) (new "Keeping the face in step", AV-13, AV-14, `AVATAR_VIDEO_FPS` default), [task plan](build/task-plan.md) (T34).
+* **Reported**: on a local run the avatar lagged badly and did not appear or speak. LiveKit was ruled out; the faults are in the agent process.
+* **Found (from the pinned Pipecat 1.12.0 and `simli-ai` 2.0.3 source)**: with `video_out_is_live=True` every Simli frame (30 fps) went into an unbounded queue drained at 25 fps, so the delay grew about 5 frames a second, roughly 12 s after a minute; and the stock Simli service reads video only after its first speech, while our guard waits for a video frame before letting speech in, so the face started only after the caller's second turn. AV-10's tests passed because their stub lacks that gating.
+* **Fixed**: latest-frame-wins output, readers started at open, 30 fps default. Also corrects the expectation that AV-10's "first frame, ready at once" ever held against the real service.
+* **Not established**: behaviour against a real Simli session. Offered and not taken: waiting for the face before the welcome (revisit after a real run).
+
 ## 2026-10-13 (CP-0015 avatar admission control and fast refusal — implemented)
 
 * **Creation**: [CP-0015](changes/cp-0015-avatar-admission-and-fast-refusal.md). **Update**: [avatar](architecture/avatar.md) (AV-10…AV-12, `AVATAR_MAX_SESSIONS`), [task plan](build/task-plan.md) (T33).

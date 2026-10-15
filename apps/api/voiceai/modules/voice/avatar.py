@@ -284,10 +284,27 @@ def _guarded_simli_class() -> type:
             await super(SimliVideoService, self).setup(setup)
 
         async def _start_avatar(self) -> None:
+            self._start_readers_without_speech()
             await SimliVideoService._start_connection(self)
             if not self._initialized:  # the stock service swallows the error and pushes it
                 raise RuntimeError("the avatar connection did not start")
             self._listen_for_vendor_end()
+
+        def _start_readers_without_speech(self) -> None:
+            """Let the stock service read the vendor's video and audio from the moment it connects.
+
+            Its two readers wait for an event that only the first speech sets, by which time it has
+            built the resampler the audio reader needs. Our guard keeps speech out until the vendor
+            has shown a frame, so waiting for speech would wait forever: the face would start after
+            the caller's second turn (AV-14). Build the resampler it would build, and set the event.
+            """
+            from av.audio.resampler import AudioResampler
+
+            from voiceai.modules.voice.serializer import OUT_RATE
+
+            if self._pipecat_resampler is None:
+                self._pipecat_resampler = AudioResampler("s16", "mono", OUT_RATE)
+            self._pipecat_resampler_event.set()
 
         def _listen_for_vendor_end(self) -> None:
             """The SDK turns a rate limit or error into an ERROR event and lets the socket die, without

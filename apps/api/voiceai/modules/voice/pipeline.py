@@ -172,10 +172,12 @@ def build_room(
             audio_out_sample_rate=OUT_RATE,
             video_in_enabled=True,
             video_out_enabled=avatar is not None,
-            # The avatar streams continuously, so frames are published as they arrive rather than
-            # repeated at a fixed rate. Size and rate are configuration: they cost CPU on the single
-            # instance, and the vendor's native size is unverified (/architecture/avatar.md).
-            video_out_is_live=avatar is not None,
+            # Latest frame wins (AV-13). The "live" mode queues every frame without limit and drains
+            # the queue at video_out_framerate, so a vendor rendering faster than that adds delay for
+            # the rest of the call. Here a new frame replaces the one waiting and the newest is
+            # published at the configured rate. Size and rate are configuration: they cost CPU on
+            # the single instance (/architecture/avatar.md).
+            video_out_is_live=False,
             video_out_width=get_settings().avatar_video_size,
             video_out_height=get_settings().avatar_video_size,
             video_out_framerate=get_settings().avatar_video_fps,

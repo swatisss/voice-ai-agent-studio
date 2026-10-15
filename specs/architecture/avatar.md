@@ -38,7 +38,7 @@ Pipecat, and with it Simli's service, stays inside the voice module (MOD-04). No
 | `SIMLI_API_KEY` | The vendor key. Never returned by any API and never logged (AV-08). |
 | `SIMLI_FACE_ID` | Which stock face to render. One face serves every agent in this change. |
 | `AVATAR_MAX_SESSIONS` | How many vendor sessions this process may hold at once (default 1). Keep it at or below the Simli plan's limit. A call over it is an ordinary video call with a placeholder tile (AV-11). |
-| `AVATAR_VIDEO_SIZE`, `AVATAR_VIDEO_FPS` | The published track's size and frame rate. Configuration because they cost CPU on the single instance and because the vendor's native size is unverified; the defaults are a starting point and the first real run confirms them. |
+| `AVATAR_VIDEO_SIZE`, `AVATAR_VIDEO_FPS` | The published track's size and frame rate, default 512 and 30: Simli's native size and rate as read from its SDK, so no frame is resized and the face is not choppy. Configuration because they cost CPU on the single instance; the first real run confirms them. Lowering the rate skips frames; it never adds delay (AV-13). |
 
 An avatar is **available** when both Simli values are set and the SDK is installed. Anything less makes it unavailable; that is not an error. `POST /api/calls` reports it as `media.avatar`, true or false, and a video call is created either way.
 
@@ -48,6 +48,13 @@ The face is chosen from the vendor's stock faces. **A face built from an uploade
 
 * **Interruption works as it does for voice.** When the caller barges in, the interruption reaches the avatar, which drops what it had buffered, so the face stops speaking with the voice (AV-04, VO-03).
 * The protected welcome, the silence clocks and the closing line behave as they do on a voice call. The added latency of the avatar is a risk to the closing line, which is allowed up to 10 s to finish before the call closes ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md), CE-06); if it proves too tight in practice that is a configuration change, not a redesign.
+
+# Keeping the face in step
+
+The face must stay in step with the voice for the whole call, however long it runs.
+
+* **The transport shows the newest frame and never queues.** The avatar's output is published in "latest frame wins" mode: a frame replaces the one waiting and a publish loop sends whatever is newest at `AVATAR_VIDEO_FPS`. The other mode queues every frame and drains the queue at that rate, so a vendor rendering faster than the publish rate adds delay without limit. A slow moment skips frames and a stalled vendor freezes the picture; neither makes the face later (AV-13).
+* **The vendor's video is read from the moment the session opens.** The stock service only starts reading after the first speech reaches it, which would leave the face absent until the caller's second turn and the proof of life in AV-10 waiting for a frame that cannot come. The stage starts the readers itself when it opens the session, so the idle face is up at once (AV-14).
 
 # When it is unavailable or fails
 
@@ -84,3 +91,5 @@ The Simli session opens when the first participant joins the room and closes whe
 - **AV-10** — Given a vendor that reports an error or limit after the connection opens, when the stage is still waiting for the first frame, then it fails before consuming any speech and the agent is heard directly; and given a session that shows no frame and reports no error, then it is trusted and becomes ready; and given the first frame arrives, then it is ready at once.
 - **AV-11** — Given `AVATAR_MAX_SESSIONS` sessions already open in this process, when another video call's avatar is asked to open, then it never contacts the vendor, the agent is heard directly, and the slot is available again once an open session closes or fails.
 - **AV-12** — Given avatar sessions open when the API shuts down, then every one is closed.
+- **AV-13** — Given an avatar-enabled video call, when the vendor produces frames faster than they are published (a burst, or a vendor rate above `AVATAR_VIDEO_FPS`), then the next frame published is the newest one, the transport holds no backlog of frames, and the published frame rate defaults to the vendor's 30; so the delay between face and voice does not grow with the length of the call.
+- **AV-14** — Given the real avatar stage whose session has just opened and no speech has reached it, then its video and audio readers are already running, a frame the vendor renders is pushed on, and that frame makes the stage ready at once (AV-10) without any speech having been sent.

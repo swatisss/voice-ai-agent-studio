@@ -206,9 +206,9 @@ def test_the_avatar_sits_after_tts_and_enables_video_out(configured) -> None:  #
         assert with_avatar.index("FrameTap") == with_avatar.index("LiveKitInputTransport") + 1
 
         assert transport._params.video_out_enabled is True          # noqa: SLF001
-        assert transport._params.video_out_is_live is True          # noqa: SLF001
+        assert transport._params.video_out_is_live is False         # noqa: SLF001 - latest frame wins (AV-13)
         assert plain_transport._params.video_out_enabled is False   # noqa: SLF001
-        assert (transport._params.video_out_width, transport._params.video_out_framerate) == (512, 25)  # noqa: SLF001
+        assert (transport._params.video_out_width, transport._params.video_out_framerate) == (512, 30)  # noqa: SLF001
     finally:
         frames.release("c-avatar")
 
@@ -553,3 +553,128 @@ async def test_shutdown_closes_every_open_session(configured) -> None:  # noqa: 
 
     assert a.stopped == 1 and not a.avatar_open
     assert not avatar_mod._LIVE  # noqa: SLF001
+
+
+# ---------------------------------------------------------------- AV-13: the face stays in step
+async def test_the_transport_publishes_the_newest_frame_and_keeps_no_backlog(configured) -> None:  # noqa: ANN001
+    """Covers: AV-13
+
+    Pipecat's real output sender, configured exactly as `build_room` configures the avatar call. The
+    vendor renders a burst of frames faster than they can be published; the first frame the caller
+    sees afterwards must be the newest, not the oldest of a queue that takes seconds to drain.
+    """
+    import concurrent.futures
+
+    from pipecat.transports.base_output import BaseOutputTransport
+
+    from voiceai.modules.voice import frames, pipeline
+
+    holder = frames.register("c-lag")
+    try:
+        _, transport, _ = pipeline.build_room(_Session(), "dg", "wss://x", "tok", "call-1", holder=holder, avatar=StubAvatar())
+        params = transport._params  # noqa: SLF001
+    finally:
+        frames.release("c-lag")
+    assert params.video_out_framerate == 30 == Settings(_env_file=None).avatar_video_fps   # the vendor's own rate
+
+    published: list[int] = []
+
+    class FakeTransport:
+        _executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+        def create_task(self, coro, name=None):  # noqa: ANN001, ANN201
+            return asyncio.get_running_loop().create_task(coro)
+
+        async def cancel_task(self, task) -> None:  # noqa: ANN001
+            task.cancel()
+
+        def get_event_loop(self):  # noqa: ANN201
+            return asyncio.get_running_loop()
+
+        async def write_video_frame(self, frame) -> bool:  # noqa: ANN001
+            published.append(frame.image[0])
+            return True
+
+    sender = BaseOutputTransport.MediaSender(
+        FakeTransport(), destination=None, sample_rate=24000, audio_chunk_size=960, params=params  # type: ignore[arg-type]
+    )
+    size = params.video_out_width
+
+    def frame(tag: int) -> OutputImageRawFrame:
+        return OutputImageRawFrame(image=bytes([tag]) * (size * size * 3), size=(size, size), format="RGB")
+
+    sender._create_video_task()  # noqa: SLF001
+    try:
+        for tag in range(1, 201):                    # a burst: 200 frames, far more than 30 fps can publish
+            await sender.handle_image_frame(frame(tag))
+        await asyncio.sleep(0.25)                    # several publish intervals
+    finally:
+        await sender._cancel_video_task()  # noqa: SLF001
+
+    assert published, "the face was never published"
+    assert published[0] == 200                       # the first thing the caller sees is the newest frame
+    assert set(published) == {200}                   # and nothing older is ever replayed behind it
+    assert getattr(sender, "_video_queue").qsize() == 0   # no backlog is held
+
+
+# ---------------------------------------------------------------- AV-14: the face does not wait for speech
+async def test_the_real_stage_reads_the_vendors_video_before_any_speech(configured, monkeypatch) -> None:  # noqa: ANN001
+    """Covers: AV-14, AV-10"""
+    import av
+    import numpy as np
+
+    class FakeClient:
+        """Stands in for Simli's client: connects, then renders its idle face."""
+
+        def __init__(self) -> None:
+            self.sent: list = []
+            self.stopped = False
+
+        async def start(self) -> None:
+            return None
+
+        async def stop(self) -> None:
+            self.stopped = True
+
+        async def sendSilence(self) -> None:  # noqa: N802
+            return None
+
+        async def send(self, data) -> None:  # noqa: ANN001
+            self.sent.append(data)
+
+        def registerEventCallback(self, *_a) -> None:  # noqa: ANN002, N802
+            return None
+
+        async def getVideoStreamIterator(self, targetFormat="rgb24"):  # noqa: ANN001, ANN201, N802
+            for i in range(1000):
+                f = av.VideoFrame.from_ndarray(np.full((16, 16, 3), i % 255, dtype=np.uint8), format="rgb24")
+                f.pts = i
+                yield f
+                await asyncio.sleep(0.01)
+
+        async def getAudioStreamIterator(self, targetSampleRate=48000):  # noqa: ANN001, ANN201, N802
+            while True:
+                await asyncio.sleep(0.01)
+                yield av.AudioFrame.from_ndarray(np.zeros((1, 960), dtype=np.int16), format="s16", layout="mono")
+
+    from unittest.mock import MagicMock
+
+    from pipecat.clocks.system_clock import SystemClock
+    from pipecat.processors.frame_processor import FrameProcessorSetup
+    from pipecat.utils.asyncio.task_manager import TaskManager, TaskManagerParams
+
+    avatar = avatar_mod.make_avatar()
+    avatar._simli_client = FakeClient()  # noqa: SLF001
+    tm = TaskManager()
+    tm.setup(TaskManagerParams(loop=asyncio.get_running_loop()))
+    await avatar.setup(FrameProcessorSetup(clock=SystemClock(), task_manager=tm, pipeline_worker=MagicMock()))
+    out = Recorder(avatar)
+    monkeypatch.setattr(avatar_mod, "READY_PROOF_S", 30.0)   # so only a real frame can make it ready in time
+    try:
+        await asyncio.wait_for(avatar.open_avatar(), 3)   # ready on the first frame, long before 30 s
+        kinds = [type(f).__name__ for f in out.frames]
+        assert "OutputImageRawFrame" in kinds              # the face is up with no speech having been sent
+        assert avatar._avatar_ready and not avatar.avatar_failed   # noqa: SLF001
+        assert avatar._simli_client.sent == []             # noqa: SLF001 - and no speech has reached the vendor
+    finally:
+        await avatar.close_avatar()

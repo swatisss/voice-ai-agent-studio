@@ -18,7 +18,7 @@ One implementation of "how the agent behaves", used by three channels:
 | `text` | `POST /api/calls/{id}/messages` | full reply text |
 | `simulation` | [Evaluation](/architecture/evaluation.md) | full reply text |
 
-A `video` call on the Live engine is driven by a Gemini Live session instead of this turn loop: the model is the brain, but tools run through this module's executor, transcripts are recorded as the same events, and the safety screen, escalation and ending rules are applied on top of it ([/architecture/live-session.md](/architecture/live-session.md)). Turn-detection modes and live persona switching do not apply to it.
+A `video` call on the `realtime` brain is driven by an OpenAI Realtime model instead of this turn loop: the model is the brain, but tools run through this module's executor, transcripts are recorded as the same events, and the safety screen, escalation and ending rules are applied on top of its events ([/architecture/realtime-brain.md](/architecture/realtime-brain.md)).
 
 Behavior MUST NOT differ between channels except: voice may emit a short *filler* line before slow tool calls, voice/text replies are kept short and speakable (no markdown, no lists), and a `video` call additionally offers the `look_at_camera` built-in. A `video` call with no camera behaves exactly as `voice` (VI-14).
 

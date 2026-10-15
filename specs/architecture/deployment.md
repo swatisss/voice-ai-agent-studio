@@ -2,7 +2,7 @@
 type: Component Spec
 title: Deployment
 description: Local zero-infrastructure development and the GCP Cloud Run deployment topology, configuration and constraints.
-status: draft
+status: stable
 tags: [architecture, deployment, gcp]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -30,7 +30,6 @@ One container image (multi-stage `infra/Dockerfile`): stage 1 builds the web exp
 | `--session-affinity` | on | sticky WebSockets |
 | CPU / memory | 2 vCPU / 2 GiB | VAD + embeddings |
 | Secrets | Secret Manager → env `GROQ_API_KEY`, `DEEPGRAM_API_KEY`; optional `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `SIMLI_API_KEY`, `SIMLI_FACE_ID` (attached only when the secret exists) | LiveKit unset → video calls degrade to voice (VI-01); Simli unset → video calls have no face (AV-01) |
-| Gemini Live (optional) | env `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GEMINI_LIVE_MODEL`, `GEMINI_AVATAR_NAME`, `GEMINI_LIVE_VOICE`, `VIDEO_ENGINE`; the Cloud Run service account holds Vertex AI user access (no key file). Locally: `gcloud auth application-default login` | Unset → video calls use the LiveKit engine (GL-01). WebSocket only, so no UDP or TURN concern; region and endpoint availability are the vendor's ([ADR-0012](/decisions/adr-0012-gemini-live-avatar.md)) |
 
 Database options:
 

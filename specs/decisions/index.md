@@ -11,4 +11,5 @@
 * [ADR-0009 LiveKit Cloud for the video channel](adr-0009-video-channel.md) - Video calls run on a LiveKit Cloud room with Pipecat's LiveKit transport; voice calls keep the plain WebSocket
 * [ADR-0010 Store captured frames, with a clock on every object](adr-0010-media-retention.md) - The first byte storage in the product, kept narrow: one port, bounded frames, a retention window, and observation text that outlives the image
 * [ADR-0011 Simli for the agent's talking face](adr-0011-avatar-simli.md) - A live face for the agent via Simli's Pipecat service, published through the existing LiveKit room; no uploaded faces
-* [ADR-0012 Gemini Live for the avatar engine](adr-0012-gemini-live-avatar.md) - A second video engine on one Gemini Live session whose avatar video and voice arrive together, relayed over our WebSocket; LiveKit and Simli stay as the fallback
+* [ADR-0012 Gemini Live for the avatar engine](adr-0012-gemini-live-avatar.md) - Not adopted: needed Vertex AI access; kept for the evidence on how the reference gets its latency
+* [ADR-0013 OpenAI Realtime as the video call's brain](adr-0013-openai-realtime-brain.md) - One speech-to-speech model in the existing Pipecat and LiveKit pipeline, with the Simli face and our tools and rules on top

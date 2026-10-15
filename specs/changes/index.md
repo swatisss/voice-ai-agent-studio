@@ -2,7 +2,8 @@
 
 * [CP-0001 Initial platform build](cp-0001-initial-platform.md) - Build the v1 platform: builder, voice and text test calls, escalation with groundwork packets, fleet learning with eval-gated fixes
 * [CP-0002 Spec enforcement in CI and contributor onboarding](cp-0002-spec-enforcement-and-onboarding.md) - CI gate, PR-level spec-first/log/lifecycle rules, acceptance ratchet, setup script, README
-* [CP-0018 Gemini Live avatar channel](cp-0018-gemini-live-avatar-channel.md) - Video calls can run on one Gemini Live session whose avatar video and voice arrive together, relayed over our WebSocket; LiveKit and Simli stay as the fallback (proposed)
+* [CP-0019 OpenAI Realtime brain for video calls](cp-0019-openai-realtime-brain-for-video.md) - One speech-to-speech model replaces speech-to-text, turn wait, model and text-to-speech on video calls, keeping LiveKit and the Simli face (proposed)
+* [CP-0018 Gemini Live avatar channel](cp-0018-gemini-live-avatar-channel.md) - Rejected: needed Vertex AI access; superseded by CP-0019
 * [CP-0017 Avatar ready before the welcome](cp-0017-avatar-ready-before-the-welcome.md) - The avatar session loads while the caller's browser joins, and the welcome waits up to 5 s for the face
 * [CP-0016 Avatar video without lag](cp-0016-avatar-video-without-lag.md) - The face stays in step with the voice: newest frame wins at the transport, the vendor's video is read from the moment the session opens, 30 fps by default
 * [CP-0015 Avatar admission control and fast refusal](cp-0015-avatar-admission-and-fast-refusal.md) - A refused or over-limit Simli session degrades at once to a plain video call, our own session cap sits below the vendor's, and sessions close at shutdown

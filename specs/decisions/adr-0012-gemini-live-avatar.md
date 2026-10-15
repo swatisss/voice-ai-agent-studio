@@ -2,10 +2,12 @@
 type: Decision Record
 title: ADR-0012 Gemini Live for the avatar engine
 description: "Add a second video engine that runs one Gemini Live session on Vertex AI, whose avatar video and voice arrive together and are relayed over our WebSocket, keeping LiveKit with Simli as the fallback."
-status: draft
+status: deprecated
 tags: [decision, video, avatar, gemini, live, latency]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-15T00:00:00Z" }
 ---
+
+> **Not adopted.** No Vertex AI access, so the unverified rows below could not be settled. Superseded by [ADR-0013](adr-0013-openai-realtime-brain.md). Kept for the evidence it records about how the reference implementation gets its latency.
 
 # Context
 
@@ -33,7 +35,7 @@ What was established, and how reliably:
 
 Option 1, as a **second engine behind a configuration switch**, and **not** a replacement. The LiveKit and Simli engine stays as the fallback and as the only engine for a deployment that cannot use Vertex AI. A spike (CP-0018, T36) settles the unverified rows above before any code is written; if the stock avatar is not available to the project, the fallback inside this decision is option 3's cousin: the same Live engine **audio-only** (GL-05), which keeps most of the latency win and shows the placeholder tile.
 
-Everything that makes the product more than a voice demo stays ours and runs on top of the session: tools through the conversation module's executor, the identity gate, transcripts as call events, the safety screen, escalation and the call-ending rules, and the camera evidence flow ([/architecture/live-session.md](/architecture/live-session.md)).
+Everything that makes the product more than a voice demo stays ours and runs on top of the session: tools through the conversation module's executor, the identity gate, transcripts as call events, the safety screen, escalation and the call-ending rules, and the camera evidence flow (`/architecture/live-session.md`).
 
 # Consequences
 

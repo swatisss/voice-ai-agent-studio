@@ -12,7 +12,7 @@ The code loads each prompt directly from the fenced `text` block under the `# Pr
 * [Turn end check](turn-end-check.md) - Fast yes/no judgment that the caller finished speaking (LLM turn evaluator)
 * [Vision observation](vision-observation.md) - Describes one captured frame and returns a confidence it is allowed to withhold
 * [Visual case draft](visual-case-draft.md) - Turns pinned observations and the transcript into the case narrative, what is missing, and a routing decision
-* [Live session addendum](live-session-addendum.md) - What a speech-to-speech session needs on top of the agent prompt: a face on a video call, tools while talking, words to say exactly, looking only by tool
+* [Realtime session addendum](realtime-session-addendum.md) - What a speech-to-speech session needs on top of the agent prompt: a face on a video call, tools while talking, words to say exactly, looking only by tool
 * [Mode: inbound](mode-inbound.md) - Mode instructions for agents that answer incoming calls
 * [Mode: outbound](mode-outbound.md) - Mode instructions for agents that place the call: identity first, purpose, respect refusals
 * [Mode: internal](mode-internal.md) - Mode instructions for the staff-facing knowledge assistant

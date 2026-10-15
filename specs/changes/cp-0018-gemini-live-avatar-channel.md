@@ -2,11 +2,13 @@
 type: Change Proposal
 title: CP-0018 Gemini Live avatar channel
 description: "Video calls can run on a Gemini Live session on Vertex AI whose avatar video and voice arrive together on one stream, relayed over our WebSocket, replacing the speech-to-text, model, text-to-speech, Simli and LiveKit chain; the LiveKit and Simli path stays as the fallback."
-status: draft
-cp_state: proposed
+status: stable
+cp_state: rejected
 tags: [video, avatar, gemini, live, latency, architecture]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-15T00:00:00Z" }
 ---
+
+> **Rejected, 2026-10-15.** The requester has no Vertex AI or Gemini Live access, so the avatar half of this proposal cannot be built or verified. It is kept as the record of the Gemini route and of what was learned from the reference implementation. Its spec edits were reverted, and its acceptance IDs (GL-01…GL-15, LV-01…LV-06, UI-49…UI-51) were never accepted and are not reused. Superseded by [CP-0019](cp-0019-openai-realtime-brain-for-video.md), which gets the same one-model latency win on OpenAI Realtime, a LiveKit room and Simli.
 
 # Why
 
@@ -24,10 +26,10 @@ This proposal brings that shape into the product as a second **engine** for vide
 # What changes
 
 1. **A video call has an engine.** `livekit` is today's path (CP-0013, CP-0014 and everything since). `gemini_live` is new. `VIDEO_ENGINE` is `auto` (default: Gemini Live when it is configured, else LiveKit), `gemini_live` or `livekit`. `POST /api/calls` reports the engine in `media` (GL-01).
-2. **The Live engine replaces the middle of the pipeline, not the product.** For these calls there is no Pipecat pipeline, no Deepgram, no separate language-model turn loop, no Simli and no LiveKit room. A relay in the `voice` module connects the browser's WebSocket to a Live session through a new port, `LiveAgent`, with Google's SDK confined to one adapter ([/architecture/live-session.md](/architecture/live-session.md), GL-13).
+2. **The Live engine replaces the middle of the pipeline, not the product.** For these calls there is no Pipecat pipeline, no Deepgram, no separate language-model turn loop, no Simli and no LiveKit room. A relay in the `voice` module connects the browser's WebSocket to a Live session through a new port, `LiveAgent`, with Google's SDK confined to one adapter (`/architecture/live-session.md`, GL-13).
 3. **What stays ours (GL-06…GL-12).** Tools run through the conversation module's executor, so the verification gate, events and call state are unchanged. Transcripts become the same `user` and `assistant` events, so analysis, feedback, the console and the explorer need no change. The safety screen, escalation, the welcome, silence and maximum-length clocks, and the closing line are re-implemented on top of the session's events.
-4. **The camera is pulled, not streamed.** The browser keeps the camera and sends one still only when `look_at_camera` asks for it. That is a stronger form of VI-03 than the LiveKit path, where video streams to a media server whenever the camera is on. Nothing is sent to the Live session ([/architecture/live-session.md](/architecture/live-session.md), GL-11).
-5. **A new browser path.** A WebSocket client sends microphone PCM and answers frame requests; a MediaSource player plays the avatar stream; a voice-only fallback exists when the avatar cannot be had or played ([/api/live-protocol.md](/api/live-protocol.md), UI-49…UI-51).
+4. **The camera is pulled, not streamed.** The browser keeps the camera and sends one still only when `look_at_camera` asks for it. That is a stronger form of VI-03 than the LiveKit path, where video streams to a media server whenever the camera is on. Nothing is sent to the Live session (`/architecture/live-session.md`, GL-11).
+5. **A new browser path.** A WebSocket client sends microphone PCM and answers frame requests; a MediaSource player plays the avatar stream; a voice-only fallback exists when the avatar cannot be had or played (`/api/live-protocol.md`, UI-49…UI-51).
 6. **The LiveKit engine and Simli stay**, unchanged, as the fallback when Gemini Live is not configured and as the only engine for any deployment that cannot use Vertex AI. Their criteria (AV-*, VI-*) apply to that engine.
 
 # Decisions taken while drafting
@@ -40,7 +42,7 @@ This proposal brings that shape into the product as a second **engine** for vide
 
 # Affected specs
 
-New: [/architecture/live-session.md](/architecture/live-session.md) (GL-01…GL-15), [/api/live-protocol.md](/api/live-protocol.md) (LV-01…LV-06), [/decisions/adr-0012-gemini-live-avatar.md](/decisions/adr-0012-gemini-live-avatar.md), [/prompts/live-session-addendum.md](/prompts/live-session-addendum.md).
+New: `/architecture/live-session.md` (GL-01…GL-15), `/api/live-protocol.md` (LV-01…LV-06), [/decisions/adr-0012-gemini-live-avatar.md](/decisions/adr-0012-gemini-live-avatar.md), `/prompts/live-session-addendum.md`.
 
 Updated (set to `draft`): [voice pipeline](/architecture/voice-pipeline.md), [media protocol](/api/media-protocol.md), [agent runtime](/architecture/agent-runtime.md), [avatar](/architecture/avatar.md), [REST API](/api/rest-api.md), [healthcare compliance](/product/healthcare-compliance.md) (rule 14, a production gap), [modular structure](/architecture/modular-structure.md) (the `LiveAgent` port and its adapter), [tech stack](/architecture/tech-stack.md), [deployment](/architecture/deployment.md), [test call UI](/ui/test-call.md), [visual case UI](/ui/visual-case.md) (UI-49…UI-51), [conventions](/process/conventions.md) (prefixes `GL`, `LV`), [task plan](/build/task-plan.md) (T36…T42).
 

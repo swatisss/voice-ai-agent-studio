@@ -24,9 +24,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 The switch sits in the call card header and reads **Talk | Video | Type**. It can be changed before a call starts and after it ends; while a call runs it is disabled with the hint "End the call to switch". It sets the call's channel (voice, video or text) and the start button label (**Start call**, **Start video call** or **Start chat**).
 
-On the Live engine ([/architecture/live-session.md](/architecture/live-session.md)) the turn-detection and persona switches are hidden for a video call, because turn-taking and the voice belong to the session (LV-06).
-
 **Video** is a voice call whose caller can turn on a camera the agent may ask to look at. It is offered only for agents whose use cases advertise the channel, and everything it adds — the agent's tile and the caller's self-view, the camera control, the evidence strip, the case card — is specified in [/ui/visual-case.md](/ui/visual-case.md).
+
+On a `realtime` video call ([/architecture/realtime-brain.md](/architecture/realtime-brain.md)) the persona switch changes style only and the voice stays fixed (UI-52); turn-detection settings still apply.
 
 # Technical details
 
@@ -79,3 +79,4 @@ In both modes the outcome banner then shows — "Resolved", "Escalated — waiti
 - **UI-10** — Given an escalation, then the transcript shows a system notice with the reason and the hand-off message as the last agent message, the call ends, and the banner "Escalated — waiting for a specialist" replaces the input.
 - **UI-34** — Given a chat that ends (goodbye, farewell phrase or hand-off), then the input is replaced by the outcome banner and "Was this helpful?" with Yes and No appears; No offers an optional comment; sending stores the answer and shows "Thanks for your feedback."; and while the call is running no feedback prompt is shown.
 - **UI-35** — Given a Talk call that the server ends (goodbye, hand-off or silence), then without any action from the tester the microphone stops, the "Listening" state disappears, and the outcome banner and the feedback prompt appear.
+- **UI-52** — Given a video call whose `media.brain` is `realtime`, when the persona switch is used, then it changes the agent's style and not its voice, and a quiet line next to it says the voice is fixed for this call; and given `media.brain` is `pipeline`, then no such line is shown.

@@ -2,7 +2,7 @@
 type: Architecture
 title: Modular structure
 description: "The backend's layers, the nine modules, the ports and contracts between them, and the CI rules that keep the boundaries where a service could later be cut."
-status: draft
+status: stable
 tags: [architecture, modularity, ports, boundaries]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-08T00:00:00Z" }
 ---
@@ -89,7 +89,6 @@ Both are declared boundaries; the difference is which way the dependency points.
 | `blobstore.BlobStore` | Storing, fetching and deleting bytes by key. It does not list and does not sign URLs ([/architecture/media-storage.md](/architecture/media-storage.md)). | `local`, `gcs` |
 | `videoroom.VideoRoom` | Opening the media room a video call runs in: whether video can be served, the caller's scoped token, dispatching the agent, and whether the call will have an avatar (`avatar_enabled()`). `conversation` creates the call and must not name the voice module that serves it. | `voice` (LiveKit) |
 | `framesource.FrameSource` | Asking a live call for its most recent camera frame, encoded. `evidence` needs a frame and must not know that a LiveKit room, or Pipecat, is what produces one. | `voice` |
-| `liveagent.LiveAgent` | Opening a speech-to-speech session that returns the agent's voice and, optionally, its face, and exchanging audio, tool calls, transcripts and media with it. `voice` relays a Live call and must not know whose SDK provides the session; Google's is imported in one adapter only (GL-13). | `adapters/liveagent` (`gemini`) |
 
 Three of these are ports for the same structural reason: `conversation` is upstream of everything that reacts to a call. `learning` names it (to drive simulated calls and read transcripts), `handoff` names it (to build a packet from a transcript), and `voice` names it (to run the brain). So `conversation` must name none of them back, or the module graph cycles — and each thing it genuinely needs from them is a port instead. The asymmetry is the design, not an accident.
 

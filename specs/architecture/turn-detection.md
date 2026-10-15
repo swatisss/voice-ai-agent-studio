@@ -2,7 +2,7 @@
 type: Component Spec
 title: Turn detection
 description: How the voice pipeline decides the caller has finished speaking - normal silence detection and semantic detection - its settings, evaluator rules, interruption control and live updates.
-status: stable
+status: draft
 tags: [architecture, voice, turn-detection]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -56,6 +56,10 @@ Role `turn` ([/architecture/llm-gateway.md](/architecture/llm-gateway.md)) with 
 # Live controls
 
 For each active voice call a `LiveControls` object (in-memory registry keyed by call id) holds the current turn settings and an optional voice-change callback. `PATCH /api/calls/{id}/live` updates it and persists the override in the call's metadata; the pipeline reads it on every decision. Persona changes are described in [/architecture/personas.md](/architecture/personas.md).
+
+# On the realtime brain
+
+A video call on the `realtime` brain has no TurnAggregator: the model's server-side detection decides the turn ([/architecture/realtime-brain.md](/architecture/realtime-brain.md), RB-07). `vad` mode maps to server voice-activity detection with `silence_duration_ms` equal to `min_silence_ms`; `semantic` mode maps to its semantic detection; `max_extra_wait_ms` has no equivalent and is ignored there. The settings, their validation (TD-08) and the live switch are the same.
 
 # Acceptance
 

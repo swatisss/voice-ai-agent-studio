@@ -11,13 +11,11 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-13T00:00:00Z" }
 
 A video call should look like a call with someone. The caller already sees themselves; this gives the agent a face on the other side, speaking in sync with what it says. The decision and the alternatives are in [ADR-0011](/decisions/adr-0011-avatar-simli.md).
 
-This spec describes the avatar of the `livekit` engine (Simli). On the `gemini_live` engine the face is rendered by the Live session and arrives muxed with its voice ([/architecture/live-session.md](/architecture/live-session.md)); the AV criteria below govern the LiveKit engine only.
-
 It is presentation only. The brain, the tools, the escalation rules and the visual-intake flow ([/architecture/visual-intake.md](/architecture/visual-intake.md)) are unchanged, and a call with no avatar behaves exactly as a video call does today.
 
 # Where it sits
 
-The video pipeline gains one processor, between TTS and the transport output ([/architecture/voice-pipeline.md](/architecture/voice-pipeline.md)):
+The video pipeline gains one processor, between TTS (on the `realtime` brain, the OpenAI Realtime service, whose speech is the same `TTSAudioRawFrame`) and the transport output ([/architecture/voice-pipeline.md](/architecture/voice-pipeline.md)):
 
 ```
 ... BrainProcessor ──▶ TTS ──▶ Simli avatar ──▶ LiveKit transport output
@@ -82,7 +80,7 @@ The Simli session starts opening as soon as the agent's video pipeline has start
 # Acceptance
 
 - **AV-01** — Given `SIMLI_API_KEY` and `SIMLI_FACE_ID` set and the SDK installed, when `POST /api/calls` is called with `channel: "video"`, then `media.avatar` is `true`; and given either value unset or the SDK absent, then `media.avatar` is `false` and the call is still created as a video call with no `video_unavailable`.
-- **AV-02** — Given an avatar-enabled video call, when its pipeline is built, then the avatar processor sits after TTS and before the transport output and `video_out_enabled` is on; and given an avatar-less video call, then the processor order and transport settings are exactly those of CP-0013.
+- **AV-02** — Given an avatar-enabled video call, when its pipeline is built, then the avatar processor sits after TTS, or after the realtime service on the realtime brain, and before the transport output and `video_out_enabled` is on; and given an avatar-less video call, then the processor order and transport settings are exactly those of CP-0013.
 - **AV-03** — Given an avatar-enabled call whose avatar service yields video frames and re-timed audio, when the agent speaks, then the transport output carries both, and the audio the caller receives is the avatar's, not the TTS output.
 - **AV-04** — Given the agent is speaking through the avatar, when the caller interrupts, then the interruption reaches the avatar service and its buffered speech is dropped.
 - **AV-05** — Given the avatar service raises on start or mid-call, when the agent next speaks, then its TTS audio reaches the transport output unchanged, the call stays active, and the failure is logged; and the call is never ended by the avatar failing.

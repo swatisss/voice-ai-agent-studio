@@ -2,7 +2,7 @@
 type: UI Spec
 title: Visual evidence and cases
 description: "The camera control and evidence strip in a video test call, the case card, the sample-image path when there is no webcam, and how evidence reads back on Calls and in the console."
-status: draft
+status: stable
 tags: [ui, video, evidence, cases]
 generated: { by: "claude-code/claude-opus-5", at: "2026-10-12T00:00:00Z" }
 ---
@@ -86,6 +86,3 @@ The picker is headed "Synthetic demo images" and every entry it produces is tagg
 - **UI-46** — Given a video call whose response has `media.avatar` true, when the agent's video track arrives, then it fills the main tile, which is labelled with the persona's name and "AI agent", and the caller's camera, when on, is a small self-view in a corner and not a full-width strip.
 - **UI-47** — Given a video call with `media.avatar` false, or an avatar that fails mid-call, then the main tile shows the placeholder with the persona's name and "AI agent", the line "No avatar is configured" or "Avatar unavailable — the agent can still be heard", and the call carries on with the agent audible.
 - **UI-48** — Given the agent is speaking, when the call has no avatar track, then the placeholder shows a speaking indicator while it speaks and not while it is silent.
-- **UI-49** — Given a video call whose `media.engine` is `gemini_live` and `media.avatar` true, when `avatar_video` messages arrive, then the page plays them in the main tile through a media source so the face and its voice are one stream, shows the persona's name and **AI agent** (UI-46), and drops everything buffered on `interrupt`.
-- **UI-50** — Given a Live-engine call whose avatar stream cannot be played, or a `notice` with `avatar: false`, then the page sends `{"type":"avatar","enabled":false}` when it cannot play, shows the placeholder tile with the reason, the agent is still heard through `audio` messages, and the call continues.
-- **UI-51** — Given a Live-engine call, when a `frame_request` arrives and the camera is on, then the page captures exactly one still and answers with it, flashes the shutter and adds the "The agent looked" notice; and given the camera is off, then it answers `declined`; and given no request, no frame is ever sent.

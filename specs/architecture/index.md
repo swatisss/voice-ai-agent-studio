@@ -14,7 +14,7 @@
 * [Call ending and feedback](call-ending-and-feedback.md) - How calls close (goodbye, farewell, hand-off, silence, max length) and the thumbs up/down feedback that feeds Insights
 * [Visual evidence intake](visual-intake.md) - Frames captured on demand, an observation with a confidence it may withhold, pinned evidence, the case and its routing
 * [Talking avatar](avatar.md) - How the agent appears as a live face in a video call: pipeline position, degradation, lifetime, and why its frames are never evidence
-* [Live session engine](live-session.md) - Video calls on one Gemini Live session whose avatar video and voice arrive together: what stays ours, the pulled camera, failure handling
+* [Realtime brain](realtime-brain.md) - Video calls on one OpenAI Realtime model inside the Pipecat, LiveKit and Simli pipeline: stages removed, what stays ours, failure handling
 * [Media storage](media-storage.md) - The blob-store port, bounded frames, the retention window and authorised access only
 * [Reference and sample imagery](imagery.md) - The seeded synthetic images offered when there is no camera, and why nothing is generated at runtime
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle

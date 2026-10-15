@@ -2,7 +2,7 @@
 type: Component Spec
 title: LLM gateway
 description: "Maps LLM roles to provider models over a pluggable wire adapter, with streaming, tool calls, JSON outputs, fallback and cost accounting."
-status: stable
+status: draft
 tags: [architecture, llm, groq, openrouter, openai]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -18,6 +18,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `judge` | Eval grading | JSON output | `groq:openai/gpt-oss-120b` |
 | `turn` | Semantic turn detection (LLM evaluator) | tiny JSON verdict in under a second | `groq:openai/gpt-oss-20b` |
 | `vision` | Describing a captured frame ([/architecture/visual-intake.md](/architecture/visual-intake.md)) | image input, JSON output | `openai:gpt-4.1-mini` |
+| `speech` | The `realtime` video brain ([/architecture/realtime-brain.md](/architecture/realtime-brain.md)) | speech in, speech out, tool calls over a WebSocket | `openai:gpt-realtime-2.1` (the id Pipecat's service defaults to; confirmed by the spike) |
+
+`speech` is the one role that is not served through the chat gateway: the Pipecat service owns its own WebSocket to OpenAI. The role exists so the model id and its prices (text and audio tokens separately) are configuration, never a literal in code, and it may be unresolvable, which makes the `realtime` brain unavailable (RB-01).
 
 `vision` is the one role whose primary model is not a Groq text model, because the role needs image input and the default text models have none. It is also the one role that may be **unresolvable**: a deployment with no vision-capable ref is a deployment where video calls degrade to voice (VI-01), which is why `POST /api/calls` reports it rather than failing.
 

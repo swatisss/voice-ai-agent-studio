@@ -238,17 +238,26 @@ async def run_room(call_id: str, tenant_id: str) -> None:
         room_name(call_id), controls, holder, avatar,
     )
 
+    if avatar is not None:
+        @task.event_handler("on_pipeline_started")
+        async def _warm_avatar(_task, _frame) -> None:  # noqa: ANN001
+            # The agent is in the call; the caller's browser is still joining. Start loading the
+            # face now so connecting to the vendor overlaps with the join, not after it (AV-07). It
+            # opens in the background: until it is up the stage is transparent, so a slow or hung
+            # vendor never silences the agent (AV-05).
+            avatar_open = asyncio.create_task(avatar.open_avatar())
+            avatar_tasks.add(avatar_open)
+            avatar_open.add_done_callback(avatar_tasks.discard)
+
     @transport.event_handler("on_first_participant_joined")
     async def _joined(_transport, participant_id: str) -> None:  # noqa: ANN001
         joined.set()
         if avatar is not None:
-            # Someone is here: only now does the vendor session open, so an empty room costs
-            # nothing. It opens in the background and the welcome does not wait for it: until the
-            # session is up the stage is transparent, so a slow or hung vendor never delays or
-            # silences the agent (AV-05).
-            avatar_open = asyncio.create_task(avatar.open_avatar())
-            avatar_tasks.add(avatar_open)
-            avatar_open.add_done_callback(avatar_tasks.discard)
+            # Normally the face is already up. If not, the welcome waits for it, briefly, so the
+            # first sentence is on camera; on a failure or a timeout it is spoken directly (AV-15).
+            from voiceai.modules.voice.avatar import WELCOME_WAIT_S
+
+            await avatar.wait_ready(WELCOME_WAIT_S)
         await brain.greet()
 
     @transport.event_handler("on_participant_disconnected")

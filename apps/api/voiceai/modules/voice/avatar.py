@@ -8,7 +8,7 @@ and the caller hears the avatar's audio instead. That is the risk this module ex
 the vendor connection fails and the stage keeps consuming audio, the agent goes silent.
 
 So the stage is wrapped in `PassThroughOnFailure`. It is a transparent processor until the session
-is explicitly opened (the first participant joined), and again for good after any failure - the
+is explicitly opened (when the pipeline has started, while the caller is still joining), and again for good after any failure - the
 agent's speech then reaches the caller unchanged and the call carries on (AV-05). A failed avatar
 never ends a call.
 
@@ -50,6 +50,10 @@ MAX_PENDING_BYTES = 4_000_000
 #: anyway. A refusal (rate limit, bad face) shows up inside this window as an error or stop event,
 #: and fails the stage before it has swallowed a word (AV-10).
 READY_PROOF_S = 5.0
+#: How long the welcome waits for the face when the caller joins. The session starts opening before
+#: the caller's browser has joined, so normally there is nothing to wait for; this bounds the cost of
+#: a slow vendor to the first word (AV-15).
+WELCOME_WAIT_S = 5.0
 
 #: Avatars that hold, or are acquiring, a vendor session in this process (AV-11, AV-12).
 _LIVE: set["PassThroughOnFailure"] = set()
@@ -108,6 +112,7 @@ class PassThroughOnFailure:
     _flushing = False
     _watch_task: asyncio.Task | None = None
     _first_video: asyncio.Event | None = None
+    _settled: asyncio.Event | None = None  # set once the open has finished: ready, failed or closed
 
     def configure_failure(self, on_failure: OnFailure | None) -> None:
         self._on_failure = on_failure
@@ -120,7 +125,30 @@ class PassThroughOnFailure:
     def avatar_failed(self) -> bool:
         return self._avatar_failed
 
-    # -- lifetime (AV-07): the vendor session starts when someone is there, and ends with the call
+    def _settle(self) -> None:
+        if self._settled is None:
+            self._settled = asyncio.Event()
+        self._settled.set()
+
+    async def wait_ready(self, timeout: float) -> bool:
+        """Wait until the face is ready, up to `timeout`; True only if it is (AV-15).
+
+        Returns early, False, when the stage has failed or closed, and False on timeout. It never
+        raises and never fails the stage: the caller then speaks directly.
+        """
+        if self._avatar_ready:
+            return True
+        if self._avatar_failed:
+            return False
+        if self._settled is None:
+            self._settled = asyncio.Event()
+        try:
+            await asyncio.wait_for(self._settled.wait(), timeout)
+        except TimeoutError:
+            return False
+        return self._avatar_ready
+
+    # -- lifetime (AV-07): the vendor session starts loading with the call and ends with it
     async def open_avatar(self) -> None:
         if self._avatar_open or self._avatar_failed:
             return
@@ -141,6 +169,8 @@ class PassThroughOnFailure:
             await self._fail(f"opening the avatar session took longer than {OPEN_TIMEOUT_S:g}s")
         except Exception as exc:  # noqa: BLE001 - a vendor failure must never end a call
             await self._fail(exc)
+        finally:
+            self._settle()
 
     async def _await_proof_of_life(self) -> None:
         """Give an explicit refusal the chance to arrive before the stage starts consuming speech.
@@ -167,6 +197,7 @@ class PassThroughOnFailure:
         self._avatar_open = False
         self._avatar_ready = False
         _LIVE.discard(self)
+        self._settle()
         if self._watch_task is not None and not self._watch_task.done():
             self._watch_task.cancel()
         if not was_open:
@@ -188,6 +219,7 @@ class PassThroughOnFailure:
             return
         self._avatar_failed = True
         self._avatar_ready = False
+        self._settle()
         _LIVE.discard(self)  # a failed session no longer counts against the cap
         reason = exc if isinstance(exc, str) else f"{type(exc).__name__}: {exc}"
         log.warning("avatar unavailable, passing the agent's speech through: %s", scrub(reason))

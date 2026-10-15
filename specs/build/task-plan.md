@@ -45,3 +45,4 @@ Work top to bottom; each task ends green (`spec_check`, tests, web build where r
 | T32 | Web: the agent's video track, the agent tile with the AI agent label, the caller's self-view, the placeholder tile | [/ui/visual-case.md](/ui/visual-case.md), [/api/media-protocol.md](/api/media-protocol.md) | UI-39, UI-46…UI-48 | done |
 | T33 | Avatar: refusal detected at open, `AVATAR_MAX_SESSIONS` admission cap, sessions closed at shutdown | [/architecture/avatar.md](/architecture/avatar.md) | AV-10…AV-12 | done |
 | T34 | Avatar video without lag: output in latest-frame mode, vendor readers started at open, `AVATAR_VIDEO_FPS` default 30 | [/architecture/avatar.md](/architecture/avatar.md) | AV-13, AV-14 | done |
+| T35 | Avatar ready before the welcome: session opens at pipeline start, the welcome waits up to 5 s for the face | [/architecture/avatar.md](/architecture/avatar.md) | AV-07, AV-09, AV-15 | done |

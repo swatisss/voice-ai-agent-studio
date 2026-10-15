@@ -1,6 +1,6 @@
 """The talking avatar: a stage that can never make the agent harder to hear.
 
-Covers: AV-01, AV-02, AV-03, AV-04, AV-05, AV-06, AV-07, AV-08, AV-09, AV-10, AV-11, AV-12
+Covers: AV-01, AV-02, AV-03, AV-04, AV-05, AV-06, AV-07, AV-08, AV-09, AV-10, AV-11, AV-12, AV-13, AV-14, AV-15
 """
 from __future__ import annotations
 
@@ -371,19 +371,21 @@ async def test_the_vendor_session_opens_on_demand_and_closes_with_the_call() -> 
     assert avatar.stopped == 1 and not avatar.avatar_open
 
 
-def test_the_session_is_opened_by_the_first_participant_not_at_pipeline_start() -> None:
+def test_the_session_starts_loading_with_the_pipeline_not_when_the_caller_joins() -> None:
     """Covers: AV-07"""
     import inspect
 
     from voiceai.modules.voice import pipeline
 
     src = inspect.getsource(pipeline.run_room)
+    warm = src[src.index("on_pipeline_started"):src.index("on_first_participant_joined")]
+    assert "open_avatar" in warm                                        # opened when the agent is in the call ...
     joined = src[src.index("async def _joined"):src.index("on_participant_disconnected")]
-    assert joined.index("open_avatar") < joined.index("brain.greet()")   # opened first, then the welcome
-    assert "open_avatar" not in src[:src.index("async def _joined")]     # and nowhere earlier
-    assert "close_avatar" in src[src.index("finally:"):]                 # closed with the call
+    assert "open_avatar" not in joined                                  # ... not left until the caller arrives
+    assert "close_avatar" in src[src.index("finally:"):]                 # and closed with the call
+    assert "_abandon_if_nobody_joins" in src                             # a call nobody joins is closed
 
-    # the stock service starts its vendor session in setup(); ours must not
+    # the stock service starts its vendor session in setup(); ours must not (we open it ourselves, once)
     guarded = avatar_mod._guarded_simli_class()  # noqa: SLF001
     setup_src = inspect.getsource(guarded.setup)
     assert "super(SimliVideoService, self).setup" in setup_src
@@ -678,3 +680,58 @@ async def test_the_real_stage_reads_the_vendors_video_before_any_speech(configur
         assert avatar._simli_client.sent == []             # noqa: SLF001 - and no speech has reached the vendor
     finally:
         await avatar.close_avatar()
+
+
+# ---------------------------------------------------------------- AV-15: the welcome waits for the face
+async def test_the_welcome_waits_for_the_face_when_it_is_nearly_up() -> None:
+    """Covers: AV-15"""
+    avatar = StubAvatar()
+    Recorder(avatar)
+    assert await avatar.wait_ready(0) is False             # nothing opened yet, nothing to wait for
+    waiting = asyncio.create_task(avatar.wait_ready(2.0))
+    await asyncio.sleep(0.05)
+    assert not waiting.done()                              # held while the session is still opening
+    await avatar.open_avatar()                             # the session comes up (the stub shows no frame: trusted)
+    assert await asyncio.wait_for(waiting, 1) is True      # released the moment it is ready, not after 2 s
+
+
+async def test_an_avatar_that_is_already_ready_does_not_delay_the_welcome() -> None:
+    """Covers: AV-15"""
+    avatar = StubAvatar()
+    Recorder(avatar)
+    await avatar.open_avatar()
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    assert await avatar.wait_ready(5.0) is True
+    assert loop.time() - started < 0.1
+
+
+async def test_a_failed_or_slow_avatar_releases_the_welcome_to_be_spoken_directly() -> None:
+    """Covers: AV-15, AV-05"""
+    failing = StubAvatar()
+    Recorder(failing)
+    waiting = asyncio.create_task(failing.wait_ready(5.0))
+    await asyncio.sleep(0.05)
+    await failing._fail("vendor refused the session")  # noqa: SLF001
+    assert await asyncio.wait_for(waiting, 1) is False     # released at once on failure, not after 5 s
+
+    slow = StubAvatar()
+    slow.hang_on_open = True
+    Recorder(slow)
+    opening = asyncio.create_task(slow.open_avatar())
+    await asyncio.sleep(0)
+    assert await slow.wait_ready(0.1) is False             # a timeout gives up; the stage is not failed by it
+    assert not slow.avatar_failed
+    opening.cancel()
+
+
+def test_the_welcome_is_held_for_the_face_before_it_is_spoken() -> None:
+    """Covers: AV-15"""
+    import inspect
+
+    from voiceai.modules.voice import pipeline
+
+    src = inspect.getsource(pipeline.run_room)
+    joined = src[src.index("async def _joined"):src.index("on_participant_disconnected")]
+    assert joined.index("wait_ready(WELCOME_WAIT_S)") < joined.index("brain.greet()")
+    assert avatar_mod.WELCOME_WAIT_S == 5.0

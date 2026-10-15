@@ -1,5 +1,13 @@
 # Directory Update Log
 
+## 2026-10-15 (CP-0017 avatar ready before the welcome — implemented)
+
+* **Creation**: [CP-0017](changes/cp-0017-avatar-ready-before-the-welcome.md). **Update**: [avatar](architecture/avatar.md) (lifetime, hangs, AV-07 and AV-09 reworded, AV-15), [task plan](build/task-plan.md) (T35).
+* **Reported**: after CP-0016 the face still arrived only after the caller had said a sentence or two.
+* **Found**: by design in CP-0014 the vendor session opened on the first participant joining and the welcome never waited for it, so connecting followed the join and the first words had no face.
+* **Changed**: the session opens when the pipeline starts (the caller's browser is still joining), and the welcome waits up to 5 s for the face. An unused session now lives up to about 60 s instead of none; accepted by the requester.
+* **Not established**: real connect time; the 5 s bound is a starting value.
+
 ## 2026-10-15 (CP-0016 avatar video without lag — implemented)
 
 * **Creation**: [CP-0016](changes/cp-0016-avatar-video-without-lag.md). **Update**: [avatar](architecture/avatar.md) (new "Keeping the face in step", AV-13, AV-14, `AVATAR_VIDEO_FPS` default), [task plan](build/task-plan.md) (T34).

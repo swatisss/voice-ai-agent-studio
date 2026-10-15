@@ -2,7 +2,7 @@
 type: Component Spec
 title: Realtime brain
 description: "How a video call runs on one OpenAI Realtime model inside the existing Pipecat, LiveKit and Simli pipeline: which stages leave, what stays ours and runs on top of the model's events, and how it fails."
-status: draft
+status: stable
 tags: [architecture, video, avatar, realtime, openai, latency]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-15T00:00:00Z" }
 ---
@@ -16,12 +16,11 @@ It is a **brain** for `channel: "video"` calls on the LiveKit engine. The room, 
 # Topology
 
 ```
-LiveKit input ─▶ FrameTap ─▶ user aggregator ─▶ OpenAI Realtime service ─▶ Simli avatar ─▶ LiveKit output ─▶ assistant aggregator
- (caller audio)  (video held,   (context)         │  server voice-activity detection         (face + audio)
-                  never sent)                     │  caller transcription
-                                                  ├─ function calls ─▶ conversation executor (our tools, identity gate)
-                                                  └─ transcripts, usage, speech boundaries ─▶ RealtimeBrain (ours)
-                                                      welcome · safety · clocks · ending · call events · fixed audio
+LiveKit input ─▶ FrameTap ─▶ Gate ─▶ user aggregator ─▶ Tap ─▶ OpenAI Realtime ─▶ Brain ─▶ Simli avatar ─▶ LiveKit output ─▶ assistant aggregator
+ (caller audio)  (video held,  (audio   (bookkeeping)    │       service             (ours)    (face + audio)
+                  never sent)   held)                    │        │ server voice-activity detection, caller transcription
+                                                         │        ├─ function calls ─▶ conversation executor (our tools, identity gate)
+                                  caller transcripts ◀───┘        └─ audio, reply text, usage ─▶ Brain: welcome · safety · clocks · ending · call events
 ```
 
 | Leaves the video pipeline | Why |
@@ -42,6 +41,17 @@ The Pipecat pieces stay in the `voice` module (MOD-04). The service emits the sa
 | `REALTIME_VOICE` | One voice for every agent in this change |
 | `VIDEO_BRAIN` | As above |
 
+# How it is wired
+
+Four small processors of ours surround the model. Each exists because of something the Pipecat service does, found by running the real service against a fake server (`tests/realtime_fake.py`), and each is covered by a test.
+
+| Piece | What it does, and why |
+|---|---|
+| `RealtimeGate` | Before the model. Holds back caller audio while the welcome plays or the call closes, so no turn can start (RB-03). |
+| `RealtimeTap` | Directly in front of the model. The service reports the caller's transcript and its own errors **upstream**, so a processor behind it never sees them; the tap hands both to the brain (RB-08, RB-13). It also **stops context frames** from reaching the model: the service treats the first one it sees as the start of the conversation, replays the context as a "previously saved conversation" message, asks for an unwanted response and marks any tool result in it as delivered without sending it. Whether one arrives before the first tool call depends on timing, so none is let through. |
+| `RealtimeBrain` | After the model: the call's rules (below). It delivers each tool result itself, as a `function_call_output` item followed by a response request, and tells Pipecat's context not to run the model. It speaks fixed lines with a `response.create` that carries the instruction, because the service does not implement `LLMMessagesAppendFrame`. |
+| An ordered worker inside the brain | Every database write the brain makes runs on one worker, not inside frame handling. Pipecat cancels a processor's in-flight work when an interruption arrives, and a transcript arrives beside one, so a write done inline was cancelled half way and the caller's turn was lost. The queue is drained, bounded, when the call ends so the last words are kept. |
+
 # What stays ours
 
 The model decides what to say; the product's rules do not move into a prompt.
@@ -49,7 +59,7 @@ The model decides what to say; the product's rules do not move into a prompt.
 | Concern | How it holds on this brain |
 |---|---|
 | Instructions | The agent's rendered system prompt ([/prompts/agent-system-prompt.md](/prompts/agent-system-prompt.md)) followed by [/prompts/realtime-session-addendum.md](/prompts/realtime-session-addendum.md) (RB-05) |
-| Tools and the identity gate | The agent's built-ins and tools are registered as functions. A call is executed by the conversation module's tool executor, the one the text runtime uses; `tool_call` and `tool_result` events are recorded in order and call state updates. A `requires_verification` tool is refused before the caller is verified ([/product/healthcare-compliance.md](/product/healthcare-compliance.md) rule 3). `look_at_camera` is offered on a video call only, as today (RB-05). |
+| Tools and the identity gate | The agent's built-ins and tools are registered as functions. A call is executed by the conversation module's tool executor, the one the text runtime uses; `tool_call` and `tool_result` events are recorded in order and call state updates. A `requires_verification` tool is refused before the caller is verified ([/product/healthcare-compliance.md](/product/healthcare-compliance.md) rule 3). The result goes back to the model, and when it carries `say`, as escalation does, the model's next reply is that text. `look_at_camera` is offered on a video call only, as today (RB-05). |
 | Transcripts | A finished caller transcript is a `user` event; a finished reply is an `assistant` event with `latency_ms` from end of caller speech to the first audio frame. Analysis, feedback, the console and the explorer need no change (RB-08). |
 | Turn detection | `vad` mode becomes the model's server detection with `silence_duration_ms` = the agent's `min_silence_ms`; `semantic` mode becomes its semantic detection. `max_extra_wait_ms` has no equivalent and is ignored. The live switch updates the session ([/architecture/turn-detection.md](/architecture/turn-detection.md), RB-07). |
 | Persona | The persona's style is in the instructions. Its Deepgram voice and speed are ignored. A live persona switch updates the instructions only (RB-10). |
@@ -76,11 +86,11 @@ The step count falls from six to four. Simli's rendering stays in the path. The 
 - **RB-04** — Given the welcome, a silence reminder, a closing line or a hand-off line, then the exact text is recorded as an `assistant` event and sent to the page, and the model is instructed to say precisely that text.
 - **RB-05** — Given a session on the realtime brain, when it is configured, then its instructions are the agent's system prompt followed by the realtime addendum, every agent tool and built-in is registered, and `look_at_camera` is registered only on a video call; and the model id comes from configuration.
 - **RB-06** — Given a final caller transcript that matches the safety phrase list, then the response in progress is interrupted, the call is escalated with category `safety`, the fixed safety message is recorded, and exactly that text is rendered by the text-to-speech provider and delivered as audio, not spoken by the model; the call then ends `handoff`; and given text-to-speech is unavailable, then the message is still recorded and shown and the model is instructed to say it.
-- **RB-07** — Given an agent with `mode: vad` and `min_silence_ms: 500`, then the session's detection is server voice-activity detection with a 500 ms silence duration; and given `mode: semantic`, then it is semantic detection; and given a live change of either, then the session is updated and the call continues.
+- **RB-07** — Given an agent with `mode: vad` and `min_silence_ms: 500`, then the session's detection is server voice-activity detection with a 500 ms silence duration; and given `mode: semantic`, then it is semantic detection; and given `allow_interruptions: false`, then the detector does not interrupt a reply (TD-07); and given a live change of either, then the session is updated and the call continues.
 - **RB-08** — Given finished caller and reply transcripts, then one `user` and one `assistant` event are recorded in order, `turn_count` increases, and the `assistant` event carries `latency_ms`.
 - **RB-09** — Given the caller says nothing, then the reminder is spoken after `policy.silence_reminder_s` and the call ends `idle` after `policy.silence_end_s`, neither clock runs during the welcome, while the agent speaks or while a reply is being produced; and given `policy.max_call_seconds` passes, then the call ends `max_duration`.
 - **RB-10** — Given a live persona switch on a realtime call, then the instructions are updated, a `system` event "Persona switched to ..." is recorded, the greeting is not repeated, and the voice does not change.
 - **RB-11** — Given the model calls `end_call`, `escalate_to_human`, or the caller says a farewell phrase, then the closing words finish first (at most 10 s), the call ends with the matching reason, and the analysis job is queued once.
 - **RB-12** — Given the session reports usage, when a response completes, then the call's `tokens_in`, `tokens_out` and `llm_cost_usd` increase by it, priced from the `speech` role with audio and text tokens separately; and given a model with no configured price, then the cost counts as zero and a warning is logged, not an error.
-- **RB-13** — Given the realtime connection cannot be opened or drops mid-call, then the call ends with reason `error`, the caller sees a message, the transcript is kept, nothing waits longer than 10 s, and no other brain takes over.
+- **RB-13** — Given the realtime connection cannot be opened, reports an error, or is lost mid-call (noticed within a second), then the call ends with reason `error`, the caller sees a message, the transcript is kept, nothing waits longer than 10 s, and no other brain takes over.
 - **RB-14** — Given `OPENAI_API_KEY` or any credential, when any API response, log line, call event or message to the browser is produced during a realtime call, then it appears in none of them.

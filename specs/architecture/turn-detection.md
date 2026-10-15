@@ -2,7 +2,7 @@
 type: Component Spec
 title: Turn detection
 description: How the voice pipeline decides the caller has finished speaking - normal silence detection and semantic detection - its settings, evaluator rules, interruption control and live updates.
-status: draft
+status: stable
 tags: [architecture, voice, turn-detection]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---

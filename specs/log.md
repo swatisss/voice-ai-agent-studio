@@ -1,5 +1,13 @@
 # Directory Update Log
 
+## 2026-10-15 (CP-0019 OpenAI Realtime brain for video calls — built; spike T36 not run)
+
+* **Update**: [CP-0019](changes/cp-0019-openai-realtime-brain-for-video.md) (`cp_state: accepted`, not `implemented`: T36 is outstanding), [realtime brain](architecture/realtime-brain.md) (how it is wired, RB-07 and RB-13 clarified), the touched specs set to `stable`, [task plan](build/task-plan.md) (T37…T41 done, T36 not done), both runbooks.
+* **Built** (T37…T41): `modules/voice/realtime.py` (availability and `VIDEO_BRAIN`, the `speech` role, session configuration, `RealtimeGate`, `RealtimeTap`, `RealtimeBrain`, exact-wording audio for the safety message, cost), `AgentSession` hooks (`run_tool`, `hear`, `record_reply`, `add_usage`, `post_turn_trigger`, `realtime_instructions`, `tool_schemas`), `build_room_realtime` in the pipeline, `media.brain` on `POST /api/calls`, the live turn-detection and persona refresh, and the Test call note (UI-52). 28 new tests in `tests/test_realtime_brain.py` cover RB-01…RB-14 by running the **real** Pipecat service, aggregators and our processors against a fake Realtime server (`tests/realtime_fake.py`).
+* **Found while building**: transcripts and errors arrive upstream of the model; the service's first context frame requests an unwanted response and swallows a tool result; `LLMMessagesAppendFrame` is not implemented; and an interruption cancels in-flight handling, which lost the caller's turn until record-keeping moved to an ordered worker. All four are in the CP and the spec.
+* **Not established — T36**: nothing was run against OpenAI. Whether the account can use the model id, whether `marin` is a valid voice, the real first-audio time, how well the Simli face follows this audio, and the price per minute are all unknown. The prices in `models.yaml` are placeholders. `scripts/realtime_spike.py` checks the account half in one command; the end-to-end figure needs a real call. UI-52 is hand-checked and listed in the acceptance baseline.
+* **Default**: `VIDEO_BRAIN=auto` means any deployment with `OPENAI_API_KEY` set now gets the realtime brain on new video calls. Set `VIDEO_BRAIN=pipeline` to keep the old chain.
+
 ## 2026-10-15 (CP-0019 OpenAI Realtime brain for video calls — proposed, awaiting review; CP-0018 rejected)
 
 * **Creation**: [CP-0019](changes/cp-0019-openai-realtime-brain-for-video.md) (`cp_state: proposed`), [realtime brain](architecture/realtime-brain.md) (RB-01…RB-14), [ADR-0013](decisions/adr-0013-openai-realtime-brain.md), [realtime session addendum](prompts/realtime-session-addendum.md); new acceptance prefix `RB`, plus UI-52. No code.

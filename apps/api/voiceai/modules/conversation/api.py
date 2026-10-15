@@ -110,9 +110,10 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
         policy = (await _published_policy(s, tenant_id, body.agent_id)) or {}
         rooms = video_room()
         # `avatar` tells the browser whether to expect an agent video track or draw a placeholder (AV-01)
+        brain = rooms.brain()  # `realtime` or `pipeline`; the call keeps it for its whole life (RB-01)
         out["media"] = {**rooms.grant(call.id, int(policy.get("max_call_seconds") or 600)).as_dict(),
-                        "avatar": rooms.avatar_enabled()}
-        rooms.start_agent(call.id, tenant_id)  # joins the room and waits for the caller
+                        "avatar": rooms.avatar_enabled(), "brain": brain}
+        rooms.start_agent(call.id, tenant_id, brain)  # joins the room and waits for the caller
     return out
 
 

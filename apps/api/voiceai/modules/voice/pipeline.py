@@ -191,7 +191,59 @@ def build_room(
     return task, transport, brain
 
 
-async def run_room(call_id: str, tenant_id: str) -> None:
+def build_room_realtime(
+    session: AgentSession, deepgram_key: str, url: str, token: str, room: str,
+    controls: LiveControls | None = None, holder: Any | None = None, avatar: Any | None = None,
+) -> tuple[PipelineTask, Any, Any]:
+    """The video pipeline when the brain is `realtime` (RB-02). No network I/O at construction (VO-06).
+
+    One OpenAI Realtime service replaces the voice-activity detector, speech-to-text, TurnAggregator,
+    BrainProcessor and text-to-speech. The transport, the frame tap and the avatar stage are the ones
+    `build_room` uses, so the camera flow and the face are unchanged. Audio runs at the model's 24 kHz
+    both ways.
+    """
+    from pipecat.transports.livekit.transport import LiveKitParams, LiveKitTransport
+
+    from voiceai.modules.voice.realtime import OPENAI_RATE, build_realtime
+
+    settings = get_settings()
+    controls = controls or LiveControls(turn=session.turn_settings())
+    holder = holder if holder is not None else frame_tap.register(session.call_id)
+    transport = LiveKitTransport(
+        url=url, token=token, room_name=room,
+        params=LiveKitParams(
+            audio_in_enabled=True, audio_in_sample_rate=OPENAI_RATE,
+            audio_out_enabled=True, audio_out_sample_rate=OPENAI_RATE,
+            video_in_enabled=True,
+            video_out_enabled=avatar is not None,
+            video_out_is_live=False,   # latest frame wins (AV-13)
+            video_out_width=settings.avatar_video_size, video_out_height=settings.avatar_video_size,
+            video_out_framerate=settings.avatar_video_fps,
+            vad_analyzer=None,
+        ),
+    )
+    task_holder: dict[str, Any] = {}
+
+    async def on_end(reason: str) -> None:
+        await session.end(reason)
+        task = task_holder.get("task")
+        if task:
+            await task.queue_frame(EndFrame())
+
+    pieces = build_realtime(session, controls, on_end, deepgram_key)
+    pipeline = Pipeline([
+        transport.input(), FrameTap(holder), pieces.gate, pieces.user_aggregator, pieces.tap, pieces.service, pieces.brain,
+        *([avatar] if avatar is not None else []), transport.output(), pieces.assistant_aggregator,
+    ])
+    task = PipelineTask(
+        pipeline,
+        params=PipelineParams(audio_in_sample_rate=OPENAI_RATE, audio_out_sample_rate=OPENAI_RATE, enable_usage_metrics=True),
+    )
+    task_holder["task"] = task
+    return task, transport, pieces.brain
+
+
+async def run_room(call_id: str, tenant_id: str, brain_kind: str = "pipeline") -> None:
     """Join the call's room, run the brain, and end the call when the caller leaves.
 
     The welcome is spoken on the first participant joining, which is the room's equivalent of the
@@ -233,7 +285,9 @@ async def run_room(call_id: str, tenant_id: str) -> None:
 
         log.info("video call %s has no avatar: %s", call_id, avatar_unavailable_reason())
 
-    task, transport, brain = build_room(
+    build = build_room_realtime if brain_kind == "realtime" else build_room
+    log.info("video call %s runs on the %s brain", call_id, brain_kind)
+    task, transport, brain = build(
         session, key, str(settings.livekit_url), rooms.agent_token(call_id, max_seconds),
         room_name(call_id), controls, holder, avatar,
     )

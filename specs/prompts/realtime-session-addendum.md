@@ -2,7 +2,7 @@
 type: Prompt
 title: Realtime session addendum
 description: "What a speech-to-speech session needs on top of the agent system prompt: it is a face on a video call, tools run while it talks, some words are given to it to say exactly, and the camera is looked at only through a tool."
-status: draft
+status: stable
 tags: [prompt, realtime, video, avatar]
 llm_role: speech
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-15T00:00:00Z" }

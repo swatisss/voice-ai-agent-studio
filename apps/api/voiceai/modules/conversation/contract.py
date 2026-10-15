@@ -27,12 +27,13 @@ else:  # resolved on use so this file stays cheap to import
 
             return AgentSession
         raise AttributeError(name)
-from voiceai.modules.conversation.endings import IDLE_LINE, MAX_DURATION_LINE, REMINDER_LINE, is_farewell
+from voiceai.modules.conversation.endings import GOODBYE, IDLE_LINE, MAX_DURATION_LINE, REMINDER_LINE, is_farewell
+from voiceai.modules.conversation.safety import SAFETY_MESSAGE
 from voiceai.modules.conversation.domain import transcript_lines
 from voiceai.modules.conversation.serializers import call_summary as _summary
 
 __all__ = [
-    "IDLE_LINE", "MAX_DURATION_LINE", "REMINDER_LINE", "AgentSession", "call_events", "call_summary",
+    "GOODBYE", "IDLE_LINE", "MAX_DURATION_LINE", "REMINDER_LINE", "SAFETY_MESSAGE", "AgentSession", "call_events", "call_summary",
     "call_transcript", "get_call", "is_farewell", "open_session", "open_simulation", "transcript_lines",
 ]
 

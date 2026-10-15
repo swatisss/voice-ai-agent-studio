@@ -33,7 +33,7 @@ def livekit(monkeypatch):  # noqa: ANN001, ANN201
     real_start = room_mod.LiveKitVideoRoom.start_agent
     monkeypatch.setattr(
         room_mod.LiveKitVideoRoom, "start_agent",
-        lambda self, call_id, tenant_id: started.append((call_id, tenant_id)),
+        lambda self, call_id, tenant_id, brain="pipeline": started.append((call_id, tenant_id)),
     )
     monkeypatch.setattr(calls_api, "video_room", lambda: room_mod.LiveKitVideoRoom())
     assert real_start is not None

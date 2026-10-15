@@ -32,6 +32,11 @@ models:   # price per 1M tokens (USD)
   # Non-reasoning OpenAI chat models only (they take max_tokens and temperature). Confirm IDs and prices in the OpenAI console.
   "openai:gpt-4.1-mini":            { input: 0.40, output: 1.60, json_schema: true, vision: true }
   "openai:gpt-4.1-nano":            { input: 0.10, output: 0.40, json_schema: true, vision: true }
+  # Speech-to-speech model for the realtime video brain (/architecture/realtime-brain.md). Not served through the chat
+  # gateway: Pipecat's service owns its own WebSocket, and this entry supplies the id and the prices. Text and audio
+  # tokens are priced separately. The id is Pipecat 1.12's default and the prices are placeholders: CONFIRM BOTH in the
+  # OpenAI console (CP-0019, T36).
+  "openai:gpt-realtime-2.1":        { input: 4.00, output: 16.00, input_audio: 32.00, output_audio: 64.00, speech: true }
 
 roles:
   realtime:
@@ -64,3 +69,7 @@ roles:
     model: "openai:gpt-4.1-mini"
     params: { temperature: 0, max_tokens: 500 }
     fallback: ["openai:gpt-4.1-nano"]
+  speech:
+    model: "openai:gpt-realtime-2.1"
+    params: {}
+    fallback: []

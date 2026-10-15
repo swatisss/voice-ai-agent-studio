@@ -25,7 +25,7 @@ printf '%s' "$SIMLI_API_KEY"      | gcloud secrets create SIMLI_API_KEY --data-f
 printf '%s' "$SIMLI_FACE_ID"      | gcloud secrets create SIMLI_FACE_ID --data-file=-        # optional (avatar)
 ```
 
-`OPENROUTER_API_KEY`, `OPENAI_API_KEY` and the three `LIVEKIT_*` values are optional: the deploy script attaches a secret only if it exists in Secret Manager. Without the LiveKit trio, video calls are created as voice calls and the UI says video is unavailable ([/architecture/visual-intake.md](/architecture/visual-intake.md), VI-01); nothing else changes. `SIMLI_API_KEY` and `SIMLI_FACE_ID` add a talking face to video calls and are likewise optional. **Do not deploy with them set until the avatar's WebRTC connection to the vendor has been tried from Cloud Run's UDP egress** — it is unverified there ([ADR-0011](/decisions/adr-0011-avatar-simli.md)).
+`OPENROUTER_API_KEY`, `OPENAI_API_KEY` (which also enables the realtime video brain, `VIDEO_BRAIN`, [ADR-0013](/decisions/adr-0013-openai-realtime-brain.md)) and the three `LIVEKIT_*` values are optional: the deploy script attaches a secret only if it exists in Secret Manager. Without the LiveKit trio, video calls are created as voice calls and the UI says video is unavailable ([/architecture/visual-intake.md](/architecture/visual-intake.md), VI-01); nothing else changes. `SIMLI_API_KEY` and `SIMLI_FACE_ID` add a talking face to video calls and are likewise optional. **Do not deploy with them set until the avatar's WebRTC connection to the vendor has been tried from Cloud Run's UDP egress** — it is unverified there ([ADR-0011](/decisions/adr-0011-avatar-simli.md)).
 
 Grant the Cloud Run runtime service account `roles/secretmanager.secretAccessor`.
 

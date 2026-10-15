@@ -27,11 +27,11 @@ from voiceai.ports.llm import BadRequest, ChatClient, ChatResult, ProviderConfig
 log = logging.getLogger("voiceai.llm")
 T = TypeVar("T", bound=BaseModel)
 
-ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn", "vision")
+ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn", "vision", "speech")
 
 # Roles that need a model capability beyond text: a ref whose models.yaml entry does not declare
 # the flag is skipped for that role exactly like a provider with no API key (LG-16).
-ROLE_CAPABILITY = {"vision": "vision"}
+ROLE_CAPABILITY = {"vision": "vision", "speech": "speech"}
 
 __all__ = [
     "ROLES", "ChatResult", "FakeReply", "Gateway", "LLMError", "LLMJsonError", "ToolCall", "Usage",

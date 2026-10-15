@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0013 OpenAI Realtime as the video call's brain
 description: "Run video calls on one OpenAI Realtime speech-to-speech model in the existing Pipecat, LiveKit and Simli pipeline, with our tools and call rules on top, keeping the speech-to-text and text-to-speech chain as the fallback."
-status: draft
+status: stable
 tags: [decision, video, avatar, realtime, openai, latency]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-15T00:00:00Z" }
 ---
@@ -20,7 +20,7 @@ What was checked:
 | It pushes the assistant's words as `LLMTextFrame`/`TTSTextFrame`, so a text-to-speech stage after it would double-speak | Read from the installed source | Verified from code |
 | Caller transcription arrives after the model starts to answer | The event order in the source (`input_audio_transcription.completed`) | Verified from code; magnitude unmeasured |
 | The default model id in this Pipecat version is `gpt-realtime-2.1` | Source default | Verified; whether the account can use it is not |
-| The Simli stage lip-syncs this audio acceptably, and the end-to-end latency | Nothing | **Unmeasured.** The spike measures it |
+| The Simli stage lip-syncs this audio acceptably, and the end-to-end latency | Nothing | **Unmeasured.** `scripts/realtime_spike.py` and a real call measure it (CP-0019, T36, not yet run) |
 | Simli publishes under 300 ms for speech-to-video | Vendor and a third-party comparison | Vendor claim, measures rendering only |
 
 # Options

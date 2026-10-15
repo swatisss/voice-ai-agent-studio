@@ -1,4 +1,4 @@
-// Spec: /ui/test-call.md (Live controls), /architecture/personas.md, /architecture/turn-detection.md
+// Spec: /ui/test-call.md (Live controls), /architecture/personas.md, /architecture/turn-detection.md, /architecture/realtime-brain.md
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -13,8 +13,10 @@ type Persona = { id: string; name: string; description?: string; voice: string; 
  * Persona and turn-detection controls. Before a call they are call-start overrides (the page sends them with
  * POST /api/calls); during a call every change is applied immediately with PATCH /api/calls/{id}/live (UI-23).
  */
-export function LiveControlsCard({ callId, active, voiceCall, personas, personaId, onPersona, turn, onTurn }: {
+export function LiveControlsCard({ callId, active, voiceCall, personas, personaId, onPersona, turn, onTurn, fixedVoice = false }: {
   callId: string | null; active: boolean; voiceCall: boolean; personas: Persona[]; personaId: string;
+  /** The call runs on the realtime brain: one voice for the whole call, so a persona switch changes style only (UI-52). */
+  fixedVoice?: boolean;
   onPersona: (id: string) => void; turn: TurnDetection; onTurn: (t: TurnDetection) => void;
 }) {
   const toast = useToast();
@@ -45,7 +47,7 @@ export function LiveControlsCard({ callId, active, voiceCall, personas, personaI
   return (
     <Card title="Live controls">
       <div className="space-y-4">
-        <Field label="Persona" hint={chosen ? `${voiceLabel(chosen.voice)} · speed ${chosen.speed}×` : "The agent's own persona"}>
+        <Field label="Persona" hint={fixedVoice ? "Changes the style only. The voice is fixed for this call." : chosen ? `${voiceLabel(chosen.voice)} · speed ${chosen.speed}×` : "The agent's own persona"}>
           <Select value={personaId} onChange={(e) => onPersona(e.target.value)}>
             <option value="">Agent default</option>
             {personas.map((p) => <option key={p.id} value={p.id}>{p.name}{p.description ? ` — ${p.description}` : ""}</option>)}

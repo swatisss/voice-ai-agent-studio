@@ -154,7 +154,7 @@ async def test_media_avatar_reports_whether_a_face_is_coming(client, seeded, con
     """Covers: AV-01, AV-08"""
     monkeypatch.setattr(calls_api, "video_room", lambda: room_mod.LiveKitVideoRoom())
     monkeypatch.setattr(calls_api, "gateway", lambda: _Vision())
-    monkeypatch.setattr(room_mod.LiveKitVideoRoom, "start_agent", lambda self, c, t: None)
+    monkeypatch.setattr(room_mod.LiveKitVideoRoom, "start_agent", lambda self, c, t, brain="pipeline": None)
     agent_id = await _agent(client)
 
     r = await client.post("/api/calls", headers=M, json={"agent_id": agent_id, "channel": "video"})

@@ -73,3 +73,7 @@ UI-45
 UI-46
 UI-47
 UI-48
+
+# CP-0019 realtime brain: the persona note on the Test call page is a browser behaviour, checked by hand (the
+# backend half of the same change is covered by tests/test_realtime_brain.py).
+UI-52

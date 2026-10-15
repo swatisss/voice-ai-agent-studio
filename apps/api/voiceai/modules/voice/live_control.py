@@ -28,4 +28,8 @@ class InProcessVoiceControl:
         if controls is None:
             return False
         controls.turn = TurnSettings.from_dict(dict(turn))
+        if controls.on_turn is not None:  # the realtime brain applies it to the model's own detector (RB-07)
+            import asyncio
+
+            asyncio.get_running_loop().create_task(controls.on_turn())
         return True

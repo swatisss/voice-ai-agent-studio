@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0019 OpenAI Realtime brain for video calls
 description: "Video calls can run on one OpenAI Realtime speech-to-speech model inside the existing Pipecat, LiveKit and Simli pipeline, replacing speech-to-text, our turn wait, the text model and text-to-speech, with our tools, safety screen and call rules kept on top."
-status: draft
-cp_state: proposed
+status: stable
+cp_state: accepted
 tags: [video, avatar, realtime, openai, latency, architecture]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-15T00:00:00Z" }
 ---
@@ -38,6 +38,15 @@ A reference implementation ([awesome-llm-apps PR #1203](https://github.com/Shubh
 * The OpenAI service pushes the assistant's words downstream as `LLMTextFrame` / `TTSTextFrame` for transcripts (it does not mark them to be skipped by text-to-speech). A text-to-speech stage placed after it would therefore **speak every reply a second time**. The exact-wording path for the safety message must not be a pipeline stage; it is rendered separately and injected as audio (RB-06).
 * Its transcript of the caller's speech arrives **after** the model has begun to answer. The safety screen can therefore trigger late, after a few words of an answer have been spoken. It interrupts, escalates and speaks the safety message, but it cannot prevent the first words (RB-06). This is a regression against the text pipeline, where the screen runs before any model call, and is raised under Open questions.
 
+# Found while building
+
+Running the real Pipecat service against a fake Realtime server (`tests/realtime_fake.py`) showed four things the reading had not:
+
+* **Transcripts and errors travel upstream.** A processor behind the service never sees the caller's words or the model's errors; a tap in front of it does (RB-08, RB-13).
+* **The first context frame is a trap.** It replays the context, requests an unwanted response and marks a tool result as delivered without sending it. The brain therefore delivers tool results itself and no context frame reaches the model (RB-05).
+* **`LLMMessagesAppendFrame` is not implemented** in this version of the service (it logs an error), so the welcome and the other fixed lines are given with a `response.create` that carries the instruction (RB-04).
+* **An interruption cancels in-flight handling.** The first version lost the caller's turn this way, intermittently, in tests; record-keeping now runs on an ordered worker that is drained when the call ends.
+
 # Affected specs
 
 New: [/architecture/realtime-brain.md](/architecture/realtime-brain.md) (RB-01…RB-14), [/decisions/adr-0013-openai-realtime-brain.md](/decisions/adr-0013-openai-realtime-brain.md), [/prompts/realtime-session-addendum.md](/prompts/realtime-session-addendum.md).
@@ -50,7 +59,7 @@ New: **RB-01…RB-14**, **UI-52**. No ID is changed or retired. AV-02 is reworde
 
 # Tasks
 
-1. **T36 (spike, gates the rest)** - with the real `OPENAI_API_KEY`: confirm the model id and that the account can use it, the voice names, tool-call behaviour, how the transcript timing really falls, whether the Simli stage lip-syncs the model's audio acceptably, and the **measured latency** from end of caller speech to the first avatar frame, against the current chain. Write it up in `specs/verification/` and amend this CP with what was found.
+1. **T36 (spike, gates the rest; NOT DONE)** - needs your real `OPENAI_API_KEY`, so it was not run here; `scripts/realtime_spike.py` does the account half of it in one command. With the real `OPENAI_API_KEY`: confirm the model id and that the account can use it, the voice names, tool-call behaviour, how the transcript timing really falls, whether the Simli stage lip-syncs the model's audio acceptably, and the **measured latency** from end of caller speech to the first avatar frame, against the current chain. Write it up in `specs/verification/` and amend this CP with what was found.
 2. **T37** - the `speech` role and price table, `VIDEO_BRAIN`, `REALTIME_VOICE`, availability, `media.brain`, the `pipeline` builder branch - covers RB-01, RB-02, RB-14.
 3. **T38** - tools through the executor, transcripts, usage and cost - covers RB-05, RB-08, RB-12.
 4. **T39** - welcome gate, ending, silence and length clocks, turn-detection mapping, persona switch - covers RB-03, RB-04, RB-07, RB-09, RB-10, RB-11.

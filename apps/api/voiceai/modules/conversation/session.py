@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.core import jobs
+from voiceai.core import jobs, prompts
 from voiceai.core.db import sessionmaker, utcnow
 from voiceai.core.errors import ApiError
 from voiceai.core.events import bus
@@ -367,6 +367,80 @@ class AgentSession:
             await self.end("handoff")  # CE-01
         elif self.state.end_requested:
             await self.end("end_call")  # RT-05
+
+    # ------------------------------------------------------------ realtime brain (CP-0019)
+    # On the realtime video brain a speech-to-speech model decides what to say, so the turn loop above
+    # does not run. These are the pieces of it the model's events still need, so the record, the call
+    # state and the rules are the ones every other channel has (/architecture/realtime-brain.md).
+    def realtime_instructions(self) -> str:
+        """The model's instructions: the agent's system prompt, then the realtime addendum (RB-05)."""
+        base = system_prompt(self.config, self.tenant_name, self.state.verified_member_ref, self.started_at, self.context)
+        now = utcnow()
+        camera = (
+            "The caller can turn their camera on; you may ask them to, and you look only by calling look_at_camera."
+            if self.channel == "video" else "The caller's camera is off. Do not offer to look at anything."
+        )
+        addendum = prompts.render(
+            "realtime-session-addendum", camera_state=camera,
+            now=f"{now:%A}, {now:%B} {now.day}, {now.year}, {now.hour % 12 or 12}:{now:%M} {'AM' if now.hour < 12 else 'PM'}",
+        )
+        return f"{base.rstrip()}\n\n{addendum.strip()}\n"
+
+    def tool_schemas(self) -> list[dict[str, Any]]:
+        """The schemas this call offers: built-ins, `look_at_camera` on a video call, and the agent's tools (RB-05)."""
+        return all_schemas(self.config.get("tools", []), self.channel)
+
+    async def run_tool(self, call_id: str, name: str, arguments: str) -> str:
+        """Execute one tool call from the model: events, identity gate, call state (RB-05)."""
+        return await self._run_tool(call_id, name, arguments)
+
+    async def hear(self, text: str) -> str:
+        """Record a finished caller utterance and screen it. Returns what the brain must do about it:
+
+        ``ok`` carry on, ``farewell`` end the call once the reply finishes (CE-02), ``safety`` the
+        caller used emergency language: the fixed message is recorded here, the call escalated, and
+        the brain speaks it and ends the call (ES-01, RB-06), ``ignored`` nothing to do.
+        """
+        text = text.strip()
+        if not text or self.state.ended:
+            return "ignored"
+        self.state.turns += 1
+        self.history.append({"role": "user", "content": text})
+        await self._event("user", text)
+        policy = self.config.get("policy", {})
+        if self.state.escalated:
+            return "ok"
+        if endings.is_farewell(text):
+            await self._persist()
+            return "farewell"
+        if policy.get("safety_screen", True) and safety.safety_match(text):
+            await self._say(safety.SAFETY_MESSAGE, {"safety": True})
+            await self.escalate("safety", "Caller used emergency or self-harm language")
+            await self._persist()
+            return "safety"
+        await self._persist()
+        return "ok"
+
+    async def record_reply(self, text: str, latency_ms: int | None) -> None:
+        """Record a finished reply, with the time from the end of the caller's speech to its first audio (RB-08)."""
+        text = text.strip()
+        if not text:
+            return
+        if latency_ms is not None:
+            self.state.latencies_ms.append(latency_ms)
+        self.history.append({"role": "assistant", "content": text})
+        await self._event("assistant", text, {"latency_ms": latency_ms, "tokens_in": self.state.tokens_in, "tokens_out": self.state.tokens_out})
+        await self._persist()
+
+    def add_usage(self, tokens_in: int, tokens_out: int, cost_usd: float) -> None:
+        """Add the model's reported usage to the call (RB-12). Persisted with the next record."""
+        self.state.tokens_in += tokens_in
+        self.state.tokens_out += tokens_out
+        self.state.cost_usd += cost_usd
+
+    def post_turn_trigger(self) -> tuple[str, str] | None:
+        """The deterministic escalation triggers after a reply: no-answer and tool-error streaks, max turns (ES-02, ES-03)."""
+        return self._post_turn_trigger(self.config.get("policy", {}))
 
     def _post_turn_trigger(self, policy: dict[str, Any]) -> tuple[str, str] | None:
         if self.state.no_answer_streak >= 2:  # ES-02

@@ -47,10 +47,14 @@ class VideoRoom(Protocol):
         """
         ...
 
+    def brain(self) -> str:
+        """Which brain a new video call gets: `realtime` or `pipeline` (RB-01)."""
+        ...
+
     def grant(self, call_id: str, max_call_seconds: int) -> RoomGrant:
         """Mint the caller's room token, scoped to this call's room and no other (VI-13)."""
         ...
 
-    def start_agent(self, call_id: str, tenant_id: str) -> None:
-        """Join the room and run the brain, without blocking the request that created the call."""
+    def start_agent(self, call_id: str, tenant_id: str, brain: str = "pipeline") -> None:
+        """Join the room and run the given brain, without blocking the request that created the call."""
         ...

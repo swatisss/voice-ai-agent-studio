@@ -82,6 +82,12 @@ class LiveKitVideoRoom:
 
         return avatar_available()
 
+    def brain(self) -> str:
+        """`realtime` or `pipeline`: which brain a new video call gets (RB-01)."""
+        from voiceai.modules.voice.realtime import resolve_brain
+
+        return resolve_brain()
+
     def grant(self, call_id: str, max_call_seconds: int) -> RoomGrant:
         settings = get_settings()
         room = room_name(call_id)
@@ -94,13 +100,13 @@ class LiveKitVideoRoom:
     def agent_token(self, call_id: str, max_call_seconds: int) -> str:
         return _mint(room_name(call_id), AGENT_IDENTITY, timedelta(seconds=max_call_seconds) + TOKEN_GRACE)
 
-    def start_agent(self, call_id: str, tenant_id: str) -> None:
+    def start_agent(self, call_id: str, tenant_id: str, brain: str = "pipeline") -> None:
         """Join the room and run the brain, as a background task.
 
         `POST /api/calls` must not block on a media connection, so the pipeline starts detached -
         the same shape the voice WebSocket has, where the socket handler owns the pipeline's life.
         """
-        task = asyncio.create_task(_run_agent(call_id, tenant_id))
+        task = asyncio.create_task(_run_agent(call_id, tenant_id, brain))
         _AGENT_TASKS.add(task)
         task.add_done_callback(_AGENT_TASKS.discard)
 
@@ -108,11 +114,11 @@ class LiveKitVideoRoom:
 _AGENT_TASKS: set[asyncio.Task[None]] = set()
 
 
-async def _run_agent(call_id: str, tenant_id: str) -> None:
+async def _run_agent(call_id: str, tenant_id: str, brain: str = "pipeline") -> None:
     from voiceai.modules.voice import pipeline
 
     try:
-        await pipeline.run_room(call_id, tenant_id)
+        await pipeline.run_room(call_id, tenant_id, brain)
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001 - a failed video call must not take the process down

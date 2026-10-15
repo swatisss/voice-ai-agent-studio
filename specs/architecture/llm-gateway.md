@@ -2,7 +2,7 @@
 type: Component Spec
 title: LLM gateway
 description: "Maps LLM roles to provider models over a pluggable wire adapter, with streaming, tool calls, JSON outputs, fallback and cost accounting."
-status: draft
+status: stable
 tags: [architecture, llm, groq, openrouter, openai]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

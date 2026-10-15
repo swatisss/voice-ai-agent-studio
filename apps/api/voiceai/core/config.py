@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     ev_concurrency: int = 4
 
     llm_role_vision: str | None = None
+    llm_role_speech: str | None = None
 
     # Video calls (/decisions/adr-0009-video-channel.md). Unset -> video degrades to voice (VI-01).
     livekit_url: str | None = None
@@ -67,6 +68,11 @@ class Settings(BaseSettings):
     avatar_video_size: int = 512   # square; Simli's native size, so nothing is resized per frame
     avatar_video_fps: int = 30     # Simli's native rate; a lower one skips frames, it never adds delay (AV-13)
     avatar_max_sessions: int = 1   # our own cap on live vendor sessions; keep it at or below the vendor plan's limit
+
+    # The video call's brain (/architecture/realtime-brain.md): auto | realtime | pipeline. `auto` picks the
+    # OpenAI Realtime brain when it is available. The voice is one fixed choice for every agent.
+    video_brain: str = "auto"
+    realtime_voice: str = "marin"
 
     # Captured frames (/architecture/media-storage.md)
     media_backend: str = "local"  # local | gcs

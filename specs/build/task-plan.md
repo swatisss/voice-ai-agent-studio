@@ -2,7 +2,7 @@
 type: Task Plan
 title: Task plan for CP-0001
 description: Ordered implementation tasks for the initial platform build, each with governing specs, acceptance IDs, and status.
-status: draft
+status: stable
 tags: [build, tasks, cp-0001]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -46,9 +46,9 @@ Work top to bottom; each task ends green (`spec_check`, tests, web build where r
 | T33 | Avatar: refusal detected at open, `AVATAR_MAX_SESSIONS` admission cap, sessions closed at shutdown | [/architecture/avatar.md](/architecture/avatar.md) | AV-10…AV-12 | done |
 | T34 | Avatar video without lag: output in latest-frame mode, vendor readers started at open, `AVATAR_VIDEO_FPS` default 30 | [/architecture/avatar.md](/architecture/avatar.md) | AV-13, AV-14 | done |
 | T35 | Avatar ready before the welcome: session opens at pipeline start, the welcome waits up to 5 s for the face | [/architecture/avatar.md](/architecture/avatar.md) | AV-07, AV-09, AV-15 | done |
-| T36 | Spike: with the real OpenAI key confirm the model id and account access, voices, tool-call behaviour, transcript timing and the Simli lip-sync of the model's audio; measure latency against the chain; write up under `specs/verification/` and amend CP-0019. Gates T37-T41 | [/architecture/realtime-brain.md](/architecture/realtime-brain.md), [/decisions/adr-0013-openai-realtime-brain.md](/decisions/adr-0013-openai-realtime-brain.md) | - | todo |
-| T37 | The `speech` role and prices, `VIDEO_BRAIN`, `REALTIME_VOICE`, availability, `media.brain`, the pipeline builder branch | [/architecture/realtime-brain.md](/architecture/realtime-brain.md), [/architecture/llm-gateway.md](/architecture/llm-gateway.md) | RB-01, RB-02, RB-14 | todo |
-| T38 | Tools through the executor, transcripts, usage and cost | [/architecture/realtime-brain.md](/architecture/realtime-brain.md) | RB-05, RB-08, RB-12 | todo |
-| T39 | Welcome gate, ending, silence and length clocks, turn-detection mapping, persona switch | [/architecture/realtime-brain.md](/architecture/realtime-brain.md), [/architecture/turn-detection.md](/architecture/turn-detection.md) | RB-03, RB-04, RB-07, RB-09, RB-10, RB-11 | todo |
-| T40 | Safety screen and the exact-wording audio path | [/architecture/realtime-brain.md](/architecture/realtime-brain.md) | RB-06 | todo |
-| T41 | Failure handling, the Test call note, runbook and compliance notes | [/architecture/realtime-brain.md](/architecture/realtime-brain.md), [/ui/test-call.md](/ui/test-call.md) | RB-13, UI-52 | todo |
+| T36 | Spike (NOT DONE - needs the requester's OpenAI key; run `scripts/realtime_spike.py`): with the real OpenAI key confirm the model id and account access, voices, tool-call behaviour, transcript timing and the Simli lip-sync of the model's audio; measure latency against the chain; write up under `specs/verification/` and amend CP-0019. Gates T37-T41 | [/architecture/realtime-brain.md](/architecture/realtime-brain.md), [/decisions/adr-0013-openai-realtime-brain.md](/decisions/adr-0013-openai-realtime-brain.md) | - | todo |
+| T37 | The `speech` role and prices, `VIDEO_BRAIN`, `REALTIME_VOICE`, availability, `media.brain`, the pipeline builder branch | [/architecture/realtime-brain.md](/architecture/realtime-brain.md), [/architecture/llm-gateway.md](/architecture/llm-gateway.md) | RB-01, RB-02, RB-14 | done |
+| T38 | Tools through the executor, transcripts, usage and cost | [/architecture/realtime-brain.md](/architecture/realtime-brain.md) | RB-05, RB-08, RB-12 | done |
+| T39 | Welcome gate, ending, silence and length clocks, turn-detection mapping, persona switch | [/architecture/realtime-brain.md](/architecture/realtime-brain.md), [/architecture/turn-detection.md](/architecture/turn-detection.md) | RB-03, RB-04, RB-07, RB-09, RB-10, RB-11 | done |
+| T40 | Safety screen and the exact-wording audio path | [/architecture/realtime-brain.md](/architecture/realtime-brain.md) | RB-06 | done |
+| T41 | Failure handling, the Test call note, runbook and compliance notes | [/architecture/realtime-brain.md](/architecture/realtime-brain.md), [/ui/test-call.md](/ui/test-call.md) | RB-13, UI-52 | done |

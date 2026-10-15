@@ -68,6 +68,7 @@ function TestCall() {
   const [selfTrack, setSelfTrack] = useState<LocalVideoTrack | null>(null);
   const [agentTrack, setAgentTrack] = useState<RemoteVideoTrack | null>(null);
   const [avatar, setAvatar] = useState(false);  // media.avatar: is the agent expected to publish a face?
+  const [brain, setBrain] = useState<string>("");  // media.brain: "realtime" has one fixed voice for the call (UI-52)
   const [cameraAvailable, setCameraAvailable] = useState(true);
   const [videoNote, setVideoNote] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidenceEntry[]>([]);
@@ -124,7 +125,7 @@ function TestCall() {
     room.current = null;
     setCallId(null); setEvents([]); setCall(null); setStatus("idle"); setEscalated(false); setLevel(0); setSpeaking(false);
     setCameraOn(false); setCameraAvailable(true); setVideoNote(null); setEvidence([]); setVisualCase(null);
-    setSelfTrack(null); setAgentTrack(null); setAvatar(false);
+    setSelfTrack(null); setAgentTrack(null); setAvatar(false); setBrain("");
   }
 
   async function toggleCamera() {
@@ -151,6 +152,7 @@ function TestCall() {
         }
         if (r.media) {
           setAvatar(Boolean(r.media.avatar));
+          setBrain(String(r.media.brain ?? ""));
           const client = new RoomClient({
             onReady: () => setStatus("active"),
             onSpeaking: setSpeaking,
@@ -321,7 +323,7 @@ function TestCall() {
         </Card>
         <div className="space-y-4">
           <LiveControlsCard callId={callId} active={status === "active"} voiceCall={mode !== "type"} personas={personas?.items ?? []}
-            personaId={personaId} onPersona={setPersonaId} turn={turn} onTurn={setTurn} />
+            personaId={personaId} onPersona={setPersonaId} turn={turn} onTurn={setTurn} fixedVoice={brain === "realtime"} />
           <EvidenceStrip entries={evidence} />
           <CaseCard visualCase={visualCase} />
           {agentUcs.length > 0 && (  // UI-24: one starting phrase per use case; callers' IDs live in the demo data

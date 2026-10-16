@@ -2,7 +2,7 @@
 type: Product Brief
 title: Product vision
 description: A multi-tenant voice AI agent platform that resolves routine calls, escalates hard ones with full context, and learns from every escalation.
-status: draft
+status: stable
 tags: [product, vision]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

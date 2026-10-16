@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0012 Phone channel (Twilio) and optional realtime speech-to-speech voice
 description: "Let callers reach published agents by phone through Twilio Media Streams, add an optional OpenAI Realtime speech-to-speech pipeline per agent, and seed a new Insurance Claims Agent that uses it."
-status: draft
-cp_state: proposed
+status: stable
+cp_state: implemented
 tags: [telephony, voice, realtime, twilio, openai, claims]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }
 ---
@@ -87,6 +87,16 @@ Reworded: DM-01 (21 tables), UC-01 (five agents, 18 tools), UC-02 (eight use cas
 * **Trial accounts.** A Twilio trial plays a short notice before connecting and can only call verified numbers; the runbook says so.
 * **Tunnel URLs.** ngrok and cloudflared quick-tunnel URLs change on restart; `PUBLIC_BASE_URL` and the Twilio webhook must both be updated, or signature validation fails (the runbook's first troubleshooting entry).
 * **Rollback.** Remove the number mapping to stop phone traffic; set `voice.pipeline` back to `cascade` and publish to stop using the Realtime API. No existing agent or data is migrated. The new table is created at startup.
+
+# Implementation notes (2026-10-16)
+
+Accepted as proposed; the answers to the questions below were: the realtime model is the OpenAI Realtime API from Cloud Run, a PSTN number or SIP URI per agent, the claims agent files a mock claim, OpenAI voices for realtime agents. What changed while implementing, all recorded in the specs:
+
+* **Own bridge instead of Pipecat's Realtime service** (spike S4, [/verification/spikes.md](/verification/spikes.md)): Pipecat 1.12's service is driven by its LLM context aggregators and cannot take exact-text responses or hand tool calls to `AgentSession`. `voiceai/voice/realtime.py` speaks the provider's WebSocket protocol; Pipecat still provides transports, serializers and frames. The model ID is therefore Pipecat's default (`gpt-realtime-2.1`) and prices stay placeholders until confirmed in the OpenAI console.
+* **Spec amendments found by the code:** the inbound mode prompt now renders `call_context` so IVR context reaches the model ([/prompts/mode-inbound.md](/prompts/mode-inbound.md), a prompt change for every inbound agent: one extra line, `(no context)` when empty); RV-15 (live PATCH on a realtime call is a 409); `settings.pipeline` in call responses; `OPENAI_REALTIME_URL`; `telephony` in the call detail.
+* **Two existing tests were updated** for the specified changes (21 tables, the `/healthz` provider list) and two for the new agent (five agents, 18 tools, the Claims agent's four scenarios).
+
+Not verified here (no OpenAI or Twilio credentials in this session; see S4): a call from a real phone, the real Realtime service, measured latency and concurrency, Cloud Run. The phone path was exercised end to end against a scripted Realtime server instead.
 
 # Open questions for the reviewer
 

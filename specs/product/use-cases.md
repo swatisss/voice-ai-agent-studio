@@ -2,7 +2,7 @@
 type: Product Brief
 title: Customer Support & Channels use cases
 description: The eight demo use cases for a health insurer - agent, mode, channels, flow, tools, knowledge, escalation triggers and demo callers for each.
-status: draft
+status: stable
 tags: [product, use-cases, demo]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---

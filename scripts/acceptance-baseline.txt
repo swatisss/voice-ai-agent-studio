@@ -53,3 +53,12 @@ CE-03
 # Live voice: needs a Deepgram key, a microphone and speakers (spike S1 in specs/verification/spikes.md)
 VO-01
 VO-03
+
+# CP-0012 phone channel and realtime voice: needs a real phone or a browser (UI-38 and UI-39 were checked in headless Chromium
+# against a locally served build on 2026-10-16; there is no browser test harness yet)
+UI-38
+UI-39
+# fake_twilio.py against a running server with provider keys: run by hand as in /build/runbook-phone.md (its path is also exercised
+# without the script by tests/test_telephony.py::test_phone_call_runs_end_to_end_through_the_pipeline)
+TEL-09
+

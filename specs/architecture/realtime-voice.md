@@ -2,7 +2,7 @@
 type: Component Spec
 title: Realtime speech-to-speech voice
 description: The optional per-agent voice pipeline that sends caller audio straight to the OpenAI Realtime model and plays its audio back - streaming, latency, how the shared runtime is still used, deterministic wording, evaluation trade-offs and cost.
-status: draft
+status: stable
 tags: [architecture, voice, realtime, openai]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }
 ---
@@ -82,13 +82,14 @@ The agent's `voice.turn_detection` ([/architecture/turn-detection.md](/architect
 | `max_extra_wait_ms`, `evaluator` | ignored (the service decides; the Voice tab says so for realtime agents) |
 | `allow_interruptions` | whether caller speech interrupts the reply (`false` holds the caller's turn until the reply ends, as in the cascade) |
 
-Live controls on the Test call page for turn detection and persona ([/architecture/personas.md](/architecture/personas.md)) apply to cascade calls only; on a realtime call they are disabled with a note.
+Live controls on the Test call page for turn detection and persona ([/architecture/personas.md](/architecture/personas.md)) apply to cascade calls only; on a realtime call they are disabled with a note, and `PATCH /api/calls/{id}/live` returns 409 `realtime_pipeline` (RV-15).
 
 # Configuration
 
 * `voice.realtime.voice`: one of the voices listed under the `speech` role in `models.yaml` ([/architecture/llm-gateway.md](/architecture/llm-gateway.md)); default is that role's first voice. The persona's Deepgram voice and speed are ignored in realtime mode.
 * `models.speech`: `null` (role default) or a speech model ref; chat models are rejected.
-* Model IDs, voices and prices live only in `apps/api/config/models.yaml` (confirm in the OpenAI console during spike S4).
+* Model IDs, voices, the transcription model and prices live only in `apps/api/config/models.yaml`; the model ID is Pipecat 1.12's default Realtime model and the prices are placeholders to confirm in the OpenAI console (spike S4 could not reach it).
+* `OPENAI_REALTIME_URL` (default `wss://api.openai.com/v1/realtime`) overrides the endpoint, for tests and proxies.
 * Missing `OPENAI_API_KEY` → the voice socket closes with 4500 `voice_unavailable`, the API stays healthy (RV-03). `DEEPGRAM_API_KEY` is not needed for a realtime agent.
 
 # Cost
@@ -122,4 +123,5 @@ The service reports token usage per response, split into text and audio tokens. 
 - **RV-11** — Given a realtime call, when the caller is silent past `policy.silence_reminder_s` and `policy.silence_end_s`, or the call reaches `policy.max_call_seconds`, then the reminder, the closing line and the end reasons `idle` and `max_duration` are the same as in CE-04 and CE-05, and neither timer runs during the welcome, while the agent speaks or while a tool runs.
 - **RV-12** — Given a response with reported usage of text and audio tokens, then the call's `tokens_in`, `tokens_out` and `llm_cost_usd` increase by the cost computed from the speech model's text and audio prices.
 - **RV-13** — Given the provider socket fails to open, then the voice socket closes with 4500; given it drops mid-call, then the call ends with reason `error` and is escalated with category `other`.
+- **RV-15** — Given a running realtime call, when `PATCH /api/calls/{id}/live` is sent, then the response is 409 `realtime_pipeline` and nothing changes; the same request on a cascade call still succeeds.
 - **RV-14** — Given a realtime agent, when an evaluation run is started, then the simulated calls use the text channel with the chat role `realtime`, no speech-model request is made, and the run summary carries `pipeline: "realtime"` and `fidelity: "text_approximation"`.

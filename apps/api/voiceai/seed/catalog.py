@@ -1,6 +1,6 @@
 """Seed definitions: tenants, personas, tools, skills, agents, use cases, regression scenarios.
 
-Spec: /demo-data/evergreen-health.md, /product/use-cases.md
+Spec: /demo-data/evergreen-health.md, /demo-data/claims-agent.md, /product/use-cases.md
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _params(required: list[str] | None = None, **props: str) -> dict[str, Any]:
     return {"type": "object", "properties": {k: {"type": "string", "description": v} for k, v in props.items()}, "required": required or []}
 
 
-# ---- tools (16): verify = requires_verification
+# ---- tools (18): verify = requires_verification
 def _tool(name: str, description: str, method: str, url: str, parameters: dict[str, Any] | None = None, verify: bool = False) -> dict[str, Any]:
     return {"name": name, "description": description, "method": method, "url": url, "parameters": parameters or _EMPTY, "requires_verification": verify}
 
@@ -73,6 +73,19 @@ TOOLS: list[dict[str, Any]] = [
     _tool("get_authorization_limit", "Claim authorization limits by staff role (claims_handler, senior_handler, team_leader, claims_manager) and claim type (inpatient, outpatient, dental).",
           "GET", "/mock/internal/authorization-limits",
           _params(["role"], role="claims_handler, senior_handler, team_leader or claims_manager", claim_type="inpatient, outpatient or dental")),
+    _tool("start_claim", "Report a new claim (first notice) for the verified member. Returns the new claim number and the documents still needed.",
+          "POST", "/mock/insurance/claims/first-notice",
+          {"type": "object", "properties": {
+              "policy_id": {"type": "string", "description": "Policy number like HP-100877 or MP-200415"},
+              "claim_type": {"type": "string", "description": "outpatient, urgent_care, inpatient, dental, motor_glass or motor_collision"},
+              "service_date": {"type": "string", "description": "Date of the service or incident, YYYY-MM-DD, within the last 365 days"},
+              "provider": {"type": "string", "description": "The provider, clinic or garage"},
+              "description": {"type": "string", "description": "What happened, in one short sentence"},
+              "estimated_amount": {"type": "number", "description": "Rough amount in dollars, if the caller knows it"},
+          }, "required": ["policy_id", "claim_type", "service_date", "provider", "description"]}, verify=True),
+    _tool("get_claim_requirements", "Documents needed for a kind of claim and where to send them. No identity check needed.",
+          "GET", "/mock/insurance/claims/requirements",
+          _params(["claim_type"], claim_type="outpatient, urgent_care, inpatient, dental, motor_glass or motor_collision")),
     _tool("get_escalation_contact", "Who to contact internally for a topic: fraud, complaints, legal, data_protection, it_service_desk or medical_director.",
           "GET", "/mock/internal/contacts", _params(["topic"], topic="fraud, complaints, legal, data_protection, it_service_desk or medical_director")),
 ]
@@ -212,6 +225,41 @@ INTERNAL_SKILLS: list[dict[str, Any]] = [
      "required_tools": ["get_escalation_contact"], "escalate_when": ""},
 ]
 
+CLAIMS_SKILLS: list[dict[str, Any]] = [
+    _VERIFY_INBOUND,
+    {"name": "Claim status", "description": "The caller asks where a claim stands: paid, denied, still processing.",
+     "instructions": (
+         "1. Verify identity first.\n"
+         "2. Ask for the claim number and read it back. If they do not have it, call get_member_claims and confirm the claim by service and date.\n"
+         "3. Call get_claim_status.\n"
+         "4. In two sentences give the status, what the plan paid and what the member owes - or the expected decision date - and the next step.\n"
+         "5. If the claim is denied and the caller disagrees, explain that a specialist handles disputes and escalate."),
+     "required_tools": ["verify_member", "get_member_claims", "get_claim_status"],
+     "escalate_when": "The caller disputes a denial or wants to appeal."},
+    {"name": "Report a new claim", "description": "The caller wants to file a claim for care they paid for or an incident on a motor policy.",
+     "instructions": (
+         "1. Verify identity first, then call get_member_policies and confirm which policy the claim is for.\n"
+         "2. Collect one detail at a time: the kind of claim (outpatient, urgent care, inpatient, dental, windscreen or collision), the date, the provider or garage, one sentence on what happened, and a rough amount if known.\n"
+         "3. Read all the details back and wait for a yes.\n"
+         "4. Call start_claim with claim_type outpatient, urgent_care, inpatient, dental, motor_glass or motor_collision and the date as YYYY-MM-DD.\n"
+         "5. Read the new claim number slowly, say the documents still needed and that a specialist contacts them only if something is missing.\n"
+         "6. If start_claim says duplicate_claim, give the existing claim number instead of filing again."),
+     "required_tools": ["verify_member", "get_member_policies", "start_claim"],
+     "escalate_when": "The estimated loss is above $10,000, anyone was injured, or fraud or identity theft is suspected."},
+    {"name": "Required documents", "description": "The caller asks which documents to send for a claim.",
+     "instructions": (
+         "1. Work out the kind of claim. No identity check is needed for this.\n"
+         "2. Call get_claim_requirements and say the documents in order, one short sentence each.\n"
+         "3. Say where to send them: the online account upload or the claims mailbox; the claim number goes on every page."),
+     "required_tools": ["get_claim_requirements"], "escalate_when": ""},
+    {"name": "Disputes and appeals", "description": "The caller disagrees with a denial, wants to appeal, reports an injury or suspects fraud.",
+     "instructions": (
+         "1. Be brief and calm. Identify the claim if there is one (after verification).\n"
+         "2. Do not argue the decision or promise an outcome.\n"
+         "3. Escalate to a human: policy_required for disputes and appeals, other for injury or suspected fraud."),
+     "required_tools": [], "escalate_when": "Always."},
+]
+
 # ---- persona library: (name, description, voice, speed, greeting, disclosure, opening, style)
 PERSONAS: list[dict[str, Any]] = [
     {"name": "Ava", "description": "Warm, calm and concise; the default for customer calls.", "voice": "aura-2-thalia-en", "speed": 1.0,
@@ -231,6 +279,9 @@ PERSONAS: list[dict[str, Any]] = [
     {"name": "Sage", "description": "Neutral and precise; short answers for staff.", "voice": "aura-2-orion-en", "speed": 1.0,
      "greeting": "Evergreen internal knowledge assistant.", "disclosure": "I'm a virtual assistant. What do you need to know?", "opening": "",
      "style": "Neutral and precise. Short answers: the step, the limit or the contact, then stop."},
+    {"name": "Nora", "description": "Calm and precise; the claims line. Reads numbers slowly and confirms before acting.", "voice": "aura-2-thalia-en", "speed": 1.0,
+     "greeting": "Thank you for calling Evergreen Health claims, this is Nora.", "disclosure": f"{DISCLOSURE} How can I help with your claim?", "opening": "",
+     "style": "Calm, precise and reassuring. Read numbers and dates slowly, one question at a time, confirm details before acting."},
 ]
 
 # ---- agents
@@ -310,6 +361,31 @@ AGENTS: list[dict[str, Any]] = [
             "max_turns": 16, "handoff_message": "I can't answer that reliably, so I'll flag it to the knowledge team.",
         },
     },
+    {
+        "key": "claims", "name": "Insurance Claims Agent", "mode": "inbound", "persona": "Nora", "kb": "claims", "pipeline": "realtime",
+        "description": "Answers claim calls: status, new claim (first notice), required documents; hands disputes to a specialist.",
+        "turn_detection": {"mode": "semantic", "min_silence_ms": 700, "max_extra_wait_ms": 1500, "evaluator": "heuristic", "allow_interruptions": True},
+        "tools": ["verify_member", "get_member_claims", "get_claim_status", "get_member_policies", "start_claim", "get_claim_requirements"],
+        "skills": CLAIMS_SKILLS,
+        "policy": {
+            "rules": [
+                "Verify identity with member ID and date of birth before any claim detail or a new claim.",
+                "Read claim numbers, dates and amounts slowly, and read them back before using them.",
+                "Before filing a new claim, read all details back and wait for a yes.",
+            ],
+            "escalate_when": [
+                "The caller disputes a denial or wants to appeal.",
+                "The caller reports an injury or an emergency.",
+                "The caller suspects fraud or identity theft.",
+                "The estimated loss is above $10,000.",
+                "The caller asks for a person.",
+            ],
+            "never": ["Give medical advice.", "Discuss another person's claim.", "State that a claim will be approved."],
+            "max_turns": 16,
+            "handoff_message": "I'm connecting you with a claims specialist who will have all the details, so you won't need to repeat yourself.",
+            "holding_message": "A claims specialist will be with you shortly. Thanks for your patience.",
+        },
+    },
 ]
 
 SANDBOX_KB = "sandbox"
@@ -332,6 +408,18 @@ SCENARIOS = [
     {"name": "Policy schedule by email", "caller_goal": "You want your policy schedule emailed to you.",
      "caller_profile": _profile("Daniel Kim", "801456", "2001-03-08"), "expected": "resolved"},
     {"name": "Appeal denied claim", "caller_goal": "Your surgery claim C-31544 was denied and you want to appeal it.",
+     "caller_profile": _profile("James Carter", "337120", "1979-11-02", claim_number="C-31544"), "expected": "escalated"},
+]
+
+
+CLAIMS_SCENARIOS = [
+    {"name": "Claim paid", "caller_goal": "You want to know whether claim C-20931 was paid and how much you owe.",
+     "caller_profile": _profile("Maria Lopez", "482913", "1986-04-12", claim_number="C-20931"), "expected": "resolved"},
+    {"name": "New urgent care claim", "caller_goal": "You went to Harbor Urgent Care yesterday, paid $150 yourself, and want to file a claim and know what to send.",
+     "caller_profile": _profile("Aisha Okafor", "725031", "1990-09-15", provider="Harbor Urgent Care", amount="150 dollars"), "expected": "resolved"},
+    {"name": "Documents for a collision", "caller_goal": "You want to know which documents you need to claim for a minor collision, you do not want to file yet.",
+     "caller_profile": _profile("James Carter", "337120", "1979-11-02"), "expected": "resolved"},
+    {"name": "Dispute a denial", "caller_goal": "Your surgery claim C-31544 was denied and you want to dispute it.",
      "caller_profile": _profile("James Carter", "337120", "1979-11-02", claim_number="C-31544"), "expected": "escalated"},
 ]
 
@@ -378,4 +466,10 @@ USE_CASES: list[dict[str, Any]] = [
      "sample_utterances": ["How much of my dental allowance is left, and is there a waiting period?", "What's my specialist copay?", "Do I need pre-authorization for an MRI?", "Find me a dentist near 94110."],
      "demo_callers": [_caller("Priya Nair", "559804", "July 23, 1992", "Dental limit remaining and waiting period"),
                       _caller("Daniel Kim", "801456", "March 8, 2001", "Specialist copay and deductible")]},
+    {"agent": "claims", "title": "Claims First Notice & Status",
+     "summary": "Where a claim stands, reporting a new claim (first notice) and which documents to send; disputes go to a claims specialist. Answered on the realtime voice pipeline, also by phone.",
+     "sample_utterances": ["I want to check on a claim.", "I need to report a new claim.", "What documents do I need for a dental claim?"],
+     "demo_callers": [_caller("Maria Lopez", "482913", "April 12, 1986", "Status of claim C-20931 and C-20977"),
+                      _caller("Aisha Okafor", "725031", "September 15, 1990", "Report an urgent care visit as a new claim"),
+                      _caller("James Carter", "337120", "November 2, 1979", "Documents for a collision; dispute claim C-31544 to see the escalation")]},
 ]

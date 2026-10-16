@@ -1,4 +1,4 @@
-"""ORM models - the 20 tables of the data model.
+"""ORM models - the 21 tables of the data model.
 
 Spec: /data/data-model.md
 """
@@ -311,6 +311,18 @@ class UseCase(Base):
     sample_utterances: Mapped[list[str]] = mapped_column(JSON, default=list)
     demo_callers: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     sort: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = _created()
+
+
+class PhoneNumber(Base):
+    """An inbound phone number routed to one agent (/architecture/telephony.md)."""
+
+    __tablename__ = "phone_numbers"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    e164: Mapped[str] = mapped_column(String(20), unique=True, index=True)  # unique across all tenants
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    label: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = _created()
 
 

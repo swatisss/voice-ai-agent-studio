@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None
     openai_api_key: str | None = None
     deepgram_api_key: str | None = None
+    openai_realtime_url: str = "wss://api.openai.com/v1/realtime"  # realtime pipeline endpoint; overridden for tests and proxies
+    # telephony (/architecture/telephony.md): the public base URL must equal the URL configured in Twilio
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_api_base: str = "https://api.twilio.com"
+    twilio_validate_signature: bool = True
+    public_base_url: str | None = None
     llm_fake: bool = False
     # per-role model overrides (/architecture/llm-gateway.md, LG-06/LG-07); a real env var of the same name wins in the gateway
     llm_role_realtime: str | None = None
@@ -36,6 +43,7 @@ class Settings(BaseSettings):
     llm_role_simulator: str | None = None
     llm_role_judge: str | None = None
     llm_role_turn: str | None = None
+    llm_role_speech: str | None = None
 
     embeddings_provider: str = "fastembed"  # fastembed | hash
     fastembed_cache: Path = API_DIR / ".cache" / "fastembed"

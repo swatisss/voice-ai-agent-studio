@@ -2,7 +2,7 @@
 type: Runbook
 title: Phone runbook
 description: Answer a real phone call with an agent - local setup with a Twilio number and a tunnel, a no-Twilio local check, the Cloud Run setup, and troubleshooting.
-status: draft
+status: stable
 tags: [build, runbook, telephony, twilio, local, gcp]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }
 ---
@@ -50,10 +50,10 @@ Every time the tunnel restarts its URL changes (free ngrok and cloudflared quick
 
 ```bash
 cd apps/api && uv run voiceai phone add +15550001111 --agent "Insurance Claims Agent"
-python scripts/fake_twilio.py --base http://localhost:8000 --to +15550001111 --wav scripts/samples/hello.wav
+uv run python ../../scripts/fake_twilio.py --base http://localhost:8000 --to +15550001111 --wav your-recording.wav --ivr menu=claims
 ```
 
-`fake_twilio.py` signs a webhook request with `TWILIO_AUTH_TOKEN` (set any value in `.env`, and `PUBLIC_BASE_URL=http://localhost:8000`), follows the returned TwiML to the stream URL, plays the WAV as mu-law `media` events, prints events and writes the agent's reply audio to a WAV file. It exercises the webhook, signature, token, stream, pipeline and call recording, but not the phone network, Twilio's trial prompt or real mu-law line noise.
+Run it from `apps/api` so it uses the API's Python environment; `--wav` is optional (without it the caller plays a one second tone, which exercises the pipeline but says nothing the agent can answer). `fake_twilio.py` signs a webhook request with `TWILIO_AUTH_TOKEN` (set any value in `.env`, and `PUBLIC_BASE_URL=http://localhost:8000`), follows the returned TwiML to the stream URL, plays the WAV as mu-law `media` events, prints events and writes the agent's reply audio to a WAV file. It exercises the webhook, signature, token, stream, pipeline and call recording, but not the phone network, Twilio's trial prompt or real mu-law line noise.
 
 # 3. Cloud Run (GCP)
 

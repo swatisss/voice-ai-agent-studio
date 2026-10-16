@@ -2,7 +2,7 @@
 type: Component Spec
 title: Voice pipeline
 description: Browser or phone audio over a WebSocket through a Pipecat pipeline - VAD, Deepgram STT, turn aggregation, the agent runtime, Deepgram TTS - with barge-in. This is the default `cascade` pipeline.
-status: draft
+status: stable
 tags: [architecture, voice, pipecat]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

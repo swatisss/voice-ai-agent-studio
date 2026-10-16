@@ -30,8 +30,14 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
         loc = ".".join(str(x) for x in first.get("loc", []))
         msg = str(first.get("msg", "")).removeprefix("Value error, ")
         raise ApiError(422, "invalid_config", f"{loc}: {msg}" if loc else msg) from exc
-    if cfg.models.realtime and cfg.models.realtime not in gateway().selectable():
+    g = gateway()
+    if cfg.models.realtime and cfg.models.realtime not in g.selectable():
         raise ApiError(422, "invalid_config", f"Unknown model '{cfg.models.realtime}'")
+    if cfg.models.speech and cfg.models.speech not in g.speech_models():  # DM-06
+        raise ApiError(422, "invalid_config", f"models.speech: '{cfg.models.speech}' is not a speech model")
+    voice = cfg.voice.realtime.voice
+    if voice and voice not in g.speech_voices():  # DM-06
+        raise ApiError(422, "invalid_config", f"voice.realtime.voice: unknown voice '{voice}'")
     return cfg.model_dump()
 
 

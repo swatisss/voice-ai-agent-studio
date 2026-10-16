@@ -1,6 +1,6 @@
 """Calls: create, text messages, end, explorer, detail, and the voice WebSocket.
 
-Spec: /api/rest-api.md (Calls), /api/voice-protocol.md, /architecture/agent-runtime.md
+Spec: /api/rest-api.md (Calls), /api/voice-protocol.md, /architecture/agent-runtime.md, /architecture/realtime-voice.md
 """
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from voiceai.config import get_settings
 from voiceai.db import get_session, sessionmaker
 from voiceai.errors import ApiError
-from voiceai.live import LIVE, LiveControls, effective_settings, persona_dict
+from voiceai.live import LIVE, LiveControls, effective_settings, persona_dict, pipeline_of
+from voiceai.llm.gateway import gateway
 from voiceai import jobs
 from voiceai.db import utcnow
 from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Escalation, Persona
@@ -67,7 +68,7 @@ def call_summary(c: Call, analysis: CallAnalysis | None = None, version: int | N
     return {
         "feedback": feedback,
         "id": c.id, "agent_id": c.agent_id, "agent_version_id": c.agent_version_id, "agent_version": version,
-        "channel": c.channel, "direction": c.direction, "status": c.status, "outcome": c.outcome, "caller_ref": c.caller_ref,
+        "channel": c.channel, "transport": "phone" if (c.meta or {}).get("telephony") else "browser", "direction": c.direction, "status": c.status, "outcome": c.outcome, "caller_ref": c.caller_ref,
         "started_at": c.started_at.isoformat() if c.started_at else None,
         "ended_at": c.ended_at.isoformat() if c.ended_at else None, "end_reason": c.end_reason,
         "turn_count": c.turn_count, "tokens_in": c.tokens_in, "tokens_out": c.tokens_out,
@@ -108,6 +109,9 @@ async def live_settings(call_id: str, body: LiveBody, request: Request, tenant_i
         raise ApiError(404, "call_not_found", "Call not found")
     if call.ended_at:
         raise ApiError(409, "call_ended", "This call has ended")
+    version = await s.get(AgentVersion, call.agent_version_id)
+    if pipeline_of(version.config if version else {}) == "realtime":  # RV-15
+        raise ApiError(409, "realtime_pipeline", "Live persona and turn-detection changes apply to cascade calls only")
     persona = await _persona(s, tenant_id, body.persona_id) if body.persona_id else None
     await s.close()
     session = await AgentSession.open(call_id, tenant_id, app=request.app)
@@ -227,7 +231,51 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
         "escalation": esc_mod.summary(esc) if esc else None,
         "analysis": analysis_out(analysis),
         "settings": await effective_settings(s, call),
+        "telephony": (call.meta or {}).get("telephony"),
     }
+
+
+async def serve_voice(websocket: WebSocket, tenant_id: str, call: Call, phone: Any | None = None) -> None:
+    """Run the voice pipeline the call's agent version asks for, on a socket that is already accepted.
+
+    Shared by the browser socket and the Twilio stream. Close 4500 when the pipeline's provider is unavailable
+    (VO-05 for the cascade, RV-03 and RV-13 for the realtime pipeline).
+    """
+    async with sessionmaker()() as s:
+        version = await s.get(AgentVersion, call.agent_version_id)
+    config = version.config if version else {}
+    kind = pipeline_of(config)
+    g = gateway()
+    key = g.provider_key("openai") if kind == "realtime" else get_settings().deepgram_api_key
+    if not key:  # VO-05, RV-03
+        await websocket.close(code=4500, reason="voice_unavailable")
+        return
+    try:
+        from voiceai.voice import pipeline
+        from voiceai.voice import realtime as rt
+    except Exception as exc:  # noqa: BLE001
+        log.error("voice pipeline unavailable: %s", exc)
+        await websocket.close(code=4500, reason="voice_unavailable")
+        return
+    session = await AgentSession.open(call.id, tenant_id, app=websocket.app)
+    controls = LiveControls(turn=session.turn_settings())
+    LIVE[call.id] = controls
+    try:
+        if kind == "realtime":
+            ref = g.speech_ref((config.get("models") or {}).get("speech"))
+
+            async def connector() -> rt.RealtimeConnection:
+                return await rt.connect_openai(key, ref)
+
+            try:
+                await pipeline.run_realtime(websocket, session, controls, connector, phone)
+            except rt.ProviderUnavailable as exc:  # RV-13
+                log.warning("realtime provider unavailable: %s", exc)
+                await websocket.close(code=4500, reason="voice_unavailable")
+        else:
+            await pipeline.run(websocket, session, key, controls, phone)
+    finally:
+        LIVE.pop(call.id, None)
 
 
 @router.websocket("/voice/{call_id}")
@@ -246,20 +294,4 @@ async def voice(websocket: WebSocket, call_id: str) -> None:
     if call.channel != "voice":
         await websocket.close(code=4400, reason="wrong channel")
         return
-    key = get_settings().deepgram_api_key
-    if not key:  # VO-05
-        await websocket.close(code=4500, reason="voice_unavailable")
-        return
-    try:
-        from voiceai.voice import pipeline
-    except Exception as exc:  # noqa: BLE001
-        log.error("voice pipeline unavailable: %s", exc)
-        await websocket.close(code=4500, reason="voice_unavailable")
-        return
-    session = await AgentSession.open(call_id, tenant_id, app=websocket.app)
-    controls = LiveControls(turn=session.turn_settings())
-    LIVE[call_id] = controls
-    try:
-        await pipeline.run(websocket, session, key, controls)
-    finally:
-        LIVE.pop(call_id, None)
+    await serve_voice(websocket, tenant_id, call)

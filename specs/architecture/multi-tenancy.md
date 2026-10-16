@@ -2,7 +2,7 @@
 type: Component Spec
 title: Multi-tenancy
 description: How the tenant is resolved for every request and the isolation rules every query, event and tool call must follow.
-status: draft
+status: stable
 tags: [architecture, tenancy, security]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Telephony (Twilio phone channel)
 description: Inbound phone calls through Twilio Media Streams - number-to-agent mapping, voice webhook and TwiML, the media-stream WebSocket, IVR context, transfer to a person, request security and settings.
-status: draft
+status: stable
 tags: [architecture, telephony, twilio, ivr]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }
 ---
@@ -59,7 +59,7 @@ Twilio posts form fields including `CallSid`, `From`, `To`, `CallStatus`. Steps:
 
 * Close codes: `4401` bad or expired token, `4404` unknown or ended call, `4500` voice unavailable (a required provider key is missing). A normal end closes with `1000`.
 * Twilio sends JSON events: `connected`, `start` (carries `streamSid`, `callSid` and custom parameters), `media` (base64 mu-law, 8 kHz, 20 ms), `mark`, `stop`. The pipeline starts on `start`; the welcome ([/architecture/voice-pipeline.md](/architecture/voice-pipeline.md), VO-07) is spoken as soon as it has. There is no `ready` message.
-* Audio in: mu-law 8 kHz is converted for the pipeline (the cascade's speech-to-text accepts it directly at 8 kHz, the realtime service receives it resampled). Audio out is mu-law 8 kHz in 20 ms `media` events carrying the `streamSid`.
+* Audio in: mu-law 8 kHz is decoded and resampled for the pipeline (16 kHz PCM for the cascade, 24 kHz for the realtime service). Audio out is converted back to mu-law 8 kHz in `media` events carrying the `streamSid`. Pipecat's stream resampler hands audio on in bursts of roughly 100 ms, which adds that much delay to the caller's side; native G.711 pass-through to the realtime service would remove it and is a possible later optimisation.
 * **Barge-in**: when the caller interrupts, the serializer sends Twilio a `clear` event so queued audio is dropped (the browser equivalent is `{"type":"interrupt"}`).
 * **End**: when the session ends for any reason ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)) the server finishes the closing speech, then closes the socket; Twilio continues to `<Hangup/>` and the caller is disconnected. A Twilio `stop` event or a dropped socket ends the session with reason `hangup`.
 * Phone calls have no end-of-call feedback prompt (there is no page); `call_feedback` is unaffected.

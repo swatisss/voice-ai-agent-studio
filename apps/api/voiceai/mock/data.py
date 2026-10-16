@@ -170,12 +170,39 @@ CONTACTS = {
 
 NURSE_LINE = "1-800-555-0142"
 
+# Claim first notice (/demo-data/members-and-claims.md "Claim first notice and requirements"): type -> (policy type, documents)
+CLAIM_WHERE_TO_SEND = "Upload them in your online account or email the claims mailbox shown on your Explanation of Benefits; the claim number must be on every page."
+_BILL = {"document": "Itemized provider bill", "note": "Must show the provider, the date and each charge"}
+_PROOF = {"document": "Proof of payment", "note": "Only if you paid the provider yourself"}
+CLAIM_TYPES: dict[str, tuple[str, list[dict[str, str]]]] = {
+    "outpatient": ("health", [_BILL, _PROOF]),
+    "urgent_care": ("health", [_BILL, _PROOF]),
+    "inpatient": ("health", [
+        {"document": "Itemized hospital bill", "note": "Must show every charge for the stay"},
+        {"document": "Discharge summary", "note": "From the hospital"},
+        {"document": "Admission authorization number", "note": "Only if the stay was planned"}]),
+    "dental": ("health", [
+        {"document": "Itemized dental bill with procedure codes", "note": "From the dentist"},
+        {"document": "X-rays", "note": "Needed for crowns, bridges or implants"}]),
+    "motor_glass": ("motor", [
+        {"document": "Garage invoice", "note": "Must show the glass work and the vehicle registration"},
+        {"document": "Photos of the damage", "note": "No police report is needed for glass-only claims"}]),
+    "motor_collision": ("motor", [
+        {"document": "Repair estimate or invoice", "note": "From the garage"},
+        {"document": "Photos of all vehicles involved", "note": "Show the damage and the registrations"},
+        {"document": "The other party's details", "note": "Name, contact details and insurer"},
+        {"document": "Police report number", "note": "Only if anyone was injured or the police attended"}]),
+}
+CLAIM_DECISION_DAYS = 30
+NEW_CLAIM_IDS: list[str] = []
+CLAIM_NUMBER_BASE = 90000
+
 # ---------------------------------------------------------------- mutable, date-relative state
 POLICIES: dict[str, dict[str, Any]] = {}
 ONBOARDING: dict[str, dict[str, Any]] = {}
 DOCUMENT_REQUESTS: list[dict[str, Any]] = []
 RENEWAL_DECISIONS: list[dict[str, Any]] = []
-_counters = {"doc": 0, "renewal": 0}
+_counters = {"doc": 0, "renewal": 0, "claim": 0}
 
 
 def today() -> date:
@@ -213,7 +240,10 @@ def reset() -> None:
     })
     DOCUMENT_REQUESTS.clear()
     RENEWAL_DECISIONS.clear()
-    _counters.update(doc=0, renewal=0)
+    for cid in NEW_CLAIM_IDS:  # claims created by first notices live only until the next reset
+        CLAIMS.pop(cid, None)
+    NEW_CLAIM_IDS.clear()
+    _counters.update(doc=0, renewal=0, claim=0)
 
 
 def next_id(kind: str) -> int:

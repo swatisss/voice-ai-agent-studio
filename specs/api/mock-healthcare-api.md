@@ -2,7 +2,7 @@
 type: API Contract
 title: Mock healthcare and insurance business API
 description: Synthetic member, claims, provider, policy, coverage, document, Green Card, renewal, onboarding, outreach and internal-reference endpoints the demo agents call as tools.
-status: draft
+status: stable
 tags: [api, mock, healthcare, insurance]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Escalation
 description: When and how calls are handed to humans - triggers, reason categories, the groundwork packet, the safety screen, and the human console lifecycle.
-status: draft
+status: stable
 tags: [architecture, escalation, handoff]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

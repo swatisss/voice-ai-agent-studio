@@ -1,4 +1,4 @@
-// Spec: /ui/agent-builder.md
+// Spec: /ui/agent-builder.md (Voice tab), /architecture/realtime-voice.md, /architecture/telephony.md
 "use client";
 
 import { Eye, Pencil, Plus, Trash2, Upload } from "lucide-react";
@@ -195,13 +195,53 @@ function Persona({ draft, update }: TabProps) {
   );
 }
 
+const PIPELINES = [
+  { id: "cascade", title: "Cascade", text: "Speech-to-text, the agent brain, then text-to-speech. The default; every existing agent uses it." },
+  { id: "realtime", title: "Realtime speech-to-speech", text: "One OpenAI model listens and speaks. Lower delay and a more natural voice, higher cost per minute." },
+] as const;
+
 function VoiceTab({ draft, update }: TabProps) {
   const value = { ...DEFAULT_TURN, ...(draft.voice?.turn_detection ?? {}) };
+  const { data: models } = useApi<any>("/api/models");
+  const pipeline: "cascade" | "realtime" = draft.voice?.pipeline === "realtime" ? "realtime" : "cascade";
+  const realtime = pipeline === "realtime";
+  const setVoice = (patch: Record<string, unknown>) => update(["voice"], { ...(draft.voice ?? {}), ...patch });
   return (
-    <Card title="Turn detection">
-      <p className="mb-4 max-w-3xl text-sm text-muted">Decide when the agent starts replying. These are the agent's defaults and are versioned when you publish; on the Test call page you can compare modes and change them live during a call.</p>
-      <TurnDetectionEditor value={value} onChange={(v) => update(["voice"], { ...(draft.voice ?? {}), turn_detection: v })} />
-    </Card>
+    <div className="space-y-4">
+      <Card title="Voice pipeline">
+        <div role="radiogroup" aria-label="Voice pipeline" className="grid gap-2 md:grid-cols-2">
+          {PIPELINES.map((p) => (
+            <button key={p.id} type="button" role="radio" aria-checked={pipeline === p.id} onClick={() => setVoice({ pipeline: p.id })}
+              className={`rounded-2xl border-[1.5px] p-3 text-left transition ${pipeline === p.id ? "border-accent bg-accent-soft" : "border-line bg-panel hover:bg-neutral-soft"}`}>
+              <div className="text-sm font-semibold">{p.title}</div>
+              <div className="mt-1 text-xs text-muted">{p.text}</div>
+            </button>
+          ))}
+        </div>
+        {realtime && (
+          <div className="mt-4 max-w-md">
+            <Field label="Realtime voice" hint="Replaces the persona's voice on realtime calls. Needs OPENAI_API_KEY; no Deepgram key.">
+              <Select value={draft.voice?.realtime?.voice ?? ""} onChange={(e) => setVoice({ realtime: { ...(draft.voice?.realtime ?? {}), voice: e.target.value || null } })}>
+                <option value="">Default ({models?.speech?.voices?.[0] ?? "first voice"})</option>
+                {models?.speech?.voices?.map((v: string) => <option key={v} value={v}>{v}</option>)}
+              </Select>
+            </Field>
+          </div>
+        )}
+      </Card>
+      <Card title="Transfer on hand-off">
+        <p className="mb-3 max-w-3xl text-sm text-muted">On a phone call, after the hand-off message the live call is redirected here. Leave empty to end the call as usual. Use international format (+15557654321) or a sip: address.</p>
+        <div className="max-w-md">
+          <Field label="Transfer to">
+            <Input value={draft.telephony?.transfer_to ?? ""} placeholder="+15557654321" onChange={(e) => update(["telephony"], { ...(draft.telephony ?? {}), transfer_to: e.target.value || null })} />
+          </Field>
+        </div>
+      </Card>
+      <Card title="Turn detection">
+        <p className="mb-4 max-w-3xl text-sm text-muted">Decide when the agent starts replying. These are the agent's defaults and are versioned when you publish; on the Test call page you can compare modes and change them live during a call{realtime ? " (cascade calls only)" : ""}.</p>
+        <TurnDetectionEditor value={value} realtime={realtime} onChange={(v) => setVoice({ turn_detection: v })} />
+      </Card>
+    </div>
   );
 }
 

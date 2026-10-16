@@ -2,7 +2,7 @@
 type: Component Spec
 title: Call ending and caller feedback
 description: Every way a call ends in voice and chat (goodbye, farewell phrase, hand-off to a human, silence, maximum duration, hang-up), and the thumbs up or down feedback a caller leaves afterwards, which feeds Insights.
-status: draft
+status: stable
 tags: [architecture, lifecycle, feedback, learning]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-07T00:00:00Z" }
 ---

@@ -1,4 +1,4 @@
-// Spec: /ui/test-call.md (Live controls), /architecture/personas.md, /architecture/turn-detection.md
+// Spec: /ui/test-call.md (Live controls), /architecture/personas.md, /architecture/turn-detection.md, /architecture/realtime-voice.md
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -13,8 +13,8 @@ type Persona = { id: string; name: string; description?: string; voice: string; 
  * Persona and turn-detection controls. Before a call they are call-start overrides (the page sends them with
  * POST /api/calls); during a call every change is applied immediately with PATCH /api/calls/{id}/live (UI-23).
  */
-export function LiveControlsCard({ callId, active, voiceCall, personas, personaId, onPersona, turn, onTurn }: {
-  callId: string | null; active: boolean; voiceCall: boolean; personas: Persona[]; personaId: string;
+export function LiveControlsCard({ callId, active, voiceCall, personas, personaId, onPersona, turn, onTurn, realtime = false }: {
+  callId: string | null; active: boolean; voiceCall: boolean; personas: Persona[]; personaId: string; realtime?: boolean;
   onPersona: (id: string) => void; turn: TurnDetection; onTurn: (t: TurnDetection) => void;
 }) {
   const toast = useToast();
@@ -26,22 +26,29 @@ export function LiveControlsCard({ callId, active, voiceCall, personas, personaI
   useEffect(() => { appliedPersona.current = personaId; appliedTurn.current = JSON.stringify(turn); }, [callId]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!callId || !active || personaId === appliedPersona.current) return;
+    if (realtime || !callId || !active || personaId === appliedPersona.current) return;
     appliedPersona.current = personaId;
     api(`/api/calls/${callId}/live`, { method: "PATCH", json: { persona_id: personaId } }).catch((e) => toast((e as ApiError).detail, "bad"));
   }, [personaId, callId, active]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!callId || !active || !voiceCall || JSON.stringify(turn) === appliedTurn.current) return;
+    if (realtime || !callId || !active || !voiceCall || JSON.stringify(turn) === appliedTurn.current) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {  // debounced 300 ms while sliders move
       appliedTurn.current = JSON.stringify(turn);
       api(`/api/calls/${callId}/live`, { method: "PATCH", json: { turn_detection: turn } }).catch((e) => toast((e as ApiError).detail, "bad"));
     }, 300);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [turn, callId, active, voiceCall]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [turn, callId, active, voiceCall, realtime]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const chosen = personas.find((p) => p.id === personaId);
+  if (realtime) {  // RV-15: the realtime service decides turns and speaks with its own voice
+    return (
+      <Card title="Live controls">
+        <div className="text-sm text-muted">This agent uses the realtime voice pipeline. Persona switching and turn-detection changes apply to cascade calls only; the voice and turn detection are set in the agent's Voice tab.</div>
+      </Card>
+    );
+  }
   return (
     <Card title="Live controls">
       <div className="space-y-4">

@@ -2,7 +2,7 @@
 type: API Contract
 title: Voice WebSocket protocol
 description: Wire format between the browser test-call client and the voice pipeline - binary PCM audio frames and JSON control messages.
-status: draft
+status: stable
 tags: [api, voice, websocket]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

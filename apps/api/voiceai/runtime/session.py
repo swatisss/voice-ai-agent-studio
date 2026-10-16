@@ -1,6 +1,6 @@
 """AgentSession - the shared brain for voice, text and simulation channels.
 
-Spec: /architecture/agent-runtime.md, /architecture/escalation.md (Triggers)
+Spec: /architecture/agent-runtime.md, /architecture/escalation.md (Triggers), /architecture/realtime-voice.md (externally driven turns)
 """
 from __future__ import annotations
 
@@ -10,19 +10,19 @@ import logging
 import statistics
 import time
 from collections.abc import AsyncIterator
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai import jobs
-from voiceai.db import sessionmaker, utcnow
+from voiceai.db import new_id, sessionmaker, utcnow
 from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.knowledge.search import search as kb_search
-from voiceai.llm.gateway import LLMError, gateway
-from voiceai.live import effective_turn, persona_dict, settings_view
+from voiceai.llm.gateway import LLMError, Usage, gateway
+from voiceai.live import effective_turn, persona_dict, pipeline_of, settings_view
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, Persona, Tenant
 from voiceai.runtime import endings, escalation, outbound
 from voiceai.runtime.prompt import system_prompt
@@ -39,6 +39,16 @@ APOLOGY_TOOLS = "I'm sorry, I wasn't able to finish looking that up."
 GOODBYE = endings.GOODBYE
 
 REGISTRY: dict[str, AgentSession] = {}
+
+
+@dataclass
+class Directive:
+    """A fixed line the runtime says instead of asking a model (holding, farewell, safety) and how the call goes on."""
+
+    text: str
+    end_reason: str | None = None                  # end the session with this reason once the line was spoken
+    escalate: tuple[str, str] | None = None        # (category, detail) to escalate with
+    data: dict[str, Any] | None = None
 
 
 def _trim_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -167,7 +177,7 @@ class AgentSession:
         return effective_turn(self.config, self.live)
 
     def settings(self) -> dict[str, Any]:
-        return settings_view(self.config.get("persona") or {}, self.turn_settings())
+        return settings_view(self.config.get("persona") or {}, self.turn_settings(), pipeline_of(self.config))
 
     async def switch_persona(self, persona: dict[str, Any] | None) -> None:
         """Live persona switch (PER-04); None restores the agent's own persona."""
@@ -241,6 +251,79 @@ class AgentSession:
         await self._say(text, data)
         await self._persist()
         return text
+
+    # ------------------------------------------------------------ externally driven turns (RT-10)
+    # A channel whose model produces the words itself (the realtime speech-to-speech pipeline) drives the session with
+    # these methods instead of respond(). The rules are the ones _turn() applies; the model call is the only difference.
+    async def record_user(self, text: str) -> str:
+        """Store a final caller transcript: increments turns, adds the `user` event."""
+        text = text.strip()
+        self.state.turns += 1
+        self.history.append({"role": "user", "content": text})
+        await self._event("user", text)
+        return text
+
+    async def screen(self, text: str) -> Directive | None:
+        """The deterministic rules that run before any model reply (RT-02, CE-02, ES-01); None = let the model answer."""
+        policy = self.config.get("policy", {})
+        if self.state.escalated:
+            return Directive(policy.get("holding_message") or "A specialist will be with you shortly.")
+        if endings.is_farewell(text):
+            return Directive(GOODBYE, end_reason="farewell", data={"farewell": True})
+        if policy.get("safety_screen", True) and escalation.safety_match(text):
+            return Directive(escalation.SAFETY_MESSAGE, end_reason="handoff", data={"safety": True},
+                             escalate=("safety", "Caller used emergency or self-harm language"))
+        return None
+
+    async def apply(self, directive: Directive) -> str:
+        """Record a directive's line (and its escalation); the caller speaks it and then ends the call itself."""
+        line = await self._say(directive.text, directive.data)
+        if directive.escalate:
+            await self.escalate(*directive.escalate)
+        await self._persist()
+        return line
+
+    async def record_reply(self, text: str, latency_ms: int | None = None, usage: Usage | None = None, interrupted: bool = False) -> None:
+        """Store a completed (or interrupted) assistant reply with its latency and usage."""
+        text = text.strip()
+        if usage is not None:
+            self.state.tokens_in += usage.input_tokens
+            self.state.tokens_out += usage.output_tokens
+            self.state.cost_usd += usage.cost_usd
+        if not text:
+            await self._persist()
+            return
+        if interrupted:
+            text = f"{text} [interrupted]"
+        elif latency_ms is not None:
+            self.state.latencies_ms.append(latency_ms)
+        self.history.append({"role": "assistant", "content": text})
+        await self._event("assistant", text, {"latency_ms": latency_ms, "tokens_in": self.state.tokens_in, "tokens_out": self.state.tokens_out})
+        await self._persist()
+
+    async def record_turn(self, user_text: str, assistant_text: str, latency_ms: int | None = None,
+                          usage: Usage | None = None, interrupted: bool = False) -> None:
+        """One caller turn and the reply to it, stored in order."""
+        await self.record_user(user_text)
+        await self.record_reply(assistant_text, latency_ms, usage, interrupted)
+
+    async def post_turn(self) -> str | None:
+        """Deterministic triggers after a reply (ES-02, ES-03, max turns): returns the hand-off line to speak, or None."""
+        policy = self.config.get("policy", {})
+        trigger = self._post_turn_trigger(policy)
+        if not trigger or self.state.escalated:
+            return None
+        handoff = policy.get("handoff_message") or "I'm connecting you with a specialist."
+        await self._say(handoff)
+        await self.escalate(*trigger)
+        await self._persist()
+        return handoff
+
+    async def run_tool(self, name: str, arguments: str | dict[str, Any], call_id: str | None = None) -> str:
+        """Run one tool call exactly as the turn loop does (gate, events, state, escalation) and return the JSON result."""
+        raw = arguments if isinstance(arguments, str) else json.dumps(arguments)
+        async with self._lock:
+            return await self._run_tool(call_id or new_id()[:12], name, raw or "{}")
 
     # ------------------------------------------------------------ turn
     async def respond(self, user_text: str) -> AsyncIterator[str]:

@@ -2,7 +2,7 @@
 type: Seed Data
 title: Insurance Claims Agent
 description: "The fifth Evergreen Health agent - an inbound claims assistant that runs on the realtime speech-to-speech pipeline: persona, policy, tools, skills, knowledge, mock-API rules and regression scenarios."
-status: draft
+status: stable
 tags: [demo-data, seed, claims, realtime]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }
 ---

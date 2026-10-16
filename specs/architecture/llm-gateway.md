@@ -2,7 +2,7 @@
 type: Component Spec
 title: LLM gateway
 description: Maps LLM roles to Groq, OpenRouter or OpenAI models through one OpenAI-compatible client, with streaming, tool calls, JSON outputs, fallback and cost accounting.
-status: draft
+status: stable
 tags: [architecture, llm, groq, openrouter, openai]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -17,7 +17,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `simulator` | Simulated callers | cheap, fast | `groq:openai/gpt-oss-20b` |
 | `judge` | Eval grading | JSON output | `groq:openai/gpt-oss-120b` |
 | `turn` | Semantic turn detection (LLM evaluator) | tiny JSON verdict in under a second | `groq:openai/gpt-oss-20b` |
-| `speech` | Realtime speech-to-speech voice pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) | streaming audio in and out, function calling | `openai:gpt-realtime` (confirm the ID in the OpenAI console) |
+| `speech` | Realtime speech-to-speech voice pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) | streaming audio in and out, function calling | `openai:gpt-realtime-2.1` (Pipecat 1.12's default Realtime model; confirm the ID in the OpenAI console) |
 
 The `speech` role is **not** a chat role: it is never passed to `stream_chat` or `complete_json`, has no fallback chain, and its models are excluded from the chat model lists. Only the realtime pipeline reads it, for the model reference, the voices it offers, session parameters and prices.
 # Configuration — `apps/api/config/models.yaml`
@@ -34,7 +34,7 @@ models:            # price per 1M tokens (USD) for cost accounting
   "openai:gpt-4.1-mini":            { input: 0.40, output: 1.60, json_schema: true }   # confirm IDs and prices in the OpenAI console
   "openai:gpt-4.1-nano":            { input: 0.10, output: 0.40, json_schema: true }
   # Speech-to-speech model (confirm ID and prices in the OpenAI console): text and audio token prices per 1M tokens
-  "openai:gpt-realtime":             { kind: speech, input: 4.00, output: 16.00, audio_input: 32.00, audio_output: 64.00 }
+  "openai:gpt-realtime-2.1":         { kind: speech, input: 4.00, output: 16.00, audio_input: 32.00, audio_output: 64.00 }
 roles:
   realtime:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0.3, max_tokens: 800 },
                fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
@@ -43,7 +43,7 @@ roles:
   simulator: { model: "groq:openai/gpt-oss-20b",  params: { reasoning_effort: low, temperature: 0.7 }, fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-nano"] }
   judge:     { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0 }, fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
   turn:      { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }, fallback: ["openrouter:openai/gpt-oss-20b", "openai:gpt-4.1-nano"] }
-  speech:    { model: "openai:gpt-realtime", voices: ["<voice ids from the console, first is the default>"], params: { transcription_model: "<confirm in console>" }, fallback: [] }
+  speech:    { model: "openai:gpt-realtime-2.1", voices: [marin, cedar, coral, alloy, ash, ballad, echo, sage, shimmer, verse], params: { transcription_model: "gpt-realtime-whisper" }, fallback: [] }
 ```
 
 * A **model ref** is `<provider>:<model id>`. Any OpenRouter model may be used by adding it under `models`, and any non-reasoning OpenAI chat model likewise.

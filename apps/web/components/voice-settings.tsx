@@ -1,11 +1,11 @@
-// Spec: /ui/agent-builder.md (Voice tab), /ui/test-call.md (Live controls), /architecture/turn-detection.md
+// Spec: /ui/agent-builder.md (Voice tab), /ui/test-call.md (Live controls), /architecture/turn-detection.md, /architecture/realtime-voice.md
 "use client";
 
 import { type TurnDetection } from "@/lib/voices";
 import { cx } from "./ui";
 
-function Slider({ label, value, min, max, step, unit, onChange, hint }: {
-  label: string; value: number; min: number; max: number; step: number; unit: string; onChange: (v: number) => void; hint?: string;
+function Slider({ label, value, min, max, step, unit, onChange, hint, disabled }: {
+  label: string; value: number; min: number; max: number; step: number; unit: string; onChange: (v: number) => void; hint?: string; disabled?: boolean;
 }) {
   const id = `slider-${label.replace(/\s+/g, "-").toLowerCase()}`;
   return (
@@ -14,7 +14,7 @@ function Slider({ label, value, min, max, step, unit, onChange, hint }: {
         <label htmlFor={id} className="text-sm font-medium">{label}</label>
         <span className="text-sm font-semibold text-accent tabular-nums">{value} {unit}</span>
       </div>
-      <input id={id} type="range" className="mt-1 w-full accent-[var(--accent)]" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <input id={id} type="range" disabled={disabled} className="mt-1 w-full accent-[var(--accent)] disabled:opacity-50" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
       {hint && <div className="text-xs text-muted">{hint}</div>}
     </div>
   );
@@ -26,7 +26,7 @@ const MODES = [
 ];
 
 /** Turn-detection editor used by the builder's Voice tab (UI-22) and the Test call live controls (UI-23). */
-export function TurnDetectionEditor({ value, onChange, compact = false }: { value: TurnDetection; onChange: (v: TurnDetection) => void; compact?: boolean }) {
+export function TurnDetectionEditor({ value, onChange, compact = false, realtime = false }: { value: TurnDetection; onChange: (v: TurnDetection) => void; compact?: boolean; realtime?: boolean }) {
   const set = (patch: Partial<TurnDetection>) => onChange({ ...value, ...patch });
   return (
     <div className="space-y-4">
@@ -43,14 +43,15 @@ export function TurnDetectionEditor({ value, onChange, compact = false }: { valu
         hint={compact ? undefined : "Shorter feels snappier; longer avoids cutting callers off."} />
       {value.mode === "semantic" && (
         <>
+          {realtime && <p className="text-xs text-muted">The realtime service decides when the caller has finished, so the extra wait and the check below do not apply.</p>}
           <Slider label="Extra wait when the caller seems unfinished" value={value.max_extra_wait_ms} min={0} max={4000} step={100} unit="ms" onChange={(v) => set({ max_extra_wait_ms: v })}
-            hint={compact ? undefined : "0 behaves like normal detection."} />
+            disabled={realtime} hint={compact ? undefined : "0 behaves like normal detection."} />
           <fieldset>
             <legend className="text-sm font-medium">How to judge "finished?"</legend>
             <div className="mt-1 flex flex-wrap gap-2">
               {([["heuristic", "Local rules (instant, free)"], ["llm", "LLM check (adds a small model call)"]] as const).map(([id, label]) => (
                 <label key={id} className={cx("flex cursor-pointer items-center gap-2 rounded-full border-[1.5px] px-3 py-1.5 text-sm", value.evaluator === id ? "border-accent bg-accent-soft" : "border-line")}>
-                  <input type="radio" name="evaluator" className="accent-[var(--accent)]" checked={value.evaluator === id} onChange={() => set({ evaluator: id })} />{label}
+                  <input type="radio" name="evaluator" disabled={realtime} className="accent-[var(--accent)]" checked={value.evaluator === id} onChange={() => set({ evaluator: id })} />{label}
                 </label>
               ))}
             </div>

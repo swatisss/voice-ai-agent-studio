@@ -2,7 +2,7 @@
 type: Seed Data
 title: Members, policies, claims and business records
 description: Synthetic records behind the mock insurance API - members, plans and benefits, policies, claims, prior authorizations, providers, documents, renewal quotes, onboarding checklists, outreach lists and internal reference data.
-status: draft
+status: stable
 tags: [demo-data, seed, mock]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---

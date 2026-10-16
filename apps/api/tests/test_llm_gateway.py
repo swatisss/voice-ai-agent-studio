@@ -175,7 +175,7 @@ async def test_openai_key_from_dotenv_settings_and_healthz(client, monkeypatch, 
     c = g._client("openai")
     assert c.api_key == "sk-from-dotenv" and c.base_url == "https://api.openai.com/v1"
     monkeypatch.setattr(gw, "_gateway", g)
-    assert (await client.get("/healthz")).json()["providers"] == {"groq": False, "openrouter": False, "openai": True, "deepgram": False}
+    assert (await client.get("/healthz")).json()["providers"] == {"groq": False, "openrouter": False, "openai": True, "deepgram": False, "twilio": False}
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-from-environment")  # the environment variable wins over the .env line
     assert _gateway(monkeypatch, openai_api_key="sk-from-dotenv")._client("openai").api_key == "sk-from-environment"

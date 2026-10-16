@@ -2,7 +2,7 @@
 type: Prompt
 title: Realtime addendum
 description: Extra instructions appended to the agent system prompt when an agent runs on the realtime speech-to-speech pipeline - spoken style, read-back, exact-text lines, tool phrases and the hand-off line.
-status: draft
+status: stable
 tags: [prompt, runtime, realtime, voice]
 llm_role: speech
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }

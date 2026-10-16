@@ -26,7 +26,7 @@ The demo domain is **Evergreen Health**, a fictional health insurer whose busine
 
 ## Run it
 
-Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js LTS (24.x), Git. Keys: an LLM key (`GROQ_API_KEY` by default, or `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`) and `DEEPGRAM_API_KEY` (voice); the other LLM keys are optional fallbacks.
+Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js LTS (24.x), Git. Keys: an LLM key (`GROQ_API_KEY` by default, or `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`) and `DEEPGRAM_API_KEY` (voice; the realtime Insurance Claims Agent needs `OPENAI_API_KEY` instead); to answer real phone calls see the [phone runbook](specs/build/runbook-phone.md); the other LLM keys are optional fallbacks.
 
 ```bash
 python scripts/setup.py --install      # once: hooks, apps/api/.env, uv sync, npm ci   (Windows: py -3 scripts/setup.py --install)
@@ -277,7 +277,8 @@ apps/web/              Next.js 16 static-export UI                   .github/   
 | `dev.py`: "port 8000 is already in use" | Another server is running. Stop it, or `--api-port 8001` (and `--web-port` for the web app) |
 | `dev.py`: "dependencies are not installed" | `python scripts/dev.py --install` (or `python scripts/setup.py --install`) |
 | Mic blocked in the browser | Use `http://localhost` or HTTPS; a headset avoids echo |
-| Voice closes immediately (code 4500) | `DEEPGRAM_API_KEY` is missing; use the **Type** tab |
+| Voice closes immediately (code 4500) | `DEEPGRAM_API_KEY` is missing (cascade agents) or `OPENAI_API_KEY` is missing (realtime agents such as the Insurance Claims Agent); use the **Type** tab |
+| Phone calls: Twilio shows 11200 / 403, or "not in service" | `PUBLIC_BASE_URL` differs from the URL in Twilio, or the number is not mapped; see the [phone runbook](specs/build/runbook-phone.md) |
 | Groq 429 (`tokens per minute`) | Free-tier cap of 8,000 tokens/min per model. Add `OPENAI_API_KEY` or `OPENROUTER_API_KEY` (the fallback answers), switch the roles to OpenAI (see `.env.example`), or enable Groq billing |
 | Groq 401 `invalid_api_key` with a good key | `apps/api/.env` lists the key twice: the later line wins. Keep one |
 | Everything slow the first time | fastembed downloads its ~70 MB model once |

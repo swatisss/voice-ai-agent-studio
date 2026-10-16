@@ -19,6 +19,7 @@ from voiceai.db import sessionmaker, utcnow
 from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.learning.propose import candidate_config, cluster_evidence, proposal_summary
+from voiceai.live import pipeline_of
 from voiceai.llm.gateway import gateway
 from voiceai.mock import data as mock
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, EvalResult, EvalRun, EvalScenario, FixProposal, Tenant
@@ -174,6 +175,9 @@ async def run_eval(tenant_id: str, payload: dict[str, Any]) -> None:
                 "regression_cases": reg_n, "regression_pass": reg_pass,
                 "lift_pct": round(100 * (cand_pass - base_pass) / cluster_n) if cluster_n else 0,
                 "duration_s": round(time.perf_counter() - started, 1),
+                # RV-14: a realtime agent is simulated on the text brain, so its scores approximate the spoken behaviour
+                "pipeline": pipeline_of(base_cfg),
+                "fidelity": "text_approximation" if pipeline_of(base_cfg) == "realtime" else "faithful",
             }
             run_db.status, run_db.finished_at = "done", utcnow()
             p_db.status = "ready"

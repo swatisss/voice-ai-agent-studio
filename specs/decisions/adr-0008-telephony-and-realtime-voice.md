@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0008 Telephony through Twilio Media Streams and an optional realtime voice pipeline
 description: Answer phone calls with Twilio Media Streams over a WebSocket on Cloud Run, and offer OpenAI Realtime speech-to-speech as a per-agent option beside the Deepgram cascade.
-status: draft
+status: stable
 tags: [decision, telephony, voice, twilio, openai]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }
 ---

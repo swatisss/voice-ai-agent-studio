@@ -62,3 +62,5 @@ UI-39
 # without the script by tests/test_telephony.py::test_phone_call_runs_end_to_end_through_the_pipeline)
 TEL-09
 
+# One-command phone demo: needs Twilio, OpenAI, a tunnel tool and a phone (the pieces and a real run against local fakes are tested)
+DEV-11

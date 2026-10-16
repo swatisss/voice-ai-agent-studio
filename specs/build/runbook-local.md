@@ -66,7 +66,7 @@ LLM_ROLE_SIMULATOR=openai:gpt-4.1-nano
 LLM_ROLE_TURN=openai:gpt-4.1-nano
 ```
 
-Realtime agents (the Insurance Claims Agent) need only `OPENAI_API_KEY` for voice and no Deepgram key; try one from the Test call page first. Answering a real phone call locally (Twilio number, tunnel, `PUBLIC_BASE_URL`) or simulating one with no Twilio account is in [/build/runbook-phone.md](/build/runbook-phone.md).
+Realtime agents (the Insurance Claims Agent) need only `OPENAI_API_KEY` for voice and no Deepgram key; try one from the Test call page first. Answering a real phone call locally (Twilio number, tunnel, `PUBLIC_BASE_URL`) or simulating one with no Twilio account is in [/build/runbook-phone.md](/build/runbook-phone.md); for a demo, `python scripts/phone_demo.py` does all of it from values in `.env` ([/build/phone-demo.md](/build/phone-demo.md)).
 
 Duplicate keys in `.env` are a trap: when a variable appears twice the later line wins, so a stale or truncated second `GROQ_API_KEY=` silently replaces a good first one (Groq then answers 401 `invalid_api_key`).
 

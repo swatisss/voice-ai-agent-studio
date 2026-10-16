@@ -352,7 +352,7 @@ async def test_silence_and_length_clocks(client, seeded):
     """Covers: RV-11"""
     bridge, conn, session, ended = await build(seeded)
     await finish_welcome(bridge, conn)
-    t0 = 1000.0
+    t0 = bridge._call_started + 1.0  # fake times relative to the call's own clock, whatever the host's uptime
     bridge._silent_since = t0
     await bridge.check_clocks(t0 + 5)
     assert endings.REMINDER_LINE not in conn.exact_texts()

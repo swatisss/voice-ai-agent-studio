@@ -5,6 +5,7 @@ Covers: TEL-01, TEL-02, TEL-03, TEL-04, TEL-05, TEL-06, TEL-07, TEL-08, TEL-10, 
 from __future__ import annotations
 
 import base64
+import concurrent.futures
 import json
 import sqlite3
 import time
@@ -454,7 +455,8 @@ def test_phone_call_runs_end_to_end_through_the_pipeline(provider, phone):
     r = signed_post(phone.client, call_params(), query="ivr_menu=claims")
     _, call_id = stream_of(r.text)
     media_in = json.dumps({"event": "media", "streamSid": "MZe2e", "media": {"payload": base64.b64encode(bytes([0x7F, 0x80]) * 80).decode()}})
-    with pytest.raises(WebSocketDisconnect):
+    # the test client may cancel the server task while it finishes cleaning up after the hang-up: both outcomes are a normal end
+    with pytest.raises((WebSocketDisconnect, concurrent.futures.CancelledError)):
         with phone.client.websocket_connect(ws_url(r.text)) as ws:
             ws.send_text(json.dumps({"event": "connected"}))
             ws.send_text(json.dumps({"event": "start", "streamSid": "MZe2e", "start": {"streamSid": "MZe2e", "callSid": "CA123", "customParameters": {}}}))

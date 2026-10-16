@@ -9,6 +9,16 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }
 
 Spec: [/architecture/telephony.md](/architecture/telephony.md), [/architecture/realtime-voice.md](/architecture/realtime-voice.md). Everything here uses synthetic data only.
 
+# One command (recommended for demos)
+
+Put these in `apps/api/.env` once: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` (your Twilio number, `+1…`), `OPENAI_API_KEY`, and optionally `DEMO_TRANSFER_TO` (a phone to hand the call to). Install `ngrok` (and run `ngrok config add-authtoken …` once) or `cloudflared`. Then:
+
+```bash
+python scripts/phone_demo.py
+```
+
+It starts the tunnel and the API, maps the number to the Insurance Claims Agent, points the Twilio number at the tunnel and prints the number to call; Ctrl+C restores everything. Spec: [/build/phone-demo.md](/build/phone-demo.md). The numbered steps below are what it automates, and the fallback if you want to do them yourself.
+
 # 0. Try the realtime agent without any phone
 
 1. Add `OPENAI_API_KEY` to `apps/api/.env` and start the stack (`python scripts/dev.py`).

@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -66,9 +66,18 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/calls/{id}/end` | → `{status, outcome}` |
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |
 | PATCH | `/api/calls/{id}/live` | `{persona_id?, turn_detection?}` → `{settings}`; changes persona and/or turn detection of a running call (404 unknown, 409 ended, 422 invalid). See [/architecture/personas.md](/architecture/personas.md), [/architecture/turn-detection.md](/architecture/turn-detection.md). |
-| GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `direction?`, `feedback?` (`up`\|`down`\|`none`), `include_seed=true` → `{items: [call summary]}` (eval calls excluded); each summary carries `feedback` (`"up"`, `"down"` or `null`) |
+| GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `direction?`, `feedback?` (`up`\|`down`\|`none`), `include_seed=true` → `{items: [call summary]}` (eval calls excluded); each summary carries `feedback` (`"up"`, `"down"` or `null`) and `transport` (`"phone"` for a call that came in through Twilio, else `"browser"`) |
 | GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
+
+## Phone numbers and telephony
+| Method | Path | Body → Result |
+|---|---|---|
+| GET | `/api/phone-numbers` | → `{items: [{id, e164, agent_id, agent_name, label, created_at}]}` for the tenant |
+| POST | `/api/phone-numbers` | `{e164, agent_id, label?}` → the number; 409 `number_in_use`, 422 for a bad number or an agent that is not the tenant's |
+| DELETE | `/api/phone-numbers/{id}` | → 204; 404 for another tenant's number |
+| POST | `/api/telephony/twilio/voice` | Twilio voice webhook (form fields, signed); **no tenant header**: returns TwiML ([/architecture/telephony.md](/architecture/telephony.md)); 403 on a bad signature |
+| WS | `/api/telephony/twilio/stream/{call_id}?token=` | Twilio Media Stream; **no tenant parameter**; token minted by the webhook |
 
 ## Use cases and outbound
 | Method | Path | Result |

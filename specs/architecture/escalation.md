@@ -2,7 +2,7 @@
 type: Component Spec
 title: Escalation
 description: When and how calls are handed to humans - triggers, reason categories, the groundwork packet, the safety screen, and the human console lifecycle.
-status: stable
+status: draft
 tags: [architecture, escalation, handoff]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -40,7 +40,7 @@ Safety phrases (case-insensitive substring): `suicide`, `kill myself`, `end my l
 3. Speak/return the handoff message (`policy.handoff_message`, or the safety message for `safety`).
 4. Publish `escalation.created` to topic `console` and `call.escalated` to `call:{id}`.
 5. Build the packet **immediately** in a background task (not the job queue): LLM `analysis` role with [/prompts/escalation-packet.md](/prompts/escalation-packet.md) over transcript + state. On success `packet_status: ready`; on failure the deterministic fallback packet with `packet_status: fallback`. Publish `escalation.updated`.
-6. **The AI call ends** once the handoff (or safety) message has been delivered, with reason `handoff` ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md), CE-01), as virtual-agent platforms do when a conversation is handed to a human. The escalation stays `waiting` for the console; the caller is then offered the feedback prompt like any ended call. The *holding* reply (policy `holding_message`) survives only as a fallback for a session that is escalated yet still open.
+6. **The AI call ends** once the handoff (or safety) message has been delivered, with reason `handoff` ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md), CE-01), as virtual-agent platforms do when a conversation is handed to a human. The escalation stays `waiting` for the console; the caller is then offered the feedback prompt like any ended call (not on a phone call, which has no page). On a phone call whose agent has `telephony.transfer_to`, the live call is also redirected to that destination after the message ([/architecture/telephony.md](/architecture/telephony.md), TEL-07). The *holding* reply (policy `holding_message`) survives only as a fallback for a session that is escalated yet still open.
 
 Evaluation (simulated) calls also create an escalation row so judging can see the outcome, but they never reach the human console: no `console` events, no packet LLM call (deterministic fallback packet), and `GET /api/escalations` excludes them.
 

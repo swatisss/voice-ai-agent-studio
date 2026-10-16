@@ -2,7 +2,7 @@
 type: Runbook
 title: Local runbook
 description: Install prerequisites, configure keys, run the API and web app, seed data and run checks on a developer machine (Windows, macOS, Linux).
-status: stable
+status: draft
 tags: [build, runbook, local]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -65,6 +65,8 @@ LLM_ROLE_JUDGE=openai:gpt-4.1-mini
 LLM_ROLE_SIMULATOR=openai:gpt-4.1-nano
 LLM_ROLE_TURN=openai:gpt-4.1-nano
 ```
+
+Realtime agents (the Insurance Claims Agent) need only `OPENAI_API_KEY` for voice and no Deepgram key; try one from the Test call page first. Answering a real phone call locally (Twilio number, tunnel, `PUBLIC_BASE_URL`) or simulating one with no Twilio account is in [/build/runbook-phone.md](/build/runbook-phone.md).
 
 Duplicate keys in `.env` are a trap: when a variable appears twice the later line wins, so a stale or truncated second `GROQ_API_KEY=` silently replaces a good first one (Groq then answers 401 `invalid_api_key`).
 

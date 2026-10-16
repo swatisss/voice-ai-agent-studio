@@ -2,7 +2,7 @@
 type: Runbook
 title: GCP runbook
 description: Build the single container and deploy it to Cloud Run with Secret Manager keys, optionally backed by Cloud SQL Postgres.
-status: stable
+status: draft
 tags: [build, runbook, gcp, cloud-run]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -20,7 +20,7 @@ printf '%s' "$OPENROUTER_API_KEY" | gcloud secrets create OPENROUTER_API_KEY --d
 printf '%s' "$OPENAI_API_KEY"     | gcloud secrets create OPENAI_API_KEY --data-file=-       # optional
 ```
 
-`OPENROUTER_API_KEY` and `OPENAI_API_KEY` are optional: the deploy script attaches a secret only if it exists in Secret Manager.
+For phone calls also create `TWILIO_AUTH_TOKEN` and `TWILIO_ACCOUNT_SID` the same way (`printf '%s' "$TWILIO_AUTH_TOKEN" | gcloud secrets create TWILIO_AUTH_TOKEN --data-file=-`). `OPENROUTER_API_KEY`, `OPENAI_API_KEY` (required by realtime agents), `TWILIO_AUTH_TOKEN` and `TWILIO_ACCOUNT_SID` are optional: the deploy script attaches a secret only if it exists in Secret Manager.
 
 Grant the Cloud Run runtime service account `roles/secretmanager.secretAccessor`.
 
@@ -29,6 +29,8 @@ Grant the Cloud Run runtime service account `roles/secretmanager.secretAccessor`
 ```bash
 PROJECT_ID=<PROJECT_ID> REGION=us-central1 ./infra/deploy-cloudrun.sh
 ```
+
+Set `PUBLIC_BASE_URL=<service URL>` for phone calls (on the first deploy you only learn the URL afterwards, so deploy once, then redeploy with it); the phone setup, number mapping and Twilio webhook are in [/build/runbook-phone.md](/build/runbook-phone.md).
 
 The script builds `infra/Dockerfile` with Cloud Build, pushes to Artifact Registry and deploys service `voiceai` with the settings in [/architecture/deployment.md](/architecture/deployment.md) (1 instance, no CPU throttling, 3600 s timeout, session affinity, secrets as env vars). It prints the service URL.
 

@@ -2,7 +2,7 @@
 type: Component Spec
 title: LLM gateway
 description: Maps LLM roles to Groq, OpenRouter or OpenAI models through one OpenAI-compatible client, with streaming, tool calls, JSON outputs, fallback and cost accounting.
-status: stable
+status: draft
 tags: [architecture, llm, groq, openrouter, openai]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -17,7 +17,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `simulator` | Simulated callers | cheap, fast | `groq:openai/gpt-oss-20b` |
 | `judge` | Eval grading | JSON output | `groq:openai/gpt-oss-120b` |
 | `turn` | Semantic turn detection (LLM evaluator) | tiny JSON verdict in under a second | `groq:openai/gpt-oss-20b` |
+| `speech` | Realtime speech-to-speech voice pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) | streaming audio in and out, function calling | `openai:gpt-realtime` (confirm the ID in the OpenAI console) |
 
+The `speech` role is **not** a chat role: it is never passed to `stream_chat` or `complete_json`, has no fallback chain, and its models are excluded from the chat model lists. Only the realtime pipeline reads it, for the model reference, the voices it offers, session parameters and prices.
 # Configuration — `apps/api/config/models.yaml`
 
 ```yaml
@@ -31,6 +33,8 @@ models:            # price per 1M tokens (USD) for cost accounting
   "openrouter:openai/gpt-oss-120b": { input: 0.15, output: 0.60, json_schema: false }
   "openai:gpt-4.1-mini":            { input: 0.40, output: 1.60, json_schema: true }   # confirm IDs and prices in the OpenAI console
   "openai:gpt-4.1-nano":            { input: 0.10, output: 0.40, json_schema: true }
+  # Speech-to-speech model (confirm ID and prices in the OpenAI console): text and audio token prices per 1M tokens
+  "openai:gpt-realtime":             { kind: speech, input: 4.00, output: 16.00, audio_input: 32.00, audio_output: 64.00 }
 roles:
   realtime:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0.3, max_tokens: 800 },
                fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
@@ -39,6 +43,7 @@ roles:
   simulator: { model: "groq:openai/gpt-oss-20b",  params: { reasoning_effort: low, temperature: 0.7 }, fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-nano"] }
   judge:     { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0 }, fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
   turn:      { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }, fallback: ["openrouter:openai/gpt-oss-20b", "openai:gpt-4.1-nano"] }
+  speech:    { model: "openai:gpt-realtime", voices: ["<voice ids from the console, first is the default>"], params: { transcription_model: "<confirm in console>" }, fallback: [] }
 ```
 
 * A **model ref** is `<provider>:<model id>`. Any OpenRouter model may be used by adding it under `models`, and any non-reasoning OpenAI chat model likewise.
@@ -90,4 +95,6 @@ A `fake` provider (in-memory, scripted responses) implements the same interface 
 - **LG-08** — Given `OPENAI_API_KEY` only as a line in `apps/api/.env` (not in the process environment), when `/healthz` is requested, then `providers.openai` is `true` and the gateway builds its `openai` client with that key and base URL `https://api.openai.com/v1`; given the variable in both places with different values, the environment variable wins; given neither, `providers.openai` is `false` and the provider is skipped.
 - **LG-09** — Given `LLM_ROLE_REALTIME=openai:gpt-4.1-mini`, when a stream starts, then the request goes to model `gpt-4.1-mini` through the `openai` provider with `stream_options.include_usage` set and without `reasoning_effort`, and `usage_cost("openai:gpt-4.1-mini", 1,000,000 input and 1,000,000 output tokens)` returns 2.00.
 - **LG-10** — Given the default configuration, when each role's reference list is built, then it ends with an `openai:` model; given a key for OpenAI only (Groq and OpenRouter skipped for lack of a key) every role (`realtime`, `analysis`, `drafting`, `simulator`, `judge`, `turn`) is served by OpenAI with no `LLM_ROLE_*` line; and given Groq answering 429 and no OpenRouter key, a `realtime` stream is served by `openai:gpt-4.1-mini`.
+- **LG-12** — Given the default configuration, when the `speech` role is resolved, then it returns an `openai:` model entry of `kind: speech` with text and audio prices and a non-empty voice list; `LLM_ROLE_SPEECH=openai:<other speech model>` replaces the model (same precedence as LG-06 and LG-07); a chat model ref in the `speech` role, or a speech model ref in a chat role or in `models.realtime`, is rejected at load with a clear error.
+- **LG-13** — Given usage of 1,000,000 text input, 1,000,000 text output, 1,000,000 audio input and 1,000,000 audio output tokens on the default speech model, then `usage_cost` returns the sum of the four prices of its entry; and `GET /api/models` does not list speech models in `selectable` (it lists them under `speech`).
 - **LG-11** — Given the default configuration, then every `openai:` ref used by a role or fallback has a price entry, and `GET /api/models` lists the OpenAI refs in `selectable`.

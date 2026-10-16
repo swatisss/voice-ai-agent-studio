@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0002 Voice pipeline
 description: Use Pipecat for transport, VAD, STT and TTS over a plain WebSocket, with our own turn aggregator and a brain processor wrapping the shared agent runtime.
-status: stable
+status: draft
 tags: [decision, voice, pipecat]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -26,4 +26,4 @@ Option 3. Pipecat provides the transport, Silero VAD, Deepgram STT/TTS and inter
 * One brain for voice, text and simulation — evaluation results reflect real call behavior.
 * Pipecat usage is confined to `voiceai/voice/`, limiting the blast radius of its frequent API changes; a smoke test guards construction.
 * Echo cancellation relies on the browser; a headset is recommended for demos.
-* Telephony later: swap the serializer for a Twilio/Telnyx media-stream serializer; the rest of the pipeline stays.
+* Telephony later: swap the serializer for a Twilio/Telnyx media-stream serializer; the rest of the pipeline stays. Done for Twilio, with an optional realtime pipeline beside this one, in [ADR-0008](adr-0008-telephony-and-realtime-voice.md).

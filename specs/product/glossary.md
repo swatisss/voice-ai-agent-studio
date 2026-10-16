@@ -2,7 +2,7 @@
 type: Glossary
 title: Glossary
 description: Shared vocabulary used across specs, code and UI labels.
-status: stable
+status: draft
 tags: [product, glossary]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -38,3 +38,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | **Turn detection** | How the voice pipeline decides the caller has finished speaking: normal (silence) or semantic ([/architecture/turn-detection.md](/architecture/turn-detection.md)). |
 | **Live controls** | Persona and turn-detection settings changed while a test call is running. |
 | **OKF** | Open Knowledge Format — Markdown + YAML frontmatter bundle format used for these specs and importable as knowledge. |
+| **IVR** | Interactive voice response: the phone menu in front of the agent that forwards a call to the agent's phone number and may pass context (`ivr_*`). |
+| **Media Stream** | Twilio's feature that sends a live phone call's audio to our WebSocket and plays audio back ([/architecture/telephony.md](/architecture/telephony.md)). |
+| **Voice pipeline** | How a voice call turns audio into answers: `cascade` (speech-to-text, brain, text-to-speech) or `realtime` (one speech-to-speech model) ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)). |
+| **Transfer** | Redirecting a live phone call to a person's number after a hand-off. |

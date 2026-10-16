@@ -2,7 +2,7 @@
 type: Component Spec
 title: Evaluation
 description: Proving a fix before shipping it - simulated callers replay cluster cases and regression scenarios against baseline and candidate configs, graded by an LLM judge.
-status: stable
+status: draft
 tags: [architecture, evaluation, simulation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -33,6 +33,10 @@ For each (case, arm): a `simulation` call is created (`is_eval: true`, excluded 
 4. Stop when the simulator hangs up, the agent ends or escalates (one extra caller line allowed after escalation is not needed — stop), or after 8 caller turns.
 
 Concurrency: `EV_CONCURRENCY` (default 4) simulations at a time.
+
+## Realtime agents
+
+Simulated callers have no voice, so an agent on the realtime pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) is simulated on the **text channel with the chat role `realtime`** (or the agent's `models.realtime`); no speech-model request is made. Prompt, tools, skills, knowledge and guards are shared and get exercised, the speech model's wording and turn-taking do not. The run summary carries `pipeline` and `fidelity: "text_approximation"` and the Insights page shows the label next to the result (RV-14).
 
 ## Judging
 

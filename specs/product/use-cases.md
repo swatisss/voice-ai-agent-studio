@@ -1,13 +1,13 @@
 ---
 type: Product Brief
 title: Customer Support & Channels use cases
-description: The seven demo use cases for a health insurer - agent, mode, channels, flow, tools, knowledge, escalation triggers and demo callers for each.
-status: stable
+description: The eight demo use cases for a health insurer - agent, mode, channels, flow, tools, knowledge, escalation triggers and demo callers for each.
+status: draft
 tags: [product, use-cases, demo]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---
 
-All seven live in the business unit **Evergreen Health · Customer Support & Channels** (category in the API data: *Customer Support & Channels*). Four agents serve them ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)). Every use case is available in **voice** (browser microphone) and **chat**. Data is synthetic ([/demo-data/members-and-claims.md](/demo-data/members-and-claims.md)). Tool names are the platform tools of [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
+All eight live in the business unit **Evergreen Health · Customer Support & Channels** (category in the API data: *Customer Support & Channels*). Five agents serve them ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)). Every use case is available in **voice** (browser microphone) and **chat**. Data is synthetic ([/demo-data/members-and-claims.md](/demo-data/members-and-claims.md)). Tool names are the platform tools of [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
 
 Common rules: identity is verified (member ID + date of birth) before any policy, claim or document detail; the agent answers facts only from tools or approved knowledge; appeals, grievances, safety language and requests for a person escalate with a groundwork packet ([/architecture/escalation.md](/architecture/escalation.md)).
 
@@ -75,10 +75,20 @@ Common rules: identity is verified (member ID + date of birth) before any policy
 * **Escalates when**: coverage for a specific treatment is ambiguous or needs a clinical decision; never gives medical advice.
 * **Demo callers**: Priya Nair (dental limit and waiting period), Daniel Kim (specialist copay and deductible).
 
+# 8. Claims First Notice & Status (phone)
+
+* **Agent / mode**: Insurance Claims Agent, inbound, on the realtime speech-to-speech pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)). Channels: browser voice, **phone** (Twilio, [/architecture/telephony.md](/architecture/telephony.md)) and chat.
+* **Goal**: tell a member where a claim stands, report a new claim (first notice) and explain which documents to send.
+* **Flow**: verify → claim number or `get_member_claims` → `get_claim_status`; or `get_member_policies` → collect claim type, date, provider, short description and a rough amount → read back → `start_claim` → read out the new claim number and the required documents; "what do I need" → `get_claim_requirements` (no verification).
+* **Knowledge**: filing a claim, required documents, claim timelines and payment ([/demo-data/kb/claims/](/demo-data/kb/claims/)).
+* **Escalates when**: the caller disputes a denial or wants to appeal, reports an injury or emergency, suspects fraud, has an estimated loss above $10,000, or asks for a person. On a phone call with a transfer number the live call is redirected after the hand-off message.
+* **Demo callers**: Maria Lopez (status of C-20931 and C-20977), Aisha Okafor (new urgent care claim), James Carter (documents for a collision; denial of C-31544 → escalation).
+* **Sample utterances**: "I want to check on a claim.", "I need to report a new claim.", "What documents do I need for a dental claim?"
+
 # Planted learning gaps (Act 3 of the demo)
 
 The Customer Care agent deliberately lacks (a) knowledge on **adding a newborn to a policy** and (b) a **prior-authorization status lookup**. Seeded history shows these as recurring escalation clusters; fixing them demonstrates fleet learning ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)).
 
 # Acceptance
 
-- **UC-02** — Given the seeded business unit, when `GET /api/use-cases` is called, then it returns the seven use cases in the order above, all with category "Customer Support & Channels", each linked to an existing published agent, and each with at least two sample utterances.
+- **UC-02** — Given the seeded business unit, when `GET /api/use-cases` is called, then it returns the eight use cases in the order above, all with category "Customer Support & Channels", each linked to an existing published agent, and each with at least two sample utterances.

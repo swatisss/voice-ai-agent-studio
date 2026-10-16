@@ -34,6 +34,10 @@ For each (case, arm): a `simulation` call is created (`is_eval: true`, excluded 
 
 Concurrency: `EV_CONCURRENCY` (default 4) simulations at a time.
 
+## Realtime agents
+
+Simulated callers have no voice, so an agent on the realtime pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) is simulated on the **text channel with the chat role `realtime`** (or the agent's `models.realtime`); no speech-model request is made. Prompt, tools, skills, knowledge and guards are shared and get exercised, the speech model's wording and turn-taking do not. The run summary carries `pipeline` and `fidelity: "text_approximation"` and the Insights page shows the label next to the result (RV-14).
+
 ## Judging
 
 The judge ([/prompts/eval-judge.md](/prompts/eval-judge.md), role `judge`) receives goal, expected outcome and transcript (with tool calls) and returns `{outcome: resolved|escalated|abandoned, goal_met: bool, grounded: bool, policy_violations: [..], notes}`.

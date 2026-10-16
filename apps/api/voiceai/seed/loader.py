@@ -1,6 +1,6 @@
 """Seeder: builds the demo database from the demo-data specs.
 
-Spec: /demo-data/index.md, /demo-data/evergreen-health.md, /demo-data/call-history.md
+Spec: /demo-data/index.md, /demo-data/evergreen-health.md, /demo-data/claims-agent.md, /demo-data/call-history.md
 """
 from __future__ import annotations
 
@@ -63,10 +63,11 @@ async def seed(reset: bool = False) -> dict[str, Any]:
                 "mode": ad["mode"],
                 "persona_id": persona.id,
                 "persona": {k: v for k, v in persona_dict(persona).items() if k != "id"},
-                "voice": {"turn_detection": ad["turn_detection"]},
+                "voice": {"pipeline": ad.get("pipeline", "cascade"), "realtime": {"voice": None}, "turn_detection": ad["turn_detection"]},
+                "telephony": {"transfer_to": None},
                 "policy": ad["policy"],
                 "tool_ids": [tools[n].id for n in ad["tools"]], "skill_ids": [k.id for k in skills],
-                "knowledge_doc_ids": [d.id for d in docs], "models": {"realtime": None},
+                "knowledge_doc_ids": [d.id for d in docs], "models": {"realtime": None, "speech": None},
             }
             if ad["mode"] == "outbound":
                 cfg["outbound"] = {"targets_url": ad["targets_url"]}
@@ -84,6 +85,8 @@ async def seed(reset: bool = False) -> dict[str, Any]:
         care_agent = agents["care"]
         for sc in catalog.SCENARIOS:
             s.add(EvalScenario(tenant_id=care, agent_id=care_agent.id, **sc))
+        for sc in catalog.CLAIMS_SCENARIOS:
+            s.add(EvalScenario(tenant_id=care, agent_id=agents["claims"].id, **sc))
         for i, uc in enumerate(catalog.USE_CASES, 1):
             s.add(UseCase(
                 tenant_id=care, agent_id=agents[uc["agent"]].id, category=catalog.CATEGORY, title=uc["title"], summary=uc["summary"],

@@ -84,7 +84,13 @@ class TurnDetectionPatch(BaseModel):
     allow_interruptions: bool | None = None
 
 
+class RealtimeVoice(BaseModel):
+    voice: str | None = Field(default=None, max_length=40)  # a voice of the `speech` role; None = its first voice
+
+
 class VoiceConfig(BaseModel):
+    pipeline: Literal["cascade", "realtime"] = "cascade"  # RV-01
+    realtime: RealtimeVoice = Field(default_factory=RealtimeVoice)
     turn_detection: TurnDetection = Field(default_factory=TurnDetection)
 
 
@@ -125,15 +131,35 @@ class Policy(BaseModel):
 
 class ModelChoice(BaseModel):
     realtime: str | None = None
+    speech: str | None = None  # realtime pipeline only (LG-12)
 
 
 class OutboundConfig(BaseModel):
     targets_url: str = Field(default="", max_length=500)
 
 
+E164_RE = re.compile(r"\+[1-9][0-9]{6,14}")
+SIP_RE = re.compile(r"sip:[^\s@]+@[^\s]+")
+
+
+class TelephonyConfig(BaseModel):
+    transfer_to: str | None = Field(default=None, max_length=200)  # E.164 number or sip: URI (DM-06)
+
+    @field_validator("transfer_to")
+    @classmethod
+    def _dest(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        v = v.strip()
+        if not (E164_RE.fullmatch(v) or SIP_RE.fullmatch(v)):
+            raise ValueError("transfer_to must be an E.164 number such as +15557654321 or a sip: URI")
+        return v
+
+
 class AgentConfig(BaseModel):
     mode: Literal["inbound", "outbound", "internal"] = "inbound"
     outbound: OutboundConfig = Field(default_factory=OutboundConfig)
+    telephony: TelephonyConfig = Field(default_factory=TelephonyConfig)
     persona_id: str | None = None
     persona: Persona = Field(default_factory=Persona)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)

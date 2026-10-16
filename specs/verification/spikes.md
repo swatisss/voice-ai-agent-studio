@@ -2,7 +2,7 @@
 type: Spike Report
 title: Spikes and verified integration notes
 description: Experiments that de-risk the voice loop, LLM tool calling and Cloud Run, plus versions and API names verified against installed packages.
-status: draft
+status: stable
 tags: [verification, spikes]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -63,3 +63,28 @@ Still unverified (needs live keys, see S1): VO-01 greeting audio and VO-03 barge
 | Cross-topic similarities | 0.53–0.63 | separate clusters |
 
 Seeding with fastembed takes ~45 s on a laptop CPU (first run also downloads ~70 MB).
+
+# S4 — Phone channel and realtime voice (2026-10-16, CP-0012)
+
+* **Goal:** confirm the Pipecat and provider facts [CP-0012](/changes/cp-0012-phone-channel-and-realtime-voice.md) relies on, before writing code.
+* **Environment:** Pipecat 1.12.0, Python 3.12, `websockets` 17.2. This session had **no OpenAI or Twilio credentials and no route to either service**, so everything below is read from the installed packages and exercised against a local scripted Realtime server; items that need the real services are listed under "Still to verify".
+
+**Verified against the installed package**
+
+* `pipecat.services.openai.realtime.OpenAIRealtimeLLMService` is driven by Pipecat's `LLMContext` aggregators: a response starts from an `LLMContextFrame`, tool results travel back through the context, `LLMMessagesAppendFrame` is unimplemented ("NEED TO IMPLEMENT" in the source), and there is no way to ask for an exact-text response or to cancel one from outside. That does not fit an `AgentSession`-driven call, so the platform speaks the provider's WebSocket protocol itself (`voiceai/voice/realtime.py`) and uses Pipecat for transports, serializers and frames only. The provider socket sits behind a small interface so the whole bridge runs against a scripted fake in tests.
+* Provider protocol (event names read from Pipecat's `events.py` for this release): `session.update` with `session.audio.input.{format, transcription, turn_detection}`, `session.audio.output.{format, voice}`, `output_modalities`, `instructions`, `tools`, `tool_choice`; formats `audio/pcm` (24,000 Hz), `audio/pcmu`, `audio/pcma`; server events `response.created`, `response.output_audio.delta`, `response.output_audio_transcript.delta`, `response.function_call_arguments.done`, `response.done` (usage with `input_token_details.audio_tokens` and `output_token_details.audio_tokens`), `input_audio_buffer.speech_started` / `speech_stopped`, `conversation.item.input_audio_transcription.completed`; client events `input_audio_buffer.append`, `conversation.item.create` (`function_call_output`), `conversation.item.truncate`, `response.create` (with `instructions`, `tool_choice`, `metadata`), `response.cancel`. Connection: `wss://api.openai.com/v1/realtime?model=<model>` with `Authorization: Bearer`.
+* Defaults in this Pipecat release: model `gpt-realtime-2.1` (reasoning-capable), input transcription model `gpt-realtime-whisper`; voices named in its OpenAI TTS list include marin, cedar, coral, alloy, ash, ballad, echo, sage, shimmer, verse. These are what `models.yaml` uses.
+* `pipecat.serializers.twilio.TwilioFrameSerializer(stream_sid, call_sid, account_sid, auth_token, params)`: mu-law 8 kHz to PCM at the pipeline rate and back, `InterruptionFrame` becomes a `clear` event, DTMF supported. With its default `auto_hang_up=True` it needs credentials and calls the Twilio REST API on `EndFrame`/`CancelFrame`; we turn that off and let `<Hangup/>` and our own transfer do it. It does not turn a Twilio `stop` event into a frame (`PhoneSerializer` does) and it never sees `start`, so the route reads `connected` and `start` itself before building the transport.
+* Pipecat's stream resampler returns audio in bursts: with 20 ms Twilio frames the first PCM arrives after 5 frames at 16 kHz and 7 frames at 24 kHz, about 100 to 140 ms of added delay on the caller's side. G.711 pass-through to the realtime service (`audio/pcmu`) would avoid it; left as a later optimisation ([/architecture/telephony.md](/architecture/telephony.md)).
+
+**Exercised offline**
+
+* A scripted Realtime server on localhost and the real Pipecat transport: a signed webhook, the Twilio stream, the welcome as exact text, welcome protection and release, a caller turn, a stored reply with usage and cost, a `stop` event ending the call with `hangup` (`tests/test_telephony.py::test_phone_call_runs_end_to_end_through_the_pipeline`). The same flow was run once as a separate server process with `scripts/fake_twilio.py` against a scripted provider: 1 call, 3 stored events, 3.3 s of agent audio returned, no errors in the API log.
+
+**Still to verify with real services** (each is a manual step in [/build/runbook-phone.md](/build/runbook-phone.md); none blocks the code)
+
+* The Realtime model ID, voices and prices in the OpenAI console, and that `gpt-realtime-2.1` accepts the `session.update` this module sends.
+* Measured end-of-speech to first-audio latency (target p50 < 0.8 s, p95 < 1.5 s) over 20 turns, browser and phone, and how many concurrent calls one 2 vCPU Cloud Run instance holds for each pipeline.
+* Whether Twilio also signs the stream handshake (the call-bound token is the control the spec relies on), and how the IVR's SIP headers or URL parameters reach the webhook.
+* A trial-number call from a real phone, the transfer redirect, and Cloud Run with `PUBLIC_BASE_URL`.
+

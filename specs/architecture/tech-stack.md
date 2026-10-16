@@ -19,7 +19,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | HTTP client | `httpx` (also used in-process via ASGI transport for relative tool URLs) |
 | Embeddings | `fastembed` with `BAAI/bge-small-en-v1.5` (384-d, local CPU); deterministic `hash` embedder for tests |
 | Vector search | NumPy cosine similarity in-process ([/decisions/adr-0004-storage-and-vectors.md](/decisions/adr-0004-storage-and-vectors.md)) |
-| Voice | `pipecat-ai` with extras `deepgram`, `silero`, `websocket` |
+| Voice | `pipecat-ai` with extras `deepgram`, `silero`, `websocket`, plus the extras for the OpenAI Realtime service and the Twilio serializer (names confirmed in spike S4) |
 | Docs parsing | `pypdf` for PDFs; stdlib `html.parser` for URLs; `pyyaml` for frontmatter |
 | Tests | `pytest`, `pytest-asyncio`, fake LLM provider |
 
@@ -41,6 +41,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | LLM — all roles | Groq `openai/gpt-oss-120b` | Any OpenRouter model; Groq `openai/gpt-oss-20b`; OpenAI `gpt-4.1-mini` / `gpt-4.1-nano` |
 | Speech-to-text | Deepgram `nova-3` streaming | — |
 | Text-to-speech | Deepgram `aura-2-thalia-en` (per persona voice) | Other Deepgram Aura-2 voices |
+| Speech-to-speech (optional, per agent) | OpenAI Realtime, gateway role `speech` ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) | another provider by a later CP |
+| Telephony (inbound) | Twilio Media Streams ([/architecture/telephony.md](/architecture/telephony.md)) | other carriers by a later CP |
 
 Model IDs MUST be confirmed against the provider console during the spike ([/verification/spikes.md](/verification/spikes.md)); they live only in `apps/api/config/models.yaml`, never in code.
 

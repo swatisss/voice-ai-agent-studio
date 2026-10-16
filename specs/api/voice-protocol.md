@@ -22,6 +22,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | server → client | text (JSON) | `{"type":"interrupt"}` — caller barged in; client MUST discard queued playback immediately |
 | server → client | text (JSON) | `{"type":"end","reason":"end_call"\|"farewell"\|"handoff"\|"idle"\|"max_duration"\|"hangup"\|"error"}` ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)) — sent after the closing speech has finished; client stops capture and releases the microphone; server closes after sending |
 
+The protocol is the same for both voice pipelines ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)): the browser cannot tell which one answered. Phone calls use a different socket, `WS /api/telephony/twilio/stream/{call_id}`, with Twilio's own JSON events ([/architecture/telephony.md](/architecture/telephony.md)).
+
 Transcripts, tool calls and status are **not** sent on this socket; the page subscribes to SSE topic `call:{id}` ([/api/events.md](/api/events.md)).
 
 # Close codes
@@ -31,7 +33,7 @@ Transcripts, tool calls and status are **not** sent on this socket; the page sub
 | 1000 | normal (hangup or end) |
 | 4400 | wrong channel (text call id) |
 | 4404 | unknown or ended call |
-| 4500 | voice unavailable (e.g. `DEEPGRAM_API_KEY` missing) |
+| 4500 | voice unavailable (e.g. `DEEPGRAM_API_KEY` missing for a cascade agent, `OPENAI_API_KEY` missing for a realtime agent) |
 
 # Browser client requirements
 

@@ -4,4 +4,5 @@
 * [Definition of done](definition-of-done.md) - Checklist every task and change must satisfy
 * [Dev launcher](dev-launcher.md) - scripts/dev.py: start web + API from one terminal with prefixed logs
 * [Local runbook](runbook-local.md) - Install, configure, run, seed and test on a developer machine
+* [Phone runbook](runbook-phone.md) - Answer a real call: local Twilio + tunnel setup, no-Twilio check, Cloud Run setup, IVR, troubleshooting
 * [GCP runbook](runbook-gcp.md) - Build and deploy to Cloud Run, with optional Cloud SQL

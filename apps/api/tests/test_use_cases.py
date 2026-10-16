@@ -1,4 +1,4 @@
-"""Customer Support & Channels seed data and use-case catalog. Covers: UC-01, UC-02, UC-03, UC-04, UC-05"""
+"""Customer Support & Channels seed data and use-case catalog. Covers: UC-01, UC-02, UC-03, UC-04, UC-05, CLM-01, CLM-02, CLM-03"""
 from __future__ import annotations
 
 from sqlalchemy import func, select
@@ -12,7 +12,7 @@ SANDBOX = {"X-Tenant-Id": "evergreen-sandbox"}
 
 TITLES = [
     "Policy Inquiry & Status", "Claims Status Tracking", "Document Center & Green Card", "Outbound Renewal Calls",
-    "Policyholder Onboarding", "Internal Knowledge Assistant", "Coverage Information Support",
+    "Policyholder Onboarding", "Internal Knowledge Assistant", "Coverage Information Support", "Claims First Notice & Status",
 ]
 
 
@@ -22,14 +22,14 @@ async def test_seeded_business_units(client, seeded):
     by_name = {a["name"]: a for a in agents}
     assert {n: a["mode"] for n, a in by_name.items()} == {
         "Customer Care Agent": "inbound", "Renewal Outreach Agent": "outbound",
-        "Welcome & Onboarding Agent": "outbound", "Internal Knowledge Assistant": "internal",
+        "Welcome & Onboarding Agent": "outbound", "Internal Knowledge Assistant": "internal", "Insurance Claims Agent": "inbound",
     }
     assert all(a["published_version"]["version"] == 1 for a in agents)
     async with sessionmaker()() as s:
-        assert await s.scalar(select(func.count()).select_from(Tool).where(Tool.tenant_id == "evergreen-care")) == 16
+        assert await s.scalar(select(func.count()).select_from(Tool).where(Tool.tenant_id == "evergreen-care")) == 18
         names = {p.name for p in (await s.scalars(select(Persona).where(Persona.tenant_id == "evergreen-care"))).all()}
-    assert names == {"Ava", "Grace", "Leo", "Maya", "Sage"}
-    expected = {"Customer Care Agent": ("Ava", 10), "Renewal Outreach Agent": ("Leo", 3), "Welcome & Onboarding Agent": ("Maya", 4), "Internal Knowledge Assistant": ("Sage", 2)}
+    assert names == {"Ava", "Grace", "Leo", "Maya", "Sage", "Nora"}
+    expected = {"Customer Care Agent": ("Ava", 10), "Renewal Outreach Agent": ("Leo", 3), "Welcome & Onboarding Agent": ("Maya", 4), "Internal Knowledge Assistant": ("Sage", 2), "Insurance Claims Agent": ("Nora", 6)}
     for name, (persona, tools) in expected.items():
         detail = (await client.get(f"/api/agents/{by_name[name]['id']}/versions", headers=H)).json()["items"][0]
         assert detail["version"] == 1
@@ -96,7 +96,7 @@ async def test_customer_care_regression_scenarios(client, seeded):
         "Policy status": "resolved", "Claim paid": "resolved", "Green Card for Spain": "resolved",
         "Dental coverage": "resolved", "Policy schedule by email": "resolved", "Appeal denied claim": "escalated",
     }
-    assert sum(r.expected == "resolved" for r in rows) == 5 and others == 0
+    assert sum(r.expected == "resolved" for r in rows) == 5 and others == 4  # only the Insurance Claims Agent has scenarios besides Customer Care (CLM-03)
     green = next(r for r in rows if r.name == "Green Card for Spain")
     assert green.caller_profile["member_id"] == "337120" and green.caller_profile["destination"] == "Spain"
 
@@ -113,3 +113,40 @@ async def test_seeded_history_and_clusters(client, seeded):
     intents = [c["intent"] for c in calls if c["outcome"] == "resolved"]
     counts = {i: intents.count(i) for i in set(intents)}
     assert counts == {"policy_status": 14, "claim_status": 26, "document_request": 16, "coverage_question": 20, "find_provider": 6}
+
+
+async def test_claims_agent_seed(client, seeded):
+    """Covers: CLM-01, CLM-03"""
+    agents = {a["name"]: a for a in (await client.get("/api/agents", headers=H)).json()["items"]}
+    claims = agents["Insurance Claims Agent"]
+    assert claims["published_version"]["version"] == 1 and claims["mode"] == "inbound"
+    async with sessionmaker()() as s:
+        from voiceai.models import AgentVersion
+
+        version = await s.get(AgentVersion, claims["published_version"]["id"])
+        cfg = version.config
+        assert cfg["voice"]["pipeline"] == "realtime" and cfg["persona"]["name"] == "Nora" and len(cfg["knowledge_doc_ids"]) == 3
+        assert {t["name"] for t in cfg["tools"]} == {"verify_member", "get_member_claims", "get_claim_status", "get_member_policies", "start_claim", "get_claim_requirements"}
+        assert [k["name"] for k in cfg["skills"]] == ["Identity verification", "Claim status", "Report a new claim", "Required documents", "Disputes and appeals"]
+        others = (await s.scalars(select(AgentVersion).where(AgentVersion.agent_id != claims["id"], AgentVersion.tenant_id == "evergreen-care"))).all()
+        assert others and all(v.config["voice"].get("pipeline", "cascade") == "cascade" for v in others)
+        scenarios = (await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == claims["id"]))).all()
+        assert len(scenarios) == 4 and sorted(sc.expected for sc in scenarios) == ["escalated", "resolved", "resolved", "resolved"]
+    items = (await client.get("/api/use-cases", headers=H)).json()["items"]
+    eighth = items[7]
+    assert eighth["title"] == "Claims First Notice & Status" and eighth["agent_id"] == claims["id"] and len(eighth["sample_utterances"]) >= 2
+
+
+async def test_claims_agent_knowledge_is_its_own(client, seeded):
+    """Covers: CLM-02"""
+    async with sessionmaker()() as s:
+        claims = (await s.scalars(select(Agent).where(Agent.tenant_id == "evergreen-care", Agent.name == "Insurance Claims Agent"))).one()
+        care = (await s.scalars(select(Agent).where(Agent.tenant_id == "evergreen-care", Agent.name == "Customer Care Agent"))).one()
+        titles = {d.id: d.title for d in (await s.scalars(select(KnowledgeDoc).where(KnowledgeDoc.tenant_id == "evergreen-care"))).all()}
+        refs = {d.id: d.source_ref for d in (await s.scalars(select(KnowledgeDoc).where(KnowledgeDoc.tenant_id == "evergreen-care"))).all()}
+        question = "which documents do I need for a collision claim"
+        own = await search(s, "evergreen-care", claims.draft_config["knowledge_doc_ids"], question)
+        other = await search(s, "evergreen-care", care.draft_config["knowledge_doc_ids"], question)
+        assert own["results"] and titles[own["results"][0]["doc_id"]] == "Required documents"
+        assert all("/kb/claims" not in refs[r["doc_id"]] for r in other.get("results", []))
+        assert not set(claims.draft_config["knowledge_doc_ids"]) & set(care.draft_config["knowledge_doc_ids"])

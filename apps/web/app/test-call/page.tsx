@@ -237,7 +237,8 @@ function TestCall() {
         </Card>
         <div className="space-y-4">
           <LiveControlsCard callId={callId} active={status === "active"} voiceCall={mode === "talk"} personas={personas?.items ?? []}
-            personaId={personaId} onPersona={setPersonaId} turn={turn} onTurn={setTurn} />
+            personaId={personaId} onPersona={setPersonaId} turn={turn} onTurn={setTurn}
+            realtime={(call?.settings?.pipeline ?? agent.draft_config?.voice?.pipeline) === "realtime"} />
           {agentUcs.length > 0 && (  // UI-24: one starting phrase per use case; callers' IDs live in the demo data
             <Card title={<button className="flex items-center gap-1" aria-expanded={scriptOpen} onClick={() => setScriptOpen(!scriptOpen)}>{scriptOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}Test script</button>}>
               {scriptOpen && (

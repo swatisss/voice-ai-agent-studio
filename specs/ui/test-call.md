@@ -62,6 +62,10 @@ A call ends by itself, in voice and in chat, after a goodbye, a farewell phrase,
 
 In both modes the outcome banner then shows — "Resolved", "Escalated — waiting for a specialist", or "Call ended" — and under it the **feedback prompt**: "Was this helpful?" with two labelled buttons, **Yes** (thumbs up) and **No** (thumbs down). **No** reveals an optional comment box ("What went wrong?", up to 300 characters) and **Send**. An answer is sent with `POST /api/calls/{id}/feedback` and replaced by "Thanks for your feedback."; it can be changed until a new call starts. **Start new call** stays available. The prompt is never shown while a call is running.
 
+# Realtime agents
+
+For an agent on the realtime voice pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) the Live controls card is replaced by a note: persona switching and turn-detection changes apply to cascade calls only (RV-15); the voice and turn detection are set in the agent's Voice tab. Talk and Type work as for any agent, and Talk needs only `OPENAI_API_KEY`.
+
 # Acceptance
 
 - **UI-24** — Given the seeded business unit, when Test call opens, then there is no card gallery; the agent select lists the published agents; the "Handles:" line under it names the use cases of the selected agent; the Test script shows one starting phrase per use case of that agent and no demo caller details; and choosing another agent updates all three without starting a call.

@@ -11,6 +11,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 * Every `/api/*` request carries header `X-Tenant-Id` (the web app sends the tenant chosen in the tenant switcher; `EventSource` and WebSocket requests pass it as query parameter `tenant`).
 * Unknown tenant → 404 `tenant_not_found`. Missing tenant → 400 `tenant_required` (except `GET /api/tenants` and `/healthz`).
+* **Telephony routes are the exception**: `/api/telephony/twilio/*` take no tenant header or query parameter. The tenant is the `tenant_id` of the `phone_numbers` row for the dialled number, and the stream endpoint trusts only the call-bound token minted by the webhook ([/architecture/telephony.md](/architecture/telephony.md)). `phone_numbers.e164` is unique across tenants.
 * v1 has no authentication; the tenant switcher stands in for login ([/product/scope.md](/product/scope.md)).
 
 # Isolation rules

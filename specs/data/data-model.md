@@ -33,7 +33,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **knowledge_chunks** — `id`, `tenant_id`, `doc_id` (FK, cascade delete), `ordinal`, `heading`, `content`, `embedding` JSON (list of float)
 
-**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `direction` (`inbound`|`outbound`|`internal`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason` (`end_call`|`farewell`|`handoff`|`idle`|`max_duration`|`hangup`|`error`), `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON (`state`, `history`, the live overrides `live.persona_id` and `live.turn_detection`, and `context` for outbound calls)
+**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `direction` (`inbound`|`outbound`|`internal`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason` (`end_call`|`farewell`|`handoff`|`idle`|`max_duration`|`hangup`|`error`), `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON (`state`, `history`, the live overrides `live.persona_id` and `live.turn_detection`, `context` for outbound calls, and `telephony` for phone calls: `{provider, call_sid, from_last4, to}`)
 
 **call_feedback** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `rating` (`up`|`down`), `comment` (nullable, ≤ 300 chars), `created_at`, `updated_at`; one row per call, replaced when the caller answers again; never created for simulation calls ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md))
 
@@ -55,6 +55,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **use_cases** — `id`, `tenant_id`, `agent_id`, `category`, `title`, `summary`, `channels` JSON list, `sample_utterances` JSON list, `demo_callers` JSON list, `sort` int, `created_at` ([/product/use-cases.md](/product/use-cases.md))
 
+**phone_numbers** — `id`, `tenant_id`, `e164` (unique across all tenants), `agent_id`, `label` (nullable), `created_at`; routes an inbound phone number to the agent's published version ([/architecture/telephony.md](/architecture/telephony.md))
+
 **jobs** — `id`, `tenant_id`, `kind`, `payload` JSON, `dedupe_key` (nullable, indexed), `status` (`queued`|`running`|`done`|`failed`), `attempts`, `last_error`, `run_after`, `created_at`, `updated_at`
 
 # Relationships
@@ -70,6 +72,6 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 20 tables exist; given an existing database without `call_feedback`, when the app starts, then that table is created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 21 tables exist; given an existing database without `call_feedback` or `phone_numbers`, when the app starts, then those tables are created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.

@@ -1,4 +1,4 @@
-"""Command line: serve, seed, reindex, chat, eval-scenarios.
+"""Command line: serve, seed, reindex, chat, eval-scenarios, phone.
 
 Spec: /build/runbook-local.md (Useful commands)
 """
@@ -64,6 +64,44 @@ async def _chat(args: argparse.Namespace) -> None:
     await jobs.drain()
 
 
+async def _phone(args: argparse.Namespace) -> None:
+    from sqlalchemy import select
+
+    from voiceai import db
+    from voiceai.models import Agent, PhoneNumber
+    from voiceai.schemas import E164_RE
+
+    db.configure()
+    await db.init_db()
+    async with db.sessionmaker()() as s:
+        if args.phone_cmd == "list":
+            rows = (await s.execute(select(PhoneNumber, Agent.name).outerjoin(Agent, Agent.id == PhoneNumber.agent_id).order_by(PhoneNumber.e164))).all()
+            for n, name in rows:
+                print(f"{n.e164}  {n.tenant_id}  {name or n.agent_id}  {n.label or ''}".rstrip())
+            if not rows:
+                print("no phone numbers")
+            return
+        e164 = args.e164.strip()
+        if not E164_RE.fullmatch(e164):
+            sys.exit(f"{e164!r} is not an E.164 number such as +15551234567")
+        if args.phone_cmd == "remove":
+            row = await s.scalar(select(PhoneNumber).where(PhoneNumber.e164 == e164))
+            if row is None:
+                sys.exit(f"{e164} is not mapped")
+            await s.delete(row)
+            await s.commit()
+            print(f"removed {e164}")
+            return
+        agent = await s.scalar(select(Agent).where(Agent.tenant_id == args.tenant, (Agent.id == args.agent) | (Agent.name == args.agent)))
+        if agent is None:
+            sys.exit(f"no agent {args.agent!r} in {args.tenant}")
+        if await s.scalar(select(PhoneNumber.id).where(PhoneNumber.e164 == e164)):
+            sys.exit(f"{e164} is already routed to an agent")
+        s.add(PhoneNumber(tenant_id=args.tenant, e164=e164, agent_id=agent.id, label=args.label))
+        await s.commit()
+        print(f"{e164} -> {agent.name} ({args.tenant})")
+
+
 async def _eval_scenarios(args: argparse.Namespace) -> None:
     from sqlalchemy import select
 
@@ -106,11 +144,21 @@ def main(argv: list[str] | None = None) -> None:
     ev = sub.add_parser("eval-scenarios", help="run regression scenarios against the published version")
     ev.add_argument("--agent", required=True)
     ev.add_argument("--repeat", type=int, default=1)
+    ph = sub.add_parser("phone", help="route phone numbers to agents (/architecture/telephony.md)")
+    ph_sub = ph.add_subparsers(dest="phone_cmd", required=True)
+    pa = ph_sub.add_parser("add", help="route a number to an agent")
+    pa.add_argument("e164", help="number in international format, e.g. +15551234567")
+    pa.add_argument("--agent", required=True, help="agent name or id")
+    pa.add_argument("--tenant", default="evergreen-care")
+    pa.add_argument("--label", default=None)
+    ph_sub.add_parser("list", help="list routed numbers")
+    pr = ph_sub.add_parser("remove", help="stop routing a number")
+    pr.add_argument("e164")
     args = p.parse_args(argv)
     if args.cmd == "serve":
         _serve(args)
         return
-    handler = {"seed": _seed, "reindex": _reindex, "chat": _chat, "eval-scenarios": _eval_scenarios}[args.cmd]
+    handler = {"seed": _seed, "reindex": _reindex, "chat": _chat, "eval-scenarios": _eval_scenarios, "phone": _phone}[args.cmd]
     asyncio.run(handler(args))
 
 

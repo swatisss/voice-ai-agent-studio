@@ -4,6 +4,7 @@
 #
 # Usage:  PROJECT_ID=my-proj REGION=us-central1 ./infra/deploy-cloudrun.sh
 # Optional persistent DB:  DB_INSTANCE=my-proj:us-central1:voiceai-pg DB_PASSWORD=... ./infra/deploy-cloudrun.sh
+# Phone calls:  PUBLIC_BASE_URL=https://<service-url> (must equal the URL Twilio calls); secrets TWILIO_AUTH_TOKEN, TWILIO_ACCOUNT_SID
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID}"
@@ -27,6 +28,9 @@ EOF
 gcloud builds submit --project "${PROJECT_ID}" --region "${REGION}" --config "${BUILD_CFG}" .
 
 ENV_VARS="AUTO_SEED=1,JOBS_ENABLED=1,CORS_ORIGINS="
+if [[ -n "${PUBLIC_BASE_URL:-}" ]]; then
+  ENV_VARS+=",PUBLIC_BASE_URL=${PUBLIC_BASE_URL%/}"
+fi
 EXTRA=()
 if [[ -n "${DB_INSTANCE:-}" ]]; then
   : "${DB_PASSWORD:?set DB_PASSWORD when DB_INSTANCE is set}"
@@ -34,9 +38,10 @@ if [[ -n "${DB_INSTANCE:-}" ]]; then
   EXTRA+=(--add-cloudsql-instances "${DB_INSTANCE}")
 fi
 
-# GROQ and DEEPGRAM are required; OPENROUTER and OPENAI are optional and attached only when the secret exists.
+# GROQ and DEEPGRAM are required; the others are optional and attached only when the secret exists
+# (OPENAI_API_KEY is needed by realtime agents, the TWILIO_* secrets by phone calls).
 SECRETS="GROQ_API_KEY=GROQ_API_KEY:latest,DEEPGRAM_API_KEY=DEEPGRAM_API_KEY:latest"
-for optional in OPENROUTER_API_KEY OPENAI_API_KEY; do
+for optional in OPENROUTER_API_KEY OPENAI_API_KEY TWILIO_AUTH_TOKEN TWILIO_ACCOUNT_SID; do
   if gcloud secrets describe "${optional}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
     SECRETS+=",${optional}=${optional}:latest"
   else

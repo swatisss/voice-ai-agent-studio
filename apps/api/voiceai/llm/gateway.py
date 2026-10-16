@@ -22,7 +22,8 @@ from voiceai.config import get_settings
 log = logging.getLogger("voiceai.llm")
 T = TypeVar("T", bound=BaseModel)
 
-ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn")
+ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn", "speech")
+CHAT_ROLES = tuple(r for r in ROLES if r != "speech")
 FIRST_TOKEN_TIMEOUT_S = 8.0
 JSON_TIMEOUT_S = 60.0
 
@@ -55,9 +56,11 @@ class ToolCall:
 
 @dataclass
 class Usage:
-    input_tokens: int = 0
-    output_tokens: int = 0
+    input_tokens: int = 0       # all input tokens (text + audio)
+    output_tokens: int = 0      # all output tokens (text + audio)
     cost_usd: float = 0.0
+    audio_input_tokens: int = 0   # the audio part of input_tokens (speech models only)
+    audio_output_tokens: int = 0  # the audio part of output_tokens (speech models only)
 
 
 @dataclass
@@ -110,13 +113,38 @@ class Gateway:
             if env:
                 self.roles.setdefault(role, {})["model"] = env
         self._clients: dict[str, openai.AsyncOpenAI] = {}
+        self._check_speech_split()
+
+    def _check_speech_split(self) -> None:
+        """LG-12: speech models serve only the `speech` role; chat models never do."""
+        for role, spec in self.roles.items():
+            refs = [spec.get("model"), *spec.get("fallback", [])]
+            for ref in refs:
+                is_speech = bool(self.models.get(ref, {}).get("kind") == "speech")
+                if role == "speech" and ref and not is_speech:
+                    raise ValueError(f"role 'speech' must use a speech model, got '{ref}'")
+                if role != "speech" and is_speech:
+                    raise ValueError(f"role '{role}' cannot use the speech model '{ref}'")
 
     # -- helpers
     def role_model(self, role: str) -> str:
         return self.roles[role]["model"]
 
     def selectable(self) -> list[str]:
-        return list(self.models.keys())
+        """Chat model refs an agent or role may use (speech models are listed separately)."""
+        return [ref for ref, spec in self.models.items() if spec.get("kind") != "speech"]
+
+    def speech_models(self) -> list[str]:
+        return [ref for ref, spec in self.models.items() if spec.get("kind") == "speech"]
+
+    def speech_voices(self) -> list[str]:
+        return list(self.roles.get("speech", {}).get("voices") or [])
+
+    def speech_ref(self, override: str | None = None) -> str:
+        return override or self.roles["speech"]["model"]
+
+    def speech_params(self) -> dict[str, Any]:
+        return dict(self.roles.get("speech", {}).get("params") or {})
 
     def refs_for(self, role: str, override: str | None = None) -> list[str]:
         spec = self.roles[role]
@@ -130,6 +158,10 @@ class Gateway:
     def provider_configured(self, provider: str) -> bool:
         p = self.providers.get(provider)
         return bool(p and os.environ.get(p["api_key_env"]) or self._key_from_settings(provider))
+
+    def provider_key(self, provider: str) -> str | None:
+        p = self.providers.get(provider)
+        return (os.environ.get(p["api_key_env"]) if p else None) or self._key_from_settings(provider)
 
     def _key_from_settings(self, provider: str) -> str | None:
         s = get_settings()
@@ -155,6 +187,12 @@ class Gateway:
         if not price:
             log.warning("no price for %s; cost counted as 0", model_ref)
             return 0.0
+        if "audio_input" in price or "audio_output" in price:  # speech model: text and audio tokens are priced apart (LG-13)
+            text_in = max(usage.input_tokens - usage.audio_input_tokens, 0)
+            text_out = max(usage.output_tokens - usage.audio_output_tokens, 0)
+            return (text_in * price.get("input", 0) + text_out * price.get("output", 0)
+                    + usage.audio_input_tokens * price.get("audio_input", 0)
+                    + usage.audio_output_tokens * price.get("audio_output", 0)) / 1e6
         return usage.input_tokens * price.get("input", 0) / 1e6 + usage.output_tokens * price.get("output", 0) / 1e6
 
     def _params(self, role: str, model_ref: str) -> dict[str, Any]:

@@ -1,7 +1,7 @@
 ---
 type: Component Spec
 title: Voice pipeline
-description: Browser microphone audio over a WebSocket through a Pipecat pipeline - VAD, Deepgram STT, turn aggregation, the agent runtime, Deepgram TTS - with barge-in.
+description: Browser or phone audio over a WebSocket through a Pipecat pipeline - VAD, Deepgram STT, turn aggregation, the agent runtime, Deepgram TTS - with barge-in. This is the default `cascade` pipeline.
 status: stable
 tags: [architecture, voice, pipecat]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
@@ -20,6 +20,8 @@ browser mic ─PCM16 16k─▶ WS /api/voice/{call_id} ─▶ Pipecat FastAPIWeb
                                 │ OutputAudioRawFrame 24k
 browser speaker ◀─PCM16 24k── transport.output()
 ```
+
+This is the `cascade` pipeline, the default. An agent with `voice.pipeline: "realtime"` runs the speech-to-speech pipeline of [/architecture/realtime-voice.md](/architecture/realtime-voice.md) on the same sockets; the pipeline is chosen from the call's version when the socket opens (RV-02). The same cascade also serves phone calls: only the transport profile changes - `browser` (PCM16 16 kHz in, 24 kHz out, JSON control messages) or `twilio` (mu-law 8 kHz both ways, Twilio events, [/architecture/telephony.md](/architecture/telephony.md)); the processors below are identical in both.
 
 Wire format and control messages: [/api/voice-protocol.md](/api/voice-protocol.md). Only `voiceai/voice/` imports Pipecat ([/decisions/adr-0002-voice-pipeline.md](/decisions/adr-0002-voice-pipeline.md)).
 

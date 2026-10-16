@@ -31,14 +31,20 @@ def persona_dict(p: Persona) -> dict[str, Any]:
             "disclosure": p.disclosure, "opening": p.opening, "style": p.style}
 
 
+def pipeline_of(config: dict[str, Any]) -> str:
+    """RV-01: `cascade` unless the version says `realtime`."""
+    return "realtime" if ((config.get("voice") or {}).get("pipeline")) == "realtime" else "cascade"
+
+
 def effective_turn(config: dict[str, Any], live: dict[str, Any] | None) -> TurnSettings:
     base = ((config.get("voice") or {}).get("turn_detection")) or {}
     patch = (live or {}).get("turn_detection") or {}
     return TurnSettings.from_dict({**base, **patch})
 
 
-def settings_view(persona: dict[str, Any], turn: TurnSettings) -> dict[str, Any]:
+def settings_view(persona: dict[str, Any], turn: TurnSettings, pipeline: str = "cascade") -> dict[str, Any]:
     return {
+        "pipeline": pipeline,
         "persona": {"id": persona.get("id"), "name": persona.get("name"), "voice": persona.get("voice"), "speed": persona.get("speed", 1.0)},
         "turn_detection": turn.to_dict(),
     }
@@ -54,4 +60,4 @@ async def effective_settings(s: AsyncSession, call: Call) -> dict[str, Any]:
         row = await s.get(Persona, live["persona_id"])
         if row is not None and row.tenant_id == call.tenant_id:
             persona = persona_dict(row)
-    return settings_view(persona, effective_turn(config, live))
+    return settings_view(persona, effective_turn(config, live), pipeline_of(config))

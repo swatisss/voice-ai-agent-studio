@@ -27,7 +27,7 @@ It instantly gets a voice agent that:
 
 # Demo domain
 
-**Evergreen Health**, a fictional health and motor insurer. The business unit *Customer Support & Channels* runs seven use cases: Policy Inquiry & Status, Claims Status Tracking, Document Center & Green Card, Outbound Renewal Calls, Policyholder Onboarding, an Internal Knowledge Assistant for staff, and Coverage Information Support ([/product/use-cases.md](/product/use-cases.md)). A second, empty *sandbox* business unit shows isolation. All data is synthetic. See [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
+**Evergreen Health**, a fictional health and motor insurer. The business unit *Customer Support & Channels* runs eight use cases: Policy Inquiry & Status, Claims Status Tracking, Document Center & Green Card, Outbound Renewal Calls, Policyholder Onboarding, an Internal Knowledge Assistant for staff, Coverage Information Support, and Claims First Notice & Status (answered by phone on a realtime voice pipeline) ([/product/use-cases.md](/product/use-cases.md)). A second, empty *sandbox* business unit shows isolation. All data is synthetic. See [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
 
 # Business impact
 

@@ -27,6 +27,8 @@ Behavior MUST NOT differ between channels except: voice may emit a short *filler
 | `respond(user_text) -> AsyncIterator[str]` | Runs one turn (below), yielding reply text chunks as they stream. |
 | `end(reason)` | Ends the call (`end_call`, `farewell`, `handoff`, `idle`, `max_duration`, `hangup`, `error`; see [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)); sets `ended_at`; queues `analyze_call`. Idempotent. |
 | `state` | Current `CallState` (below). |
+| `run_tool(name, args) -> str` | Runs one tool call exactly as the turn loop does (verification gate, execution, `tool_call`/`tool_result` events, state updates, escalation and end triggers) and returns the JSON result. Used by channels where an external model drives the conversation, such as the realtime speech-to-speech pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)). |
+| `record_turn(user_text, assistant_text, latency_ms, usage, interrupted)` | Stores the `user` and `assistant` events, increments `turns` and adds usage to the call totals for such a channel. |
 
 | `set_persona(persona)` | Replaces the persona used for the next turns (live switch), records a `system` event "Persona switched to ...", never repeats the greeting. See [/architecture/personas.md](/architecture/personas.md). |
 
@@ -90,4 +92,5 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 - **RT-06** — Given the realtime LLM raises after fallback, when a turn runs, then the caller hears the apology line and the call is escalated with category `other`.
 - **RT-07** — Given the same agent version and the same scripted LLM responses, when run via text and via simulation, then the stored event sequences are identical apart from channel and timestamps.
 - **RT-08** — Given a session, when `end()` is called twice, then only one `analyze_call` job exists for the call.
+- **RT-10** — Given the same scripted tool results, when a tool is run through `run_tool` and through the text turn loop, then the stored `tool_call`/`tool_result` events, the verification outcome and the escalation behavior are identical; and `record_turn` stores a `user` and an `assistant` event, increments `turns` and adds the reported usage to the call totals.
 - **RT-09** — Given a turn that used the LLM, when it completes, then the call's token counts and `llm_cost_usd` increase by the gateway-reported usage.

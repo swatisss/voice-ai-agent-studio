@@ -31,15 +31,18 @@ function CallDetail() {
         <h1 className="text-xl font-semibold">Call <span className="mono text-base">{c.id.slice(0, 8)}</span></h1>
         {c.outcome ? <Badge tone={outcomeTone(c.outcome)}>{label(c.outcome)}</Badge> : <Badge>{label(c.status)}</Badge>}
         <Badge>{label(c.channel)}</Badge>
+        {c.transport === "phone" && <Badge tone="info">Phone</Badge>}
         <Badge tone={MODE_TONE[c.direction] ?? "neutral"}>{MODE_LABEL[c.direction] ?? "Inbound"}</Badge>
         {c.agent_version && <Badge tone="ok">v{c.agent_version}</Badge>}
         <FeedbackBadge rating={c.feedback?.rating} />
       </div>
-      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-6 lg:grid-cols-8">
         <div><div className="text-xs text-muted">Started</div>{when(c.started_at)}</div>
         <div><div className="text-xs text-muted">Duration</div>{duration ? secs(duration) : "—"}</div>
         <div><div className="text-xs text-muted">End reason</div>{label(c.end_reason)}</div>
         <div><div className="text-xs text-muted">Caller</div><span className="mono">{maskRef(c.caller_ref)}</span></div>
+        {c.telephony && <div><div className="text-xs text-muted">Dialled number</div><span className="mono">{c.telephony.to}</span></div>}
+        {c.telephony && <div><div className="text-xs text-muted">Caller phone</div><span className="mono">•••• {c.telephony.from_last4}</span></div>}
         <div><div className="text-xs text-muted">LLM cost</div>{money(c.llm_cost_usd, 4)}</div>
         <div><div className="text-xs text-muted">Tokens</div>{c.tokens_in + c.tokens_out}</div>
       </div>

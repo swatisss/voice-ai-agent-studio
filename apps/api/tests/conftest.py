@@ -18,6 +18,9 @@ os.environ.update({
     "OPENROUTER_API_KEY": "",
     "OPENAI_API_KEY": "",
     "DEEPGRAM_API_KEY": "",
+    "TWILIO_ACCOUNT_SID": "",
+    "TWILIO_AUTH_TOKEN": "",
+    "PUBLIC_BASE_URL": "",
     "WEB_DIST_DIR": str(_TMP / "no-web"),
 })
 

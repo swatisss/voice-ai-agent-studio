@@ -66,6 +66,8 @@ LLM_ROLE_SIMULATOR=openai:gpt-4.1-nano
 LLM_ROLE_TURN=openai:gpt-4.1-nano
 ```
 
+Realtime agents (the Insurance Claims Agent) need only `OPENAI_API_KEY` for voice and no Deepgram key; try one from the Test call page first. Answering a real phone call locally (Twilio number, tunnel, `PUBLIC_BASE_URL`) or simulating one with no Twilio account is in [/build/runbook-phone.md](/build/runbook-phone.md).
+
 Duplicate keys in `.env` are a trap: when a variable appears twice the later line wins, so a stale or truncated second `GROQ_API_KEY=` silently replaces a good first one (Groq then answers 401 `invalid_api_key`).
 
 Without `DEEPGRAM_API_KEY` the Talk tab refuses the voice socket (close code 4500) and shows a toast; the API stays healthy. The refused voice call row stays `active` in the Calls list. Add the key later with no other change.

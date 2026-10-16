@@ -48,7 +48,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `policy.max_turns` | 4–40 |
 | `policy.silence_reminder_s`, `policy.silence_end_s`, `policy.max_call_seconds` | voice call timers ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)): 5–60 (default 10), 10–300 (default 30, must be greater than the reminder), 60–3600 (default 600) |
 | `policy.rules`, `policy.escalate_when`, `policy.never` | lists of ≤ 300-char strings, ≤ 30 items each |
-| `models.realtime` | `null` (role default) or a model ref listed by `GET /api/models` |
+| `models.realtime` | `null` (role default) or a model ref listed by `GET /api/models` (chat refs only) |
+| `models.speech` | `null` (role default) or a speech model ref listed under `speech` by `GET /api/models`; used only when `voice.pipeline` is `realtime` |
 | `*_ids` | must reference same-tenant, non-archived objects |
 
 # Library persona and voice settings
@@ -69,7 +70,20 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `evaluator` | `heuristic` or `llm` |
 | `allow_interruptions` | boolean |
 
-The snapshot carries `persona` (resolved, with `id` when from the library), `voice`, `mode` and `outbound`.
+The snapshot carries `persona` (resolved, with `id` when from the library), `voice`, `mode`, `outbound` and `telephony`.
+
+# Voice pipeline and telephony settings
+
+```json
+"voice": { "pipeline": "realtime", "realtime": { "voice": null }, "turn_detection": { ... } },
+"telephony": { "transfer_to": "+15557654321" }
+```
+
+| Field | Rules |
+|---|---|
+| `voice.pipeline` | `cascade` (default when absent) or `realtime` ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)); anything else → 422 |
+| `voice.realtime.voice` | `null` (the `speech` role's first voice) or one of the voices the role lists; the persona's Deepgram voice is ignored in realtime mode; an unknown voice → 422 |
+| `telephony.transfer_to` | `null` or an E.164 number (`^\+[1-9][0-9]{6,14}$`) or a `sip:` URI; where a live phone call is redirected after a hand-off ([/architecture/telephony.md](/architecture/telephony.md)); anything else → 422 |
 
 # Mode and outbound settings
 
@@ -127,4 +141,5 @@ Later edits to a tool or skill never change existing versions. Knowledge docs ar
 # Acceptance
 
 - **DM-04** — Given a draft config with `max_turns: 2`, when saved, then the API returns 422. (Turn-detection bounds: TD-08.)
+- **DM-06** — Given a draft config with `telephony.transfer_to: "0123"`, or `voice.realtime.voice` not in the `speech` role's list, or `models.speech` set to a chat model, when saved, then the API returns 422; `+15557654321` and `sip:claims@example.com` are accepted. (`voice.pipeline` values: RV-01.)
 - **DM-05** — Given a published version, when the underlying tool is edited, then the version's snapshot still holds the old definition.

@@ -25,6 +25,10 @@ models:   # price per 1M tokens (USD)
   # Non-reasoning OpenAI chat models only (they take max_tokens and temperature). Confirm IDs and prices in the OpenAI console.
   "openai:gpt-4.1-mini":            { input: 0.40, output: 1.60, json_schema: true }
   "openai:gpt-4.1-nano":            { input: 0.10, output: 0.40, json_schema: true }
+  # Speech-to-speech model for the realtime voice pipeline (role `speech`, /architecture/realtime-voice.md).
+  # The ID is Pipecat 1.12's default Realtime model; prices are text and audio tokens per 1M and MUST be confirmed
+  # in the OpenAI console (spike S4 could not reach the console).
+  "openai:gpt-realtime-2.1":        { kind: speech, input: 4.00, output: 16.00, audio_input: 32.00, audio_output: 64.00 }
 
 roles:
   realtime:
@@ -51,3 +55,8 @@ roles:
     model: "groq:openai/gpt-oss-20b"
     params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }
     fallback: ["openrouter:openai/gpt-oss-20b", "openai:gpt-4.1-nano"]
+  speech:
+    model: "openai:gpt-realtime-2.1"
+    voices: [marin, cedar, coral, alloy, ash, ballad, echo, sage, shimmer, verse]   # first is the default; confirm in the console
+    params: { transcription_model: "gpt-realtime-whisper" }
+    fallback: []

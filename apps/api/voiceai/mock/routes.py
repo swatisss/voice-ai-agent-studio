@@ -241,6 +241,68 @@ def _countries(raw: list[str] | str | None) -> list[str]:
     return [re.sub(r"^the\s+", "", i.strip(), flags=re.I) for i in items if i and i.strip()]
 
 
+# ---------------------------------------------------------------- claim first notice and requirements (MOCK-13, MOCK-14)
+class FirstNotice(BaseModel):
+    policy_id: str
+    claim_type: str
+    service_date: str
+    provider: str
+    description: str
+    estimated_amount: float | None = None
+
+
+def _claim_docs(spec: tuple[str, list[dict[str, str]]]) -> list[dict[str, str]]:
+    return [dict(d) for d in spec[1]]
+
+
+@router.post("/insurance/claims/first-notice", response_model=None)
+async def claim_first_notice(body: FirstNotice, x_member_ref: str | None = Header(default=None)) -> dict[str, Any] | JSONResponse:
+    if x_member_ref not in data.MEMBERS:
+        return unverified()
+    pid, p = _owned_policy(body.policy_id, x_member_ref)
+    if p is None:
+        return err(404, "policy_not_found", "No policy with that number for this member")
+    ctype = norm_key(body.claim_type)
+    spec = data.CLAIM_TYPES.get(ctype)
+    if spec is None:
+        return err(422, "invalid_claim_type", "Unknown claim type", valid_types=list(data.CLAIM_TYPES))
+    if p["status"] != "active":
+        return err(409, "policy_not_active", "The policy is not active")
+    if p["type"] != spec[0]:
+        return err(409, "claim_type_mismatch", f"A {ctype} claim needs a {spec[0]} policy, but {pid} is a {p['type']} policy")
+    served = parse_date(body.service_date)
+    if served is None or served > data.today() or (data.today() - served).days > 365:
+        return err(422, "invalid_service_date", "The service date must be a date within the last 365 days, not in the future")
+    description, provider = body.description.strip(), body.provider.strip()
+    if not 3 <= len(description) <= 300 or not provider:
+        return err(422, "invalid_description", "Give a provider and a description of 3 to 300 characters")
+    for cid, c in data.CLAIMS.items():
+        if c["member"] == x_member_ref and c.get("policy_id") == pid and c["service_date"] == served.isoformat() and c["provider"].lower() == provider.lower():
+            return err(409, "duplicate_claim", "A claim for that policy, date and provider already exists", existing_claim_id=cid)
+    cid = f"C-{data.CLAIM_NUMBER_BASE + data.next_id('claim'):05d}"
+    next_step = "Send the documents listed; a claims specialist contacts you only if something is missing."
+    data.CLAIMS[cid] = {
+        "member": x_member_ref, "policy_id": pid, "type": spec[0], "service": description, "provider": provider, "service_date": served.isoformat(),
+        "billed": body.estimated_amount, "status": "received", "claim_type": ctype,
+        "timeline": [{"date": data.today().isoformat(), "event": "Claim received"}], "next_step": next_step,
+        "expected_decision_date_offset": data.CLAIM_DECISION_DAYS,
+    }
+    data.NEW_CLAIM_IDS.append(cid)
+    return {
+        "claim_id": cid, "policy_id": pid, "claim_type": ctype, "status": "received", "received_date": data.today().isoformat(),
+        "expected_decision_days": data.CLAIM_DECISION_DAYS, "required_documents": _claim_docs(spec), "next_step": next_step,
+    }
+
+
+@router.get("/insurance/claims/requirements", response_model=None)
+async def claim_requirements(claim_type: str) -> dict[str, Any] | JSONResponse:
+    ctype = norm_key(claim_type)
+    spec = data.CLAIM_TYPES.get(ctype)
+    if spec is None:
+        return err(422, "invalid_claim_type", "Unknown claim type", valid_types=list(data.CLAIM_TYPES))
+    return {"claim_type": ctype, "documents": _claim_docs(spec), "where_to_send": data.CLAIM_WHERE_TO_SEND}
+
+
 @router.post("/insurance/documents/request", response_model=None)
 async def request_document(body: DocumentRequest, x_member_ref: str | None = Header(default=None)) -> dict[str, Any] | JSONResponse:
     if x_member_ref not in data.MEMBERS:

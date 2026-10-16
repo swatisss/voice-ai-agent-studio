@@ -13,3 +13,4 @@ The code loads each prompt directly from the fenced `text` block under the `# Pr
 * [Mode: inbound](mode-inbound.md) - Mode instructions for agents that answer incoming calls
 * [Mode: outbound](mode-outbound.md) - Mode instructions for agents that place the call: identity first, purpose, respect refusals
 * [Mode: internal](mode-internal.md) - Mode instructions for the staff-facing knowledge assistant
+* [Realtime addendum](realtime-addendum.md) - Spoken-style, read-back and exact-text rules appended to the system prompt for agents on the realtime speech-to-speech pipeline

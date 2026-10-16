@@ -71,6 +71,21 @@ Amounts used this year (default $0): Maria: outpatient $1,850, dental $320, ment
 
 Every claim also returns a `timeline` (date, event) list and a `next_step` sentence (for example "No action needed", "Expect a decision by <date>", "An appeals specialist can file an appeal").
 
+# Claim first notice and requirements
+
+Used by the Insurance Claims Agent ([/demo-data/claims-agent.md](/demo-data/claims-agent.md)) through `POST /mock/insurance/claims/first-notice` and `GET /mock/insurance/claims/requirements` ([/api/mock-healthcare-api.md](/api/mock-healthcare-api.md)). Claim numbers created this way continue from `C-90001`, are stored in memory and reset on restart or `seed --reset`. The expected decision time is always 30 days.
+
+| claim_type | Policy needed | Documents (in this order) | Where to send |
+|---|---|---|---|
+| `outpatient` | health | itemized provider bill; proof of payment if you paid the provider | online account upload or claims mailbox |
+| `urgent_care` | health | itemized provider bill; proof of payment if you paid the provider | online account upload or claims mailbox |
+| `inpatient` | health | itemized hospital bill; discharge summary; admission authorization number if the stay was planned | online account upload or claims mailbox |
+| `dental` | health | itemized dental bill with procedure codes; X-rays for crowns, bridges or implants | online account upload or claims mailbox |
+| `motor_glass` | motor | garage invoice; photos of the damage | online account upload or claims mailbox |
+| `motor_collision` | motor | repair estimate or invoice; photos of all vehicles involved; the other party's details; police report number if anyone was injured or police attended | online account upload or claims mailbox |
+
+Each document carries a one-line `note` in the response (for example "Must show the claim number on every page"). The `next_step` of a new claim is "Send the documents listed; a claims specialist contacts you only if something is missing."
+
 # Prior authorizations (catalog endpoint only; not a tool in v1)
 
 | auth_id | member | service | status | details |

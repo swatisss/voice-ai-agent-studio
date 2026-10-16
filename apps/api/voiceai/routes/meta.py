@@ -33,7 +33,10 @@ async def tenants(s: AsyncSession = Depends(get_session)) -> dict:
 @router.get("/api/models")
 async def models() -> dict:
     g = gateway()
-    return {"roles": {r: g.role_model(r) for r in g.roles}, "selectable": g.selectable()}
+    return {
+        "roles": {r: g.role_model(r) for r in g.roles}, "selectable": g.selectable(),
+        "speech": {"models": g.speech_models(), "voices": g.speech_voices()},
+    }
 
 
 @router.get("/healthz")
@@ -54,6 +57,7 @@ async def healthz(s: AsyncSession = Depends(get_session)) -> dict:
             "openrouter": g.provider_configured("openrouter"),
             "openai": g.provider_configured("openai"),
             "deepgram": bool(settings.deepgram_api_key),
+            "twilio": bool(settings.twilio_auth_token),
         },
     }
 

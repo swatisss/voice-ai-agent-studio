@@ -26,4 +26,4 @@ Option 3. Pipecat provides the transport, Silero VAD, Deepgram STT/TTS and inter
 * One brain for voice, text and simulation — evaluation results reflect real call behavior.
 * Pipecat usage is confined to `voiceai/voice/`, limiting the blast radius of its frequent API changes; a smoke test guards construction.
 * Echo cancellation relies on the browser; a headset is recommended for demos.
-* Telephony later: swap the serializer for a Twilio/Telnyx media-stream serializer; the rest of the pipeline stays.
+* Telephony later: swap the serializer for a Twilio/Telnyx media-stream serializer; the rest of the pipeline stays. Done for Twilio, with an optional realtime pipeline beside this one, in [ADR-0008](adr-0008-telephony-and-realtime-voice.md).

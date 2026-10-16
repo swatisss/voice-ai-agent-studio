@@ -1,4 +1,4 @@
-// Spec: /ui/calls.md (Explorer)
+// Spec: /ui/calls.md (Explorer), /architecture/telephony.md
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -43,7 +43,7 @@ export default function CallsPage() {
                 {data.items.map((c) => (
                   <tr key={c.id} className="cursor-pointer border-t border-line hover:bg-neutral-soft" onClick={() => router.push(`/calls/detail/?id=${c.id}`)}>
                     <td className="py-2 whitespace-nowrap">{when(c.started_at)}</td>
-                    <td>{label(c.channel)}{c.is_seed && <span className="ml-1 text-xs text-muted">(seed)</span>}</td>
+                    <td>{label(c.channel)}{c.transport === "phone" && <Badge tone="info" className="ml-1">Phone</Badge>}{c.is_seed && <span className="ml-1 text-xs text-muted">(seed)</span>}</td>
                     <td><Badge tone={MODE_TONE[c.direction] ?? "neutral"}>{MODE_LABEL[c.direction] ?? "Inbound"}</Badge></td>
                     <td>{versionOf(c)}</td>
                     <td className="mono text-xs">{maskRef(c.caller_ref)}</td>

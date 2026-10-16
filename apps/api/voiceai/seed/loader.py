@@ -85,8 +85,9 @@ async def seed(reset: bool = False) -> dict[str, Any]:
         care_agent = agents["care"]
         for sc in catalog.SCENARIOS:
             s.add(EvalScenario(tenant_id=care, agent_id=care_agent.id, **sc))
-        for sc in catalog.CLAIMS_SCENARIOS:
-            s.add(EvalScenario(tenant_id=care, agent_id=agents["claims"].id, **sc))
+        for key, group in (("claims", catalog.CLAIMS_SCENARIOS), ("followup", catalog.FOLLOWUP_SCENARIOS)):
+            for sc in group:
+                s.add(EvalScenario(tenant_id=care, agent_id=agents[key].id, **sc))
         for i, uc in enumerate(catalog.USE_CASES, 1):
             s.add(UseCase(
                 tenant_id=care, agent_id=agents[uc["agent"]].id, category=catalog.CATEGORY, title=uc["title"], summary=uc["summary"],

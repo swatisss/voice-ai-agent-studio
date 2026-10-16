@@ -35,7 +35,7 @@ FULL = {
 
 
 def args(**over):  # noqa: ANN003, ANN202
-    return argparse.Namespace(**{"port": 8000, "public_url": None, "keep_webhook": False, "check": False, **over})
+    return argparse.Namespace(**{"port": 8000, "sim_port": 9200, "simulator": False, "public_url": None, "keep_webhook": False, "check": False, **over})
 
 
 def which_none(_: str) -> None:
@@ -236,3 +236,42 @@ def test_run_gives_the_api_the_tunnel_url_and_restores_on_exit(monkeypatch, caps
     monkeypatch.setattr(demo.shutil, "which", lambda n: None)
     assert demo.main(["--public-url", "https://cloud.run.app/", "--keep-webhook"]) == 0
     assert started[0][1]["PUBLIC_BASE_URL"] == "https://cloud.run.app" and hooks == [("set", "https://cloud.run.app/api/telephony/twilio/voice")]
+
+
+def test_simulator_mode_needs_only_the_openai_key():
+    """Covers: DEV-12"""
+    sim = args(simulator=True)
+    only_openai = {"OPENAI_API_KEY": "sk-secret-key-value"}
+    assert demo.preflight(only_openai, sim, which=which_none, uv=["uv"], in_use=lambda p: False) == []  # no Twilio keys, no tunnel tool
+    missing = demo.preflight({}, sim, which=which_none, uv=["uv"], in_use=lambda p: False)
+    assert missing == ["OPENAI_API_KEY is missing: add it to apps/api/.env"]
+    busy = demo.preflight(only_openai, sim, which=which_none, uv=["uv"], in_use=lambda p: p == 9200)
+    assert len(busy) == 1 and "port 9200 is busy" in busy[0] and "secret" not in busy[0]
+
+
+def test_simulator_plan_wires_the_simulator_and_the_api_together():
+    """Covers: DEV-12"""
+    plan = demo.simulator_plan(args(simulator=True, port=8123, sim_port=9234), ["uv"])
+    (sim_name, sim_cmd, sim_cwd, sim_env), (api_name, api_cmd, api_cwd, api_env) = plan
+    assert (sim_name, api_name) == ("simulator", "api")
+    assert sim_cmd[-1].endswith("twilio_sim.py") and api_cmd[-3:] == ["serve", "--port", "8123"] and sim_cwd == api_cwd == demo.API_DIR
+    for key in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "PUBLIC_BASE_URL"):
+        assert sim_env[key] == api_env[key], key  # one account, one token, one number, one public URL
+    assert api_env["PUBLIC_BASE_URL"] == "http://127.0.0.1:8123" and sim_env["SIM_PLATFORM_URL"] == "http://127.0.0.1:8123"
+    assert api_env["TWILIO_API_BASE"] == "http://127.0.0.1:9234" and sim_env["SIM_PORT"] == "9234"
+    assert not any("ngrok" in " ".join(c) or "cloudflared" in " ".join(c) for _, c, _, _ in plan)  # no tunnel
+
+
+def test_simulator_check_makes_no_network_call(monkeypatch, capsys):
+    """Covers: DEV-12"""
+    def boom(*a, **k):  # noqa: ANN002, ANN003, ANN202
+        raise AssertionError("--check must not start a process or open a connection")
+
+    monkeypatch.setattr(demo, "load_config", lambda: {"OPENAI_API_KEY": "sk-secret-key-value"})
+    monkeypatch.setattr(demo.dev, "uv_command", lambda: ["uv"])
+    monkeypatch.setattr(demo.dev, "port_in_use", lambda p: False)
+    monkeypatch.setattr(demo.subprocess, "Popen", boom)
+    monkeypatch.setattr(demo.urllib.request, "urlopen", boom)
+    assert demo.main(["--simulator", "--check"]) == 0
+    out = capsys.readouterr().out
+    assert "(simulator)" in out and "tunnel" not in out and "secret" not in out

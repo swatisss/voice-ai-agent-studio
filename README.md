@@ -26,7 +26,7 @@ The demo domain is **Evergreen Health**, a fictional health insurer whose busine
 
 ## Run it
 
-Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js LTS (24.x), Git. Keys: an LLM key (`GROQ_API_KEY` by default, or `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`) and `DEEPGRAM_API_KEY` (voice; the realtime Insurance Claims Agent needs `OPENAI_API_KEY` instead); to answer real phone calls fill in the Twilio values in `.env` and run `python scripts/phone_demo.py` (details in the [phone runbook](specs/build/runbook-phone.md)); the other LLM keys are optional fallbacks.
+Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js LTS (24.x), Git. Keys: an LLM key (`GROQ_API_KEY` by default, or `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`) and `DEEPGRAM_API_KEY` (voice; the realtime Insurance Claims Agent needs `OPENAI_API_KEY` instead); to try phone calls without a Twilio account run `python scripts/phone_demo.py --simulator` (a browser phone; only the OpenAI key is needed), and for real calls fill in the Twilio values in `.env` and run `python scripts/phone_demo.py` (details in the [phone runbook](specs/build/runbook-phone.md)); the other LLM keys are optional fallbacks.
 
 ```bash
 python scripts/setup.py --install      # once: hooks, apps/api/.env, uv sync, npm ci   (Windows: py -3 scripts/setup.py --install)

@@ -1,13 +1,13 @@
 ---
 type: Product Brief
 title: Customer Support & Channels use cases
-description: The eight demo use cases for a health insurer - agent, mode, channels, flow, tools, knowledge, escalation triggers and demo callers for each.
+description: The nine demo use cases for a health insurer - agent, mode, channels, flow, tools, knowledge, escalation triggers and demo callers for each.
 status: stable
 tags: [product, use-cases, demo]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---
 
-All eight live in the business unit **Evergreen Health · Customer Support & Channels** (category in the API data: *Customer Support & Channels*). Five agents serve them ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)). Every use case is available in **voice** (browser microphone) and **chat**. Data is synthetic ([/demo-data/members-and-claims.md](/demo-data/members-and-claims.md)). Tool names are the platform tools of [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
+All nine live in the business unit **Evergreen Health · Customer Support & Channels** (category in the API data: *Customer Support & Channels*). Six agents serve them ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)). Every use case is available in **voice** (browser microphone) and **chat**. Data is synthetic ([/demo-data/members-and-claims.md](/demo-data/members-and-claims.md)). Tool names are the platform tools of [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
 
 Common rules: identity is verified (member ID + date of birth) before any policy, claim or document detail; the agent answers facts only from tools or approved knowledge; appeals, grievances, safety language and requests for a person escalate with a groundwork packet ([/architecture/escalation.md](/architecture/escalation.md)).
 
@@ -85,10 +85,18 @@ Common rules: identity is verified (member ID + date of birth) before any policy
 * **Demo callers**: Maria Lopez (status of C-20931 and C-20977), Aisha Okafor (new urgent care claim), James Carter (documents for a collision; denial of C-31544 → escalation).
 * **Sample utterances**: "I want to check on a claim.", "I need to report a new claim.", "What documents do I need for a dental claim?"
 
+# 9. Claims Follow-up Calls (outbound)
+
+* **Agent / mode**: Claims Follow-up Agent, **outbound**, on the realtime pipeline: the agent phones the member. By phone through Twilio or the [simulator](/build/twilio-simulator.md), or in the browser like any outbound agent.
+* **Goal**: tell a member whose claim is waiting on a document (or still processing) where it stands and what is needed.
+* **Flow**: opening with the member's first name and the purpose → the callee verifies their date of birth (no detail before) → `get_claim_status` for the claim in the call context → in two sentences what it waits for and where to send it (`get_claim_requirements`), or the expected decision date → questions.
+* **Escalates when**: the callee disputes, reports an injury, is upset or asks for a person.
+* **Targets**: members with a claim *pending information*, then *processing*. **Demo targets**: Priya Nair (C-40210, a missing authorization number), Maria Lopez (C-20977, processing).
+
 # Planted learning gaps (Act 3 of the demo)
 
 The Customer Care agent deliberately lacks (a) knowledge on **adding a newborn to a policy** and (b) a **prior-authorization status lookup**. Seeded history shows these as recurring escalation clusters; fixing them demonstrates fleet learning ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)).
 
 # Acceptance
 
-- **UC-02** — Given the seeded business unit, when `GET /api/use-cases` is called, then it returns the eight use cases in the order above, all with category "Customer Support & Channels", each linked to an existing published agent, and each with at least two sample utterances.
+- **UC-02** — Given the seeded business unit, when `GET /api/use-cases` is called, then it returns the nine use cases in the order above, all with category "Customer Support & Channels", each linked to an existing published agent, and each with at least two sample utterances.

@@ -2,6 +2,7 @@
 
 * [CP-0001 Initial platform build](cp-0001-initial-platform.md) - Build the v1 platform: builder, voice and text test calls, escalation with groundwork packets, fleet learning with eval-gated fixes
 * [CP-0002 Spec enforcement in CI and contributor onboarding](cp-0002-spec-enforcement-and-onboarding.md) - CI gate, PR-level spec-first/log/lifecycle rules, acceptance ratchet, setup script, README
+* [CP-0014 Twilio simulator and outbound phone calls](cp-0014-twilio-simulator-and-outbound-phone-calls.md) - A local Twilio with a browser phone, real outbound calls through Twilio, a Claims Follow-up outbound agent
 * [CP-0013 One-command phone demo](cp-0013-one-command-phone-demo.md) - scripts/phone_demo.py: fill in .env, run one script, call the number
 * [CP-0012 Phone channel (Twilio) and optional realtime speech-to-speech voice](cp-0012-phone-channel-and-realtime-voice.md) - Inbound Twilio calls to published agents, OpenAI Realtime as a per-agent pipeline, new Insurance Claims Agent, local phone runbook
 * [CP-0011 Calls close properly and callers rate them](cp-0011-call-ending-and-feedback.md) - Hand-off, farewell, silence and max length end calls; thumbs up/down after a call feeds Insights

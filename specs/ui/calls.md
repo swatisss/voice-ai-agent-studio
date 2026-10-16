@@ -22,5 +22,5 @@ Filters: agent, outcome, channel, direction, feedback (Any · Not helpful · Hel
 # Acceptance
 
 - **UI-11** — Given a call with an escalation and analysis, when opened, then the packet, disposition, note and analysis fields are all visible.
-- **UI-39** — Given a phone call and a browser voice call, then the explorer shows a **Phone** badge only on the phone call, and the phone call's detail header shows the dialled number and the caller's last four digits but no full caller number.
+- **UI-39** — Given a phone call and a browser voice call, then the explorer shows a **Phone** badge only on the phone call, and the phone call's detail header shows the dialled number and the caller's last four digits but no full caller number; for an outbound phone call it shows the platform's calling number and the callee's last four digits.
 - **UI-36** — Given calls with and without feedback, then the explorer shows "Helpful" / "Not helpful" badges, filtering by Not helpful lists only those calls, and a call's detail page shows the caller's comment.

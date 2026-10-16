@@ -260,6 +260,19 @@ CLAIMS_SKILLS: list[dict[str, Any]] = [
      "required_tools": [], "escalate_when": "Always."},
 ]
 
+FOLLOWUP_SKILLS: list[dict[str, Any]] = [
+    _VERIFY_OUTBOUND,
+    {"name": "Claim follow-up", "description": "After the callee is verified: what their claim is waiting for, or where it stands.",
+     "instructions": (
+         "1. Call get_claim_status with the claim_id from the call context.\n"
+         "2. In two sentences say what the claim is waiting for. For a claim pending information say which document is missing and, using get_claim_requirements for the claim type, where it can be sent; for a claim being processed give the expected decision date.\n"
+         "3. Ask if they have any questions and answer from the claim record only; never promise a decision.\n"
+         "4. If they dispute the status, report an injury, are upset or ask for a person, escalate.\n"
+         "5. If it is a bad time, say a claims specialist will call back and escalate with caller_requested."),
+     "required_tools": ["get_claim_status", "get_claim_requirements"],
+     "escalate_when": "The callee disputes, reports an injury, is upset or asks for a person."},
+]
+
 # ---- persona library: (name, description, voice, speed, greeting, disclosure, opening, style)
 PERSONAS: list[dict[str, Any]] = [
     {"name": "Ava", "description": "Warm, calm and concise; the default for customer calls.", "voice": "aura-2-thalia-en", "speed": 1.0,
@@ -280,7 +293,8 @@ PERSONAS: list[dict[str, Any]] = [
      "greeting": "Evergreen internal knowledge assistant.", "disclosure": "I'm a virtual assistant. What do you need to know?", "opening": "",
      "style": "Neutral and precise. Short answers: the step, the limit or the contact, then stop."},
     {"name": "Nora", "description": "Calm and precise; the claims line. Reads numbers slowly and confirms before acting.", "voice": "aura-2-thalia-en", "speed": 1.0,
-     "greeting": "Thank you for calling Evergreen Health claims, this is Nora.", "disclosure": f"{DISCLOSURE} How can I help with your claim?", "opening": "",
+     "greeting": "Thank you for calling Evergreen Health claims, this is Nora.", "disclosure": f"{DISCLOSURE} How can I help with your claim?",
+     "opening": "Hello, may I speak with {first_name}? This is Nora from Evergreen Health claims, calling about {purpose}.",
      "style": "Calm, precise and reassuring. Read numbers and dates slowly, one question at a time, confirm details before acting."},
 ]
 
@@ -388,6 +402,26 @@ AGENTS: list[dict[str, Any]] = [
     },
 ]
 
+FOLLOWUP_AGENT: dict[str, Any] = {
+    "key": "followup", "name": "Claims Follow-up Agent", "mode": "outbound", "persona": "Nora", "kb": "claims", "pipeline": "realtime",
+    "targets_url": "/mock/insurance/outreach/claims",
+    "description": "Phones members whose claim is waiting on a document or still processing and explains where it stands.",
+    "turn_detection": {"mode": "semantic", "min_silence_ms": 700, "max_extra_wait_ms": 1500, "evaluator": "heuristic", "allow_interruptions": True},
+    "tools": ["verify_member", "get_claim_status", "get_claim_requirements"],
+    "skills": FOLLOWUP_SKILLS,
+    "policy": {
+        "rules": [
+            "Do not share any claim detail until the callee has verified their date of birth.",
+            "State what the claim is waiting for in two sentences, then ask if they have questions.",
+            "Respect a refusal or a bad time: offer a specialist callback and end politely.",
+        ],
+        "escalate_when": ["The callee disputes the claim status or a denial.", "The callee reports an injury or an emergency.", "The callee is upset or asks for a person."],
+        "never": ["Promise that a claim will be approved or paid by a date.", "Share information about anyone other than the verified member."],
+        "max_turns": 16, "handoff_message": "I'll have a claims specialist call you back shortly.",
+    },
+}
+AGENTS.append(FOLLOWUP_AGENT)
+
 SANDBOX_KB = "sandbox"
 
 
@@ -421,6 +455,14 @@ CLAIMS_SCENARIOS = [
      "caller_profile": _profile("James Carter", "337120", "1979-11-02"), "expected": "resolved"},
     {"name": "Dispute a denial", "caller_goal": "Your surgery claim C-31544 was denied and you want to dispute it.",
      "caller_profile": _profile("James Carter", "337120", "1979-11-02", claim_number="C-31544"), "expected": "escalated"},
+]
+
+
+FOLLOWUP_SCENARIOS = [
+    {"name": "Missing document", "caller_goal": "You are called about your MRI claim C-40210. Verify yourself, then ask what exactly is missing and where it should be sent.",
+     "caller_profile": _profile("Priya Nair", "559804", "1992-07-23", claim_number="C-40210"), "expected": "resolved"},
+    {"name": "Wants a person", "caller_goal": "You are called about a claim that is still processing. You do not want to talk to a machine: ask to speak to a person.",
+     "caller_profile": _profile("James Carter", "337120", "1979-11-02"), "expected": "escalated"},
 ]
 
 
@@ -472,4 +514,9 @@ USE_CASES: list[dict[str, Any]] = [
      "demo_callers": [_caller("Maria Lopez", "482913", "April 12, 1986", "Status of claim C-20931 and C-20977"),
                       _caller("Aisha Okafor", "725031", "September 15, 1990", "Report an urgent care visit as a new claim"),
                       _caller("James Carter", "337120", "November 2, 1979", "Documents for a collision; dispute claim C-31544 to see the escalation")]},
+    {"agent": "followup", "title": "Claims Follow-up Calls (outbound)",
+     "summary": "The agent phones a member whose claim is waiting on a document or still processing, verifies them and explains what is needed. By phone through Twilio or the simulator, or in the browser.",
+     "sample_utterances": ["Yes, speaking.", "What exactly is missing?", "Where do I send it?", "Can someone call me back?"],
+     "demo_callers": [_caller("Priya Nair", "559804", "July 23, 1992", "Claim C-40210 is waiting for an authorization number"),
+                      _caller("Maria Lopez", "482913", "April 12, 1986", "Claim C-20977 is still processing")]},
 ]

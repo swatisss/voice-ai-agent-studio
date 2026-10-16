@@ -1,6 +1,6 @@
 """Twilio phone channel: number mapping, webhook, signatures, media stream, IVR context and transfer.
 
-Covers: TEL-01, TEL-02, TEL-03, TEL-04, TEL-05, TEL-06, TEL-07, TEL-08, TEL-10, TEL-11
+Covers: TEL-01, TEL-02, TEL-03, TEL-04, TEL-05, TEL-06, TEL-07, TEL-08, TEL-10, TEL-11, TEL-12, TEL-13, TEL-14
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def phone(app, tmp_path, monkeypatch):  # noqa: ANN001, ANN201
     db_path = tmp_path / "phone.db"
     for key, value in {
         "DATABASE_URL": f"sqlite+aiosqlite:///{db_path.as_posix()}", "AUTO_SEED": "1", "TWILIO_AUTH_TOKEN": TOKEN,
-        "TWILIO_ACCOUNT_SID": "ACtest", "PUBLIC_BASE_URL": BASE, "OPENAI_API_KEY": "sk-test", "DEEPGRAM_API_KEY": "dg-test",
+        "TWILIO_ACCOUNT_SID": "ACtest", "PUBLIC_BASE_URL": BASE, "TWILIO_PHONE_NUMBER": "+15550001111", "OPENAI_API_KEY": "sk-test", "DEEPGRAM_API_KEY": "dg-test",
     }.items():
         monkeypatch.setenv(key, value)
     from voiceai.config import get_settings
@@ -481,3 +481,115 @@ def test_phone_call_runs_end_to_end_through_the_pipeline(provider, phone):
     spoken = [(e["kind"], e["text"]) for e in detail["events"] if e["kind"] in ("user", "assistant")]
     assert spoken[0][0] == "assistant" and ("user", "I want to check on a claim.") in spoken and spoken[-1] == ("assistant", "Let me check on that claim.")
     assert detail["tokens_in"] > 0 and detail["llm_cost_usd"] > 0
+
+
+# ---------------------------------------------------------------- outbound phone calls
+FOLLOW = "Claims Follow-up Agent"
+TARGET = {"member_ref": "EVG-559804"}
+
+
+def outbound_body(phone, **over):  # noqa: ANN001, ANN202
+    return {"agent_id": phone.agents[FOLLOW], **TARGET, "to": "+15559876543", **over}
+
+
+@pytest.fixture
+def dialer(monkeypatch):  # noqa: ANN001, ANN201
+    """Replaces the Twilio REST call: records what the platform asks Twilio to dial."""
+    placed: list[dict] = []
+
+    async def fake_place_call(to, from_number, twiml, timeout_s=30, client=None):  # noqa: ANN001, ANN202
+        placed.append({"to": to, "from": from_number, "twiml": twiml, "timeout": timeout_s})
+        return "CAout1"
+
+    monkeypatch.setattr(telephony, "place_call", fake_place_call)
+    return placed
+
+
+def test_outbound_call_asks_twilio_to_dial_and_stores_no_full_number(phone, dialer):
+    """Covers: TEL-12"""
+    r = phone.client.post("/api/phone/outbound", headers=H, json=outbound_body(phone))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["call_sid"] == "CAout1" and body["status"] == "ringing"
+    (placed,) = dialer
+    assert placed["to"] == "+15559876543" and placed["from"] == "+15550001111"
+    url, call_id = stream_of(placed["twiml"])
+    parsed = urlparse(url)
+    assert call_id == body["call_id"] and parsed.scheme == "wss" and parsed.netloc == "abc123.ngrok.test" and parse_qs(parsed.query)["token"][0]
+    (direction, channel, meta), = rows(phone, "select direction, channel, meta from calls where id=?", call_id)
+    meta = json.loads(meta)
+    assert (direction, channel) == ("outbound", "voice") and meta["context"]["first_name"] == "Priya" and meta["context"]["claim_id"] == "C-40210"
+    assert meta["telephony"] == {"provider": "twilio", "call_sid": "CAout1", "to_last4": "6543", "from": "+15550001111", "direction": "outbound"}
+    assert "5559876543" not in json.dumps(meta)
+    assert phone.client.get(f"/api/calls/{call_id}", headers=H).json()["transport"] == "phone"
+
+
+def test_outbound_call_validation_and_failures(phone, dialer, monkeypatch):
+    """Covers: TEL-13"""
+    from voiceai.config import get_settings
+
+    post = lambda **over: phone.client.post("/api/phone/outbound", headers=H, json=outbound_body(phone, **over))  # noqa: E731
+    count = lambda: rows(phone, "select count(*) from calls")[0][0]  # noqa: E731
+    before = count()
+    assert post(member_ref="EVG-000000").json()["error"] == "unknown_target"
+    assert post(agent_id=phone.agents["Customer Care Agent"]).json()["error"] == "not_outbound"
+    draft = phone.client.post("/api/agents", headers=H, json={"name": "Draft", "description": ""}).json()["id"]
+    assert post(agent_id=draft).json()["error"] == "agent_not_published"
+    assert post(to="0123").status_code == 422 and post(to="+1 555").json()["error"] == "invalid_number"
+    assert count() == before and dialer == []
+
+    async def refuses(*a, **k):  # noqa: ANN002, ANN003, ANN202
+        raise telephony.TwilioError("Twilio answered HTTP 500")
+
+    monkeypatch.setattr(telephony, "place_call", refuses)
+    r = post()
+    assert r.status_code == 502 and r.json()["error"] == "twilio_error"
+    assert rows(phone, "select end_reason, outcome, status from calls order by started_at desc limit 1") == [("error", "abandoned", "ended")]
+    monkeypatch.setenv("TWILIO_PHONE_NUMBER", "")
+    get_settings.cache_clear()
+    n = count()
+    r = post()
+    assert r.status_code == 409 and r.json()["error"] == "telephony_not_configured" and count() == n
+
+
+def test_unanswered_outbound_call_is_closed_after_the_ring_timeout(phone, dialer, monkeypatch):
+    """Covers: TEL-14"""
+    from voiceai import live
+    from voiceai.config import get_settings
+
+    monkeypatch.setenv("OUTBOUND_RING_TIMEOUT_S", "0.4")
+    get_settings.cache_clear()
+    ignored = phone.client.post("/api/phone/outbound", headers=H, json=outbound_body(phone)).json()["call_id"]
+    answered = phone.client.post("/api/phone/outbound", headers=H, json=outbound_body(phone, member_ref="EVG-482913")).json()["call_id"]
+    live.LIVE[answered] = object()  # its stream connected in time
+    time.sleep(1.2)
+    try:
+        assert rows(phone, "select status, outcome, end_reason from calls where id=?", ignored) == [("ended", "abandoned", "hangup")]
+        assert rows(phone, "select count(*) from jobs where kind='analyze_call' and payload like ?", f"%{ignored}%") == [(0,)]
+        assert rows(phone, "select status, outcome from calls where id=?", answered) == [("active", None)]
+    finally:
+        live.LIVE.pop(answered, None)
+
+
+async def test_place_call_posts_to_the_twilio_calls_resource(monkeypatch):
+    """Covers: TEL-12"""
+    from voiceai.config import get_settings
+
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "ACtest")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", TOKEN)
+    get_settings.cache_clear()
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(201, json={"sid": "CAreal1", "status": "queued"})
+
+    sid = await telephony.place_call("+15559876543", "+15550001111", "<Response/>", 20, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    assert sid == "CAreal1"
+    form = parse_qs(seen[0].content.decode())
+    assert seen[0].url.path == "/2010-04-01/Accounts/ACtest/Calls.json" and form["To"] == ["+15559876543"] and form["From"] == ["+15550001111"]
+    assert form["Twiml"] == ["<Response/>"] and form["Timeout"] == ["20"]
+    failing = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500)))
+    with pytest.raises(telephony.TwilioError):
+        await telephony.place_call("+15559876543", "+15550001111", "<Response/>", 20, failing)
+    get_settings.cache_clear()

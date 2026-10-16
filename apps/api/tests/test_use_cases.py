@@ -1,4 +1,4 @@
-"""Customer Support & Channels seed data and use-case catalog. Covers: UC-01, UC-02, UC-03, UC-04, UC-05, CLM-01, CLM-02, CLM-03"""
+"""Customer Support & Channels seed data and use-case catalog. Covers: UC-01, UC-02, UC-03, UC-04, UC-05, CLM-01, CLM-02, CLM-03, CLM-04"""
 from __future__ import annotations
 
 from sqlalchemy import func, select
@@ -13,6 +13,7 @@ SANDBOX = {"X-Tenant-Id": "evergreen-sandbox"}
 TITLES = [
     "Policy Inquiry & Status", "Claims Status Tracking", "Document Center & Green Card", "Outbound Renewal Calls",
     "Policyholder Onboarding", "Internal Knowledge Assistant", "Coverage Information Support", "Claims First Notice & Status",
+    "Claims Follow-up Calls (outbound)",
 ]
 
 
@@ -23,13 +24,14 @@ async def test_seeded_business_units(client, seeded):
     assert {n: a["mode"] for n, a in by_name.items()} == {
         "Customer Care Agent": "inbound", "Renewal Outreach Agent": "outbound",
         "Welcome & Onboarding Agent": "outbound", "Internal Knowledge Assistant": "internal", "Insurance Claims Agent": "inbound",
+        "Claims Follow-up Agent": "outbound",
     }
     assert all(a["published_version"]["version"] == 1 for a in agents)
     async with sessionmaker()() as s:
         assert await s.scalar(select(func.count()).select_from(Tool).where(Tool.tenant_id == "evergreen-care")) == 18
         names = {p.name for p in (await s.scalars(select(Persona).where(Persona.tenant_id == "evergreen-care"))).all()}
     assert names == {"Ava", "Grace", "Leo", "Maya", "Sage", "Nora"}
-    expected = {"Customer Care Agent": ("Ava", 10), "Renewal Outreach Agent": ("Leo", 3), "Welcome & Onboarding Agent": ("Maya", 4), "Internal Knowledge Assistant": ("Sage", 2), "Insurance Claims Agent": ("Nora", 6)}
+    expected = {"Customer Care Agent": ("Ava", 10), "Renewal Outreach Agent": ("Leo", 3), "Welcome & Onboarding Agent": ("Maya", 4), "Internal Knowledge Assistant": ("Sage", 2), "Insurance Claims Agent": ("Nora", 6), "Claims Follow-up Agent": ("Nora", 3)}
     for name, (persona, tools) in expected.items():
         detail = (await client.get(f"/api/agents/{by_name[name]['id']}/versions", headers=H)).json()["items"][0]
         assert detail["version"] == 1
@@ -96,7 +98,7 @@ async def test_customer_care_regression_scenarios(client, seeded):
         "Policy status": "resolved", "Claim paid": "resolved", "Green Card for Spain": "resolved",
         "Dental coverage": "resolved", "Policy schedule by email": "resolved", "Appeal denied claim": "escalated",
     }
-    assert sum(r.expected == "resolved" for r in rows) == 5 and others == 4  # only the Insurance Claims Agent has scenarios besides Customer Care (CLM-03)
+    assert sum(r.expected == "resolved" for r in rows) == 5 and others == 6  # only the two claims agents have scenarios besides Customer Care (CLM-03, CLM-04)
     green = next(r for r in rows if r.name == "Green Card for Spain")
     assert green.caller_profile["member_id"] == "337120" and green.caller_profile["destination"] == "Spain"
 
@@ -129,7 +131,8 @@ async def test_claims_agent_seed(client, seeded):
         assert {t["name"] for t in cfg["tools"]} == {"verify_member", "get_member_claims", "get_claim_status", "get_member_policies", "start_claim", "get_claim_requirements"}
         assert [k["name"] for k in cfg["skills"]] == ["Identity verification", "Claim status", "Report a new claim", "Required documents", "Disputes and appeals"]
         others = (await s.scalars(select(AgentVersion).where(AgentVersion.agent_id != claims["id"], AgentVersion.tenant_id == "evergreen-care"))).all()
-        assert others and all(v.config["voice"].get("pipeline", "cascade") == "cascade" for v in others)
+        pipelines = sorted(v.config["voice"].get("pipeline", "cascade") for v in others)
+        assert pipelines == ["cascade"] * 4 + ["realtime"]  # only the Claims Follow-up Agent besides this one
         scenarios = (await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == claims["id"]))).all()
         assert len(scenarios) == 4 and sorted(sc.expected for sc in scenarios) == ["escalated", "resolved", "resolved", "resolved"]
     items = (await client.get("/api/use-cases", headers=H)).json()["items"]
@@ -150,3 +153,22 @@ async def test_claims_agent_knowledge_is_its_own(client, seeded):
         assert own["results"] and titles[own["results"][0]["doc_id"]] == "Required documents"
         assert all("/kb/claims" not in refs[r["doc_id"]] for r in other.get("results", []))
         assert not set(claims.draft_config["knowledge_doc_ids"]) & set(care.draft_config["knowledge_doc_ids"])
+
+
+async def test_claims_follow_up_agent_seed_and_opening(client, seeded):
+    """Covers: CLM-04, OB-02"""
+    from voiceai.models import AgentVersion
+
+    agents = {a["name"]: a for a in (await client.get("/api/agents", headers=H)).json()["items"]}
+    follow = agents["Claims Follow-up Agent"]
+    async with sessionmaker()() as s:
+        cfg = (await s.get(AgentVersion, follow["published_version"]["id"])).config
+        assert cfg["mode"] == "outbound" and cfg["voice"]["pipeline"] == "realtime" and cfg["outbound"]["targets_url"] == "/mock/insurance/outreach/claims"
+        assert {t["name"] for t in cfg["tools"]} == {"verify_member", "get_claim_status", "get_claim_requirements"} and len(cfg["knowledge_doc_ids"]) == 3
+        assert "{first_name}" in cfg["persona"]["opening"] and "{purpose}" in cfg["persona"]["opening"]
+        scenarios = (await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == follow["id"]))).all()
+        assert sorted(sc.expected for sc in scenarios) == ["escalated", "resolved"]
+    items = (await client.get("/api/use-cases", headers=H)).json()["items"]
+    assert items[8]["title"] == "Claims Follow-up Calls (outbound)" and items[8]["agent_id"] == follow["id"] and items[8]["mode"] == "outbound"
+    r = await client.post("/api/calls", headers=H, json={"agent_id": follow["id"], "channel": "text", "context": {"member_ref": "EVG-559804"}})
+    assert r.json()["greeting"] == "Hello, may I speak with Priya? This is Nora from Evergreen Health claims, calling about a document your claim is still waiting for."

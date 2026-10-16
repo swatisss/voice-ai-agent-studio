@@ -8,7 +8,8 @@ import functools
 import logging
 import re
 
-from fastapi import APIRouter, Request, Response, WebSocket
+from fastapi import APIRouter, Depends, Request, Response, WebSocket
+from pydantic import BaseModel
 from sqlalchemy import select
 from starlette.websockets import WebSocketState
 
@@ -21,9 +22,12 @@ from voiceai.llm.gateway import gateway
 from voiceai.models import Agent, AgentVersion, Call, PhoneNumber
 from voiceai.routes.calls import serve_voice
 from voiceai.runtime.session import create_call
+from voiceai.schemas import E164_RE
+from voiceai.tenancy import current_tenant
 
 log = logging.getLogger("voiceai.telephony")
 router = APIRouter(prefix="/api/telephony/twilio")
+phone_router = APIRouter(prefix="/api/phone")
 
 
 def _xml(body: str) -> Response:
@@ -102,3 +106,47 @@ async def stream(websocket: WebSocket, call_id: str) -> None:
 
 async def _on_end(session, reason: str, call_sid: str) -> None:  # noqa: ANN001
     await telephony.on_phone_end(session, reason, call_sid)
+
+
+class OutboundIn(BaseModel):
+    agent_id: str
+    member_ref: str
+    to: str
+
+
+@phone_router.post("/outbound")
+async def place_outbound(body: OutboundIn, request: Request, tenant_id: str = Depends(current_tenant)) -> dict:
+    """TEL-12, TEL-13, TEL-14: an outbound agent phones `to` through Twilio's REST API (or the simulator)."""
+    s = get_settings()
+    to = body.to.strip()
+    if not E164_RE.fullmatch(to):
+        raise ApiError(422, "invalid_number", "to must be an international number such as +15551234567")
+    if not (s.twilio_account_sid and s.twilio_auth_token and s.public_base_url and s.twilio_phone_number):
+        raise ApiError(409, "telephony_not_configured", "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, PUBLIC_BASE_URL and TWILIO_PHONE_NUMBER")
+    async with sessionmaker()() as db:
+        agent = await db.scalar(select(Agent).where(Agent.id == body.agent_id, Agent.tenant_id == tenant_id))
+        if agent is None:
+            raise ApiError(404, "agent_not_found", "Agent not found")
+        version = await db.get(AgentVersion, agent.published_version_id) if agent.published_version_id else None
+        if version is None:
+            raise ApiError(409, "agent_not_published", "Publish the agent before calling")
+        if version.config.get("mode") != "outbound":
+            raise ApiError(409, "not_outbound", "Only outbound agents place calls")
+        call = await create_call(db, tenant_id, agent.id, "voice", context={"member_ref": body.member_ref}, app=request.app)
+        meta = dict(call.meta or {})
+        meta["telephony"] = {"provider": "twilio", "call_sid": "", "to_last4": re.sub(r"\D", "", to)[-4:], "from": s.twilio_phone_number, "direction": "outbound"}
+        call.meta = meta
+        await db.commit()
+        call_id = call.id
+    token = telephony.mint_token(s.twilio_auth_token, call_id)
+    try:
+        sid = await telephony.place_call(to, s.twilio_phone_number, telephony.twiml_stream(telephony.stream_url(call_id, token), call_id))
+    except telephony.TwilioError as exc:
+        await telephony.close_unanswered(call_id, "error")
+        raise ApiError(502, "twilio_error", str(exc)) from exc
+    async with sessionmaker()() as db:
+        row = await db.get(Call, call_id)
+        row.meta = {**(row.meta or {}), "telephony": {**row.meta["telephony"], "call_sid": sid}}
+        await db.commit()
+    telephony.expire_unanswered(call_id, s.outbound_ring_timeout_s)
+    return {"call_id": call_id, "call_sid": sid, "status": "ringing"}

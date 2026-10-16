@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     twilio_auth_token: str | None = None
     twilio_api_base: str = "https://api.twilio.com"
     twilio_validate_signature: bool = True
+    twilio_phone_number: str | None = None  # the platform's own number: caller ID of outbound calls
+    outbound_ring_timeout_s: float = 45.0   # an outbound call whose stream has not connected by then is closed (TEL-14)
     public_base_url: str | None = None
     llm_fake: bool = False
     # per-role model overrides (/architecture/llm-gateway.md, LG-06/LG-07); a real env var of the same name wins in the gateway

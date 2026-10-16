@@ -17,9 +17,10 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Escalation engine with deterministic triggers and LLM judgment; groundwork packet; human agent console with accept/resolve and disposition.
 * Fleet learning: per-call analysis, gap clustering, impact estimate, fix drafting (knowledge article or skill + tool), evaluation by simulated replay with a judge, approval → new agent version.
 * Dashboard: calls, containment rate, escalated to human, response time, containment trend, escalations by root cause.
-* The seven *Customer Support & Channels* use cases ([/product/use-cases.md](/product/use-cases.md)) with five agents in three call modes: inbound, **outbound** (the agent places the call, simulated in the browser) and internal (staff assistant).
+* The seven *Customer Support & Channels* use cases ([/product/use-cases.md](/product/use-cases.md)) with six agents in three call modes: inbound, **outbound** (the agent places the call, simulated in the browser) and internal (staff assistant).
 * Seeded demo data: members, policies, claims, coverage, documents and Green Card, renewals, onboarding, providers, internal reference data, knowledge articles, ~120 historical calls.
 * Mock healthcare and insurance business API served by the platform itself.
+* **Outbound phone calls** to one explicit number and a local **Twilio simulator** with a browser phone ([/build/twilio-simulator.md](/build/twilio-simulator.md)).
 * **Inbound phone calls** through Twilio Media Streams to a published agent (one number per agent, IVR context, optional redirect of the live call to a person on hand-off), verifiable locally through a tunnel or a no-account simulator ([/architecture/telephony.md](/architecture/telephony.md)).
 * An **optional realtime speech-to-speech voice pipeline** (OpenAI Realtime) chosen per agent; the Insurance Claims Agent uses it, all other agents keep the Deepgram cascade ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)).
 * Local dev with zero infrastructure (SQLite); GCP Cloud Run deployment.
@@ -32,7 +33,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Audio recording storage and playback.
 * PHI redaction pipeline, BAAs, audit log export, data retention policies.
 * Languages other than English.
-* Real outbound dialing (phone calls placed by the platform): dialer, caller ID, consent and do-not-call management, voicemail detection (v1 simulates outbound calls in the browser). SMS and chat widgets for end customers.
+* Outbound dialing campaigns: dialer lists, caller-ID management, consent and do-not-call management, voicemail detection. (A single outbound phone call to an explicit number through Twilio or the simulator is in scope; the browser also simulates outbound calls.) SMS and chat widgets for end customers.
 * Horizontal scaling (v1 runs as a single instance; see [/decisions/adr-0005-single-service.md](/decisions/adr-0005-single-service.md)).
 
 # Non-goals

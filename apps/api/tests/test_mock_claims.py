@@ -62,3 +62,14 @@ async def test_requirements_need_no_member_and_cover_every_type(client):
         assert r["claim_type"] == kind and r["documents"]
     bad = await client.get("/mock/insurance/claims/requirements", params={"claim_type": "vet"})
     assert bad.status_code == 422 and bad.json()["error"] == "invalid_claim_type"
+
+
+async def test_claims_outreach_list(client):
+    """Covers: MOCK-15"""
+    targets = (await client.get("/mock/insurance/outreach/claims")).json()["targets"]
+    assert [(t["first_name"], t["context"]["claim_id"], t["context"]["purpose"]) for t in targets] == [
+        ("Priya", "C-40210", "a document your claim is still waiting for"), ("Maria", "C-20977", "an update on your claim"),
+    ]
+    assert targets[0]["member_ref"] == "EVG-559804" and targets[0]["context"]["member_id"] == "559804"
+    await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice())  # a new claim is `received`: not listed
+    assert [t["context"]["claim_id"] for t in (await client.get("/mock/insurance/outreach/claims")).json()["targets"]] == ["C-40210", "C-20977"]

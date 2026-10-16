@@ -19,6 +19,14 @@ python scripts/phone_demo.py
 
 It starts the tunnel and the API, maps the number to the Insurance Claims Agent, points the Twilio number at the tunnel and prints the number to call; Ctrl+C restores everything. Spec: [/build/phone-demo.md](/build/phone-demo.md). The numbered steps below are what it automates, and the fallback if you want to do them yourself.
 
+# No Twilio account: the simulator
+
+```bash
+python scripts/phone_demo.py --simulator
+```
+
+Needs only `OPENAI_API_KEY`. Open `http://localhost:9200`: the page is a phone. Dial the shown number and talk (the Insurance Claims Agent answers; the conversation appears on the platform's Calls page with the Phone badge). For an **outbound** call, pick an outbound agent and a target in the outbound panel, enter your own phone number and press **Call me**: the page rings, press Answer and the agent speaks first (try the Claims Follow-up Agent, target Priya Nair). Spec: [/build/twilio-simulator.md](/build/twilio-simulator.md). Later, with real Twilio, run without `--simulator`.
+
 # 0. Try the realtime agent without any phone
 
 1. Add `OPENAI_API_KEY` to `apps/api/.env` and start the stack (`python scripts/dev.py`).

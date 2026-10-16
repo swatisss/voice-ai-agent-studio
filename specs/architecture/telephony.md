@@ -23,7 +23,7 @@ caller phone ─▶ (your IVR forwards here, optional) ─▶ Twilio number
                                                           ▼ 3. on hand-off: Twilio REST update → <Dial> transfer_to
 ```
 
-Only inbound calls are supported. Outbound agents are still simulated in the browser ([/architecture/call-modes.md](/architecture/call-modes.md)).
+Inbound calls arrive through the webhook below. **Outbound** calls are placed by the platform through Twilio's REST API to one phone number at a time (see Outbound phone calls); the media stream and everything after it are the same. Outbound agents can still be tried in the browser without a phone ([/architecture/call-modes.md](/architecture/call-modes.md)). Everything here also runs against the local [Twilio simulator](/build/twilio-simulator.md) with no Twilio account.
 
 # Phone numbers
 
@@ -64,6 +64,18 @@ Twilio posts form fields including `CallSid`, `From`, `To`, `CallStatus`. Steps:
 * **End**: when the session ends for any reason ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)) the server finishes the closing speech, then closes the socket; Twilio continues to `<Hangup/>` and the caller is disconnected. A Twilio `stop` event or a dropped socket ends the session with reason `hangup`.
 * Phone calls have no end-of-call feedback prompt (there is no page); `call_feedback` is unaffected.
 
+# Outbound phone calls
+
+`POST /api/phone/outbound` `{agent_id, member_ref, to}` ([/api/rest-api.md](/api/rest-api.md)) places a call from an **outbound** agent ([/architecture/call-modes.md](/architecture/call-modes.md)) to the phone number `to` (E.164):
+
+1. The target must be one the agent lists (`member_ref`, 422 `unknown_target`), the agent must be outbound (409 `not_outbound`) and published (409 `agent_not_published`), `to` must be E.164 (422 `invalid_number`), and Twilio must be configured: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `PUBLIC_BASE_URL` and `TWILIO_PHONE_NUMBER` (the caller ID; 409 `telephony_not_configured`).
+2. A voice call is created as for any outbound call (direction `outbound`, the call context built from the target) with `meta.telephony = {provider: "twilio", call_sid, to_last4, from, direction: "outbound"}`: the callee's number is stored as last four digits only.
+3. The platform asks Twilio to dial: `POST /2010-04-01/Accounts/{sid}/Calls.json` with `To`, `From` (`TWILIO_PHONE_NUMBER`), `Timeout`, and inline `Twiml` holding the same `<Connect><Stream>` with a call-bound token as the inbound webhook answers with. A Twilio error ends the call (reason `error`) and returns 502 `twilio_error`.
+4. When the callee answers, Twilio connects the stream; the pipeline starts and the agent speaks the persona **opening** first ([/architecture/call-modes.md](/architecture/call-modes.md), OB-02). The callee still has to verify their date of birth before any detail.
+5. **Ring timeout.** A call whose stream has not connected after `OUTBOUND_RING_TIMEOUT_S` (default 45) is closed: status `ended`, outcome `abandoned`, end reason `hangup`, no analysis.
+
+Placing a call to a real phone is a deliberate act: there is one number per request, no list dialling, and consent and do-not-call handling are outside this system ([/product/scope.md](/product/scope.md)).
+
 # IVR context
 
 An IVR in front of the agent forwards the call to the Twilio number (or to a Twilio SIP URI) and can pass context. Webhook parameters named `ivr_<name>` (from the query string of the webhook URL or from the form body; for SIP, headers `X-IVR-<Name>`, which Twilio posts as `SipHeader_X-IVR-<Name>` — how each carrier surfaces them is confirmed in spike S4) become call context entries `ivr_<name>`.
@@ -98,6 +110,9 @@ A true warm transfer (the agent stays on the line, introduces the caller) is out
 | `TWILIO_AUTH_TOKEN` | Validates webhooks, mints stream tokens, authenticates REST calls. Required for the telephony routes. |
 | `TWILIO_ACCOUNT_SID` | Only needed for transfer (REST). |
 | `TWILIO_VALIDATE_SIGNATURE` | Default `1`. `0` is for local experiments only (TEL-10). |
+| `TWILIO_PHONE_NUMBER` | The platform's own number: caller ID of outbound calls. |
+| `TWILIO_API_BASE` | Default `https://api.twilio.com`; the [Twilio simulator](/build/twilio-simulator.md)'s URL for local runs. |
+| `OUTBOUND_RING_TIMEOUT_S` | Default `45` (TEL-14). |
 
 `GET /healthz` reports `providers.twilio` (auth token configured, no network call) ([/architecture/deployment.md](/architecture/deployment.md)).
 
@@ -120,4 +135,7 @@ Two ways, both in [/build/runbook-phone.md](/build/runbook-phone.md):
 - **TEL-08** — Given the phone-number API, when a number is added, listed and removed, then validation follows the rules above (E.164 format, 409 `number_in_use` on a duplicate, 422 for an unknown agent), a number of another tenant is not visible or removable (404), and removing it makes the webhook answer "not in service".
 - **TEL-09** — Given a running API with a mapped number and `scripts/fake_twilio.py`, when it plays a WAV file against the mapped number, then the webhook returns TwiML, the stream is accepted, the call appears as `active` and then `ended` in the Calls list, and the agent's reply audio is received (checked by hand against a running server with provider keys).
 - **TEL-10** — Given `TWILIO_VALIDATE_SIGNATURE=0`, when the process is on Cloud Run (`K_SERVICE` set), then the telephony routes refuse to start; when it is not, unsigned requests are accepted and a warning is logged; given no `TWILIO_AUTH_TOKEN`, the webhook answers the "not in service" TwiML and `/healthz` reports `providers.twilio: false`.
+- **TEL-12** — Given an outbound agent with a listed target, a valid E.164 `to` and Twilio configured, when `POST /api/phone/outbound` is called, then one `Calls.json` request is made with `To`, `From` = `TWILIO_PHONE_NUMBER` and `Twiml` containing `<Connect><Stream>` with a `wss://` URL on `PUBLIC_BASE_URL`'s host naming the new call and a token, an outbound voice call exists with the target's context and `meta.telephony` holding `to_last4` (not the full number), and the response carries `call_id` and `call_sid`.
+- **TEL-13** — Given the outbound endpoint, then an unlisted `member_ref` is 422 `unknown_target`, an inbound agent 409 `not_outbound`, an unpublished agent 409 `agent_not_published`, a malformed `to` 422 `invalid_number`, missing Twilio settings 409 `telephony_not_configured` with no call created, and a Twilio REST error 502 `twilio_error` with the call ended (reason `error`).
+- **TEL-14** — Given an outbound call whose stream never connects, when the ring timeout passes, then the call is `ended` with outcome `abandoned` and end reason `hangup` and no analysis job; given the stream connected in time, the call is not touched, and the agent's first utterance is the persona opening (OB-02), not the inbound greeting.
 - **TEL-11** — Given a phone call that ends for any reason in [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md), when the closing speech has finished, then the stream socket closes with 1000, `calls.end_reason` is that reason, and no feedback prompt is created for the call.

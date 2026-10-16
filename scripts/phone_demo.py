@@ -5,6 +5,7 @@ Spec: /build/phone-demo.md, /architecture/telephony.md
 
     python scripts/phone_demo.py             # tunnel + API + number mapping + Twilio webhook, then call the number
     python scripts/phone_demo.py --check     # pre-flight only: what is configured, what is missing
+    python scripts/phone_demo.py --simulator # no Twilio account: the local Twilio simulator and its browser phone
 
 Needs in apps/api/.env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, OPENAI_API_KEY; and `ngrok` or `cloudflared`
 installed. Optional: DEMO_AGENT, DEMO_TRANSFER_TO, NGROK_AUTHTOKEN. Ctrl+C restores the number's previous webhook and stops everything.
@@ -18,6 +19,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -38,6 +40,7 @@ E164 = re.compile(r"\+[1-9][0-9]{6,14}")
 SIP = re.compile(r"sip:[^\s@]+@\S+")
 TENANT = "evergreen-care"
 DEFAULT_AGENT = "Insurance Claims Agent"
+SIM_SID, SIM_TOKEN, SIM_NUMBER = "ACsimulator", "simulator-token", "+15550001111"
 WEBHOOK_PATH = "/api/telephony/twilio/voice"
 CLOUDFLARED_URL = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
 
@@ -56,8 +59,16 @@ def load_config(environ: dict[str, str] | None = None, dotenv: dict[str, str] | 
 
 def preflight(cfg: dict[str, str], args: argparse.Namespace, which: Callable[[str], str | None] | None = None,
               uv: list[str] | None = None, in_use: Callable[[int], bool] | None = None) -> list[str]:
-    """Problems with their fixes; never includes a value of a key (DEV-07)."""
+    """Problems with their fixes; never includes a value of a key (DEV-07, DEV-12)."""
     which = which or shutil.which
+    if getattr(args, "simulator", False):  # no Twilio account, no tunnel: only the OpenAI key (DEV-12)
+        problems = [] if cfg.get("OPENAI_API_KEY") else ["OPENAI_API_KEY is missing: add it to apps/api/.env"]
+        if not (dev.uv_command() if uv is None else uv):
+            problems.append("uv is not installed: https://docs.astral.sh/uv/")
+        for port in (args.port, args.sim_port):
+            if (in_use or dev.port_in_use)(port):
+                problems.append(f"port {port} is busy: stop what is using it or pass --port / --sim-port")
+        return problems
     problems = [f"{k} is missing: add it to apps/api/.env" for k in REQUIRED if not cfg.get(k)]
     number = cfg.get("TWILIO_PHONE_NUMBER")
     if number and not E164.fullmatch(number):
@@ -229,6 +240,61 @@ def setup_agent(request: Request, agent_name: str, number: str, transfer_to: str
     return done
 
 
+# ------------------------------------------------------------------ simulator mode (DEV-12)
+def simulator_plan(args: argparse.Namespace, uv: list[str]) -> list[tuple[str, list[str], Path, dict[str, str]]]:
+    """The simulator and the API, wired together: same account, token and number; the API's Twilio base URL is the simulator."""
+    api_url = f"http://127.0.0.1:{args.port}"
+    shared = {"TWILIO_ACCOUNT_SID": SIM_SID, "TWILIO_AUTH_TOKEN": SIM_TOKEN, "TWILIO_PHONE_NUMBER": SIM_NUMBER, "PUBLIC_BASE_URL": api_url}
+    sim_env = {**shared, "SIM_PORT": str(args.sim_port), "SIM_PLATFORM_URL": api_url}
+    api_env = {**shared, "TWILIO_API_BASE": f"http://127.0.0.1:{args.sim_port}"}
+    return [
+        ("simulator", [*uv, "run", "python", "../../scripts/twilio_sim.py"], API_DIR, sim_env),
+        ("api", [*uv, "run", "voiceai", "serve", "--port", str(args.port)], API_DIR, api_env),
+    ]
+
+
+def run_simulator(args: argparse.Namespace, cfg: dict[str, str]) -> int:
+    say = lambda text: print(f"[demo] {text}", flush=True)  # noqa: E731
+    procs: list[subprocess.Popen[bytes]] = []
+    try:
+        log_dir = API_DIR / "data"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        for name, cmd, cwd, env in simulator_plan(args, dev.uv_command() or ["uv"]):
+            say(f"starting the {name} (log: apps/api/data/phone-demo-{name}.log) ...")
+            log = open(log_dir / f"phone-demo-{name}.log", "wb")  # noqa: SIM115 - lives as long as the process
+            procs.append(subprocess.Popen(cmd, cwd=cwd, env={**os.environ, **env}, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **_group()))
+            wait_for(f"http://127.0.0.1:{args.sim_port if name == 'simulator' else args.port}/{'sim/state' if name == 'simulator' else 'healthz'}", procs[-1])
+        request = http_request(f"http://127.0.0.1:{args.port}")
+        for line in setup_agent(request, cfg.get("DEMO_AGENT") or DEFAULT_AGENT, SIM_NUMBER, cfg.get("DEMO_TRANSFER_TO")) or ["already set up"]:
+            say(line)
+        sim_cfg = {"TWILIO_ACCOUNT_SID": SIM_SID, "TWILIO_AUTH_TOKEN": SIM_TOKEN, "TWILIO_PHONE_NUMBER": SIM_NUMBER,
+                   "TWILIO_API_BASE": f"http://127.0.0.1:{args.sim_port}"}
+        set_webhook(sim_cfg, f"http://127.0.0.1:{args.port}{WEBHOOK_PATH}")
+        print("\n" + "=" * 64)
+        print("  READY (Twilio simulator, no Twilio account needed)")
+        print(f"  Open the browser phone:  http://localhost:{args.sim_port}   (use a headset)")
+        print(f"  Dial {SIM_NUMBER}, or pick an outbound agent and press 'Call me'")
+        print(f"  Calls page: http://localhost:{args.port}/calls/   |   Ctrl+C stops everything")
+        print("=" * 64 + "\n", flush=True)
+        seen: dict[str, str] = {}
+        feed_calls(request, seen, lambda _: None)
+        while True:
+            time.sleep(2)
+            for proc in procs:
+                if proc.poll() is not None:
+                    raise DemoError("a process stopped: see the logs in apps/api/data/phone-demo-*.log")
+            feed_calls(request, seen, say)
+    except KeyboardInterrupt:
+        print()
+        return 0
+    except DemoError as exc:
+        print(f"\nproblem: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        for proc in reversed(procs):
+            dev.kill_tree(proc)
+
+
 # ------------------------------------------------------------------ run
 def wait_for(url: str, proc: subprocess.Popen[bytes], timeout: float = 180.0) -> None:
     deadline = time.time() + timeout
@@ -261,15 +327,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--public-url", default=None, help="use this public URL instead of starting a tunnel")
     p.add_argument("--keep-webhook", action="store_true", help="do not restore the number's previous webhook on exit")
     p.add_argument("--check", action="store_true", help="pre-flight only")
+    p.add_argument("--simulator", action="store_true", help="no Twilio account: start the local Twilio simulator and its browser phone")
+    p.add_argument("--sim-port", type=int, default=9200, help="simulator port (with --simulator)")
     args = p.parse_args(argv)
+    if hasattr(signal, "SIGTERM"):  # a stopped demo cleans up like Ctrl+C: restores the webhook and stops the processes
+        signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     cfg = load_config()
     if cfg.get("PUBLIC_BASE_URL") and not args.public_url:
         print("note: PUBLIC_BASE_URL in .env is ignored; this script sets it from the tunnel")
     problems = preflight(cfg, args)
-    print("Phone demo pre-flight")
-    for key in REQUIRED:
+    print("Phone demo pre-flight" + (" (simulator)" if args.simulator else ""))
+    for key in (("OPENAI_API_KEY",) if args.simulator else REQUIRED):
         print(f"  {'ok     ' if cfg.get(key) else 'MISSING'} {key}")
-    print(f"  tunnel   {'--public-url' if args.public_url else ('ngrok' if shutil.which('ngrok') else ('cloudflared' if shutil.which('cloudflared') else 'MISSING'))}")
+    if not args.simulator:
+        print(f"  tunnel   {'--public-url' if args.public_url else ('ngrok' if shutil.which('ngrok') else ('cloudflared' if shutil.which('cloudflared') else 'MISSING'))}")
     for problem in problems:
         print(f"  problem: {problem}")
     if problems:
@@ -277,6 +348,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         print("everything is in place; run without --check to start")
         return 0
+    if args.simulator:
+        return run_simulator(args, cfg)
 
     procs: list[subprocess.Popen[bytes]] = []
     restore: tuple[str, str] | None = None

@@ -33,8 +33,13 @@ Windows without a `python` command: `py -3 scripts/phone_demo.py`. Stdlib only (
 | `--public-url URL` | Use this public URL instead of starting a tunnel (a Cloud Run URL, your own tunnel) |
 | `--keep-webhook` | Do not restore the number's previous webhook on exit |
 | `--check` | Pre-flight only |
+| `--simulator` | No Twilio account: start the [Twilio simulator](/build/twilio-simulator.md) and the API wired together (no tunnel, no Twilio keys; only `OPENAI_API_KEY` is required) and open its browser phone |
 
-# What it does, in order
+# Simulator mode
+
+`python scripts/phone_demo.py --simulator` is for the demo without a Twilio account (and for rehearsing). It needs only `OPENAI_API_KEY`: the simulator and the API run on localhost, the API gets `TWILIO_API_BASE` pointing at the simulator and matching dummy credentials, the number `+15550001111` is mapped to the Insurance Claims Agent, and the browser phone at `http://localhost:9200` is the handset (dial the number; or place an outbound call to yourself from its outbound panel). When real Twilio is available later, run the script without `--simulator` and with your Twilio values in `.env`: nothing else changes.
+
+# What it does, in order (real Twilio)
 
 1. **Pre-flight.** Reads `apps/api/.env` and the environment. Missing required keys, no tunnel tool (neither `ngrok` nor `cloudflared`; unless `--public-url`), no `uv`, or a busy port are reported with the fix, and nothing starts. A `PUBLIC_BASE_URL` left in `.env` is ignored: the script owns it.
 2. **Tunnel.** `ngrok http <port>` when installed (the public URL is read from ngrok's local API), otherwise `cloudflared tunnel --url http://127.0.0.1:<port>` (the URL is read from its output).
@@ -50,4 +55,5 @@ Windows without a `python` command: `py -3 scripts/phone_demo.py`. Stdlib only (
 - **DEV-08** — Given ngrok's tunnel listing, then the `https` public URL is picked; given a cloudflared output line, then its `trycloudflare.com` URL is picked; given `--public-url`, then no tunnel is started; a `PUBLIC_BASE_URL` in `.env` is ignored and the API receives the tunnel's URL.
 - **DEV-09** — Given a Twilio account that owns the number, when the webhook step runs, then the number's voice URL becomes `<public URL>/api/telephony/twilio/voice` with method POST and the previous voice URL is returned for restoring; given a number the account does not own, then the step fails with a message naming the number; restoring puts the previous URL back.
 - **DEV-10** — Given the API with the seeded agents, when the mapping step runs, then the number is mapped to the named agent; run again it changes nothing; run with the number mapped to another agent it is re-mapped; with a transfer number set it is saved on the agent and published once, and not again when already equal; an unknown agent name fails naming the agent.
+- **DEV-12** — Given `OPENAI_API_KEY` only, when pre-flight runs with `--simulator`, then no Twilio key and no tunnel tool is required; and when the plan is built, then the simulator and the API are started with the same account SID, auth token and phone number, `TWILIO_API_BASE` of the API pointing at the simulator, `PUBLIC_BASE_URL` and `SIM_PLATFORM_URL` pointing at the API, the number is mapped to the named agent, and the number's webhook is set through the simulator's REST API; no tunnel is started.
 - **DEV-11** — Given real Twilio and OpenAI credentials, a tunnel tool and a phone, when `python scripts/phone_demo.py` runs and the number is called, then the agent answers and the call appears in the printed feed and on the Calls page; Ctrl+C restores the webhook and leaves no process running (by hand).

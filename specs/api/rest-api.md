@@ -77,7 +77,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/phone-numbers` | `{e164, agent_id, label?}` → the number; 409 `number_in_use`, 422 for a bad number or an agent that is not the tenant's |
 | DELETE | `/api/phone-numbers/{id}` | → 204; 404 for another tenant's number |
 | POST | `/api/telephony/twilio/voice` | Twilio voice webhook (form fields, signed); **no tenant header**: returns TwiML ([/architecture/telephony.md](/architecture/telephony.md)); 403 on a bad signature |
-| WS | `/api/telephony/twilio/stream/{call_id}?token=` | Twilio Media Stream; **no tenant parameter**; token minted by the webhook |
+| POST | `/api/phone/outbound` | `{agent_id, member_ref, to}` → `{call_id, call_sid, status}`; places an outbound phone call ([/architecture/telephony.md](/architecture/telephony.md)); 409 `not_outbound` · `agent_not_published` · `telephony_not_configured`, 422 `unknown_target` · `invalid_number`, 502 `twilio_error` |
+| WS | `/api/telephony/twilio/stream/{call_id}?token= | Twilio Media Stream; **no tenant parameter**; token minted by the webhook |
 
 ## Use cases and outbound
 | Method | Path | Result |

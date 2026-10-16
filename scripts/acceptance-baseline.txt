@@ -64,3 +64,8 @@ TEL-09
 
 # One-command phone demo: needs Twilio, OpenAI, a tunnel tool and a phone (the pieces and a real run against local fakes are tested)
 DEV-11
+
+# Twilio simulator browser phone: needs a browser and a microphone. Checked in headless Chromium with a fake microphone against the real API on 2026-10-16:
+# inbound call with audio both ways, outbound call ringing, Answer, opening spoken, End. The platform and simulator logic is covered by tests.
+SIM-06
+

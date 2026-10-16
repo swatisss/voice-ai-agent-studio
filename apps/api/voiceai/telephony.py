@@ -4,6 +4,7 @@ Spec: /architecture/telephony.md
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -128,6 +129,64 @@ def stream_url(call_id: str, token: str) -> str:
 def twiml_dial(destination: str) -> str:
     target = f"<Sip>{escape(destination)}</Sip>" if destination.startswith("sip:") else escape(destination)
     return f"<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Dial>{target}</Dial></Response>"
+
+
+# ---------------------------------------------------------------- outbound calls (TEL-12..TEL-14)
+class TwilioError(Exception):
+    """Twilio (or the simulator) refused or could not be reached."""
+
+
+async def place_call(to: str, from_number: str, twiml: str, timeout_s: int = 30, client: httpx.AsyncClient | None = None) -> str:
+    """Ask Twilio to dial `to`; when answered it runs `twiml`. Returns the call SID."""
+    s = get_settings()
+    url = f"{s.twilio_api_base.rstrip('/')}/2010-04-01/Accounts/{s.twilio_account_sid}/Calls.json"
+    own = client is None
+    client = client or httpx.AsyncClient(timeout=15)
+    try:
+        resp = await client.post(url, data={"To": to, "From": from_number, "Twiml": twiml, "Timeout": str(timeout_s)},
+                                 auth=(s.twilio_account_sid or "", s.twilio_auth_token or ""))
+        if resp.status_code >= 300:
+            raise TwilioError(f"Twilio answered HTTP {resp.status_code}")
+        sid = (resp.json() or {}).get("sid")
+        if not sid:
+            raise TwilioError("Twilio did not return a call SID")
+        return str(sid)
+    except httpx.HTTPError as exc:
+        raise TwilioError(f"cannot reach Twilio: {exc}") from exc
+    finally:
+        if own:
+            await client.aclose()
+
+
+_expiry_tasks: set[asyncio.Task[None]] = set()
+
+
+async def close_unanswered(call_id: str, reason: str) -> bool:
+    """End a call that never connected: status ended, outcome abandoned, no analysis (TEL-14)."""
+    from voiceai.db import sessionmaker, utcnow
+    from voiceai.models import Call
+
+    async with sessionmaker()() as db:
+        call = await db.get(Call, call_id)
+        if call is None or call.ended_at is not None:
+            return False
+        call.ended_at, call.end_reason, call.status, call.outcome = utcnow(), reason, "ended", "abandoned"
+        await db.commit()
+    return True
+
+
+def expire_unanswered(call_id: str, timeout_s: float) -> None:
+    """After `timeout_s`, close the call unless its stream connected (TEL-14)."""
+    from voiceai.live import LIVE
+
+    async def run() -> None:
+        await asyncio.sleep(timeout_s)
+        if call_id not in LIVE:
+            await close_unanswered(call_id, "hangup")
+
+    task = asyncio.ensure_future(run())
+    _expiry_tasks.add(task)
+    task.add_done_callback(_expiry_tasks.discard)
 
 
 # ---------------------------------------------------------------- transfer (TEL-07)

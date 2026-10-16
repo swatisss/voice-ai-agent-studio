@@ -30,6 +30,10 @@ The mode selects a mode prompt ([/prompts/mode-inbound.md](/prompts/mode-inbound
 * **Identity.** The call starts **unverified**. Tools marked `requires_verification` stay blocked until `verify_member` succeeds, exactly as for inbound calls ([/architecture/tools-and-skills.md](/architecture/tools-and-skills.md)); the context never marks the call verified.
 * **Handoff.** The outbound agent's `handoff_message` offers a callback or a specialist; escalation, packets and learning work as for inbound calls.
 
+# Outbound calls by phone
+
+An outbound agent can also place a real phone call: `POST /api/phone/outbound` dials one number through Twilio (or the [simulator](/build/twilio-simulator.md)) and the pipeline, opening, identity rules and escalation are exactly those above ([/architecture/telephony.md](/architecture/telephony.md), TEL-12…TEL-14). The browser-simulated outbound call of the Test call page remains for trying an agent without a phone.
+
 # Internal calls
 
 The internal prompt tells the agent its audience is staff, to search internal knowledge before answering, to cite the article title, to say when a procedure is not documented, and to refuse requests for individual member data. Tools without `requires_verification` run normally; the verification gate does not apply because internal tools take no member context.

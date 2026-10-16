@@ -18,7 +18,7 @@ A phone-first agent that handles claim questions for Evergreen Health members: w
 | Name | **Insurance Claims Agent** |
 | Description | Answers claim calls: status, new claim (first notice), required documents; hands disputes to a specialist. |
 | Mode | inbound |
-| Persona | **Nora** (library persona): greeting "Thank you for calling Evergreen Health claims, this is Nora."; disclosure "I'm a virtual assistant, and this call may be recorded for quality. How can I help with your claim?"; style "calm, precise and reassuring; reads numbers slowly; confirms before acting". The persona's Deepgram voice (`aura-2-thalia-en`) is stored but unused in realtime mode. |
+| Persona | **Nora** (library persona; she also has the outbound `opening` below for the follow-up agent): greeting "Thank you for calling Evergreen Health claims, this is Nora."; disclosure "I'm a virtual assistant, and this call may be recorded for quality. How can I help with your claim?"; style "calm, precise and reassuring; reads numbers slowly; confirms before acting". The persona's Deepgram voice (`aura-2-thalia-en`) is stored but unused in realtime mode. |
 | Voice | `pipeline: realtime`; `realtime.voice` unset (the `speech` role default); turn detection `semantic`, `min_silence_ms` 700, interruptions allowed |
 | Telephony | `transfer_to: null` (set it in the builder to try a hand-off to a real phone, [/ui/agent-builder.md](/ui/agent-builder.md)) |
 | Policy | verify identity (member ID + date of birth) before any claim detail or a new claim; never promise approval or payment dates beyond the claim record; safety screen on; `max_turns` 16; silence 10 s / 30 s, max call 600 s |
@@ -67,12 +67,29 @@ Folder [/demo-data/kb/claims/](/demo-data/kb/claims/): 3 articles — filing a c
 
 No historical calls are seeded for this agent: its Calls and Insights fill from real and test calls.
 
+# Claims Follow-up Agent (outbound)
+
+The outbound use case: the agent **phones** a member whose claim is waiting on something or still processing, tells them where it stands and what is needed. It runs on the realtime pipeline and is called by phone through [/architecture/telephony.md](/architecture/telephony.md) (or tried in the browser like any outbound agent, [/architecture/call-modes.md](/architecture/call-modes.md)).
+
+| Field | Value |
+|---|---|
+| Name / mode | **Claims Follow-up Agent**, outbound, `targets_url` `/mock/insurance/outreach/claims` |
+| Persona / voice | **Nora**, whose `opening` is "Hello, may I speak with {first_name}? This is Nora from Evergreen Health claims, calling about {purpose}."; `pipeline: realtime`, turn detection semantic |
+| Tools (3, all shared) | `verify_member`, `get_claim_status`, `get_claim_requirements` |
+| Skills | **Identity verification (outbound call)** (the outbound skill of [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)); **Claim follow-up**: after verification, `get_claim_status` for the claim in the call context; say in two sentences what the claim is waiting for (for *pending information*, the document, and where to send it from `get_claim_requirements`) or the expected decision date; ask if they have questions; a dispute, an injury, a request for a person, or an upset callee escalates |
+| Knowledge | its own copy of the three claims articles ([/demo-data/kb/claims/](/demo-data/kb/claims/)) |
+| Policy | never share any detail before the date of birth is verified; respect "bad time" (offer that a specialist will call back, then escalate `caller_requested`); never promise a decision; handoff message "I'll have a claims specialist call you back shortly." |
+| Scenarios (2) | *Missing document*: Priya Nair is called about claim C-40210, verifies, asks what is needed — `resolved`; *Wants a person*: James Carter called about a processing claim says he wants to speak to someone — `escalated` |
+
+Targets and call context: [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md) (Claims outreach list), MOCK-15.
+
 # Use case
 
-The agent serves use case 8, *Claims First Notice & Status* ([/product/use-cases.md](/product/use-cases.md)). Sample utterances: "I want to check on a claim", "I need to report a new claim", "What documents do I need for a dental claim?".
+The agent serves use case 8, *Claims First Notice & Status*; the Claims Follow-up Agent serves use case 9, *Claims Follow-up Calls (outbound)* ([/product/use-cases.md](/product/use-cases.md)). Sample utterances: "I want to check on a claim", "I need to report a new claim", "What documents do I need for a dental claim?".
 
 # Acceptance
 
-- **CLM-01** — Given a fresh database, when the seeder runs, then tenant `evergreen-care` has the agent *Insurance Claims Agent* (mode inbound) published as v1 with `voice.pipeline: "realtime"`, persona Nora, the six tools above, the five skills above and the three claims articles as its only knowledge, and every other seeded agent still has `voice.pipeline` `cascade`.
+- **CLM-01** — Given a fresh database, when the seeder runs, then tenant `evergreen-care` has the agent *Insurance Claims Agent* (mode inbound) published as v1 with `voice.pipeline: "realtime"`, persona Nora, the six tools above, the five skills above and the three claims articles as its only knowledge, and every other seeded agent except the Claims Follow-up Agent still has `voice.pipeline` `cascade`.
 - **CLM-02** — Given the Insurance Claims Agent and the Customer Care Agent, when each searches knowledge, then their document sets are disjoint: "which documents do I need for a collision claim" finds *Required documents* for the claims agent and nothing from the claims folder for the Customer Care Agent.
+- **CLM-04** — Given a fresh database, when the seeder runs, then the *Claims Follow-up Agent* (mode outbound, `voice.pipeline: "realtime"`, persona Nora with an opening containing `{first_name}` and `{purpose}`, `targets_url` `/mock/insurance/outreach/claims`) is published as v1 with the three tools and its own copy of the three claims articles, has the two scenarios above (one `resolved`, one `escalated`), and `GET /api/use-cases` returns the ninth use case linked to it; starting an outbound call to Priya Nair's target opens with "Hello, may I speak with Priya? This is Nora from Evergreen Health claims, calling about a document your claim is still waiting for."
 - **CLM-03** — Given the Insurance Claims Agent, then it has the four regression scenarios above, three expected `resolved` and one `escalated`, and `GET /api/use-cases` returns the eighth use case linked to it with at least two sample utterances.

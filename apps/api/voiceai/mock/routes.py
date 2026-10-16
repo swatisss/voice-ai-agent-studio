@@ -455,6 +455,22 @@ async def outreach_renewals() -> dict[str, Any]:
     return {"targets": targets}
 
 
+@router.get("/insurance/outreach/claims")
+async def outreach_claims() -> dict[str, Any]:
+    """Members with a claim waiting on a document (first) or still processing (MOCK-15)."""
+    targets = []
+    for rank, status, purpose in ((0, "pending information", "a document your claim is still waiting for"), (1, "processing", "an update on your claim")):
+        for cid, c in data.CLAIMS.items():
+            if c["status"] != status:
+                continue
+            m = data.MEMBERS[c["member"]]
+            targets.append((rank, cid, {
+                "member_ref": c["member"], "first_name": m["first_name"], "summary": f"{cid} {c['service']}: {status}",
+                "context": {"member_id": c["member"].split("-")[1], "claim_id": cid, "claim_service": c["service"], "claim_status": status, "purpose": purpose},
+            }))
+    return {"targets": [t for _, _, t in sorted(targets, key=lambda x: (x[0], x[1]))]}
+
+
 @router.get("/insurance/outreach/onboarding")
 async def outreach_onboarding() -> dict[str, Any]:
     targets = []

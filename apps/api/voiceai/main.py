@@ -92,7 +92,7 @@ def create_app() -> FastAPI:
         allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
         allow_methods=["*"], allow_headers=["*"],
     )
-    for r in (meta.router, agents.router, personas.router, knowledge.router, calls.router, phone_numbers.router, telephony.router, usecases.router, console.router, insights.router, dashboard.router, mock_router):
+    for r in (meta.router, agents.router, personas.router, knowledge.router, calls.router, phone_numbers.router, telephony.router, telephony.phone_router, usecases.router, console.router, insights.router, dashboard.router, mock_router):
         app.include_router(r)
 
     @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

@@ -86,6 +86,10 @@ Used by the Insurance Claims Agent ([/demo-data/claims-agent.md](/demo-data/clai
 
 Each document carries a one-line `note` in the response (for example "Must show the claim number on every page"). The `next_step` of a new claim is "Send the documents listed; a claims specialist contacts you only if something is missing."
 
+# Claims outreach list
+
+`GET /mock/insurance/outreach/claims` lists the members the Claims Follow-up Agent calls: those with a claim in status *pending information* first, then *processing*, each as a target `{member_ref, first_name, summary, context}` with `context` = `member_id`, `claim_id`, `claim_service`, `claim_status`, `purpose` ("a document your claim is still waiting for" for pending information, "an update on your claim" for processing). Seed: Priya Nair (C-40210, MRI lumbar spine, pending information: the provider still has to send authorization number PA-77812), then Maria Lopez (C-20977, lipid panel, processing). A claim that changes status drops out of or enters the list.
+
 # Prior authorizations (catalog endpoint only; not a tool in v1)
 
 | auth_id | member | service | status | details |

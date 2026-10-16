@@ -11,6 +11,7 @@
 * [Personas](personas.md) - Tenant persona library, snapshot resolution, per-call overrides and live switching
 * [Call modes](call-modes.md) - Inbound, outbound and internal modes, call context, outbound targets and opening
 * [Call ending and feedback](call-ending-and-feedback.md) - How calls close (goodbye, farewell, hand-off, silence, max length) and the thumbs up/down feedback that feeds Insights
+* [Caller memory](caller-memory.md) - Per-call notes consolidated by a background dream into a versioned caller profile; recall, privacy and the MemoryProvider
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios

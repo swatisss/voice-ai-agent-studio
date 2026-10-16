@@ -2,7 +2,7 @@
 type: Scope
 title: v1 scope
 description: What the v1 (hackathon) platform includes, what it excludes, and the non-goals.
-status: stable
+status: draft
 tags: [product, scope]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -16,6 +16,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * **Test call from the browser** — voice (mic → agent → speaker) and text chat against the same agent runtime.
 * Escalation engine with deterministic triggers and LLM judgment; groundwork packet; human agent console with accept/resolve and disposition.
 * Fleet learning: per-call analysis, gap clustering, impact estimate, fix drafting (knowledge article or skill + tool), evaluation by simulated replay with a judge, approval → new agent version.
+* **Caller memory**: the agent remembers verified callers across calls (notes consolidated by a background "dream" into a versioned profile), with a Memory page to inspect, edit and delete ([/architecture/caller-memory.md](/architecture/caller-memory.md)).
 * Dashboard: calls, containment rate, escalated to human, response time, containment trend, escalations by root cause.
 * The seven *Customer Support & Channels* use cases ([/product/use-cases.md](/product/use-cases.md)) with four agents in three call modes: inbound, **outbound** (the agent places the call, simulated in the browser) and internal (staff assistant).
 * Seeded demo data: members, policies, claims, coverage, documents and Green Card, renewals, onboarding, providers, internal reference data, knowledge articles, ~120 historical calls.

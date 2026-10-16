@@ -7,3 +7,4 @@
 * [ADR-0005 Single service](adr-0005-single-service.md) - API, voice, jobs, events and static web in one process and one Cloud Run service
 * [ADR-0006 Turn detection on Pipecat](adr-0006-turn-detection.md) - Own normal/semantic turn detection instead of adopting LiveKit's turn detector
 * [ADR-0007 OpenAI as a third LLM provider](adr-0007-openai-provider.md) - OpenAI beside Groq and OpenRouter; Groq stays primary, OpenAI is every role's last fallback and a one-line switch
+* [ADR-0008 Caller memory with offline consolidation](adr-0008-caller-memory.md) - Own versioned tables, notes consolidated by a background dream, MemoryProvider interface, mem0 only as a possible later backend

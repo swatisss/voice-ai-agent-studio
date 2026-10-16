@@ -2,7 +2,7 @@
 type: UI Spec
 title: Calls
 description: Call explorer with filters and a call detail page showing transcript, tool calls, escalation packet and analysis.
-status: stable
+status: draft
 tags: [ui, calls]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -16,10 +16,12 @@ Filters: agent, outcome, channel, direction, feedback (Any · Not helpful · Hel
 * Header: outcome badge, channel, version, start/end, duration, end reason, cost, tokens.
 * Transcript (same rendering as test call) with tool calls inline as expandable rows (`JsonView` of args/result).
 * **Escalation** card (if any): status, reason, disposition, resolution note, packet (same component as the console).
+* **Memory used** card (when the agent had memory enabled): the level (None · Hint · Verified) and the facts the agent was given in this call with their sensitivity and Stated/Inferred badge, each linking to the caller's Memory page; shown as "No memory used" when empty.
 * **Caller feedback** card (when given): the rating as "Helpful" / "Not helpful", the comment and when it was given.
 * **Analysis** card: intent, root cause, fixable, gap summary, caller goal, resolution summary, sentiment, cluster link.
 
 # Acceptance
 
 - **UI-11** — Given a call with an escalation and analysis, when opened, then the packet, disposition, note and analysis fields are all visible.
+- **UI-43** — Given a call whose agent had memory and a verified caller with remembered facts, then the call detail shows the Memory used card with level Verified and those facts; a call from an agent without memory shows no card.
 - **UI-36** — Given calls with and without feedback, then the explorer shows "Helpful" / "Not helpful" badges, filtering by Not helpful lists only those calls, and a call's detail page shows the caller's comment.

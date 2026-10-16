@@ -2,7 +2,7 @@
 type: Seed Data
 title: Evergreen Health tenants, agents, tools and skills
 description: The two demo business units, the persona library, the four agents of Customer Support & Channels with their tools, skills and knowledge, the use-case catalog, and the regression scenarios.
-status: stable
+status: draft
 tags: [demo-data, seed, healthcare]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -102,6 +102,7 @@ Seven rows in `use_cases` for `evergreen-care`, category *Customer Support & Cha
 
 # Acceptance
 
+- **MEM-20** — Given a fresh database, when the seeder runs, then the Customer Care Agent has `memory.enabled: true` (other agents off), a current profile `v1` (source `seed`) exists for `EVG-482913` with three synthetic facts (a call-back time preference, a household fact and an inferred, unconfirmed one), no `call_notes` exist, and seeded calls queue no `capture_call_note` jobs.
 - **UC-01** — Given a fresh database, when the seeder runs, then tenant `evergreen-care` has the four agents (modes inbound, outbound, outbound, internal), all published as v1 with the personas, tools, skills and documents listed above, 16 tools in total; tenant `evergreen-sandbox` has one document and no agents.
 - **UC-03** — Given the Customer Care Agent and the Internal Knowledge Assistant, when each searches knowledge, then their document sets are disjoint and come from their own folders, and neither can retrieve the other's documents: a question about claims-handler approval limits never returns an internal article for the Customer Care Agent, and a question about the Green Card never returns a customer-care article for the Internal Knowledge Assistant, while each agent's own question finds its own article first (*Authorization limits* for the assistant, *Green Card* for Customer Care).
 - **UC-04** — Given the seeded Customer Care Agent, then it has the six regression scenarios above, five expected `resolved` and one `escalated`.

@@ -2,7 +2,7 @@
 type: Compliance Note
 title: Healthcare compliance rules
 description: Safety, privacy, verification and disclosure rules every healthcare agent on the platform must follow, and the production gaps v1 leaves open.
-status: stable
+status: draft
 tags: [product, healthcare, compliance, safety]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -18,10 +18,11 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
    > "If this is a medical emergency, please hang up and call 911. If you are thinking about harming yourself, you can call or text 988 at any time. I'm connecting you with a nurse right now."
 7. **Appeals and grievances go to humans.** Filing an appeal or grievance is always escalated with category `policy_required`.
 8. **Approved fixes only.** Drafted knowledge or skills affect callers only after a human approves them.
+9. **Caller memory is personal data.** Memory is written only for verified callers, never holds identifiers (member IDs, dates of birth, card or account numbers, contact details), never stores inferred health information, and shows `normal` and `high` sensitivity facts only after identity verification; a phone number alone unlocks nothing beyond low-sensitivity preferences. Staff can edit and delete any fact or a caller's entire memory ([/architecture/caller-memory.md](/architecture/caller-memory.md)). Agents with memory enabled SHOULD say in their disclosure that details of calls may be remembered.
 
 # Production gaps (not in v1)
 
 * Business Associate Agreements with every processor (LLM, STT, TTS, cloud).
 * PHI redaction before transcripts reach analytics, clustering or LLM drafting.
-* Audit logging, access controls, retention and deletion policies.
+* Audit logging, access controls, retention and deletion policies (v1 has configurable retention and deletion for caller memory only, with no access control on who may view or delete it).
 * Recording consent handling per jurisdiction.

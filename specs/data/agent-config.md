@@ -2,7 +2,7 @@
 type: Config Schema
 title: Agent configuration schemas
 description: JSON shapes of the agent draft config, persona, policy, tool and skill definitions, and the immutable version snapshot.
-status: stable
+status: draft
 tags: [data, config, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -31,6 +31,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
     "silence_end_s": 30,
     "max_call_seconds": 600
   },
+  "memory": { "enabled": false, "dream_after_notes": 10, "max_items": 25, "retention_days": 365 },
   "tool_ids": ["..."],
   "skill_ids": ["..."],
   "knowledge_doc_ids": ["..."],
@@ -47,6 +48,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `persona.opening` | ≤ 400 chars, may be empty; outbound opener, supports `{first_name}` placeholders |
 | `policy.max_turns` | 4–40 |
 | `policy.silence_reminder_s`, `policy.silence_end_s`, `policy.max_call_seconds` | voice call timers ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)): 5–60 (default 10), 10–300 (default 30, must be greater than the reminder), 60–3600 (default 600) |
+| `memory.enabled` | boolean, default `false`; when `true` the agent writes call notes for verified callers and uses caller memory ([/architecture/caller-memory.md](/architecture/caller-memory.md)); never active for `internal` agents |
+| `memory.dream_after_notes`, `memory.max_items`, `memory.retention_days` | integers 1–50 (default 10), 5–100 (default 25), 30–1095 (default 365) |
 | `policy.rules`, `policy.escalate_when`, `policy.never` | lists of ≤ 300-char strings, ≤ 30 items each |
 | `models.realtime` | `null` (role default) or a model ref listed by `GET /api/models` |
 | `*_ids` | must reference same-tenant, non-archived objects |
@@ -69,7 +72,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `evaluator` | `heuristic` or `llm` |
 | `allow_interruptions` | boolean |
 
-The snapshot carries `persona` (resolved, with `id` when from the library), `voice`, `mode` and `outbound`.
+The snapshot carries `persona` (resolved, with `id` when from the library), `voice`, `mode`, `outbound` and `memory`.
 
 # Mode and outbound settings
 
@@ -127,4 +130,5 @@ Later edits to a tool or skill never change existing versions. Knowledge docs ar
 # Acceptance
 
 - **DM-04** — Given a draft config with `max_turns: 2`, when saved, then the API returns 422. (Turn-detection bounds: TD-08.)
+- **DM-06** — Given a draft config with `memory.dream_after_notes: 0`, `memory.max_items: 3` or `memory.retention_days: 7`, when saved, then the API returns 422; with the defaults, or with the block omitted, it saves and an omitted block behaves as `enabled: false`.
 - **DM-05** — Given a published version, when the underlying tool is edited, then the version's snapshot still holds the old definition.

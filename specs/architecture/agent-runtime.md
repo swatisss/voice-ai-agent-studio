@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent runtime
 description: The shared brain used by voice calls, text chat and simulations - turn loop, prompt assembly, built-in tools, call state, safety screen and escalation triggers.
-status: stable
+status: draft
 tags: [architecture, runtime]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -23,9 +23,9 @@ Behavior MUST NOT differ between channels except: voice may emit a short *filler
 
 | Method | Behavior |
 |---|---|
-| `start() -> str` | Returns the greeting: persona greeting + disclosure. Records it as an `assistant` event. |
+| `start() -> str` | Returns the greeting: persona greeting + disclosure. Records it as an `assistant` event. For a memory-enabled inbound agent with a `caller_phone`, first looks up the memory hint ([/architecture/caller-memory.md](/architecture/caller-memory.md)); the greeting is never personalised from a hint. |
 | `respond(user_text) -> AsyncIterator[str]` | Runs one turn (below), yielding reply text chunks as they stream. |
-| `end(reason)` | Ends the call (`end_call`, `farewell`, `handoff`, `idle`, `max_duration`, `hangup`, `error`; see [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)); sets `ended_at`; queues `analyze_call`. Idempotent. |
+| `end(reason)` | Ends the call (`end_call`, `farewell`, `handoff`, `idle`, `max_duration`, `hangup`, `error`; see [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)); sets `ended_at`; queues `analyze_call` and, for a qualifying verified call of a memory-enabled agent, `capture_call_note` ([/architecture/caller-memory.md](/architecture/caller-memory.md)). Idempotent. |
 | `state` | Current `CallState` (below). |
 
 | `set_persona(persona)` | Replaces the persona used for the next turns (live switch), records a `system` event "Persona switched to ...", never repeats the greeting. See [/architecture/personas.md](/architecture/personas.md). |
@@ -42,7 +42,7 @@ A session knows its agent's `mode` (`inbound`, `outbound`, `internal`) and, for 
 2. **Ended?** If the call has ended, yield nothing.
 3. **Escalated or farewell?** If the call is already escalated (a session that is escalated yet still open), yield the policy `holding_message` without calling the LLM. Otherwise, if the caller's turn is a **farewell phrase** ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md), CE-02), yield the closing line "Thank you for calling. Take care!", end with reason `farewell` and make no LLM request.
 4. **Safety screen** (if `policy.safety_screen`): case-insensitive match against the safety phrase list in [/architecture/escalation.md](/architecture/escalation.md). On match, yield the safety message, escalate with category `safety`, stop.
-5. Build messages: system prompt from [/prompts/agent-system-prompt.md](/prompts/agent-system-prompt.md) + the last 30 conversation messages (user, assistant, tool calls and results).
+5. Build messages: system prompt from [/prompts/agent-system-prompt.md](/prompts/agent-system-prompt.md) (including `caller_memory` when the agent has memory enabled) + the last 30 conversation messages (user, assistant, tool calls and results). When a verification tool succeeds in this turn, the session loads that member's memory before the next LLM request and drops any hint that belonged to another profile (MEM-09, MEM-11).
 6. Call the LLM gateway with role `realtime` (agent model override honored), streaming, with tool schemas for built-in tools + the agent's tools.
 7. While the model requests tool calls (max **4 rounds** per turn):
    1. voice only: if this is the first round in the turn and filler is enabled, yield `"One moment while I check that."` once;
@@ -76,6 +76,8 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 | `tools_used` | ordered list of `{name, ok, summary}` — feeds the groundwork packet |
 | `escalated` / `escalation_id` | set once |
 | `end_requested` / `ended` | lifecycle |
+| `memory_level` | `none` · `hint` · `verified`: what caller memory is loaded ([/architecture/caller-memory.md](/architecture/caller-memory.md)) |
+| `memory_fact_ids` | ids of the memory facts shown to the model in this call |
 | `tokens_in`, `tokens_out`, `cost_usd` | accumulated from gateway usage |
 
 `no_answer_streak` resets when a search returns results; `tool_error_streak` resets on a successful agent-tool call.
@@ -90,4 +92,5 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 - **RT-06** — Given the realtime LLM raises after fallback, when a turn runs, then the caller hears the apology line and the call is escalated with category `other`.
 - **RT-07** — Given the same agent version and the same scripted LLM responses, when run via text and via simulation, then the stored event sequences are identical apart from channel and timestamps.
 - **RT-08** — Given a session, when `end()` is called twice, then only one `analyze_call` job exists for the call.
+- **RT-10** — Given a memory-enabled agent and a profile for member M, when a call verifies as M, then the next LLM request's system prompt contains M's memory and `memory_level` is `verified`; given an agent with memory disabled, the system prompt shows no caller memory and no memory lookup happens (full memory acceptance: MEM-01…MEM-19).
 - **RT-09** — Given a turn that used the LLM, when it completes, then the call's token counts and `llm_cost_usd` increase by the gateway-reported usage.

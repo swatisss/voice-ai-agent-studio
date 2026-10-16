@@ -2,7 +2,7 @@
 type: UI Spec
 title: Test call
 description: Pick a published agent, then talk or type to it with a live transcript; the agent opens a voice call with its spoken welcome, and technical details are shown on demand.
-status: stable
+status: draft
 tags: [ui, voice, test-call]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -29,6 +29,7 @@ The switch sits in the call card header. It can be changed before a call starts 
 A switch at the top right, **off by default** and remembered in the browser (`localStorage` key `test-call-technical`; the page works without storage).
 
 * **Off**: no Activity card and no Call card. The transcript with its system notices, the outcome banner and Live controls are always shown.
+* **Caller phone** (inbound agents with memory enabled only, shown whatever this switch says): an optional text field above Start call, "Caller phone (optional)", sent as `caller_phone`; helper text "Used only to test the unverified memory hint". It is not remembered by the browser.
 * **On**: **Activity** — tool call chips in order (name, args summary, ✓/✕, duration) and knowledge searches with top result title + score or "No answer"; **Call** — call id (link to call detail), direction, status, turns, tokens, LLM cost, median latency.
 
 Switching it on or off never restarts or disturbs a running call.
@@ -67,6 +68,7 @@ In both modes the outcome banner then shows — "Resolved", "Escalated — waiti
 - **UI-24** — Given the seeded business unit, when Test call opens, then there is no card gallery; the agent select lists the published agents; the "Handles:" line under it names the use cases of the selected agent; the Test script shows one starting phrase per use case of that agent and no demo caller details; and choosing another agent updates all three without starting a call.
 - **UI-25** — Given an outbound agent, when a target is chosen and Place outbound call is clicked, then the first message in the transcript is the agent's opening addressed to that person, and the call is labelled outbound.
 - **UI-23** — Given a running call, when the persona or the turn-detection mode is changed in Live controls, then a system notice appears in the transcript, the call continues without restarting, and the next agent reply (or turn decision) uses the new setting.
+- **UI-42** — Given a memory-enabled inbound agent, then Test call shows the optional Caller phone field and sends its value as `caller_phone`; for agents without memory, and for outbound and internal agents, the field is absent.
 - **UI-31** — Given Test call, then the Talk | Type switch is in the call card header and not in the page's top row; when a call is running it is disabled; and when it is switched between calls the start button changes between Start call and Start chat.
 - **UI-32** — Given a browser with no saved choice, when a call runs, then no Activity or Call card is shown while the transcript, system notices, outcome banner and Live controls are; when Technical details is switched on, both cards appear without restarting the call; and after a reload the choice is remembered.
 - **UI-33** — Given Talk mode and an allowed microphone, when Start call is pressed, then the agent's welcome is heard and appears as the first agent message without the tester speaking, and the tester's answer after it ends is handled as the first turn; talking during the welcome does not cut it off.

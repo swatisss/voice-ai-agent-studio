@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: stable
+status: draft
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -33,7 +33,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **knowledge_chunks** — `id`, `tenant_id`, `doc_id` (FK, cascade delete), `ordinal`, `heading`, `content`, `embedding` JSON (list of float)
 
-**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `direction` (`inbound`|`outbound`|`internal`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason` (`end_call`|`farewell`|`handoff`|`idle`|`max_duration`|`hangup`|`error`), `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON (`state`, `history`, the live overrides `live.persona_id` and `live.turn_detection`, and `context` for outbound calls)
+**calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `direction` (`inbound`|`outbound`|`internal`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason` (`end_call`|`farewell`|`handoff`|`idle`|`max_duration`|`hangup`|`error`), `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `meta` JSON (`state`, `history`, the live overrides `live.persona_id` and `live.turn_detection`, `context` for outbound calls, and `caller_phone_hash` when the call carried a caller phone)
 
 **call_feedback** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `rating` (`up`|`down`), `comment` (nullable, ≤ 300 chars), `created_at`, `updated_at`; one row per call, replaced when the caller answers again; never created for simulation calls ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md))
 
@@ -55,6 +55,12 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **use_cases** — `id`, `tenant_id`, `agent_id`, `category`, `title`, `summary`, `channels` JSON list, `sample_utterances` JSON list, `demo_callers` JSON list, `sort` int, `created_at` ([/product/use-cases.md](/product/use-cases.md))
 
+**call_notes** — `id`, `tenant_id`, `member_ref`, `call_id` (unique), `agent_id`, `summary` (≤ 300 chars), `facts` JSON (candidate facts), `status` (`pending`|`dreamed`), `dream_run_id` (nullable), `created_at`; scrubbed of identifiers ([/architecture/caller-memory.md](/architecture/caller-memory.md))
+
+**caller_profiles** — `id`, `tenant_id`, `member_ref`, `version` int (unique with tenant and member), `is_current` bool (exactly one per member), `facts` JSON (list of memory facts), `suppressed` JSON (texts staff removed), `phone_hashes` JSON (salted hashes, never numbers), `source` (`dream`|`manual`|`capture`|`seed`), `dream_run_id` (nullable), `created_at`; one row per version
+
+**dream_runs** — `id`, `tenant_id`, `member_ref`, `trigger` (`threshold`|`manual`), `status` (`running`|`done`|`failed`|`skipped`), `note_ids` JSON, `from_version`, `to_version` (nullable), `changes` JSON (the diff: op, fact id, before, after, reason), `contradictions` JSON, `tokens_in`, `tokens_out`, `cost_usd` float, `error` (nullable), `created_at`, `finished_at`
+
 **jobs** — `id`, `tenant_id`, `kind`, `payload` JSON, `dedupe_key` (nullable, indexed), `status` (`queued`|`running`|`done`|`failed`), `attempts`, `last_error`, `run_after`, `created_at`, `updated_at`
 
 # Relationships
@@ -65,11 +71,12 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
         │         │                         └─ call_analysis ── cluster ── fix_proposal ── eval_run ── eval_result
         │         └─ eval_scenario
         ├─ tool, skill, knowledge_doc ── knowledge_chunk
+        ├─ call_note ── caller_profile (versions) ── dream_run   (per member_ref)
         └─ job
 ```
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 20 tables exist; given an existing database without `call_feedback`, when the app starts, then that table is created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 23 tables exist; given an existing database without `call_feedback`, `call_notes`, `caller_profiles` or `dream_runs`, when the app starts, then those tables are created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.

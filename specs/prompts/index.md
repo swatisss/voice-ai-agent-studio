@@ -10,6 +10,8 @@ The code loads each prompt directly from the fenced `text` block under the `# Pr
 * [Caller simulator](caller-simulator.md) - Plays a caller with a goal during evaluations
 * [Eval judge](eval-judge.md) - Grades a simulated call against its goal and expected outcome
 * [Turn end check](turn-end-check.md) - Fast yes/no judgment that the caller finished speaking (LLM turn evaluator)
+* [Memory capture](memory-capture.md) - Turns a verified call into a small structured note with candidate memory facts
+* [Memory dream](memory-dream.md) - Consolidates a caller's profile with waiting notes into add, update, confirm and retire changes
 * [Mode: inbound](mode-inbound.md) - Mode instructions for agents that answer incoming calls
 * [Mode: outbound](mode-outbound.md) - Mode instructions for agents that place the call: identity first, purpose, respect refusals
 * [Mode: internal](mode-internal.md) - Mode instructions for the staff-facing knowledge assistant

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Multi-tenancy
 description: How the tenant is resolved for every request and the isolation rules every query, event and tool call must follow.
-status: stable
+status: draft
 tags: [architecture, tenancy, security]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -20,7 +20,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 3. Agent configs may only reference tools, skills and docs of the same tenant; publish validates this.
 4. Knowledge search, clustering and evaluation operate within one tenant and one agent.
 5. Events are delivered only to subscribers of the same tenant.
-6. Tools always send `X-Tenant-Id`; the mock API serves both demo tenants from separate data sets.
+6. Caller memory (notes, profiles, dream runs, phone hashes) is looked up by tenant and member; a member reference in another tenant never matches ([/architecture/caller-memory.md](/architecture/caller-memory.md), MEM-14).
+7. Tools always send `X-Tenant-Id`; the mock API serves both demo tenants from separate data sets.
 
 # Acceptance
 

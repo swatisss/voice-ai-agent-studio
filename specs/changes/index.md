@@ -1,5 +1,6 @@
 # Change proposals
 
+* [CP-0012 Caller memory with dreaming](cp-0012-caller-memory-dreaming.md) - Verified callers are remembered across calls: per-call notes, a background dream consolidates them into a versioned profile, recall at call time, console to inspect and delete
 * [CP-0001 Initial platform build](cp-0001-initial-platform.md) - Build the v1 platform: builder, voice and text test calls, escalation with groundwork packets, fleet learning with eval-gated fixes
 * [CP-0002 Spec enforcement in CI and contributor onboarding](cp-0002-spec-enforcement-and-onboarding.md) - CI gate, PR-level spec-first/log/lifecycle rules, acceptance ratchet, setup script, README
 * [CP-0011 Calls close properly and callers rate them](cp-0011-call-ending-and-feedback.md) - Hand-off, farewell, silence and max length end calls; thumbs up/down after a call feeds Insights

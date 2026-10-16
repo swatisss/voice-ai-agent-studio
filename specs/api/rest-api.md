@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -61,14 +61,27 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Calls
 | Method | Path | Body → Result |
 |---|---|---|
-| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings}`; 409 if agent unpublished. For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
+| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?, caller_phone?}` → `{call_id, greeting, settings}`; 409 if agent unpublished. For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. `caller_phone` (optional, 7–20 characters of digits and `+ - ( )` and spaces, else 422) is the caller's number as caller ID: it is hashed immediately, never stored, and only enables the unverified memory hint of an inbound memory-enabled agent ([/architecture/caller-memory.md](/architecture/caller-memory.md)). |
 | POST | `/api/calls/{id}/messages` | `{text}` → `{reply, call_status, ended, escalated}` (text channel only) |
 | POST | `/api/calls/{id}/end` | → `{status, outcome}` |
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |
 | PATCH | `/api/calls/{id}/live` | `{persona_id?, turn_detection?}` → `{settings}`; changes persona and/or turn detection of a running call (404 unknown, 409 ended, 422 invalid). See [/architecture/personas.md](/architecture/personas.md), [/architecture/turn-detection.md](/architecture/turn-detection.md). |
 | GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `direction?`, `feedback?` (`up`\|`down`\|`none`), `include_seed=true` → `{items: [call summary]}` (eval calls excluded); each summary carries `feedback` (`"up"`, `"down"` or `null`) |
-| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) |
+| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `memory` (`{level, facts: [{id, text, sensitivity, basis}]}`: what caller memory the agent was given, empty facts when none) |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
+
+## Caller memory
+| Method | Path | Body → Result |
+|---|---|---|
+| GET | `/api/memory/members` | query `q?` (member reference substring) → `{items: [{member_ref, fact_count, pending_notes, version, last_dream_at, dream_after_notes}]}` |
+| GET | `/api/memory/members/{member_ref}` | → `{member_ref, profile: {version, facts, source, created_at}, versions: [{version, source, created_at}], pending_notes: [{id, call_id, summary, created_at}], runs: [dream run with changes and contradictions]}`; 404 `member_not_found` when the member has no profile and no notes |
+| GET | `/api/memory/members/{member_ref}/versions/{version}` | → that profile version (read-only) |
+| PATCH | `/api/memory/members/{member_ref}/facts/{fact_id}` | `{text}` (≤ 200 chars, scrubbed) → new profile version |
+| DELETE | `/api/memory/members/{member_ref}/facts/{fact_id}` | → new profile version; the text is added to `suppressed` |
+| POST | `/api/memory/members/{member_ref}/dream` | → `{job_id}`; 409 `nothing_to_consolidate` without pending notes |
+| DELETE | `/api/memory/members/{member_ref}` | deletes notes, all profile versions and dream runs → 204 |
+
+All memory endpoints are tenant-scoped; another tenant's member is 404. See [/architecture/caller-memory.md](/architecture/caller-memory.md).
 
 ## Use cases and outbound
 | Method | Path | Result |
@@ -112,4 +125,5 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 - **API-01** — Given an unpublished agent, when `POST /api/calls` is made, then the response is 409 `agent_not_published`.
 - **API-02** — Given a text call, when `POST /messages` is made on a voice call id, then the response is 409 `wrong_channel`.
 - **API-03** — Given any validation failure, then the response is 422 with `{error, detail}`.
+- **API-05** — Given caller memory in two tenants, then `/api/memory/members` lists only the caller's tenant; a PATCH with a text over 200 characters returns 422; a `caller_phone` of `abc` returns 422; and `GET /api/calls/{id}` for a call that used memory returns `memory.facts` with ids and texts.
 - **API-04** — Given `GET /api/calls`, then simulation calls created by evaluations never appear.

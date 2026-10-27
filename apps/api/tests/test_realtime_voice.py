@@ -414,8 +414,13 @@ def voice_app(app, tmp_path, monkeypatch):  # noqa: ANN001, ANN201
     reset_gateway()
 
 
-def open_voice(vapp, agent: str) -> int | None:  # noqa: ANN001
-    call_id = vapp.client.post("/api/calls", headers=H, json={"agent_id": vapp.agents[agent], "channel": "voice"}).json()["call_id"]
+def start_voice(vapp, agent: str) -> str:  # noqa: ANN001
+    """Create a voice call; returns the call id, or the refusal reason of POST /api/calls (ADM-02)."""
+    r = vapp.client.post("/api/calls", headers=H, json={"agent_id": vapp.agents[agent], "channel": "voice"})
+    return r.json()["call_id"] if r.status_code == 200 else r.json()["error"]
+
+
+def connect(vapp, call_id: str) -> int | None:  # noqa: ANN001
     try:
         with vapp.client.websocket_connect(f"/api/voice/{call_id}?tenant=evergreen-care") as ws:
             ws.receive_text()
@@ -441,11 +446,15 @@ def test_the_call_picks_its_pipeline_and_its_key(voice_app, monkeypatch):
     monkeypatch.setattr(pipeline, "run_realtime", fake_realtime)
     monkeypatch.setattr(pipeline, "run", fake_cascade)
     voice_app.keys(openai="sk-test")  # OpenAI only: the realtime agent connects without any Deepgram key
-    assert open_voice(voice_app, "Insurance Claims Agent") == 1000 and ran == ["realtime"]
-    assert open_voice(voice_app, "Customer Care Agent") == 4500  # the cascade still needs Deepgram
+    assert connect(voice_app, start_voice(voice_app, "Insurance Claims Agent")) == 1000 and ran == ["realtime"]
+    assert start_voice(voice_app, "Customer Care Agent") == "voice_unavailable"  # the cascade still needs Deepgram (ADM-02)
     voice_app.keys(deepgram="dg-test")
-    assert open_voice(voice_app, "Customer Care Agent") == 1000 and ran == ["realtime", "cascade"]
-    assert open_voice(voice_app, "Insurance Claims Agent") == 4500  # RV-03: no OpenAI key
+    assert connect(voice_app, start_voice(voice_app, "Customer Care Agent")) == 1000 and ran == ["realtime", "cascade"]
+    assert start_voice(voice_app, "Insurance Claims Agent") == "voice_unavailable"  # no OpenAI key: refused up front
+    voice_app.keys(openai="sk-test", deepgram="dg-test")
+    planned = start_voice(voice_app, "Insurance Claims Agent")
+    voice_app.keys(deepgram="dg-test")  # RV-03: the OpenAI key is gone when the socket opens
+    assert connect(voice_app, planned) == 4500
     assert voice_app.client.get("/healthz").json()["status"] == "ok"
 
     async def unavailable(websocket, session, controls, connector, phone=None):  # noqa: ANN001, ANN202
@@ -453,7 +462,7 @@ def test_the_call_picks_its_pipeline_and_its_key(voice_app, monkeypatch):
 
     monkeypatch.setattr(pipeline, "run_realtime", unavailable)
     voice_app.keys(openai="sk-test")
-    assert open_voice(voice_app, "Insurance Claims Agent") == 4500  # RV-13: the provider socket cannot be opened
+    assert connect(voice_app, start_voice(voice_app, "Insurance Claims Agent")) == 4500  # RV-13: the provider socket cannot be opened
 
 
 def test_realtime_pipeline_has_no_deepgram_services(monkeypatch):

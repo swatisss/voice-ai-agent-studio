@@ -168,8 +168,15 @@ async def test_realtime_agent_is_evaluated_on_the_text_brain(client, seeded, fak
     assert "speech" not in roles and "realtime" in roles
 
 
-async def test_live_changes_are_refused_on_realtime_calls(client, seeded):
+async def test_live_changes_are_refused_on_realtime_calls(client, seeded, monkeypatch):
     """Covers: RV-15"""
+    from voiceai.config import get_settings
+    from voiceai.llm.gateway import reset_gateway
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")  # both voice calls must be admitted (ADM-02)
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "dg-test")
+    get_settings.cache_clear()
+    reset_gateway()
     r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["claims"]["agent_id"], "channel": "voice"})
     call_id = r.json()["call_id"]
     patch = await client.patch(f"/api/calls/{call_id}/live", headers=H, json={"turn_detection": {"mode": "vad"}})

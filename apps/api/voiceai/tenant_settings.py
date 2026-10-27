@@ -110,25 +110,31 @@ async def delete_openai_key(s: AsyncSession, tenant_id: str) -> None:
         await s.delete(cred)
 
 
-async def ensure_pipeline_allowed(s: AsyncSession, tenant_id: str, config: dict[str, Any], status: int = 422) -> None:
-    """MT-06, MT-08: raise `pipeline_not_allowed` when the config's pipeline is not in the tenant's allowlist."""
+async def ensure_pipeline_allowed(s: AsyncSession, tenant_id: str, config: dict[str, Any]) -> None:
+    """MT-06: raise `pipeline_not_allowed` when the config's pipeline is not in the tenant's allowlist."""
     pipeline = pipeline_of(config)
     if pipeline not in await allowed_pipelines(s, tenant_id):
-        raise ApiError(status, "pipeline_not_allowed", f"The {pipeline} voice pipeline is not enabled for this business unit")
+        raise ApiError(422, "pipeline_not_allowed", f"The {pipeline} voice pipeline is not enabled for this business unit")
+
+
+async def openai_key_from(s: AsyncSession, tenant_id: str, source: str) -> str | None:
+    """The OpenAI key a realtime call of this tenant may use from one source: `tenant` (its own stored key) or
+    `platform` (the platform key, only while the tenant allows the fallback)."""
+    if source == "tenant":
+        cred = await _credential(s, tenant_id)
+        return vault.decrypt(cred.ciphertext) if cred is not None else None
+    row = await _row(s, tenant_id)
+    if row is None or row.openai_platform_fallback:
+        return gateway().provider_key("openai") or None
+    return None
 
 
 async def resolve_openai_key(s: AsyncSession, tenant_id: str) -> tuple[str, str] | None:
     """MT-11: (key, source) for a realtime call of this tenant - own key, else the platform key if allowed, else None."""
-    cred = await _credential(s, tenant_id)
-    if cred is not None:
-        plain = vault.decrypt(cred.ciphertext)
-        if plain:
-            return plain, "tenant"
-    row = await _row(s, tenant_id)
-    if row is None or row.openai_platform_fallback:
-        platform = gateway().provider_key("openai")
-        if platform:
-            return platform, "platform"
+    for source in ("tenant", "platform"):
+        key = await openai_key_from(s, tenant_id, source)
+        if key:
+            return key, source
     return None
 
 

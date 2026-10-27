@@ -38,7 +38,7 @@ A phone number belongs to one tenant and routes to one agent (its **published** 
 Twilio posts form fields including `CallSid`, `From`, `To`, `CallStatus`. Steps:
 
 1. **Validate the signature** (below). Invalid → 403, no call.
-2. Look up `To` in `phone_numbers`. Unknown number, an agent that is not published, a pipeline the tenant does not allow, or Twilio/OpenAI/Deepgram credentials missing for the agent's pipeline (for `realtime`, the tenant's OpenAI key resolution of [/architecture/tenant-settings.md](/architecture/tenant-settings.md)) → answer TwiML `<Say>` "Sorry, this number is not in service." and `<Hangup/>`; no call row, no stream.
+2. Look up `To` in `phone_numbers`. Unknown number, an agent that is not published, missing Twilio credentials, or a refusal from [call admission](/architecture/call-admission.md) (pipeline not allowed for the tenant, or no usable provider credential for the agent's pipeline) → answer TwiML `<Say>` "Sorry, this number is not in service." and `<Hangup/>`; no call row, no stream.
 3. Create the call: `channel: voice`, `direction: inbound`, the agent's published version, `meta.telephony = {provider: "twilio", call_sid, from_last4, to}`. The full caller number is **not** stored (last four digits only). The call context is built from the IVR parameters (below).
 4. Answer TwiML:
 

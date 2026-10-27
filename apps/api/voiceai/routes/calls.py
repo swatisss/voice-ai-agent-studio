@@ -1,7 +1,7 @@
 """Calls: create, text messages, end, explorer, detail, and the voice WebSocket.
 
 Spec: /api/rest-api.md (Calls), /api/voice-protocol.md, /architecture/agent-runtime.md, /architecture/realtime-voice.md,
-/architecture/tenant-settings.md
+/architecture/tenant-settings.md, /architecture/call-admission.md
 """
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.config import get_settings
 from voiceai.db import get_session, sessionmaker
 from voiceai.errors import ApiError
 from voiceai.live import LIVE, LiveControls, effective_settings, persona_dict, pipeline_of
@@ -25,7 +24,7 @@ from voiceai.schemas import TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
 from voiceai.runtime.session import AgentSession, create_call
 from voiceai.tenancy import current_tenant, resolve_tenant
-from voiceai import tenant_settings
+from voiceai import admission
 
 log = logging.getLogger("voiceai.calls")
 router = APIRouter(prefix="/api")
@@ -95,9 +94,13 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
     if body.turn_detection:
         live["turn_detection"] = body.turn_detection.model_dump(exclude_none=True)
     call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None, context=body.context, app=request.app)
-    if body.channel == "voice":  # MT-08: the published version's pipeline must still be allowed
+    if body.channel == "voice":  # ADM-02: refused up front, and no call row is kept
         version = await s.get(AgentVersion, call.agent_version_id)
-        await tenant_settings.ensure_pipeline_allowed(s, tenant_id, version.config if version else {}, status=409)
+        decided = await admission.admit(s, tenant_id, version.config if version else {})
+        if isinstance(decided, admission.Refusal):
+            raise ApiError(409, decided.reason, "Voice is not available for this agent right now"
+                           if decided.reason == "voice_unavailable" else "The agent's voice pipeline is not enabled for this business unit")
+        call.meta = {**(call.meta or {}), "admission": decided.to_meta()}
     await s.commit()
     greeting = None
     if body.channel == "text":
@@ -249,23 +252,17 @@ async def serve_voice(websocket: WebSocket, tenant_id: str, call: Call, phone: A
     async with sessionmaker()() as s:
         version = await s.get(AgentVersion, call.agent_version_id)
         config = version.config if version else {}
-        kind = pipeline_of(config)
-        if kind not in await tenant_settings.allowed_pipelines(s, tenant_id):  # MT-08
-            await websocket.close(code=4500, reason="pipeline_not_allowed")
+        decided = await admission.admit_socket(s, tenant_id, config, (call.meta or {}).get("admission"))
+        if isinstance(decided, admission.Refusal):  # MT-08, VO-05, RV-03, ADM-04
+            await websocket.close(code=4500, reason=decided.reason)
             return
-        key: str | None = get_settings().deepgram_api_key
-        if kind == "realtime":  # MT-11: the tenant's own key, else the platform key if the tenant allows it
-            resolved = await tenant_settings.resolve_openai_key(s, tenant_id)
-            key = resolved[0] if resolved else None
-            if resolved:
-                row = await s.get(Call, call.id)
-                if row is not None:
-                    row.meta = {**(row.meta or {}), "openai_key_source": resolved[1]}  # RV-16
-                    await s.commit()
-    g = gateway()
-    if not key:  # VO-05, RV-03
-        await websocket.close(code=4500, reason="voice_unavailable")
-        return
+        plan, key = decided
+        if not (call.meta or {}).get("admission"):  # a call created before admission existed: record its plan now
+            row = await s.get(Call, call.id)
+            if row is not None:
+                row.meta = {**(row.meta or {}), "admission": plan.to_meta()}
+                await s.commit()
+    kind = plan.pipeline
     try:
         from voiceai.voice import pipeline
         from voiceai.voice import realtime as rt
@@ -278,7 +275,7 @@ async def serve_voice(websocket: WebSocket, tenant_id: str, call: Call, phone: A
     LIVE[call.id] = controls
     try:
         if kind == "realtime":
-            ref = g.speech_ref((config.get("models") or {}).get("speech"))
+            ref = plan.model_ref or gateway().speech_ref((config.get("models") or {}).get("speech"))
 
             async def connector() -> rt.RealtimeConnection:
                 return await rt.connect_openai(key, ref)

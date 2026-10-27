@@ -26,6 +26,8 @@ Changing `allowed_pipelines` to drop `realtime` while any agent of the tenant ha
 
 # Enforcement points
 
+The call-start rows below are decided by [call admission](/architecture/call-admission.md); this table lists where the allowlist is felt.
+
 | Where | Check | Result when not allowed |
 |---|---|---|
 | `PUT /api/agents/{id}` with a draft whose `voice.pipeline` is `realtime` | tenant allows `realtime` | 422 `pipeline_not_allowed` |

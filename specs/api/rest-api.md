@@ -49,7 +49,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | PUT | `/api/personas/{id}` | persona fields → persona |
 | DELETE | `/api/personas/{id}` | 204; 409 `persona_in_use` while an agent draft references it |
 
-`settings` (in call responses and `GET /api/calls/{id}`): `{pipeline: "cascade"|"realtime", persona: {id, name, voice, speed}, turn_detection: {...}, openai_key_source?: "tenant"|"platform"}`, the effective values after overrides; `openai_key_source` is present on voice calls of the realtime pipeline once connected.
+`settings` (in call responses and `GET /api/calls/{id}`): `{pipeline: "cascade"|"realtime", persona: {id, name, voice, speed}, turn_detection: {...}, openai_key_source?: "tenant"|"platform"}`, the effective values after overrides; `openai_key_source` is present on voice calls of the realtime pipeline from call creation (the admission plan's credential source).
 
 ## Tools, skills, knowledge
 | Method | Path | Body → Result |
@@ -69,7 +69,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Calls
 | Method | Path | Body → Result |
 |---|---|---|
-| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings}` (`settings`: `{pipeline, persona, turn_detection}`); 409 if agent unpublished; for `voice`, 409 `pipeline_not_allowed` when the published version's pipeline is not allowed for the tenant. For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
+| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings}` (`settings`: `{pipeline, persona, turn_detection}`); 409 if agent unpublished; for `voice`, 409 `pipeline_not_allowed` or `voice_unavailable` when [call admission](/architecture/call-admission.md) refuses (no call row is created). For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
 | POST | `/api/calls/{id}/messages` | `{text}` → `{reply, call_status, ended, escalated}` (text channel only) |
 | POST | `/api/calls/{id}/end` | → `{status, outcome}` |
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |

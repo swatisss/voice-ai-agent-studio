@@ -179,8 +179,12 @@ async def test_text_and_simulation_behave_identically(client, seeded, fake_llm):
     assert strip(await _events(text_id)) == strip(await _events(call.id))
 
 
-async def test_unpublished_agent_and_wrong_channel(client, seeded):
+async def test_unpublished_agent_and_wrong_channel(client, seeded, monkeypatch):
     """Covers: API-01, API-02, API-03"""
+    from voiceai.config import get_settings
+
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "dg-test")  # a voice call needs a usable key to be admitted (ADM-02)
+    get_settings.cache_clear()
     async with sessionmaker()() as s:
         a = Agent(tenant_id="evergreen-care", name="Draft only", draft_config={})
         s.add(a)

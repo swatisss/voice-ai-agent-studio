@@ -90,7 +90,7 @@ Live controls on the Test call page for turn detection and persona ([/architectu
 * `models.speech`: `null` (role default) or a speech model ref; chat models are rejected.
 * Model IDs, voices, the transcription model and prices live only in `apps/api/config/models.yaml`; the model ID is Pipecat 1.12's default Realtime model and the prices are placeholders to confirm in the OpenAI console (spike S4 could not reach it).
 * `OPENAI_REALTIME_URL` (default `wss://api.openai.com/v1/realtime`) overrides the endpoint, for tests and proxies.
-* The OpenAI key for a realtime call is resolved per tenant: the tenant's own key, else the platform `OPENAI_API_KEY` when the tenant allows the fallback ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)). No usable key → the voice socket closes with 4500 `voice_unavailable`, the API stays healthy (RV-03). `DEEPGRAM_API_KEY` is not needed for a realtime agent.
+* The OpenAI key for a realtime call is resolved per tenant: the tenant's own key, else the platform `OPENAI_API_KEY` when the tenant allows the fallback ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)); the source is chosen once per call by [call admission](/architecture/call-admission.md). No usable key → the voice socket closes with 4500 `voice_unavailable`, the API stays healthy (RV-03). `DEEPGRAM_API_KEY` is not needed for a realtime agent.
 
 # Cost
 

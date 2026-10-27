@@ -63,4 +63,11 @@ async def effective_settings(s: AsyncSession, call: Call) -> dict[str, Any]:
         row = await s.get(Persona, live["persona_id"])
         if row is not None and row.tenant_id == call.tenant_id:
             persona = persona_dict(row)
-    return settings_view(persona, effective_turn(config, live), pipeline_of(config), (call.meta or {}).get("openai_key_source"))
+    return settings_view(persona, effective_turn(config, live), pipeline_of(config), key_source(call.meta or {}, pipeline_of(config)))
+
+
+def key_source(meta: dict[str, Any], pipeline: str) -> str | None:
+    """RV-16, ADM-05: which OpenAI key a realtime call uses, known from the moment the call is admitted."""
+    if pipeline != "realtime":
+        return None
+    return ((meta.get("admission") or {}).get("credential_source")) or meta.get("openai_key_source")

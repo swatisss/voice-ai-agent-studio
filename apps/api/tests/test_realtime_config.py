@@ -1,6 +1,6 @@
 """Pipeline and telephony settings, the speech role, runtime methods for externally driven turns and realtime evaluation.
 
-Covers: RV-01, RV-14, RV-15, DM-06, LG-12, LG-13, RT-10, DEP-04
+Covers: RV-01, RV-14, RV-15, DM-06, LG-12, LG-13, DEP-04
 """
 from __future__ import annotations
 
@@ -107,37 +107,6 @@ async def _session(seeded, agent_key: str = "care") -> AgentSession:
         call = await create_call(s, "evergreen-care", seeded[agent_key]["agent_id"], "voice")
         await s.commit()
     return await AgentSession.open(call.id, "evergreen-care")
-
-
-async def test_run_tool_matches_the_turn_loop(client, seeded, fake_llm):
-    """Covers: RT-10"""
-    verify = ("verify_member", {"member_id": "482913", "date_of_birth": "1986-04-12"})
-    claim = ("get_claim_status", {"claim_id": "C-20931"})
-    fake_llm(script(FakeReply(tool_calls=[claim]), FakeReply(tool_calls=[verify]), FakeReply(tool_calls=[claim]), FakeReply(text="Paid.")))
-    text_call = await _session(seeded)
-    await text_call.start()
-    await text_call.reply("What about claim C-20931?")
-    async with sessionmaker()() as s:
-        loop_events = [(e.kind, (e.data or {}).get("name"), (e.data or {}).get("ok")) for e in
-                       (await s.scalars(select(CallEvent).where(CallEvent.call_id == text_call.call_id, CallEvent.kind.in_(("tool_call", "tool_result"))).order_by(CallEvent.seq))).all()]
-    driven = await _session(seeded)
-    await driven.start()
-    blocked = await driven.run_tool("get_claim_status", {"claim_id": "C-20931"})
-    assert "identity_not_verified" in blocked
-    await driven.run_tool("verify_member", {"member_id": "482913", "date_of_birth": "1986-04-12"})
-    assert driven.state.verified_member_ref == "EVG-482913"
-    assert "paid" in (await driven.run_tool("get_claim_status", '{"claim_id": "C-20931"}')).lower()
-    async with sessionmaker()() as s:
-        driven_events = [(e.kind, (e.data or {}).get("name"), (e.data or {}).get("ok")) for e in
-                         (await s.scalars(select(CallEvent).where(CallEvent.call_id == driven.call_id, CallEvent.kind.in_(("tool_call", "tool_result"))).order_by(CallEvent.seq))).all()]
-    assert loop_events[:2] == driven_events[:2] and loop_events[0] == ("tool_call", "get_claim_status", None)
-    assert driven_events[1][2] is False  # the gate blocked it in both channels
-
-    await driven.record_turn("thanks", "You're welcome.", latency_ms=420, usage=Usage(input_tokens=100, output_tokens=20, cost_usd=0.01))
-    assert driven.state.turns == 1 and driven.state.tokens_in == 100 and driven.state.latencies_ms == [420]
-    async with sessionmaker()() as s:
-        kinds = [e.kind for e in (await s.scalars(select(CallEvent).where(CallEvent.call_id == driven.call_id).order_by(CallEvent.seq))).all()]
-    assert kinds[-2:] == ["user", "assistant"]
 
 
 async def test_realtime_agent_is_evaluated_on_the_text_brain(client, seeded, fake_llm):

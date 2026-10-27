@@ -1,6 +1,6 @@
 """AgentSession - the shared brain for voice, text and simulation channels.
 
-Spec: /architecture/agent-runtime.md, /architecture/escalation.md (Triggers), /architecture/realtime-voice.md (externally driven turns)
+Spec: /architecture/agent-runtime.md (Turn policy), /architecture/escalation.md (Triggers), /architecture/realtime-voice.md
 """
 from __future__ import annotations
 
@@ -37,18 +37,37 @@ FILLER = "One moment while I check that."
 APOLOGY_OUTAGE = "I'm sorry, I'm having trouble right now. Let me connect you with someone who can help."
 APOLOGY_TOOLS = "I'm sorry, I wasn't able to finish looking that up."
 GOODBYE = endings.GOODBYE
+HANDOFF_DEFAULT = "I'm connecting you with a specialist."
+HOLDING_DEFAULT = "A specialist will be with you shortly."
 
 REGISTRY: dict[str, AgentSession] = {}
 
 
 @dataclass
-class Directive:
+class _Rule:
     """A fixed line the runtime says instead of asking a model (holding, farewell, safety) and how the call goes on."""
 
     text: str
     end_reason: str | None = None                  # end the session with this reason once the line was spoken
     escalate: tuple[str, str] | None = None        # (category, detail) to escalate with
     data: dict[str, Any] | None = None
+
+
+@dataclass
+class Decision:
+    """What a channel whose model speaks for itself does next (/architecture/agent-runtime.md, Turn policy).
+
+    `say` is an exact line the channel speaks verbatim, replacing anything the model was saying; the channel passes
+    the decision to AgentSession.commit() first, which records the line (a caller-turn line is recorded only then, so a
+    model reply cut off for it is stored before it). With `end`, the call ends with that reason once the line was spoken.
+    """
+
+    say: str | None = None
+    end: str | None = None
+    model_turn: bool = False      # let the model answer (or, after tools, continue its turn)
+    output: str | None = None     # a tool call's JSON result
+    refresh: bool = False         # the prompt changed (verification): rebuild the model's instructions
+    rule: _Rule | None = None     # a caller-turn rule whose line commit() still has to record
 
 
 def _trim_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -114,6 +133,7 @@ class AgentSession:
         self.seq = seq
         self.tools = ToolExecutor(self.tenant_id, self.call_id, config.get("tools", []), self.state, app)
         self._lock = asyncio.Lock()
+        self._tool_rounds = 0  # tool calls in the current caller turn of an externally driven channel (RT-12)
 
     # ------------------------------------------------------------ loading
     @classmethod
@@ -252,39 +272,107 @@ class AgentSession:
         await self._persist()
         return text
 
-    # ------------------------------------------------------------ externally driven turns (RT-10)
-    # A channel whose model produces the words itself (the realtime speech-to-speech pipeline) drives the session with
-    # these methods instead of respond(). The rules are the ones _turn() applies; the model call is the only difference.
-    async def record_user(self, text: str) -> str:
-        """Store a final caller transcript: increments turns, adds the `user` event."""
+    # ------------------------------------------------------------ turn policy (RT-11…RT-15)
+    # A channel whose model produces the words itself (the realtime speech-to-speech pipeline) reports events and gets
+    # decisions back. The rules are the ones _turn() applies with the platform's own text model.
+    async def caller_turn(self, text: str) -> Decision:
+        """A final caller transcript (RT-11): recorded, then the rules that run before any model reply."""
         text = text.strip()
-        self.state.turns += 1
-        self.history.append({"role": "user", "content": text})
-        await self._event("user", text)
-        return text
+        if not text or self.state.ended:
+            return Decision()
+        self._tool_rounds = 0
+        await self._record_user(text)
+        rule = self._caller_rule(text)
+        if rule is None:
+            return Decision(model_turn=True)
+        return Decision(say=rule.text, end=rule.end_reason, rule=rule)
 
-    async def screen(self, text: str) -> Directive | None:
+    async def commit(self, decision: Decision) -> Decision:
+        """Record a decision's line (and its escalation) once the channel has stopped the model; idempotent."""
+        if decision.rule is not None:
+            rule, decision.rule = decision.rule, None
+            await self._apply_rule(rule)
+        return decision
+
+    async def tool_requested(self, name: str, arguments: str | dict[str, Any], call_id: str | None = None) -> Decision:
+        """One tool call (RT-12): the round limit, then the gate, execution, events, state and escalation of _turn()."""
+        self._tool_rounds += 1
+        if self._tool_rounds > MAX_TOOL_ROUNDS:
+            return Decision(output=json.dumps({"error": "tool_round_limit"}))
+        raw = arguments if isinstance(arguments, str) else json.dumps(arguments)
+        before = self.state.verified_member_ref
+        async with self._lock:
+            output = await self._run_tool(call_id or new_id()[:12], name, raw or "{}")
+        return Decision(output=output, refresh=self.state.verified_member_ref != before)
+
+    async def reply_finished(self, text: str, latency_ms: int | None = None, usage: Usage | None = None,
+                             interrupted: bool = False, decide: bool = True) -> Decision:
+        """A model reply ended (RT-13, RT-14): recorded with its usage; with `decide`, the post-turn rules.
+
+        A reply that only carried a fixed line, was cut off, or still has tool calls running is recorded with
+        `decide=False`; tool calls are followed up by tools_finished().
+        """
+        await self._record_reply(text, latency_ms, usage, interrupted)
+        if not decide:
+            return Decision()
+        handoff = await self._post_turn_handoff()
+        if handoff:
+            return Decision(say=handoff, end="handoff")
+        return await self._end_call_decision(spoke=bool(text.strip()))
+
+    async def tools_finished(self, spoke: bool) -> Decision:
+        """The tool calls of a model reply have all returned (RV-09): hand off, close, or let the model continue."""
+        if self.state.escalated:  # the model called escalate_to_human: the hand-off message, then the call ends
+            return Decision(say=await self.announce(self._handoff_line(), {"handoff": True}), end="handoff")
+        if self.state.end_requested:
+            return await self._end_call_decision(spoke)
+        return Decision(model_turn=True)
+
+    # -- the rules, shared by the policy and _turn()
+    def _handoff_line(self) -> str:
+        return self.config.get("policy", {}).get("handoff_message") or HANDOFF_DEFAULT
+
+    def _caller_rule(self, text: str) -> _Rule | None:
         """The deterministic rules that run before any model reply (RT-02, CE-02, ES-01); None = let the model answer."""
         policy = self.config.get("policy", {})
         if self.state.escalated:
-            return Directive(policy.get("holding_message") or "A specialist will be with you shortly.")
+            return _Rule(policy.get("holding_message") or HOLDING_DEFAULT)
         if endings.is_farewell(text):
-            return Directive(GOODBYE, end_reason="farewell", data={"farewell": True})
+            return _Rule(GOODBYE, end_reason="farewell", data={"farewell": True})
         if policy.get("safety_screen", True) and escalation.safety_match(text):
-            return Directive(escalation.SAFETY_MESSAGE, end_reason="handoff", data={"safety": True},
-                             escalate=("safety", "Caller used emergency or self-harm language"))
+            return _Rule(escalation.SAFETY_MESSAGE, end_reason="handoff", data={"safety": True},
+                         escalate=("safety", "Caller used emergency or self-harm language"))
         return None
 
-    async def apply(self, directive: Directive) -> str:
-        """Record a directive's line (and its escalation); the caller speaks it and then ends the call itself."""
-        line = await self._say(directive.text, directive.data)
-        if directive.escalate:
-            await self.escalate(*directive.escalate)
+    async def _apply_rule(self, rule: _Rule) -> str:
+        line = await self._say(rule.text, rule.data)
+        if rule.escalate:
+            await self.escalate(*rule.escalate)
         await self._persist()
         return line
 
-    async def record_reply(self, text: str, latency_ms: int | None = None, usage: Usage | None = None, interrupted: bool = False) -> None:
-        """Store a completed (or interrupted) assistant reply with its latency and usage."""
+    async def _post_turn_handoff(self) -> str | None:
+        """Deterministic triggers after a reply (ES-02, ES-03, max turns): records the hand-off line and escalates."""
+        trigger = self._post_turn_trigger(self.config.get("policy", {}))
+        if not trigger or self.state.escalated:
+            return None
+        handoff = await self._say(self._handoff_line())
+        await self.escalate(*trigger)
+        await self._persist()
+        return handoff
+
+    async def _end_call_decision(self, spoke: bool) -> Decision:
+        """RT-14: after `end_call`, a goodbye only when the model said nothing itself."""
+        if not self.state.end_requested:
+            return Decision()
+        return Decision(say=None if spoke else await self.announce(GOODBYE), end="end_call")
+
+    async def _record_user(self, text: str) -> None:
+        self.state.turns += 1
+        self.history.append({"role": "user", "content": text})
+        await self._event("user", text)
+
+    async def _record_reply(self, text: str, latency_ms: int | None, usage: Usage | None, interrupted: bool) -> None:
         text = text.strip()
         if usage is not None:
             self.state.tokens_in += usage.input_tokens
@@ -301,30 +389,6 @@ class AgentSession:
         await self._event("assistant", text, {"latency_ms": latency_ms, "tokens_in": self.state.tokens_in, "tokens_out": self.state.tokens_out})
         await self._persist()
 
-    async def record_turn(self, user_text: str, assistant_text: str, latency_ms: int | None = None,
-                          usage: Usage | None = None, interrupted: bool = False) -> None:
-        """One caller turn and the reply to it, stored in order."""
-        await self.record_user(user_text)
-        await self.record_reply(assistant_text, latency_ms, usage, interrupted)
-
-    async def post_turn(self) -> str | None:
-        """Deterministic triggers after a reply (ES-02, ES-03, max turns): returns the hand-off line to speak, or None."""
-        policy = self.config.get("policy", {})
-        trigger = self._post_turn_trigger(policy)
-        if not trigger or self.state.escalated:
-            return None
-        handoff = policy.get("handoff_message") or "I'm connecting you with a specialist."
-        await self._say(handoff)
-        await self.escalate(*trigger)
-        await self._persist()
-        return handoff
-
-    async def run_tool(self, name: str, arguments: str | dict[str, Any], call_id: str | None = None) -> str:
-        """Run one tool call exactly as the turn loop does (gate, events, state, escalation) and return the JSON result."""
-        raw = arguments if isinstance(arguments, str) else json.dumps(arguments)
-        async with self._lock:
-            return await self._run_tool(call_id or new_id()[:12], name, raw or "{}")
-
     # ------------------------------------------------------------ turn
     async def respond(self, user_text: str) -> AsyncIterator[str]:
         async with self._lock:
@@ -339,30 +403,17 @@ class AgentSession:
         text = user_text.strip()
         if not text or self.state.ended:
             return
-        self.state.turns += 1
-        self.history.append({"role": "user", "content": text})
-        await self._event("user", text)
+        await self._record_user(text)
         policy = self.config.get("policy", {})
 
-        if self.state.escalated:  # RT-02
-            yield await self._say(policy.get("holding_message") or "A specialist will be with you shortly.")
-            await self._persist()
+        rule = self._caller_rule(text)  # RT-02 holding, CE-02 farewell, ES-01 safety: no model needed
+        if rule is not None:
+            yield await self._apply_rule(rule)
+            if rule.end_reason:
+                await self.end(rule.end_reason)  # CE-01, CE-02
             return
 
-        if endings.is_farewell(text):  # CE-02: no model needed to close a call the caller has finished
-            yield await self._say(GOODBYE, {"farewell": True})
-            await self._persist()
-            await self.end("farewell")
-            return
-
-        if policy.get("safety_screen", True) and escalation.safety_match(text):  # ES-01
-            yield await self._say(escalation.SAFETY_MESSAGE, {"safety": True})
-            await self.escalate("safety", "Caller used emergency or self-harm language")
-            await self._persist()
-            await self.end("handoff")  # CE-01
-            return
-
-        handoff = policy.get("handoff_message") or "I'm connecting you with a specialist."
+        handoff = self._handoff_line()
         override = (self.config.get("models") or {}).get("realtime")
         schemas = all_schemas(self.config.get("tools", []))
         spoken = ""
@@ -438,10 +489,9 @@ class AgentSession:
             self.history.append({"role": "assistant", "content": final})
             await self._event("assistant", final, {"latency_ms": first_chunk_ms, "tokens_in": self.state.tokens_in, "tokens_out": self.state.tokens_out})
 
-        trigger = self._post_turn_trigger(policy)
-        if trigger and not self.state.escalated:
-            yield await self._say(handoff)
-            await self.escalate(*trigger)
+        line = await self._post_turn_handoff()
+        if line:
+            yield line
         await self._persist()
         if self.state.escalated:  # a post-turn trigger fired this turn (an earlier escalation returned above)
             await self.end("handoff")  # CE-01

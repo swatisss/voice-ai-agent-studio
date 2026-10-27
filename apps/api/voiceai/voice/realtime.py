@@ -39,17 +39,15 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from voiceai import prompts
 from voiceai.live import LiveControls
 from voiceai.llm.gateway import Usage, gateway
-from voiceai.runtime import endings
 from voiceai.runtime.call_clock import CallClock
 from voiceai.runtime.prompt import system_prompt
-from voiceai.runtime.session import Directive, AgentSession
+from voiceai.runtime.session import AgentSession, Decision
 from voiceai.runtime.tools import all_schemas
 from voiceai.voice.turn_detection import TurnSettings
 
 log = logging.getLogger("voiceai.voice.realtime")
 
 RATE = 24000                      # PCM16 mono, both directions
-MAX_TOOL_ROUNDS = 4               # RV-05
 EXACT_PREFIX = "Say exactly the following text, word for word, and nothing else: "
 USER_RECORDED_WAIT_S = 2.0        # a reply is stored after the transcript of the turn it answers, but never waits longer
 FILLER_ON = "Before a tool call that may take a moment, say one short phrase such as 'One moment while I check that.'"
@@ -227,7 +225,6 @@ class RealtimeBridge(FrameProcessor):
         self._greeted = False
         self._closing = False
         self._ended = False
-        self._tool_rounds = 0
         self._exact_queue: list[str] = []  # lines asked for verbatim, in order (fallback when the service does not echo metadata)
         self._speech_stopped_at: float | None = None
         self._hold_pending = False
@@ -486,22 +483,25 @@ class RealtimeBridge(FrameProcessor):
         if not text:
             self._user_recorded.set()
             return
-        self._tool_rounds = 0
-        await self.session.record_user(text)
+        decision = await self.session.caller_turn(text)
         self._user_recorded.set()
-        directive = await self.session.screen(text)
-        if directive is not None:  # spawned: it waits for provider events this reader loop has to keep delivering
-            self._spawn(self._speak_directive(directive))
+        if decision.say is not None:  # spawned: it waits for provider events this reader loop has to keep delivering
+            self._spawn(self._replace_reply(decision))
 
-    async def _speak_directive(self, directive: Directive) -> None:
+    async def _replace_reply(self, decision: Decision) -> None:
         """RV-08: a fixed line replaces whatever the model was about to say."""
         await self._cancel_active(suppress=True)
-        line = await self.session.apply(directive)
-        if directive.end_reason:
+        await self._carry_out(decision)
+
+    async def _carry_out(self, decision: Decision) -> None:
+        """Speak a decision's exact line and, when it ends the call, close once the line was spoken."""
+        await self.session.commit(decision)
+        if decision.end:
             await self._begin_closing()
-        await self._say_exact(line)
-        if directive.end_reason:
-            self._spawn(self._finish(directive.end_reason))
+        if decision.say is not None:
+            await self._say_exact(decision.say)
+        if decision.end:
+            self._spawn(self._finish(decision.end))
 
     # ------------------------------------------------------------ tool calls
     def _on_function_call(self, evt: dict[str, Any]) -> None:
@@ -516,37 +516,22 @@ class RealtimeBridge(FrameProcessor):
 
     async def _run_call(self, resp: _Resp, call_id: str, name: str, arguments: str) -> None:
         await self._after_user_transcript(resp)
-        self._tool_rounds += 1
-        if self._tool_rounds > MAX_TOOL_ROUNDS:
-            output = json.dumps({"error": "tool_round_limit"})
-        else:
-            before = self.session.state.verified_member_ref
-            output = await self.session.run_tool(name, arguments, call_id)
-            if self.session.state.verified_member_ref != before:  # the prompt carries the verification status
-                await self._update_session()
-        await self._send({"type": "conversation.item.create", "item": {"type": "function_call_output", "call_id": call_id, "output": output}})
+        decision = await self.session.tool_requested(name, arguments, call_id)  # RV-05: gate and round limit
+        if decision.refresh:  # the prompt carries the verification status
+            await self._update_session()
+        await self._send({"type": "conversation.item.create", "item": {"type": "function_call_output", "call_id": call_id, "output": decision.output}})
 
     async def _after_tools(self, resp: _Resp, status: str, spoke: bool) -> None:
         await asyncio.gather(*resp.calls, return_exceptions=True)
         if self._closing or status == "cancelled":
             return
-        state = self.session.state
-        if state.escalated:  # RV-09: the hand-off message is spoken verbatim, then the call ends
-            policy = self.session.config.get("policy", {})
-            line = await self.session.announce(policy.get("handoff_message") or "I'm connecting you with a specialist.", {"handoff": True})
+        decision = await self.session.tools_finished(spoke)
+        if decision.model_turn:
+            await self._send({"type": "response.create"})
+            return
+        if decision.end == "handoff":  # RV-09: the hand-off message replaces anything still playing
             await self._cancel_active(suppress=False)
-            await self._begin_closing()
-            await self._say_exact(line)
-            self._spawn(self._finish("handoff"))
-            return
-        if state.end_requested:  # the model said goodbye and called end_call
-            await self._begin_closing()
-            if not spoke:
-                line = await self.session.announce(endings.GOODBYE)
-                await self._say_exact(line)
-            self._spawn(self._finish("end_call"))
-            return
-        await self._send({"type": "response.create"})
+        await self._carry_out(decision)
 
     # ------------------------------------------------------------ responses
     async def _on_response_done(self, response: dict[str, Any]) -> None:
@@ -563,37 +548,27 @@ class RealtimeBridge(FrameProcessor):
                 for part in item.get("content") or []:
                     resp.text += part.get("transcript") or ""
         spoke = bool(resp.text.strip())
+        decision = Decision()
         if resp.exact is not None or resp.suppressed:
-            await self.session.record_reply("", None, usage)  # the line itself was stored when the platform chose to say it
+            await self.session.reply_finished("", usage=usage, decide=False)  # the line was stored when the platform chose it
             if resp.exact is not None and self._welcoming and not self._welcome_response_done:
                 self._welcome_response_done = True
                 if self._welcome_spoken and not self._bot_speaking and not self._welcome_end:
                     self._welcome_end = asyncio.get_running_loop().call_later(self.WELCOME_GRACE_S, lambda: self._spawn(self._end_welcome()))
         else:
             await self._after_user_transcript(resp)
-            await self.session.record_reply(resp.text, resp.latency_ms, usage, interrupted=(status == "cancelled" and spoke))
+            decide = not resp.calls and status == "completed" and not self._closing  # ES-02, ES-03, max turns, end_call
+            decision = await self.session.reply_finished(
+                resp.text, resp.latency_ms, usage, interrupted=(status == "cancelled" and spoke), decide=decide,
+            )
         if self._hold_pending and not resp.calls and not self._closing:
             await self._respond_when_free()
         if resp.calls:
             self._spawn(self._after_tools(resp, status, spoke))
-        elif status == "completed" and resp.exact is None and not self._closing:
-            await self._after_reply(spoke)
+        elif decision.end:
+            await self._carry_out(decision)
         if self._active is None and not self._bot_speaking and not self._welcoming:
             self.clock.wait_for_caller(time.monotonic())
-
-    async def _after_reply(self, spoke: bool) -> None:
-        state = self.session.state
-        handoff = await self.session.post_turn()  # ES-02, ES-03, max turns
-        if handoff:
-            await self._begin_closing()
-            await self._say_exact(handoff)
-            self._spawn(self._finish("handoff"))
-        elif state.end_requested:
-            await self._begin_closing()
-            if not spoke:
-                line = await self.session.announce(endings.GOODBYE)
-                await self._say_exact(line)
-            self._spawn(self._finish("end_call"))
 
     async def _cancel_active(self, suppress: bool) -> None:
         rid = self._active

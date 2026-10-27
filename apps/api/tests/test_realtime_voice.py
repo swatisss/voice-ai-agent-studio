@@ -385,7 +385,10 @@ async def test_losing_the_provider_ends_the_call_with_an_escalation(client, seed
     bridge, conn, session, ended = await build(seeded)
     await finish_welcome(bridge, conn)
     conn.feed(None)  # the provider closed the socket
-    await pump(bridge, 3)
+    for _ in range(250):  # the reader task notices it and escalates (a database write): wait for that, up to 5 s
+        if ended:
+            break
+        await pump(bridge, 1)
     assert ended == ["error"] and session.state.escalated
     async with sessionmaker()() as s:
         esc = (await s.scalars(select(Escalation).where(Escalation.call_id == session.call_id))).one()

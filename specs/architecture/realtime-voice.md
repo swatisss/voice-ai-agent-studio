@@ -44,12 +44,12 @@ The transport, serializers, welcome protection and ending logic are shared with 
 
 # What is reused from the shared runtime
 
-The realtime model replaces how audio becomes words and back. It does not replace the brain. The bridge drives the same `AgentSession` ([/architecture/agent-runtime.md](/architecture/agent-runtime.md)) through two methods, so the behavior rules are written once:
+The realtime model replaces how audio becomes words and back. It does not replace the brain. The bridge is an adapter over the same `AgentSession` turn policy ([/architecture/agent-runtime.md](/architecture/agent-runtime.md), Turn policy): it reports caller turns, finished replies and tool calls as events and carries out the decisions it gets back, so the behavior rules are written once:
 
 | Piece | In realtime mode |
 |---|---|
 | **System prompt** | The session instructions are the assembled system prompt of [/prompts/agent-system-prompt.md](/prompts/agent-system-prompt.md) (persona, mode instructions, policy, skills, call context) **plus** [/prompts/realtime-addendum.md](/prompts/realtime-addendum.md). Prompts are loaded verbatim from `specs/prompts/`; nothing is copied into code. |
-| **Tools** | Built-in tools and the agent's HTTP tools are given to the service as functions (same JSON schemas). A function call runs through `AgentSession.run_tool`, which applies the verification gate, executes the tool, records `tool_call`/`tool_result` events, updates call state and triggers escalation or ending exactly as in a text turn ([/architecture/tools-and-skills.md](/architecture/tools-and-skills.md)). At most **4** tool rounds per caller turn; a fifth call gets `{"error":"tool_round_limit"}`. |
+| **Tools** | Built-in tools and the agent's HTTP tools are given to the service as functions (same JSON schemas). A function call is reported to the session's turn policy, which applies the verification gate, executes the tool, records `tool_call`/`tool_result` events, updates call state and triggers escalation or ending exactly as in a text turn ([/architecture/tools-and-skills.md](/architecture/tools-and-skills.md)). At most **4** tool rounds per caller turn, counted by the session; a fifth call gets `{"error":"tool_round_limit"}`. When verification changes the prompt, the decision tells the bridge to refresh the service's instructions. |
 | **Knowledge** | `search_knowledge` is one of the tools; the agent's own documents only ([/architecture/knowledge.md](/architecture/knowledge.md)). |
 | **Transcripts and events** | The service's final user transcript becomes a `user` event and increments `turns`; each completed reply becomes an `assistant` event with `latency_ms` and usage. Fleet learning, the Calls page, escalation packets and feedback read these events and need no change. |
 | **Escalation** | `escalate_to_human` and the deterministic triggers ([/architecture/escalation.md](/architecture/escalation.md)) work unchanged. |

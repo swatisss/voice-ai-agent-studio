@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from collections.abc import Awaitable, Callable
 
 from fastapi import WebSocket
 from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -45,6 +45,56 @@ def make_transport(websocket: WebSocket, phone: PhoneStream | None, in_rate: int
     return transport, serializer
 
 
+class CallEnder:
+    """The end-of-call sequence shared by both pipelines: record the reason for the serializer, end the session,
+    transfer a phone call before its stream closes (TEL-07), then stop the pipeline."""
+
+    def __init__(self, session: AgentSession, serializer: RawPCMSerializer | PhoneSerializer, phone: PhoneStream | None) -> None:
+        self.session, self.serializer, self.phone = session, serializer, phone
+        self.task: PipelineTask | None = None
+
+    async def __call__(self, reason: str) -> None:
+        self.serializer.end_reason = reason
+        await self.session.end(reason)
+        if self.phone and self.phone.on_end:  # TEL-07: the transfer must happen before the stream closes
+            await self.phone.on_end(self.session, reason)
+        if self.task:
+            await self.task.queue_frame(EndFrame())
+
+
+async def run_call(
+    task: PipelineTask, transport: FastAPIWebsocketTransport, session: AgentSession, greet: Callable[[], Awaitable[None]],
+    shutdown: Callable[[], Awaitable[None]] | None = None, hangup_is_normal: bool = False,
+) -> None:
+    """Greet when the caller connects, end the session on hang-up, run the pipeline to its end.
+
+    With `hangup_is_normal`, the cancellation caused by the caller hanging up is a normal end rather than an error.
+    """
+    hung_up = False
+
+    @transport.event_handler("on_client_connected")
+    async def _connected(_transport, _ws) -> None:  # noqa: ANN001
+        await greet()
+
+    @transport.event_handler("on_client_disconnected")
+    async def _disconnected(_transport, _ws) -> None:  # noqa: ANN001
+        nonlocal hung_up
+        hung_up = True
+        await session.end("hangup")
+        await task.cancel()
+
+    runner = PipelineRunner(handle_sigint=False)
+    try:
+        await runner.run(task)
+    except asyncio.CancelledError:
+        if not (hangup_is_normal and hung_up):  # cancelled from outside: propagate
+            raise
+    finally:
+        if shutdown:
+            await shutdown()
+        await session.end("hangup")
+
+
 def build(
     websocket: WebSocket, session: AgentSession, deepgram_key: str, controls: LiveControls | None = None,
     phone: PhoneStream | None = None,
@@ -68,26 +118,17 @@ def build(
     )
     turns = TurnAggregator(controls, TurnEvaluator(), last_agent_text=lambda: last_agent_message(session), vad_stop_ms=int(settings.voice_vad_stop_secs * 1000))
 
-    task_holder: dict[str, Any] = {}
-
-    async def on_end(reason: str) -> None:
-        serializer.end_reason = reason
-        await session.end(reason)
-        if phone and phone.on_end:  # TEL-07: the transfer must happen before the stream closes
-            await phone.on_end(session, reason)
-        task = task_holder.get("task")
-        if task:
-            await task.queue_frame(EndFrame())
-
+    on_end = CallEnder(session, serializer, phone)
     brain = BrainProcessor(session, on_end, controls)
 
     async def apply_voice(voice: str, speed: float) -> None:  # live persona switch: next sentence uses the new voice
-        await task_holder["task"].queue_frame(TTSUpdateSettingsFrame(delta=DeepgramTTSService.Settings(voice=voice, speed=speed)))
+        if on_end.task:
+            await on_end.task.queue_frame(TTSUpdateSettingsFrame(delta=DeepgramTTSService.Settings(voice=voice, speed=speed)))
 
     controls.on_voice = apply_voice
     pipeline = Pipeline([transport.input(), vad, stt, turns, brain, tts, transport.output()])
     task = PipelineTask(pipeline, params=PipelineParams(audio_in_sample_rate=IN_RATE, audio_out_sample_rate=OUT_RATE))
-    task_holder["task"] = task
+    on_end.task = task
     return task, transport, brain, serializer
 
 
@@ -100,23 +141,7 @@ def last_agent_message(session: AgentSession) -> str | None:
 
 async def run(websocket: WebSocket, session: AgentSession, deepgram_key: str, controls: LiveControls | None = None, phone: PhoneStream | None = None) -> None:
     task, transport, brain, _ = build(websocket, session, deepgram_key, controls, phone)
-
-    @transport.event_handler("on_client_connected")
-    async def _connected(_transport, _ws) -> None:  # noqa: ANN001
-        await brain.greet()
-
-    @transport.event_handler("on_client_disconnected")
-    async def _disconnected(_transport, _ws) -> None:  # noqa: ANN001
-        await session.end("hangup")
-        await task.cancel()
-
-    runner = PipelineRunner(handle_sigint=False)
-    try:
-        await runner.run(task)
-    except asyncio.CancelledError:
-        raise
-    finally:
-        await session.end("hangup")
+    await run_call(task, transport, session, brain.greet)
 
 
 def build_realtime(
@@ -125,21 +150,11 @@ def build_realtime(
 ) -> tuple[PipelineTask, FastAPIWebsocketTransport, RealtimeBridge, RawPCMSerializer | PhoneSerializer]:
     """The speech-to-speech pipeline: transport in, RealtimeBridge, transport out (RV-02). No network here."""
     transport, serializer = make_transport(websocket, phone, REALTIME_RATE if phone else IN_RATE, REALTIME_RATE)
-    task_holder: dict[str, Any] = {}
-
-    async def on_end(reason: str) -> None:
-        serializer.end_reason = reason
-        await session.end(reason)
-        if phone and phone.on_end:
-            await phone.on_end(session, reason)
-        task = task_holder.get("task")
-        if task:
-            await task.queue_frame(EndFrame())
-
+    on_end = CallEnder(session, serializer, phone)
     bridge = RealtimeBridge(session, controls, conn, on_end, send_ready=phone is None)
     pipeline = Pipeline([transport.input(), bridge, transport.output()])
     task = PipelineTask(pipeline, params=PipelineParams(audio_in_sample_rate=REALTIME_RATE if phone else IN_RATE, audio_out_sample_rate=REALTIME_RATE))
-    task_holder["task"] = task
+    on_end.task = task
     return task, transport, bridge, serializer
 
 
@@ -149,26 +164,5 @@ async def run_realtime(
     """Open the provider socket first (RV-13: a failure here becomes close code 4500 in the caller), then run the call."""
     conn = await connector()
     task, transport, bridge, _ = build_realtime(websocket, session, controls, conn, phone)
-
-    @transport.event_handler("on_client_connected")
-    async def _connected(_transport, _ws) -> None:  # noqa: ANN001
-        await bridge.greet()
-
-    hung_up = False
-
-    @transport.event_handler("on_client_disconnected")
-    async def _disconnected(_transport, _ws) -> None:  # noqa: ANN001
-        nonlocal hung_up
-        hung_up = True
-        await session.end("hangup")
-        await task.cancel()
-
-    runner = PipelineRunner(handle_sigint=False)
-    try:
-        await runner.run(task)
-    except asyncio.CancelledError:
-        if not hung_up:  # cancelled from outside: propagate; the caller hanging up cancels our own pipeline, which is a normal end
-            raise
-    finally:
-        await bridge.shutdown()
-        await session.end("hangup")
+    # the caller hanging up cancels our own pipeline, which is a normal end for the realtime call
+    await run_call(task, transport, session, bridge.greet, shutdown=bridge.shutdown, hangup_is_normal=True)

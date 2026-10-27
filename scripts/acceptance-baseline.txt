@@ -58,6 +58,10 @@ VO-03
 # against a locally served build on 2026-10-16; there is no browser test harness yet)
 UI-38
 UI-39
+# CP-0014 Settings page and builder Realtime card: no browser harness here; the API behind both was exercised against a running
+# server on 2026-10-27 and the web build passes. Click-through in the browser still to be done by the reviewer.
+UI-40
+UI-41
 # fake_twilio.py against a running server with provider keys: run by hand as in /build/runbook-phone.md (its path is also exercised
 # without the script by tests/test_telephony.py::test_phone_call_runs_end_to_end_through_the_pipeline)
 TEL-09

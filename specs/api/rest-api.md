@@ -22,14 +22,22 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | GET | `/api/tenants` | `{items: [{id, name, industry}]}` |
 | GET | `/api/models` | `{roles: {realtime: "<ref>", ...}, selectable: ["<ref>", ...]}` |
 
+## Tenant settings
+| Method | Path | Body → Result |
+|---|---|---|
+| GET | `/api/tenant-settings` | `{allowed_pipelines: ["cascade", ...], openai: {key_set, key_last4, key_updated_at, platform_fallback}}` ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)) |
+| PUT | `/api/tenant-settings` | `{allowed_pipelines?, openai_platform_fallback?}` → settings; 422 if `allowed_pipelines` is empty, lacks `cascade` or has an unknown value; 409 `pipeline_in_use` (`detail` names the agents) when dropping a pipeline an agent still uses |
+| PUT | `/api/tenant-settings/openai-key` | `{api_key}` → `{key_set: true, key_last4, key_updated_at}`; 422 `invalid_key`; 503 `secrets_unavailable`. The key is never returned |
+| DELETE | `/api/tenant-settings/openai-key` | → 204 |
+
 ## Agents
 | Method | Path | Body → Result |
 |---|---|---|
 | GET | `/api/agents` | `{items: [{id, name, description, mode, published_version, updated_at}]}` |
 | POST | `/api/agents` | `{name, description, draft_config?}` → agent (default config filled in) |
 | GET | `/api/agents/{id}` | `{id, name, description, draft_config, published_version: {id, version, created_at} \| null}` |
-| PUT | `/api/agents/{id}` | `{name?, description?, draft_config?}` → agent (validated per [/data/agent-config.md](/data/agent-config.md)) |
-| POST | `/api/agents/{id}/publish` | `{change_note?}` → `{id, version, created_at}`; 422 on validation failure |
+| PUT | `/api/agents/{id}` | `{name?, description?, draft_config?}` → agent (validated per [/data/agent-config.md](/data/agent-config.md); 422 `pipeline_not_allowed`) |
+| POST | `/api/agents/{id}/publish` | `{change_note?}` → `{id, version, created_at}`; 422 on validation failure, including `pipeline_not_allowed` |
 | GET | `/api/agents/{id}/versions` | `{items: [{id, version, change_note, source_proposal_id, created_at}]}` |
 | GET | `/api/agents/{id}/scenarios` | `{items: [eval_scenario]}` |
 
@@ -41,7 +49,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | PUT | `/api/personas/{id}` | persona fields → persona |
 | DELETE | `/api/personas/{id}` | 204; 409 `persona_in_use` while an agent draft references it |
 
-`settings` (in call responses and `GET /api/calls/{id}`): `{pipeline: "cascade"|"realtime", persona: {id, name, voice, speed}, turn_detection: {...}}`, the effective values after overrides.
+`settings` (in call responses and `GET /api/calls/{id}`): `{pipeline: "cascade"|"realtime", persona: {id, name, voice, speed}, turn_detection: {...}, openai_key_source?: "tenant"|"platform"}`, the effective values after overrides; `openai_key_source` is present on voice calls of the realtime pipeline once connected.
 
 ## Tools, skills, knowledge
 | Method | Path | Body → Result |
@@ -61,7 +69,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Calls
 | Method | Path | Body → Result |
 |---|---|---|
-| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings}` (`settings`: `{pipeline, persona, turn_detection}`); 409 if agent unpublished. For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
+| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings}` (`settings`: `{pipeline, persona, turn_detection}`); 409 if agent unpublished; for `voice`, 409 `pipeline_not_allowed` when the published version's pipeline is not allowed for the tenant. For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
 | POST | `/api/calls/{id}/messages` | `{text}` → `{reply, call_status, ended, escalated}` (text channel only) |
 | POST | `/api/calls/{id}/end` | → `{status, outcome}` |
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |

@@ -81,7 +81,7 @@ The snapshot carries `persona` (resolved, with `id` when from the library), `voi
 
 | Field | Rules |
 |---|---|
-| `voice.pipeline` | `cascade` (default when absent) or `realtime` ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)); anything else → 422 |
+| `voice.pipeline` | `cascade` (default when absent) or `realtime` ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)); anything else → 422; a value the tenant's `allowed_pipelines` does not contain → 422 `pipeline_not_allowed` ([/architecture/tenant-settings.md](/architecture/tenant-settings.md), MT-06) |
 | `voice.realtime.voice` | `null` (the `speech` role's first voice) or one of the voices the role lists; the persona's Deepgram voice is ignored in realtime mode; an unknown voice → 422 |
 | `telephony.transfer_to` | `null` or an E.164 number (`^\+[1-9][0-9]{6,14}$`) or a `sip:` URI; where a live phone call is redirected after a hand-off ([/architecture/telephony.md](/architecture/telephony.md)); anything else → 422 |
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bootstrap a clone on any machine (Windows, macOS, Linux).
 
-Spec: /process/sdd-workflow.md (Onboarding, SDD-09), /build/runbook-local.md
+Spec: /process/sdd-workflow.md (Onboarding, SDD-09), /build/runbook-local.md, /architecture/tenant-settings.md
 
     python scripts/setup.py             # hooks + apps/api/.env + prerequisite report + spec check
     python scripts/setup.py --install   # also: uv sync (backend) and npm ci (web)
@@ -11,6 +11,9 @@ Stdlib only. On Windows without a `python` command use `py -3 scripts/setup.py`.
 from __future__ import annotations
 
 import argparse
+import base64
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -39,8 +42,24 @@ def ensure_env(root: Path = ROOT) -> str:
         return "exists"
     if not example.exists():
         return "missing-example"
-    shutil.copyfile(example, env)
+    text = example.read_text(encoding="utf-8")
+    # /architecture/tenant-settings.md: a fresh .env gets its own key for tenants' stored provider keys
+    text = re.sub(r"(?m)^TENANT_SECRETS_KEY=.*$", f"TENANT_SECRETS_KEY={new_secrets_key()}", text)
+    env.write_text(text, encoding="utf-8")
     return "created"
+
+
+SECRETS_KEY_HINT = 'cd apps/api && uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+
+
+def new_secrets_key() -> str:
+    """A Fernet key (32 url-safe base64 bytes), the format TENANT_SECRETS_KEY expects."""
+    return base64.urlsafe_b64encode(os.urandom(32)).decode()
+
+
+def has_secrets_key(root: Path = ROOT) -> bool:
+    env = root / "apps" / "api" / ".env"
+    return env.exists() and re.search(r"(?m)^TENANT_SECRETS_KEY=\S", env.read_text(encoding="utf-8")) is not None
 
 
 def uv_command() -> list[str] | None:
@@ -68,6 +87,9 @@ def main() -> int:
     print({"created": "  created apps/api/.env - add GROQ_API_KEY and DEEPGRAM_API_KEY",
            "exists": "  apps/api/.env already exists (left untouched)",
            "missing-example": "  ! apps/api/.env.example not found"}[state])
+    if state == "exists" and not has_secrets_key():
+        print("  note: no TENANT_SECRETS_KEY (needed to store tenants' own OpenAI keys); generate one with")
+        print(f"    {SECRETS_KEY_HINT}")
 
     print("3. Prerequisites")
     ok_py = sys.version_info >= (3, 9)

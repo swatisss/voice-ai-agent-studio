@@ -22,6 +22,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 4. Knowledge search, clustering and evaluation operate within one tenant and one agent.
 5. Events are delivered only to subscribers of the same tenant.
 6. Tools always send `X-Tenant-Id`; the mock API serves both demo tenants from separate data sets.
+7. A tenant's settings and stored credentials apply only to that tenant's agents and calls; a tenant's OpenAI key is never used for another tenant's call and is never returned by the API ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)).
 
 # Acceptance
 

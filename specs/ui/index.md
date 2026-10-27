@@ -8,4 +8,5 @@
 * [Test call](test-call.md) - Pick an agent, talk or type to it with a live transcript; spoken welcome in voice; technical details on demand
 * [Calls](calls.md) - Call explorer and call detail with transcript, packet and analysis
 * [Agent console](agent-console.md) - Human escalation queue with groundwork packets
+* [Settings](settings.md) - Allow the realtime voice pipeline and manage the business unit's own OpenAI key
 * [Insights](insights.md) - Clusters, fix proposals, evaluation results and approval

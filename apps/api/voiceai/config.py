@@ -1,6 +1,6 @@
 """Application settings from environment variables and `.env`.
 
-Spec: /architecture/deployment.md, /architecture/llm-gateway.md, /architecture/knowledge.md
+Spec: /architecture/deployment.md, /architecture/llm-gateway.md, /architecture/knowledge.md, /architecture/tenant-settings.md
 """
 from __future__ import annotations
 
@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     twilio_api_base: str = "https://api.twilio.com"
     twilio_validate_signature: bool = True
     public_base_url: str | None = None
+    # Fernet key that encrypts tenants' own provider keys (/architecture/tenant-settings.md)
+    tenant_secrets_key: str | None = None
     llm_fake: bool = False
     # per-role model overrides (/architecture/llm-gateway.md, LG-06/LG-07); a real env var of the same name wins in the gateway
     llm_role_realtime: str | None = None

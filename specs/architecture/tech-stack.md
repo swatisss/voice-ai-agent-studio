@@ -20,6 +20,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | Embeddings | `fastembed` with `BAAI/bge-small-en-v1.5` (384-d, local CPU); deterministic `hash` embedder for tests |
 | Vector search | NumPy cosine similarity in-process ([/decisions/adr-0004-storage-and-vectors.md](/decisions/adr-0004-storage-and-vectors.md)) |
 | Voice | `pipecat-ai` with extras `deepgram`, `silero`, `websocket`, plus the extras for the OpenAI Realtime service and the Twilio serializer (names confirmed in spike S4) |
+| Secrets at rest | `cryptography` (Fernet) for tenants' stored provider keys ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)) |
 | Docs parsing | `pypdf` for PDFs; stdlib `html.parser` for URLs; `pyyaml` for frontmatter |
 | Tests | `pytest`, `pytest-asyncio`, fake LLM provider |
 

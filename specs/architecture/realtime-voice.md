@@ -14,7 +14,7 @@ The default voice pipeline is a cascade: speech-to-text, then the text brain, th
 | | `cascade` (default) | `realtime` |
 |---|---|---|
 | Models | Deepgram STT, text LLM role `realtime`, Deepgram TTS | one OpenAI Realtime model (gateway role `speech`) |
-| Keys needed | `DEEPGRAM_API_KEY` + an LLM key | `OPENAI_API_KEY` only |
+| Keys needed | `DEEPGRAM_API_KEY` + an LLM key | an OpenAI key only: the tenant's own, or the platform `OPENAI_API_KEY` ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)) |
 | Who decides the words | the text brain, sentence by sentence | the speech model, within our prompt |
 | Turn end | our TurnAggregator (normal or semantic) | the service's server-side turn detection, configured from the same settings |
 | Voice | persona voice (Deepgram Aura) | `voice.realtime.voice` (an OpenAI voice) |
@@ -25,7 +25,7 @@ Choice and rationale: [/decisions/adr-0008-telephony-and-realtime-voice.md](/dec
 
 # Selecting the pipeline
 
-`voice.pipeline` in the agent config ([/data/agent-config.md](/data/agent-config.md)): `cascade` (default, also when the field is absent) or `realtime`. It is part of the published version snapshot, so a call uses the pipeline of the version it runs. The voice WebSocket for browser calls ([/api/voice-protocol.md](/api/voice-protocol.md)) and the Twilio stream ([/architecture/telephony.md](/architecture/telephony.md)) pick the pipeline from the call's version; the wire formats do not change, which is why a realtime agent can be tried from the Test call page before any phone is involved.
+`voice.pipeline` in the agent config ([/data/agent-config.md](/data/agent-config.md)): `cascade` (default, also when the field is absent) or `realtime`. `realtime` is available only to tenants whose settings allow it; save, publish and call start enforce this ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)). It is part of the published version snapshot, so a call uses the pipeline of the version it runs. The voice WebSocket for browser calls ([/api/voice-protocol.md](/api/voice-protocol.md)) and the Twilio stream ([/architecture/telephony.md](/architecture/telephony.md)) pick the pipeline from the call's version; the wire formats do not change, which is why a realtime agent can be tried from the Test call page before any phone is involved.
 
 # Topology
 
@@ -90,7 +90,7 @@ Live controls on the Test call page for turn detection and persona ([/architectu
 * `models.speech`: `null` (role default) or a speech model ref; chat models are rejected.
 * Model IDs, voices, the transcription model and prices live only in `apps/api/config/models.yaml`; the model ID is Pipecat 1.12's default Realtime model and the prices are placeholders to confirm in the OpenAI console (spike S4 could not reach it).
 * `OPENAI_REALTIME_URL` (default `wss://api.openai.com/v1/realtime`) overrides the endpoint, for tests and proxies.
-* Missing `OPENAI_API_KEY` → the voice socket closes with 4500 `voice_unavailable`, the API stays healthy (RV-03). `DEEPGRAM_API_KEY` is not needed for a realtime agent.
+* The OpenAI key for a realtime call is resolved per tenant: the tenant's own key, else the platform `OPENAI_API_KEY` when the tenant allows the fallback ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)). No usable key → the voice socket closes with 4500 `voice_unavailable`, the API stays healthy (RV-03). `DEEPGRAM_API_KEY` is not needed for a realtime agent.
 
 # Cost
 
@@ -112,7 +112,7 @@ The service reports token usage per response, split into text and audio tokens. 
 
 - **RV-01** — Given an agent config with `voice.pipeline: "realtime"` or `"cascade"` or no value, when saved, then it is accepted and absent means `cascade`; any other value returns 422; the value is part of the published version snapshot.
 - **RV-02** — Given a published realtime agent and a published cascade agent, when each opens its voice socket, then the realtime agent builds the realtime pipeline (no Deepgram service constructed) and the cascade agent builds the unchanged Deepgram pipeline; the wire protocol of the browser socket is identical for both.
-- **RV-03** — Given a realtime agent and `OPENAI_API_KEY` unset, when its voice socket opens, then it closes with 4500 `voice_unavailable` and `/healthz` stays `ok`; with `DEEPGRAM_API_KEY` unset and `OPENAI_API_KEY` set the same agent connects.
+- **RV-03** — Given a realtime agent whose tenant has no OpenAI key of its own and `OPENAI_API_KEY` unset, when its voice socket opens, then it closes with 4500 `voice_unavailable` and `/healthz` stays `ok`; with `DEEPGRAM_API_KEY` unset and `OPENAI_API_KEY` set the same agent connects.
 - **RV-04** — Given a realtime call, when the session is configured, then its instructions equal the assembled system prompt for that agent version followed by the realtime addendum, and its function list equals the built-in tools plus the agent's tools with the same schemas as the text channel.
 - **RV-05** — Given a function call from the service for a tool marked `requires_verification` on an unverified call, then no business-API request is made, the model receives `identity_not_verified`, and the `tool_call` and `tool_result` events are stored in order; after `verify_member` succeeds the same tool runs; a fifth tool call in one turn returns `tool_round_limit`.
 - **RV-06** — Given a final user transcript and the completed reply, then a `user` event and an `assistant` event (with `latency_ms`) are stored in order and `turns` increases by one; a reply cut off by the caller is stored with the `[interrupted]` suffix.
@@ -124,4 +124,5 @@ The service reports token usage per response, split into text and audio tokens. 
 - **RV-12** — Given a response with reported usage of text and audio tokens, then the call's `tokens_in`, `tokens_out` and `llm_cost_usd` increase by the cost computed from the speech model's text and audio prices.
 - **RV-13** — Given the provider socket fails to open, then the voice socket closes with 4500; given it drops mid-call, then the call ends with reason `error` and is escalated with category `other`.
 - **RV-15** — Given a running realtime call, when `PATCH /api/calls/{id}/live` is sent, then the response is 409 `realtime_pipeline` and nothing changes; the same request on a cascade call still succeeds.
+- **RV-16** — Given two tenants that both allow realtime, tenant A with its own OpenAI key and tenant B without one and with fallback on, when each places a realtime call, then A's provider connection authenticates with A's key and B's with the platform key, and each call's `settings.openai_key_source` is `tenant` and `platform` respectively.
 - **RV-14** — Given a realtime agent, when an evaluation run is started, then the simulated calls use the text channel with the chat role `realtime`, no speech-model request is made, and the run summary carries `pipeline: "realtime"` and `fidelity: "text_approximation"`.

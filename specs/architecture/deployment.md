@@ -29,7 +29,7 @@ One container image (multi-stage `infra/Dockerfile`): stage 1 builds the web exp
 | `--timeout` | 3600 | long WebSocket voice calls and SSE |
 | `--session-affinity` | on | sticky WebSockets |
 | CPU / memory | 2 vCPU / 2 GiB | VAD + embeddings |
-| Secrets | Secret Manager → env `GROQ_API_KEY`, `DEEPGRAM_API_KEY`; optional `OPENROUTER_API_KEY`, `OPENAI_API_KEY` (needed by realtime agents), `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID` (all attached only when the secret exists) | |
+| Secrets | Secret Manager → env `GROQ_API_KEY`, `DEEPGRAM_API_KEY`; optional `OPENROUTER_API_KEY`, `OPENAI_API_KEY` (needed by realtime agents), `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID`, `TENANT_SECRETS_KEY` (encrypts tenants' own OpenAI keys, [/architecture/tenant-settings.md](/architecture/tenant-settings.md)) (all attached only when the secret exists) | |
 | Env | `AUTO_SEED=1`, `JOBS_ENABLED=1`, `CORS_ORIGINS=`, and for phone calls `PUBLIC_BASE_URL=<service URL>` | |
 
 Phone calls ([/architecture/telephony.md](/architecture/telephony.md)) need nothing beyond the table above: Twilio calls the public HTTPS service (`--allow-unauthenticated`; the webhook is protected by its signature, not by IAM), and each call is one long WebSocket held by the single instance. The 3600 s timeout bounds a call, `--no-cpu-throttling` keeps audio flowing between requests, and min instance 1 avoids a cold start on the first ring. How many concurrent calls a 2 vCPU instance holds, for each pipeline, is measured in spike S4 and recorded here when known.

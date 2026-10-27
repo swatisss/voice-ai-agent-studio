@@ -18,4 +18,5 @@
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios
 * [Jobs and events](jobs-and-events.md) - Background job queue and server-sent event bus
 * [Multi-tenancy](multi-tenancy.md) - Tenant resolution and isolation rules
+* [Tenant settings and credentials](tenant-settings.md) - Per-tenant voice pipeline allowlist and own OpenAI key for realtime calls
 * [Deployment](deployment.md) - Local dev and GCP Cloud Run topology

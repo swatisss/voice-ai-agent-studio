@@ -19,6 +19,7 @@ dependencies = [
     "pyyaml>=6.0",
     "python-multipart>=0.0.9",
     "pipecat-ai[deepgram,silero,websocket]>=1.0",
+    "cryptography>=43",
 ]
 
 [project.scripts]

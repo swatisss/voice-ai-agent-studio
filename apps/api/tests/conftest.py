@@ -21,6 +21,7 @@ os.environ.update({
     "TWILIO_ACCOUNT_SID": "",
     "TWILIO_AUTH_TOKEN": "",
     "PUBLIC_BASE_URL": "",
+    "TENANT_SECRETS_KEY": "",
     "WEB_DIST_DIR": str(_TMP / "no-web"),
 })
 

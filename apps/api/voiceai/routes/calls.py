@@ -1,6 +1,7 @@
 """Calls: create, text messages, end, explorer, detail, and the voice WebSocket.
 
-Spec: /api/rest-api.md (Calls), /api/voice-protocol.md, /architecture/agent-runtime.md, /architecture/realtime-voice.md
+Spec: /api/rest-api.md (Calls), /api/voice-protocol.md, /architecture/agent-runtime.md, /architecture/realtime-voice.md,
+/architecture/tenant-settings.md
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from voiceai.schemas import TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
 from voiceai.runtime.session import AgentSession, create_call
 from voiceai.tenancy import current_tenant, resolve_tenant
+from voiceai import tenant_settings
 
 log = logging.getLogger("voiceai.calls")
 router = APIRouter(prefix="/api")
@@ -93,6 +95,9 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
     if body.turn_detection:
         live["turn_detection"] = body.turn_detection.model_dump(exclude_none=True)
     call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None, context=body.context, app=request.app)
+    if body.channel == "voice":  # MT-08: the published version's pipeline must still be allowed
+        version = await s.get(AgentVersion, call.agent_version_id)
+        await tenant_settings.ensure_pipeline_allowed(s, tenant_id, version.config if version else {}, status=409)
     await s.commit()
     greeting = None
     if body.channel == "text":
@@ -243,10 +248,21 @@ async def serve_voice(websocket: WebSocket, tenant_id: str, call: Call, phone: A
     """
     async with sessionmaker()() as s:
         version = await s.get(AgentVersion, call.agent_version_id)
-    config = version.config if version else {}
-    kind = pipeline_of(config)
+        config = version.config if version else {}
+        kind = pipeline_of(config)
+        if kind not in await tenant_settings.allowed_pipelines(s, tenant_id):  # MT-08
+            await websocket.close(code=4500, reason="pipeline_not_allowed")
+            return
+        key: str | None = get_settings().deepgram_api_key
+        if kind == "realtime":  # MT-11: the tenant's own key, else the platform key if the tenant allows it
+            resolved = await tenant_settings.resolve_openai_key(s, tenant_id)
+            key = resolved[0] if resolved else None
+            if resolved:
+                row = await s.get(Call, call.id)
+                if row is not None:
+                    row.meta = {**(row.meta or {}), "openai_key_source": resolved[1]}  # RV-16
+                    await s.commit()
     g = gateway()
-    key = g.provider_key("openai") if kind == "realtime" else get_settings().deepgram_api_key
     if not key:  # VO-05, RV-03
         await websocket.close(code=4500, reason="voice_unavailable")
         return

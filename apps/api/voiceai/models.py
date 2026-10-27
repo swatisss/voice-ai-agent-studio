@@ -1,4 +1,4 @@
-"""ORM models - the 21 tables of the data model.
+"""ORM models - the 23 tables of the data model.
 
 Spec: /data/data-model.md
 """
@@ -31,6 +31,30 @@ class Tenant(Base):
     name: Mapped[str] = mapped_column(String(200))
     industry: Mapped[str] = mapped_column(String(100), default="")
     created_at: Mapped[datetime] = _created()
+
+
+class TenantSettings(Base):
+    """Per-tenant pipeline allowlist and key fallback; no row means the defaults (/architecture/tenant-settings.md)."""
+
+    __tablename__ = "tenant_settings"
+    tenant_id: Mapped[str] = mapped_column(String(64), ForeignKey("tenants.id"), primary_key=True)
+    allowed_pipelines: Mapped[list[str]] = mapped_column(JSON, default=lambda: ["cascade"])
+    openai_platform_fallback: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class TenantCredential(Base):
+    """A tenant's own provider key, Fernet-encrypted; the plain key is never stored (/architecture/tenant-settings.md)."""
+
+    __tablename__ = "tenant_credentials"
+    __table_args__ = (UniqueConstraint("tenant_id", "provider"),)
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    provider: Mapped[str] = mapped_column(String(32))
+    ciphertext: Mapped[str] = mapped_column(Text)
+    last4: Mapped[str] = mapped_column(String(4))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
 class Agent(Base):

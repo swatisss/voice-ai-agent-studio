@@ -26,7 +26,7 @@ from voiceai.jobs import worker
 from voiceai.mock.routes import router as mock_router
 from voiceai.models import Tenant
 from voiceai import telephony as telephony_helpers
-from voiceai.routes import agents, calls, console, dashboard, insights, knowledge, meta, personas, phone_numbers, telephony, usecases
+from voiceai.routes import agents, calls, console, dashboard, insights, knowledge, meta, personas, phone_numbers, telephony, tenant_settings, usecases
 from voiceai.runtime import app_ref, escalation
 
 log = logging.getLogger("voiceai")
@@ -66,6 +66,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     db.configure(settings.database_url)
     await db.init_db()
+    async with db.sessionmaker()() as s:  # MT-12: existing realtime agents stay on the air
+        from voiceai.tenant_settings import grandfather
+
+        if await grandfather(s):
+            await s.commit()
     app_ref.APP = app
     if settings.auto_seed:
         async with db.sessionmaker()() as s:
@@ -92,7 +97,7 @@ def create_app() -> FastAPI:
         allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
         allow_methods=["*"], allow_headers=["*"],
     )
-    for r in (meta.router, agents.router, personas.router, knowledge.router, calls.router, phone_numbers.router, telephony.router, usecases.router, console.router, insights.router, dashboard.router, mock_router):
+    for r in (meta.router, agents.router, personas.router, knowledge.router, calls.router, phone_numbers.router, telephony.router, tenant_settings.router, usecases.router, console.router, insights.router, dashboard.router, mock_router):
         app.include_router(r)
 
     @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

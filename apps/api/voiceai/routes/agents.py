@@ -1,6 +1,6 @@
 """Agents, versions, scenarios, tools and skills.
 
-Spec: /api/rest-api.md (Agents; Tools, skills), /data/agent-config.md
+Spec: /api/rest-api.md (Agents; Tools, skills), /data/agent-config.md, /architecture/tenant-settings.md
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from voiceai.errors import ApiError
 from voiceai.models import Agent, AgentVersion, EvalScenario, Skill, Tool
 from voiceai.schemas import SkillDef, ToolDef
 from voiceai.tenancy import current_tenant
+from voiceai.tenant_settings import ensure_pipeline_allowed
 
 router = APIRouter(prefix="/api")
 
@@ -61,6 +62,7 @@ async def list_agents(tenant_id: str = Depends(current_tenant), s: AsyncSession 
 @router.post("/agents")
 async def create_agent(body: AgentCreate, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     cfg = validate_config(body.draft_config or default_config())
+    await ensure_pipeline_allowed(s, tenant_id, cfg)  # MT-06
     agent = Agent(tenant_id=tenant_id, name=body.name, description=body.description, draft_config=cfg)
     s.add(agent)
     await s.commit()
@@ -81,7 +83,9 @@ async def update_agent(agent_id: str, body: AgentUpdate, tenant_id: str = Depend
     if body.description is not None:
         agent.description = body.description
     if body.draft_config is not None:
-        agent.draft_config = validate_config(body.draft_config)
+        cfg = validate_config(body.draft_config)
+        await ensure_pipeline_allowed(s, tenant_id, cfg)  # MT-06
+        agent.draft_config = cfg
     await s.commit()
     return agent_out(agent, await _version(s, agent))
 
@@ -89,6 +93,7 @@ async def update_agent(agent_id: str, body: AgentUpdate, tenant_id: str = Depend
 @router.post("/agents/{agent_id}/publish")
 async def publish_agent(agent_id: str, body: PublishBody, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     agent = await _agent(s, tenant_id, agent_id)
+    await ensure_pipeline_allowed(s, tenant_id, agent.draft_config or {})  # MT-06
     version = await publish(s, agent, body.change_note)
     await s.commit()
     return {"id": version.id, "version": version.version, "created_at": version.created_at.isoformat()}

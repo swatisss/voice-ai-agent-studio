@@ -19,6 +19,10 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **tenants** — `id` (slug PK), `name`, `industry`, `created_at`
 
+**tenant_settings** — `tenant_id` (PK, FK `tenants.id`), `allowed_pipelines` JSON list, `openai_platform_fallback` bool, `updated_at`; no row means the defaults ([/architecture/tenant-settings.md](/architecture/tenant-settings.md))
+
+**tenant_credentials** — `id`, `tenant_id`, `provider` (`openai`; unique with `tenant_id`), `ciphertext` (Fernet token, never the plain key), `last4`, `created_at`, `updated_at`
+
 **agents** — `id`, `tenant_id`, `name`, `description`, `draft_config` JSON ([/data/agent-config.md](/data/agent-config.md)), `published_version_id` (nullable FK), `created_at`, `updated_at`
 
 **personas** — `id`, `tenant_id`, `name`, `description`, `voice`, `speed` float, `greeting`, `disclosure`, `opening`, `style`, `created_at`, `updated_at` ([/architecture/personas.md](/architecture/personas.md))
@@ -72,6 +76,6 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 21 tables exist; given an existing database without `call_feedback` or `phone_numbers`, when the app starts, then those tables are created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 23 tables exist; given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings` or `tenant_credentials`, when the app starts, then those tables are created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.

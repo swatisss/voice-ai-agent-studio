@@ -11,8 +11,8 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 
 | id | name | contents |
 |---|---|---|
-| `evergreen-care` | Evergreen Health · Customer Support & Channels | the five agents, personas, 18 tools, knowledge, use cases, call history |
-| `evergreen-sandbox` | Evergreen Health · New Business Unit (sandbox) | empty except one welcome article: shows isolation and building from scratch |
+| `evergreen-care` | Evergreen Health · Customer Support & Channels | the five agents, personas, 18 tools, knowledge, use cases, call history; settings allow `cascade` and `realtime`, no own OpenAI key, platform fallback on |
+| `evergreen-sandbox` | Evergreen Health · New Business Unit (sandbox) | empty except one welcome article: shows isolation and building from scratch; default settings (cascade only) |
 
 # Persona library (`evergreen-care`)
 
@@ -108,6 +108,7 @@ Eight rows in `use_cases` for `evergreen-care`, category *Customer Support & Cha
 
 # Acceptance
 
+- **UC-06** — Given a fresh database, when the seeder runs, then `evergreen-care` has `allowed_pipelines` `["cascade","realtime"]` with platform fallback on and no stored key, and `evergreen-sandbox` has no settings row (cascade only).
 - **UC-01** — Given a fresh database, when the seeder runs, then tenant `evergreen-care` has the five agents (modes inbound, outbound, outbound, internal, inbound), all published as v1 with the personas, tools, skills and documents listed above, 18 tools in total, and only the Insurance Claims Agent on the realtime pipeline; tenant `evergreen-sandbox` has one document and no agents.
 - **UC-03** — Given the Customer Care Agent and the Internal Knowledge Assistant, when each searches knowledge, then their document sets are disjoint and come from their own folders, and neither can retrieve the other's documents: a question about claims-handler approval limits never returns an internal article for the Customer Care Agent, and a question about the Green Card never returns a customer-care article for the Internal Knowledge Assistant, while each agent's own question finds its own article first (*Authorization limits* for the assistant, *Green Card* for Customer Care).
 - **UC-04** — Given the seeded Customer Care Agent, then it has the six regression scenarios above, five expected `resolved` and one `escalated`.

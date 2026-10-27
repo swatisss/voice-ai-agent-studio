@@ -1,4 +1,4 @@
-// Spec: /ui/agent-builder.md (Voice tab), /architecture/realtime-voice.md, /architecture/telephony.md
+// Spec: /ui/agent-builder.md (Voice tab), /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md
 "use client";
 
 import { Eye, Pencil, Plus, Trash2, Upload } from "lucide-react";
@@ -203,6 +203,9 @@ const PIPELINES = [
 function VoiceTab({ draft, update }: TabProps) {
   const value = { ...DEFAULT_TURN, ...(draft.voice?.turn_detection ?? {}) };
   const { data: models } = useApi<any>("/api/models");
+  const { tenant } = useTenant();
+  const { data: settings } = useApi<{ allowed_pipelines: string[] }>("/api/tenant-settings", [tenant]);
+  const allowed = (id: string) => id === "cascade" || !!settings?.allowed_pipelines.includes(id);  // UI-41
   const pipeline: "cascade" | "realtime" = draft.voice?.pipeline === "realtime" ? "realtime" : "cascade";
   const realtime = pipeline === "realtime";
   const setVoice = (patch: Record<string, unknown>) => update(["voice"], { ...(draft.voice ?? {}), ...patch });
@@ -211,13 +214,16 @@ function VoiceTab({ draft, update }: TabProps) {
       <Card title="Voice pipeline">
         <div role="radiogroup" aria-label="Voice pipeline" className="grid gap-2 md:grid-cols-2">
           {PIPELINES.map((p) => (
-            <button key={p.id} type="button" role="radio" aria-checked={pipeline === p.id} onClick={() => setVoice({ pipeline: p.id })}
-              className={`rounded-2xl border-[1.5px] p-3 text-left transition ${pipeline === p.id ? "border-accent bg-accent-soft" : "border-line bg-panel hover:bg-neutral-soft"}`}>
+            <button key={p.id} type="button" role="radio" aria-checked={pipeline === p.id} disabled={!allowed(p.id) && pipeline !== p.id} onClick={() => setVoice({ pipeline: p.id })}
+              className={`rounded-2xl border-[1.5px] p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${pipeline === p.id ? "border-accent bg-accent-soft" : "border-line bg-panel hover:bg-neutral-soft"}`}>
               <div className="text-sm font-semibold">{p.title}</div>
               <div className="mt-1 text-xs text-muted">{p.text}</div>
             </button>
           ))}
         </div>
+        {settings && !allowed("realtime") && (
+          <p className="mt-2 text-xs text-muted">Realtime speech-to-speech: not enabled for this business unit - turn it on in <Link href="/settings/" className="text-accent underline">Settings</Link>.</p>
+        )}
         {realtime && (
           <div className="mt-4 max-w-md">
             <Field label="Realtime voice" hint="Replaces the persona's voice on realtime calls. Needs OPENAI_API_KEY; no Deepgram key.">

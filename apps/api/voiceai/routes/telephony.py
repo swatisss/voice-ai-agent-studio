@@ -1,6 +1,7 @@
 """Twilio voice webhook and Media Stream WebSocket.
 
-Spec: /architecture/telephony.md, /api/rest-api.md (Phone numbers and telephony), /architecture/multi-tenancy.md
+Spec: /architecture/telephony.md, /api/rest-api.md (Phone numbers and telephony), /architecture/multi-tenancy.md,
+/architecture/tenant-settings.md
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from voiceai.config import get_settings
 from voiceai.db import sessionmaker
 from voiceai.errors import ApiError
 from voiceai.live import pipeline_of
-from voiceai.llm.gateway import gateway
+from voiceai import tenant_settings
 from voiceai.models import Agent, AgentVersion, Call, PhoneNumber
 from voiceai.routes.calls import serve_voice
 from voiceai.runtime.session import create_call
@@ -53,8 +54,11 @@ async def voice_webhook(request: Request) -> Response:
         version = await db.get(AgentVersion, agent.published_version_id) if agent and agent.published_version_id else None
         if not version or version.config.get("mode") == "outbound":  # TEL-03: unmapped, unpublished or not an answering agent
             return _xml(telephony.twiml_not_in_service())
-        realtime = pipeline_of(version.config) == "realtime"
-        if not (gateway().provider_key("openai") if realtime else s.deepgram_api_key):  # TEL-03: the pipeline has no key
+        kind = pipeline_of(version.config)
+        if kind not in await tenant_settings.allowed_pipelines(db, number.tenant_id):  # TEL-03, MT-08
+            return _xml(telephony.twiml_not_in_service())
+        has_key = await tenant_settings.resolve_openai_key(db, number.tenant_id) if kind == "realtime" else s.deepgram_api_key
+        if not has_key:  # TEL-03: the pipeline has no usable key for this tenant
             return _xml(telephony.twiml_not_in_service())
         call = await create_call(db, number.tenant_id, agent.id, "voice", app=request.app)
         context = telephony.ivr_context({**dict(request.query_params), **{k: v for k, v in params.items()}})  # TEL-05

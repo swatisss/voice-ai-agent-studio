@@ -22,7 +22,7 @@ from voiceai.learning.analyze import refresh_stats
 from voiceai.live import persona_dict
 from voiceai.mock import data as mock_data
 from voiceai.models import (
-    Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, Persona, Skill, Tenant, Tool, UseCase,
+    Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, Persona, Skill, Tenant, TenantSettings, Tool, UseCase,
 )
 from voiceai.schemas import FIXABLE
 from voiceai.seed import catalog
@@ -46,6 +46,7 @@ async def seed(reset: bool = False) -> dict[str, Any]:
         for t in catalog.TENANTS:
             s.add(Tenant(**t))
         await s.flush()
+        s.add(TenantSettings(tenant_id=care, allowed_pipelines=["cascade", "realtime"], openai_platform_fallback=True))  # UC-06
 
         tools = {t["name"]: Tool(tenant_id=care, **t) for t in catalog.TOOLS}
         personas = {p["name"]: Persona(tenant_id=care, **p) for p in catalog.PERSONAS}

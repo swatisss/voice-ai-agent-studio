@@ -39,9 +39,9 @@ if [[ -n "${DB_INSTANCE:-}" ]]; then
 fi
 
 # GROQ and DEEPGRAM are required; the others are optional and attached only when the secret exists
-# (OPENAI_API_KEY is needed by realtime agents, the TWILIO_* secrets by phone calls).
+# (OPENAI_API_KEY is needed by realtime agents, the TWILIO_* secrets by phone calls, TENANT_SECRETS_KEY by tenants' own keys).
 SECRETS="GROQ_API_KEY=GROQ_API_KEY:latest,DEEPGRAM_API_KEY=DEEPGRAM_API_KEY:latest"
-for optional in OPENROUTER_API_KEY OPENAI_API_KEY TWILIO_AUTH_TOKEN TWILIO_ACCOUNT_SID; do
+for optional in OPENROUTER_API_KEY OPENAI_API_KEY TWILIO_AUTH_TOKEN TWILIO_ACCOUNT_SID TENANT_SECRETS_KEY; do
   if gcloud secrets describe "${optional}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
     SECRETS+=",${optional}=${optional}:latest"
   else

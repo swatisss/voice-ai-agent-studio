@@ -42,12 +42,15 @@ def effective_turn(config: dict[str, Any], live: dict[str, Any] | None) -> TurnS
     return TurnSettings.from_dict({**base, **patch})
 
 
-def settings_view(persona: dict[str, Any], turn: TurnSettings, pipeline: str = "cascade") -> dict[str, Any]:
-    return {
+def settings_view(persona: dict[str, Any], turn: TurnSettings, pipeline: str = "cascade", key_source: str | None = None) -> dict[str, Any]:
+    view = {
         "pipeline": pipeline,
         "persona": {"id": persona.get("id"), "name": persona.get("name"), "voice": persona.get("voice"), "speed": persona.get("speed", 1.0)},
         "turn_detection": turn.to_dict(),
     }
+    if key_source:  # RV-16: which OpenAI key served a realtime call
+        view["openai_key_source"] = key_source
+    return view
 
 
 async def effective_settings(s: AsyncSession, call: Call) -> dict[str, Any]:
@@ -60,4 +63,4 @@ async def effective_settings(s: AsyncSession, call: Call) -> dict[str, Any]:
         row = await s.get(Persona, live["persona_id"])
         if row is not None and row.tenant_id == call.tenant_id:
             persona = persona_dict(row)
-    return settings_view(persona, effective_turn(config, live), pipeline_of(config))
+    return settings_view(persona, effective_turn(config, live), pipeline_of(config), (call.meta or {}).get("openai_key_source"))

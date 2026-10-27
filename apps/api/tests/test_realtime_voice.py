@@ -352,8 +352,8 @@ async def test_silence_and_length_clocks(client, seeded):
     """Covers: RV-11"""
     bridge, conn, session, ended = await build(seeded)
     await finish_welcome(bridge, conn)
-    t0 = bridge._call_started + 1.0  # fake times relative to the call's own clock, whatever the host's uptime
-    bridge._silent_since = t0
+    t0 = bridge.clock.started + 1.0  # fake times relative to the call's own clock, whatever the host's uptime
+    bridge.clock.silent_since = t0
     await bridge.check_clocks(t0 + 5)
     assert endings.REMINDER_LINE not in conn.exact_texts()
     await bridge.check_clocks(t0 + 11)
@@ -374,7 +374,7 @@ async def test_silence_and_length_clocks(client, seeded):
 
     bridge, conn, session, ended = await build(seeded)
     await finish_welcome(bridge, conn)
-    await bridge.check_clocks(bridge._call_started + session.config["policy"]["max_call_seconds"] + 1)
+    await bridge.check_clocks(bridge.clock.started + session.config["policy"]["max_call_seconds"] + 1)
     await pump(bridge, 4)
     assert endings.MAX_DURATION_LINE in conn.exact_texts() and ended == ["max_duration"]
     await bridge.shutdown()

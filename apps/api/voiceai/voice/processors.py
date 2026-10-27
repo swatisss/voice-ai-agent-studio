@@ -31,7 +31,7 @@ from pipecat.frames.frames import (
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 from voiceai.live import LiveControls
-from voiceai.runtime import endings
+from voiceai.runtime.call_clock import CallClock
 from voiceai.runtime.session import AgentSession
 from voiceai.voice.turn_detection import VAD_STOP_MS, TurnEvaluator
 
@@ -149,13 +149,7 @@ class BrainProcessor(FrameProcessor):
     _welcome_spoken = False
     _welcome_end: asyncio.TimerHandle | None = None
     _welcome_timeout: asyncio.TimerHandle | None = None
-    _silence_reminder_s = 10.0
-    _silence_end_s = 30.0
-    _max_call_s = 600.0
-    _silent_since: float | None = None   # when the current silence began (None while someone is talking)
-    _reminded = False
-    _reminder_pending = False            # the reminder line is being spoken; keep the original silence start
-    _call_started: float | None = None
+    clock: CallClock | None = None       # silence and call-length clock, created when the call starts (CE-04, CE-05)
     _watchdog: asyncio.Task[None] | None = None
     _closing = False                     # the call is ending: nothing may interrupt or restart it
 
@@ -204,13 +198,13 @@ class BrainProcessor(FrameProcessor):
             if handle:
                 handle.cancel()
         self._welcome_end = self._welcome_timeout = None
-        if self._silent_since is None and not self._bot_speaking:  # the caller gets a full silence window after the welcome
-            self._silent_since = time.monotonic()
+        if self.clock and not self._bot_speaking:  # the caller gets a full silence window after the welcome
+            self.clock.wait_for_caller(time.monotonic())
 
     def on_bot_started(self) -> None:
         self._bot_speaking = True
-        if not self._reminder_pending:  # the agent is talking: not silence (a reminder keeps the original start)
-            self._silent_since = None
+        if self.clock:
+            self.clock.agent_started()
         if self._welcoming:
             self._welcome_spoken = True
             if self._welcome_end:  # audio resumed after a gap between sentences
@@ -220,22 +214,16 @@ class BrainProcessor(FrameProcessor):
     async def on_bot_stopped(self) -> None:
         self._bot_speaking = False
         self._bot_stopped.set()
-        if self._reminder_pending:
-            self._reminder_pending = False  # the reminder finished; the silence still counts from its original start
-        else:
-            self._silent_since = time.monotonic()
-            self._reminded = False
+        if self.clock:
+            self.clock.agent_finished(time.monotonic())
         if self._welcoming and self._welcome_spoken and not self._welcome_end:
             self._welcome_end = asyncio.get_running_loop().call_later(self.WELCOME_GRACE_S, self._end_welcome)
         await self._release_held()
 
     # -- silence and call-length clocks (CE-04, CE-05)
     def _start_clocks(self) -> None:
-        policy = (getattr(self.session, "config", None) or {}).get("policy") or {}
-        self._silence_reminder_s = float(policy.get("silence_reminder_s", self._silence_reminder_s))
-        self._silence_end_s = float(policy.get("silence_end_s", self._silence_end_s))
-        self._max_call_s = float(policy.get("max_call_seconds", self._max_call_s))
-        self._call_started = time.monotonic()
+        policy = (getattr(self.session, "config", None) or {}).get("policy")
+        self.clock = CallClock(policy, time.monotonic())
         if self.RUN_WATCHDOG and self._watchdog is None:
             self._watchdog = asyncio.get_running_loop().create_task(self._watch())
 
@@ -251,22 +239,16 @@ class BrainProcessor(FrameProcessor):
 
     async def check_clocks(self, now: float | None = None) -> None:
         """One tick of the call clock and the silence clock (also called directly by tests)."""
-        if self._closing:
+        if self._closing or self.clock is None:
             return
-        now = time.monotonic() if now is None else now
-        if self._call_started is not None and now - self._call_started >= self._max_call_s:
-            await self._close_with(endings.MAX_DURATION_LINE, "max_duration")  # CE-05
+        action = self.clock.tick(time.monotonic() if now is None else now, quiet=not (self._welcoming or self.busy))
+        if action is None:
             return
-        if self._silent_since is None or self._welcoming or self.busy:
-            return  # nobody is silent while the welcome or a reply is playing
-        silent = now - self._silent_since
-        if silent >= self._silence_end_s:
-            await self._close_with(endings.IDLE_LINE, "idle")  # CE-04
-        elif silent >= self._silence_reminder_s and not self._reminded:
-            self._reminded = True
-            self._reminder_pending = True
-            await self.session.announce(endings.REMINDER_LINE, {"silence_reminder": True})
-            await self._speak_text([endings.REMINDER_LINE])
+        if action.kind == "close":
+            await self._close_with(action.line, action.reason or "idle")
+        else:
+            await self.session.announce(action.line, {"silence_reminder": True})
+            await self._speak_text([action.line])
 
     async def _close_with(self, line: str, reason: str) -> None:
         self._closing = True
@@ -287,9 +269,8 @@ class BrainProcessor(FrameProcessor):
     # -- decisions (also called directly by tests)
     async def on_user_started(self) -> None:
         """VO-03 barge-in, unless interruptions are disabled (TD-07) or the welcome is playing (VO-08)."""
-        self._silent_since = None  # the caller is talking: the silence clock restarts after the next agent line (CE-04)
-        self._reminded = False
-        self._reminder_pending = False
+        if self.clock:
+            self.clock.caller_started()
         if self._closing or self._welcoming or not self.controls.turn.allow_interruptions:
             return  # a call that is closing is never interrupted: that would leave it open
         if self.busy:
@@ -332,8 +313,8 @@ class BrainProcessor(FrameProcessor):
             self._closing = True
             await self._finish(getattr(self.session, "end_reason", None) or "end_call")
         else:
-            if self._silent_since is None and not self._bot_speaking and not self._welcoming:
-                self._silent_since = time.monotonic()  # a reply with no speech still leaves the caller waiting
+            if self.clock and not self._bot_speaking and not self._welcoming:
+                self.clock.wait_for_caller(time.monotonic())  # a reply with no speech still leaves the caller waiting
             if not self._bot_speaking:
                 asyncio.get_running_loop().call_soon(lambda: asyncio.ensure_future(self._release_held()))
 

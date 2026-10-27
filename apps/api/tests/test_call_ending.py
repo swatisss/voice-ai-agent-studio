@@ -163,7 +163,7 @@ async def _after_welcome(brain: _Brain) -> float:
     await brain.on_bot_stopped()
     await asyncio.sleep(0.05)  # grace period over: the welcome is no longer protected
     assert not brain._welcoming
-    return brain._silent_since
+    return brain.clock.silent_since
 
 
 async def test_silence_reminder_then_idle_end():
@@ -176,7 +176,7 @@ async def test_silence_reminder_then_idle_end():
     assert brain.announced == [endings.REMINDER_LINE] and brain.closed == []
     brain.on_bot_started()                                              # the reminder plays ...
     await brain.on_bot_stopped()                                        # ... and does not restart the silence
-    assert brain._silent_since == t0
+    assert brain.clock.silent_since == t0
     await brain.check_clocks(now=t0 + 15)
     assert brain.announced == [endings.REMINDER_LINE]                   # the reminder is said once
     await brain.check_clocks(now=t0 + 31)
@@ -190,12 +190,12 @@ async def test_caller_speech_resets_the_silence_clock():
     await brain.check_clocks(now=t0 + 11)
     assert brain.announced == [endings.REMINDER_LINE]
     await brain.on_user_started()                                       # the caller answers
-    assert brain._silent_since is None
+    assert brain.clock.silent_since is None
     await brain.check_clocks(now=t0 + 60)                               # nobody is silent while the caller talks
     assert brain.closed == []
     brain.on_bot_started()
     await brain.on_bot_stopped()                                        # the agent's reply is over: a fresh silence
-    assert brain._silent_since is not None and not brain._reminded
+    assert brain.clock.silent_since is not None and not brain.clock.reminded
 
 
 async def test_no_silence_timers_during_the_welcome():
@@ -203,7 +203,7 @@ async def test_no_silence_timers_during_the_welcome():
     brain = _Brain(reminder=10, end=30)
     await brain.greet()
     assert brain._welcoming
-    await brain.check_clocks(now=brain._call_started + 400)             # far beyond the silence limits
+    await brain.check_clocks(now=brain.clock.started + 400)             # far beyond the silence limits
     assert brain.announced == [] and brain.closed == []
     brain._end_welcome()
 
@@ -212,7 +212,7 @@ async def test_maximum_duration_ends_the_call():
     """Covers: CE-05"""
     brain = _Brain(max_call=60)
     await _after_welcome(brain)
-    await brain.check_clocks(now=brain._call_started + 61)
+    await brain.check_clocks(now=brain.clock.started + 61)
     assert brain.announced == [endings.MAX_DURATION_LINE] and brain.closed == ["max_duration"]
     assert endings.MAX_DURATION_LINE in brain.spoken()
 

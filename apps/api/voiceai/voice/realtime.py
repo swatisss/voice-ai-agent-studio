@@ -40,6 +40,7 @@ from voiceai import prompts
 from voiceai.live import LiveControls
 from voiceai.llm.gateway import Usage, gateway
 from voiceai.runtime import endings
+from voiceai.runtime.call_clock import CallClock
 from voiceai.runtime.prompt import system_prompt
 from voiceai.runtime.session import Directive, AgentSession
 from voiceai.runtime.tools import all_schemas
@@ -234,15 +235,8 @@ class RealtimeBridge(FrameProcessor):
         self._welcome_spoken = False
         self._welcome_end: asyncio.TimerHandle | None = None
         self._welcome_timeout: asyncio.TimerHandle | None = None
-        # silence and call-length clocks (RV-11, CE-04, CE-05)
-        policy = session.config.get("policy") or {}
-        self._silence_reminder_s = float(policy.get("silence_reminder_s", 10))
-        self._silence_end_s = float(policy.get("silence_end_s", 30))
-        self._max_call_s = float(policy.get("max_call_seconds", 600))
-        self._silent_since: float | None = None
-        self._reminded = False
-        self._reminder_pending = False   # the reminder is being spoken: the silence still counts from its original start
-        self._call_started: float | None = None
+        # silence and call-length clock (RV-11, CE-04, CE-05); restarted when the session opens
+        self.clock = CallClock(session.config.get("policy"), time.monotonic())
 
     # ------------------------------------------------------------ helpers
     @property
@@ -284,7 +278,7 @@ class RealtimeBridge(FrameProcessor):
     # ------------------------------------------------------------ startup and welcome
     async def start(self) -> None:
         """Open the session: tools, instructions, voice and turn detection; then read provider events."""
-        self._call_started = time.monotonic()
+        self.clock = CallClock(self.session.config.get("policy"), time.monotonic())
         await self._update_session()
         self._reader = asyncio.ensure_future(self._read_loop())
         if self.RUN_WATCHDOG:
@@ -314,8 +308,8 @@ class RealtimeBridge(FrameProcessor):
         self._welcome_end = self._welcome_timeout = None
         if not self._closing:
             await self._update_session()  # the agent's own turn detection applies from here on
-        if self._silent_since is None and not self.busy:
-            self._silent_since = time.monotonic()
+        if not self.busy:
+            self.clock.wait_for_caller(time.monotonic())
 
     # ------------------------------------------------------------ audio in
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
@@ -361,8 +355,7 @@ class RealtimeBridge(FrameProcessor):
     def on_bot_started(self) -> None:
         self._bot_speaking = True
         self._bot_stopped.clear()
-        if not self._reminder_pending:
-            self._silent_since = None
+        self.clock.agent_started()
         if self._welcoming:
             self._welcome_spoken = True
             if self._welcome_end:
@@ -372,11 +365,7 @@ class RealtimeBridge(FrameProcessor):
     async def on_bot_stopped(self) -> None:
         self._bot_speaking = False
         self._bot_stopped.set()
-        if self._reminder_pending:
-            self._reminder_pending = False  # the reminder finished; the silence still counts from its original start
-        elif self._active is None and not self._welcoming:
-            self._silent_since = time.monotonic()
-            self._reminded = False
+        self.clock.agent_finished(time.monotonic(), waiting=self._active is None and not self._welcoming)
         if self._welcoming and self._welcome_spoken and self._welcome_response_done and not self._welcome_end:
             self._welcome_end = asyncio.get_running_loop().call_later(self.WELCOME_GRACE_S, lambda: self._spawn(self._end_welcome()))
 
@@ -434,8 +423,7 @@ class RealtimeBridge(FrameProcessor):
         resp.waits_for_user = not self._user_recorded.is_set()
         self._active = rid
         self._idle.clear()
-        if not self._reminder_pending:
-            self._silent_since = None
+        self.clock.agent_started()
 
     async def _on_audio_delta(self, evt: dict[str, Any]) -> None:
         rid = evt.get("response_id", "")
@@ -455,9 +443,7 @@ class RealtimeBridge(FrameProcessor):
         await self.push_frame(TTSAudioRawFrame(audio=audio, sample_rate=RATE, num_channels=1))
 
     async def _on_speech_started(self) -> None:
-        self._silent_since = None
-        self._reminded = False
-        self._reminder_pending = False
+        self.clock.caller_started()
         self._user_recorded.clear()
         if self._closing or self._welcoming or not self.controls.turn.allow_interruptions:
             return
@@ -592,8 +578,8 @@ class RealtimeBridge(FrameProcessor):
             self._spawn(self._after_tools(resp, status, spoke))
         elif status == "completed" and resp.exact is None and not self._closing:
             await self._after_reply(spoke)
-        if self._active is None and not self._bot_speaking and not self._welcoming and self._silent_since is None:
-            self._silent_since = time.monotonic()
+        if self._active is None and not self._bot_speaking and not self._welcoming:
+            self.clock.wait_for_caller(time.monotonic())
 
     async def _after_reply(self, spoke: bool) -> None:
         state = self.session.state
@@ -678,19 +664,13 @@ class RealtimeBridge(FrameProcessor):
     async def check_clocks(self, now: float | None = None) -> None:
         if self._closing:
             return
-        now = time.monotonic() if now is None else now
-        if self._call_started is not None and now - self._call_started >= self._max_call_s:
-            await self._close_with(endings.MAX_DURATION_LINE, "max_duration")  # CE-05
+        action = self.clock.tick(time.monotonic() if now is None else now, quiet=not (self._welcoming or self.busy))
+        if action is None:
             return
-        if self._silent_since is None or self._welcoming or self.busy:
-            return
-        silent = now - self._silent_since
-        if silent >= self._silence_end_s:
-            await self._close_with(endings.IDLE_LINE, "idle")  # CE-04
-        elif silent >= self._silence_reminder_s and not self._reminded:
-            self._reminded = True
-            self._reminder_pending = True
-            line = await self.session.announce(endings.REMINDER_LINE, {"silence_reminder": True})
+        if action.kind == "close":
+            await self._close_with(action.line, action.reason or "idle")
+        else:
+            line = await self.session.announce(action.line, {"silence_reminder": True})
             await self._say_exact(line)
 
     async def _close_with(self, line: str, reason: str) -> None:

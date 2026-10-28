@@ -69,7 +69,10 @@ def test_pipeline_builds_without_network():
     from voiceai.live import LiveControls
     from voiceai.voice.turn_detection import TurnSettings
 
-    session = SimpleNamespace(config={"persona": {"voice": "aura-2-thalia-en", "speed": 1.1}}, history=[], turn_settings=lambda: TurnSettings())
+    from voiceai.call_settings import CallSettings
+
+    config = {"persona": {"voice": "aura-2-thalia-en", "speed": 1.1}}
+    session = SimpleNamespace(config=config, call_settings=CallSettings.of(config), history=[], turn_settings=lambda: TurnSettings())
     controls = LiveControls(turn=TurnSettings())
     task, transport, brain, serializer = build(FakeWS(), session, "dummy-key", controls)  # type: ignore[arg-type]
     assert task is not None and brain.session is session and serializer.end_reason == "hangup"

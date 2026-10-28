@@ -120,37 +120,37 @@ async def test_policy_timer_bounds_are_rejected_by_the_api(client, seeded):
 # ---------------------------------------------------------------- voice clocks (frame-free: the brain is driven directly)
 
 class _Brain(BrainProcessor):
-    RUN_WATCHDOG = False
+    FINISH_WAIT_S = 0.01
 
     def __init__(self, reminder: float = 10, end: float = 30, max_call: float = 600) -> None:
         self.announced: list[str] = []
         self.closed: list[str] = []
+        self.pushed: list = []
 
         async def announce(text, data=None):  # noqa: ANN001, ANN202
             self.announced.append(text)
+            return text
 
         async def start() -> str:
             return "Hello, this is Ava."
 
-        self.session = SimpleNamespace(
+        async def on_end(reason: str) -> None:
+            self.closed.append(reason)
+
+        session = SimpleNamespace(
             start=start, announce=announce, state=SimpleNamespace(ended=False), end_reason=None,
             config={"policy": {"silence_reminder_s": reminder, "silence_end_s": end, "max_call_seconds": max_call}},
         )
-        self.controls = LiveControls(turn=TurnSettings())
-        self._task = None
-        self._bot_speaking = False
-        self._greeted = False
-        self._held = []
-        self._bot_stopped = asyncio.Event()
-        self.pushed: list = []
-        self.WELCOME_GRACE_S = 0.01  # type: ignore[misc]
+        super().__init__(session, on_end, LiveControls(turn=TurnSettings()))  # type: ignore[arg-type]
+        self.floor.RUN_WATCHDOG = False
+        self.floor.WELCOME_GRACE_S = 0.01
 
     async def push_frame(self, frame, direction=None) -> None:  # type: ignore[override]  # noqa: ANN001
         self.pushed.append(frame)
 
-    async def _finish(self, reason: str) -> None:  # type: ignore[override]
-        self._closing = True
-        self.closed.append(reason)
+    async def tick(self, now: float) -> None:
+        await self.floor.tick(now)
+        await self.floor.settle()
 
     def spoken(self) -> list[str]:
         return [f.text for f in self.pushed if isinstance(f, LLMTextFrame)]
@@ -159,27 +159,27 @@ class _Brain(BrainProcessor):
 async def _after_welcome(brain: _Brain) -> float:
     """Run the welcome to its end and return the monotonic time the silence began."""
     await brain.greet()
-    brain.on_bot_started()
+    brain.floor.bot_started()
     await brain.on_bot_stopped()
     await asyncio.sleep(0.05)  # grace period over: the welcome is no longer protected
-    assert not brain._welcoming
-    return brain.clock.silent_since
+    assert not brain.floor.welcoming
+    return brain.floor.clock.silent_since
 
 
 async def test_silence_reminder_then_idle_end():
     """Covers: CE-04"""
     brain = _Brain(reminder=10, end=30)
     t0 = await _after_welcome(brain)
-    await brain.check_clocks(now=t0 + 5)
+    await brain.tick(t0 + 5)
     assert brain.announced == []                                        # not silent long enough
-    await brain.check_clocks(now=t0 + 11)
+    await brain.tick(t0 + 11)
     assert brain.announced == [endings.REMINDER_LINE] and brain.closed == []
-    brain.on_bot_started()                                              # the reminder plays ...
+    brain.floor.bot_started()                                           # the reminder plays ...
     await brain.on_bot_stopped()                                        # ... and does not restart the silence
-    assert brain.clock.silent_since == t0
-    await brain.check_clocks(now=t0 + 15)
+    assert brain.floor.clock.silent_since == t0
+    await brain.tick(t0 + 15)
     assert brain.announced == [endings.REMINDER_LINE]                   # the reminder is said once
-    await brain.check_clocks(now=t0 + 31)
+    await brain.tick(t0 + 31)
     assert brain.announced[-1] == endings.IDLE_LINE and brain.closed == ["idle"]
 
 
@@ -187,32 +187,32 @@ async def test_caller_speech_resets_the_silence_clock():
     """Covers: CE-04"""
     brain = _Brain(reminder=10, end=30)
     t0 = await _after_welcome(brain)
-    await brain.check_clocks(now=t0 + 11)
+    await brain.tick(t0 + 11)
     assert brain.announced == [endings.REMINDER_LINE]
     await brain.on_user_started()                                       # the caller answers
-    assert brain.clock.silent_since is None
-    await brain.check_clocks(now=t0 + 60)                               # nobody is silent while the caller talks
+    assert brain.floor.clock.silent_since is None
+    await brain.tick(t0 + 60)                                           # nobody is silent while the caller talks
     assert brain.closed == []
-    brain.on_bot_started()
+    brain.floor.bot_started()
     await brain.on_bot_stopped()                                        # the agent's reply is over: a fresh silence
-    assert brain.clock.silent_since is not None and not brain.clock.reminded
+    assert brain.floor.clock.silent_since is not None and not brain.floor.clock.reminded
 
 
 async def test_no_silence_timers_during_the_welcome():
     """Covers: CE-04"""
     brain = _Brain(reminder=10, end=30)
     await brain.greet()
-    assert brain._welcoming
-    await brain.check_clocks(now=brain.clock.started + 400)             # far beyond the silence limits
+    assert brain.floor.welcoming
+    await brain.tick(brain.floor.clock.started + 400)                   # far beyond the silence limits
     assert brain.announced == [] and brain.closed == []
-    brain._end_welcome()
+    await brain.floor.stop()
 
 
 async def test_maximum_duration_ends_the_call():
     """Covers: CE-05"""
     brain = _Brain(max_call=60)
     await _after_welcome(brain)
-    await brain.check_clocks(now=brain.clock.started + 61)
+    await brain.tick(brain.floor.clock.started + 61)
     assert brain.announced == [endings.MAX_DURATION_LINE] and brain.closed == ["max_duration"]
     assert endings.MAX_DURATION_LINE in brain.spoken()
 
@@ -221,8 +221,8 @@ async def test_a_closing_call_is_not_interrupted():
     """Covers: CE-06"""
     brain = _Brain()
     await _after_welcome(brain)
-    brain._closing = True
-    brain._bot_speaking = True
+    await brain.floor.begin_closing()
+    brain.floor.bot_started()
     interrupted: list[int] = []
 
     async def broadcast() -> None:
@@ -232,6 +232,16 @@ async def test_a_closing_call_is_not_interrupted():
     await brain.on_user_started()
     await brain.on_user_turn("anything")
     assert interrupted == [] and brain._task is None
+
+
+async def test_a_hangup_racing_the_goodbye_ends_the_call_once():
+    """Covers: CE-06"""
+    brain = _Brain()
+    await _after_welcome(brain)
+    brain.floor.finish_after_drain("farewell")
+    await brain.floor.end("hangup")
+    await brain.floor.settle()
+    assert brain.closed == ["hangup"]
 
 
 async def test_end_reason_is_reported_after_the_closing_speech(app, database, seeded, fake_llm):

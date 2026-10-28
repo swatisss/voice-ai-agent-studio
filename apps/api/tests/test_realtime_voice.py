@@ -96,13 +96,13 @@ class FakeConn:
 
 
 class Bridge(rt.RealtimeBridge):
-    RUN_WATCHDOG = False
-    WELCOME_GRACE_S = 0.02
     FINISH_WAIT_S = 0.2
     FINISH_GRACE_S = 0.01
 
     def __init__(self, *a: Any, **k: Any) -> None:  # noqa: ANN401
         super().__init__(*a, **k)
+        self.floor.RUN_WATCHDOG = False
+        self.floor.WELCOME_GRACE_S = 0.02
         self.pushed: list = []
         self.interrupted = 0
 
@@ -352,29 +352,29 @@ async def test_silence_and_length_clocks(client, seeded):
     """Covers: RV-11"""
     bridge, conn, session, ended = await build(seeded)
     await finish_welcome(bridge, conn)
-    t0 = bridge.clock.started + 1.0  # fake times relative to the call's own clock, whatever the host's uptime
-    bridge.clock.silent_since = t0
-    await bridge.check_clocks(t0 + 5)
+    t0 = bridge.floor.clock.silent_since  # the silence began when the welcome ended
+    await bridge.floor.tick(t0 + 5)
     assert endings.REMINDER_LINE not in conn.exact_texts()
-    await bridge.check_clocks(t0 + 11)
-    await bridge.check_clocks(t0 + 12)  # only once
+    await bridge.floor.tick(t0 + 11)
+    await bridge.floor.tick(t0 + 12)  # only once
     await pump(bridge)
     assert conn.exact_texts().count(endings.REMINDER_LINE) == 1 and not ended
-    bridge._welcoming = True
-    await bridge.check_clocks(t0 + 400)  # never during the welcome
-    bridge._welcoming = False
-    bridge._active = "busy"
-    await bridge.check_clocks(t0 + 400)  # nor while the agent speaks or a tool runs
-    assert not ended
-    bridge._active = None
-    await bridge.check_clocks(t0 + 31)
+    conn.reply = None  # type: ignore[assignment]
+    rid = conn.start_reply("Let me check.")  # the agent is producing a reply
+    await pump(bridge)
+    await bridge.floor.tick(t0 + 400)  # nobody is silent while the agent speaks or a tool runs
+    assert not ended and endings.IDLE_LINE not in conn.exact_texts()
+    conn.finish(rid, "completed")
+    await pump(bridge)
+    t1 = bridge.floor.clock.silent_since  # a fresh silence after the reply
+    await bridge.floor.tick(t1 + 31)
     await pump(bridge, 4)
     assert endings.IDLE_LINE in conn.exact_texts() and ended == ["idle"]
     await bridge.shutdown()
 
     bridge, conn, session, ended = await build(seeded)
     await finish_welcome(bridge, conn)
-    await bridge.check_clocks(bridge.clock.started + session.config["policy"]["max_call_seconds"] + 1)
+    await bridge.floor.tick(bridge.floor.clock.started + session.config["policy"]["max_call_seconds"] + 1)
     await pump(bridge, 4)
     assert endings.MAX_DURATION_LINE in conn.exact_texts() and ended == ["max_duration"]
     await bridge.shutdown()

@@ -7,7 +7,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import time
 from collections.abc import Awaitable, Callable
 
 from pipecat.frames.frames import (
@@ -31,7 +30,7 @@ from pipecat.frames.frames import (
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 from voiceai.live import LiveControls
-from voiceai.runtime.call_clock import CallClock
+from voiceai.runtime.call_floor import CallFloor
 from voiceai.runtime.session import AgentSession
 from voiceai.voice.turn_detection import VAD_STOP_MS, TurnEvaluator
 
@@ -133,128 +132,51 @@ class TurnAggregator(FrameProcessor):
 class BrainProcessor(FrameProcessor):
     """Runs AgentSession for each caller turn and streams the reply to TTS.
 
-    The opening welcome is protected (VO-08): while it plays, caller speech (or the agent's own voice
-    leaking from the speakers into the microphone) neither interrupts it nor is answered.
+    The call floor owns the protected welcome (VO-08), the silence and call-length clock and the closing state; this
+    processor maps Pipecat frames onto it and is its `Stage`: fixed lines go to TTS like any reply.
     """
 
-    WELCOME_GRACE_S = 0.8        # silence after the welcome audio before the protection ends (bridges gaps between sentences)
-    WELCOME_MIN_TIMEOUT_S = 15.0  # safety net if the welcome never finishes speaking
-    WELCOME_SLOW_CHARS_PER_S = 6.0
-
-    # silence and call-length clocks (CE-04, CE-05); defaults are overridden from the agent policy when the call starts
-    RUN_WATCHDOG = True
-    WATCHDOG_TICK_S = 0.5
-
-    # class-level defaults so the welcome and clock state exist even on test doubles that skip __init__
-    _welcome_spoken = False
-    _welcome_end: asyncio.TimerHandle | None = None
-    _welcome_timeout: asyncio.TimerHandle | None = None
-    clock: CallClock | None = None       # silence and call-length clock, created when the call starts (CE-04, CE-05)
-    _watchdog: asyncio.Task[None] | None = None
-    _closing = False                     # the call is ending: nothing may interrupt or restart it
-
-    @property
-    def _welcoming(self) -> bool:
-        return self.controls.welcoming  # shared with the TurnAggregator, which drops transcripts meanwhile
-
-    @_welcoming.setter
-    def _welcoming(self, value: bool) -> None:
-        self.controls.welcoming = value
+    FINISH_WAIT_S = 10.0  # the most a goodbye may take to play out before the call closes
 
     def __init__(
         self, session: AgentSession, on_end: Callable[[str], Awaitable[None]], controls: LiveControls, **kwargs,  # noqa: ANN003
     ) -> None:
         super().__init__(**kwargs)
         self.session = session
-        self.on_end = on_end
         self.controls = controls
+        self.floor = CallFloor(session, controls, self, on_end)
         self._task: asyncio.Task[None] | None = None
-        self._bot_speaking = False
         self._greeted = False
         self._held: list[str] = []
         self._bot_stopped = asyncio.Event()
 
     async def greet(self) -> None:
+        async def opening() -> str:
+            await self.push_frame(OutputTransportMessageUrgentFrame(message={"type": "ready"}))
+            return await self.session.start()
+
         if self._greeted:
             return
         self._greeted = True
-        self._welcoming = True  # protected from the first moment: noise can arrive before any audio is out
-        self._start_clocks()
-        try:
-            await self.push_frame(OutputTransportMessageUrgentFrame(message={"type": "ready"}))
-            greeting = await self.session.start()
-            loop = asyncio.get_running_loop()
-            timeout = max(self.WELCOME_MIN_TIMEOUT_S, len(greeting) / self.WELCOME_SLOW_CHARS_PER_S)
-            self._welcome_timeout = loop.call_later(timeout, self._end_welcome)
-            await self._speak_text([greeting])
-        except BaseException:
-            self._end_welcome()
-            raise
+        self.floor.start()
+        await self.floor.welcome(opening)
+        self.floor.welcome_produced()  # the whole welcome is with TTS now
 
-    def _end_welcome(self) -> None:
-        self._welcoming = False
-        self._welcome_spoken = False
-        for handle in (self._welcome_end, self._welcome_timeout):
-            if handle:
-                handle.cancel()
-        self._welcome_end = self._welcome_timeout = None
-        if self.clock and not self._bot_speaking:  # the caller gets a full silence window after the welcome
-            self.clock.wait_for_caller(time.monotonic())
+    # -- the floor's Stage
+    def working(self) -> bool:
+        return bool(self._task and not self._task.done())
 
-    def on_bot_started(self) -> None:
-        self._bot_speaking = True
-        if self.clock:
-            self.clock.agent_started()
-        if self._welcoming:
-            self._welcome_spoken = True
-            if self._welcome_end:  # audio resumed after a gap between sentences
-                self._welcome_end.cancel()
-                self._welcome_end = None
+    async def say(self, text: str) -> None:
+        await self._speak_text([text])
 
-    async def on_bot_stopped(self) -> None:
-        self._bot_speaking = False
-        self._bot_stopped.set()
-        if self.clock:
-            self.clock.agent_finished(time.monotonic())
-        if self._welcoming and self._welcome_spoken and not self._welcome_end:
-            self._welcome_end = asyncio.get_running_loop().call_later(self.WELCOME_GRACE_S, self._end_welcome)
-        await self._release_held()
+    async def drained(self) -> None:
+        # let the goodbye play out before closing
+        self._bot_stopped.clear()
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(self._bot_stopped.wait(), self.FINISH_WAIT_S)
 
-    # -- silence and call-length clocks (CE-04, CE-05)
-    def _start_clocks(self) -> None:
-        policy = (getattr(self.session, "config", None) or {}).get("policy")
-        self.clock = CallClock(policy, time.monotonic())
-        if self.RUN_WATCHDOG and self._watchdog is None:
-            self._watchdog = asyncio.get_running_loop().create_task(self._watch())
-
-    def _stop_clocks(self) -> None:
-        task, self._watchdog = self._watchdog, None
-        if task and not task.done() and task is not asyncio.current_task():
-            task.cancel()
-
-    async def _watch(self) -> None:
-        while not self._closing:
-            await asyncio.sleep(self.WATCHDOG_TICK_S)
-            await self.check_clocks()
-
-    async def check_clocks(self, now: float | None = None) -> None:
-        """One tick of the call clock and the silence clock (also called directly by tests)."""
-        if self._closing or self.clock is None:
-            return
-        action = self.clock.tick(time.monotonic() if now is None else now, quiet=not (self._welcoming or self.busy))
-        if action is None:
-            return
-        if action.kind == "close":
-            await self._close_with(action.line, action.reason or "idle")
-        else:
-            await self.session.announce(action.line, {"silence_reminder": True})
-            await self._speak_text([action.line])
-
-    async def _close_with(self, line: str, reason: str) -> None:
-        self._closing = True
-        await self.session.announce(line, {"closing": reason})
-        await self._speak_text([line])
-        await self._finish(reason)
+    async def guard_changed(self) -> None:
+        pass  # the cascade reads the floor at every decision
 
     async def _speak_text(self, chunks: list[str]) -> None:
         await self.push_frame(LLMFullResponseStartFrame())
@@ -262,35 +184,31 @@ class BrainProcessor(FrameProcessor):
             await self.push_frame(LLMTextFrame(c))
         await self.push_frame(LLMFullResponseEndFrame())
 
-    @property
-    def busy(self) -> bool:
-        return self._bot_speaking or bool(self._task and not self._task.done())
-
     # -- decisions (also called directly by tests)
+    async def on_bot_stopped(self) -> None:
+        self.floor.bot_stopped()
+        self._bot_stopped.set()
+        await self._release_held()
+
     async def on_user_started(self) -> None:
-        """VO-03 barge-in, unless interruptions are disabled (TD-07) or the welcome is playing (VO-08)."""
-        if self.clock:
-            self.clock.caller_started()
-        if self._closing or self._welcoming or not self.controls.turn.allow_interruptions:
-            return  # a call that is closing is never interrupted: that would leave it open
-        if self.busy:
+        """VO-03 barge-in, unless interruptions are disabled (TD-07), the welcome is playing (VO-08) or the call is closing."""
+        self.floor.caller_started()
+        if self.floor.may_interrupt(self.controls.turn.allow_interruptions) and self.floor.busy:
             await self._cancel_task()
             await self.broadcast_interruption()
 
     async def on_user_turn(self, text: str) -> None:
-        if self._closing:
+        if not self.floor.listening:  # VO-08: heard during the welcome (often our own echo), or the call is closing
+            log.debug("dropping caller turn heard during the welcome or closing: %r", text)
             return
-        if self._welcoming:  # VO-08: heard during the welcome (often our own echo): not a caller turn
-            log.debug("dropping caller turn heard during the welcome: %r", text)
-            return
-        if self.busy and not self.controls.turn.allow_interruptions:
+        if self.floor.busy and not self.controls.turn.allow_interruptions:
             self._held.append(text)  # answered after the agent finishes
             return
         await self._cancel_task()
         self._task = asyncio.create_task(self._respond(text))
 
     async def _release_held(self) -> None:
-        if self._held and not self.busy:
+        if self._held and not self.floor.busy:
             text, self._held = " ".join(self._held), []
             self._task = asyncio.create_task(self._respond(text))
 
@@ -310,21 +228,11 @@ class BrainProcessor(FrameProcessor):
             if started:
                 await self.push_frame(LLMFullResponseEndFrame())
         if self.session.state.ended:  # the runtime ended the call: goodbye, farewell or hand-off (CE-01, CE-02)
-            self._closing = True
-            await self._finish(getattr(self.session, "end_reason", None) or "end_call")
+            self.floor.finish_after_drain(getattr(self.session, "end_reason", None) or "end_call")
         else:
-            if self.clock and not self._bot_speaking and not self._welcoming:
-                self.clock.wait_for_caller(time.monotonic())  # a reply with no speech still leaves the caller waiting
-            if not self._bot_speaking:
+            self.floor.settled()  # a reply with no speech still leaves the caller waiting
+            if not self.floor.bot_speaking:
                 asyncio.get_running_loop().call_soon(lambda: asyncio.ensure_future(self._release_held()))
-
-    async def _finish(self, reason: str) -> None:
-        # let the goodbye play out before closing (max 10 s)
-        self._closing = True
-        self._bot_stopped.clear()
-        with contextlib.suppress(asyncio.TimeoutError):
-            await asyncio.wait_for(self._bot_stopped.wait(), 10)
-        await self.on_end(reason)
 
     async def _cancel_task(self) -> None:
         if self._task and not self._task.done() and self._task is not asyncio.current_task():
@@ -341,20 +249,19 @@ class BrainProcessor(FrameProcessor):
         if isinstance(frame, VADUserStartedSpeakingFrame):
             await self.on_user_started()
         elif isinstance(frame, BotStartedSpeakingFrame):
-            self.on_bot_started()
+            self.floor.bot_started()
         elif isinstance(frame, BotStoppedSpeakingFrame):
             await self.on_bot_stopped()
         elif isinstance(frame, InputTransportMessageFrame):
             if isinstance(frame.message, dict) and frame.message.get("type") == "hangup":
                 await self._cancel_task()
-                await self.on_end("hangup")
+                await self.floor.end("hangup")
             return
         elif isinstance(frame, StartFrame):
             await self.push_frame(frame, direction)
             return
         elif isinstance(frame, (EndFrame, CancelFrame)):
-            self._end_welcome()
-            self._stop_clocks()
+            await self.floor.stop()
             await self._cancel_task()
         elif isinstance(frame, InterruptionFrame):
             pass

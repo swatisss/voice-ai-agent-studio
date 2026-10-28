@@ -5,6 +5,7 @@ Covers: TD-01, TD-02, TD-03, TD-04, TD-05, TD-06, TD-07, TD-08, VO-02
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from pipecat.frames.frames import TranscriptionFrame, VADUserStartedSpeakingFrame, VADUserStoppedSpeakingFrame
@@ -142,10 +143,11 @@ async def test_live_mode_change_applies_to_next_decision():
 
 class _Brain(BrainProcessor):
     def __init__(self, allow: bool) -> None:
-        self.controls = LiveControls(turn=TurnSettings(allow_interruptions=allow))
-        self._task = None
-        self._bot_speaking = True
-        self._held = []
+        async def on_end(reason: str) -> None:
+            pass
+
+        super().__init__(SimpleNamespace(), on_end, LiveControls(turn=TurnSettings(allow_interruptions=allow)))  # type: ignore[arg-type]
+        self.floor.bot_started()  # the agent is talking
         self.interrupted = 0
         self.cancelled = 0
         self.started: list[str] = []
@@ -166,8 +168,7 @@ async def test_interruptions_can_be_disabled():
     await off.on_user_started()
     await off.on_user_turn("what about my claim")
     assert off.interrupted == 0 and off.cancelled == 0 and off.started == [] and off._held == ["what about my claim"]
-    off._bot_speaking = False
-    await off._release_held()
+    await off.on_bot_stopped()
     await asyncio.sleep(0)
     assert off.started == ["what about my claim"]
 

@@ -32,17 +32,15 @@ class _Brain(BrainProcessor):
         async def start() -> str:
             return WELCOME
 
-        self.session = SimpleNamespace(start=start)
-        self.controls = LiveControls(turn=TurnSettings(allow_interruptions=allow))
-        self._task = None
-        self._bot_speaking = False
-        self._greeted = False
-        self._held = []
-        self._bot_stopped = asyncio.Event()
-        self.WELCOME_GRACE_S = grace  # type: ignore[misc]
+        async def on_end(reason: str) -> None:
+            pass
+
         self.pushed: list = []
         self.interrupted = 0
         self.replies: list[str] = []
+        super().__init__(SimpleNamespace(start=start), on_end, LiveControls(turn=TurnSettings(allow_interruptions=allow)))  # type: ignore[arg-type]
+        self.floor.RUN_WATCHDOG = False
+        self.floor.WELCOME_GRACE_S = grace
 
     async def push_frame(self, frame, direction=None) -> None:  # type: ignore[override]  # noqa: ANN001
         self.pushed.append(frame)
@@ -65,19 +63,19 @@ async def test_welcome_is_said_once_after_ready():
     assert isinstance(ready, OutputTransportMessageUrgentFrame) and ready.message == {"type": "ready"}
     assert isinstance(start, LLMFullResponseStartFrame) and isinstance(end, LLMFullResponseEndFrame)
     assert isinstance(text, LLMTextFrame) and text.text == WELCOME
-    brain._end_welcome()
+    await brain.floor.stop()
 
 
 async def test_welcome_is_not_interrupted_and_echo_is_not_answered():
     """Covers: VO-08"""
     brain = _Brain(allow=True)
     await brain.greet()
-    brain.on_bot_started()  # the welcome is playing
+    brain.floor.bot_started()  # the welcome is playing
     await brain.on_user_started()  # microphone picks up sound (an echo of the speakers, or the caller)
     await brain.on_user_turn("Thanks for calling Evergreen Health")  # what STT made of it
     assert brain.interrupted == 0
     assert brain.replies == [] and brain._held == []
-    brain._end_welcome()
+    await brain.floor.stop()
 
 
 async def test_aggregator_ignores_speech_while_welcoming():
@@ -107,13 +105,13 @@ async def test_protection_ends_after_the_audio_and_normal_rules_return():
     """Covers: VO-08, TD-07"""
     brain = _Brain(allow=True, grace=0.03)
     await brain.greet()
-    brain.on_bot_started()
+    brain.floor.bot_started()
     await brain.on_bot_stopped()
-    assert brain._welcoming  # still inside the grace period
+    assert brain.floor.welcoming  # still inside the grace period
     await asyncio.sleep(0.1)
-    assert not brain._welcoming and not brain.controls.welcoming
+    assert not brain.floor.welcoming and not brain.controls.welcoming
 
-    brain._bot_speaking = True  # the agent talks again; the caller speaks over it
+    brain.floor.bot_started()  # the agent talks again; the caller speaks over it
     await brain.on_user_started()
     assert brain.interrupted == 1
     await brain.on_user_turn("what about my claim")
@@ -125,26 +123,26 @@ async def test_gap_between_sentences_does_not_end_the_protection():
     """Covers: VO-08"""
     brain = _Brain(grace=0.05)
     await brain.greet()
-    brain.on_bot_started()
+    brain.floor.bot_started()
     await brain.on_bot_stopped()  # the speech engine pauses between sentences ...
     await asyncio.sleep(0.02)
-    brain.on_bot_started()        # ... and carries on within the grace period
+    brain.floor.bot_started()        # ... and carries on within the grace period
     await asyncio.sleep(0.1)
-    assert brain._welcoming
+    assert brain.floor.welcoming
     await brain.on_bot_stopped()
     await asyncio.sleep(0.15)
-    assert not brain._welcoming
+    assert not brain.floor.welcoming
 
 
 async def test_protection_times_out_if_the_welcome_never_finishes():
     """Covers: VO-08"""
     brain = _Brain()
-    brain.WELCOME_MIN_TIMEOUT_S = 0.05  # type: ignore[misc]
-    brain.WELCOME_SLOW_CHARS_PER_S = 10_000.0  # type: ignore[misc]
+    brain.floor.WELCOME_MIN_TIMEOUT_S = 0.05
+    brain.floor.WELCOME_SLOW_CHARS_PER_S = 10_000.0
     await brain.greet()  # the speech engine never reports audio
-    assert brain._welcoming
+    assert brain.floor.welcoming
     await asyncio.sleep(0.15)
-    assert not brain._welcoming
+    assert not brain.floor.welcoming
     await brain.on_user_turn("hello?")
     await asyncio.sleep(0)
     assert brain.replies == ["hello?"]

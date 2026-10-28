@@ -39,7 +39,7 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from voiceai import prompts
 from voiceai.live import LiveControls
 from voiceai.llm.gateway import Usage, gateway
-from voiceai.runtime.call_clock import CallClock
+from voiceai.runtime.call_floor import CallFloor
 from voiceai.runtime.prompt import system_prompt
 from voiceai.runtime.session import AgentSession, Decision
 from voiceai.runtime.tools import all_schemas
@@ -191,11 +191,6 @@ class _Resp:
 class RealtimeBridge(FrameProcessor):
     """Sits between the transport input and output: audio in, audio out, and the call's rules around the model."""
 
-    WELCOME_GRACE_S = 0.8
-    WELCOME_MIN_TIMEOUT_S = 15.0
-    WELCOME_SLOW_CHARS_PER_S = 6.0
-    RUN_WATCHDOG = True
-    WATCHDOG_TICK_S = 0.5
     FINISH_WAIT_S = 10.0
     FINISH_GRACE_S = 0.3   # audio may still be on its way to the transport when the closing response is done
 
@@ -211,7 +206,6 @@ class RealtimeBridge(FrameProcessor):
         self.send_ready = send_ready
         self._resampler = create_stream_resampler()
         self._reader: asyncio.Task[None] | None = None
-        self._watchdog: asyncio.Task[None] | None = None
         self._background: set[asyncio.Task[Any]] = set()
         self._resp: dict[str, _Resp] = {}
         self._active: str | None = None
@@ -219,38 +213,22 @@ class RealtimeBridge(FrameProcessor):
         self._idle.set()
         self._user_recorded = asyncio.Event()
         self._user_recorded.set()
-        self._bot_speaking = False
         self._bot_stopped = asyncio.Event()
         self._bot_stopped.set()
-        self._greeted = False
-        self._closing = False
-        self._ended = False
         self._exact_queue: list[str] = []  # lines asked for verbatim, in order (fallback when the service does not echo metadata)
         self._speech_stopped_at: float | None = None
         self._hold_pending = False
-        self._welcome_response_done = False
-        self._welcome_spoken = False
-        self._welcome_end: asyncio.TimerHandle | None = None
-        self._welcome_timeout: asyncio.TimerHandle | None = None
-        # silence and call-length clock (RV-11, CE-04, CE-05); restarted when the session opens
-        self.clock = CallClock(session.config.get("policy"), time.monotonic())
+        # the protected welcome, the silence and call-length clock and the closing state (RV-07, RV-11, CE-04..CE-06)
+        self.floor = CallFloor(session, controls, self, on_end)
 
     # ------------------------------------------------------------ helpers
-    @property
-    def _welcoming(self) -> bool:
-        return self.controls.welcoming
-
-    @_welcoming.setter
-    def _welcoming(self, value: bool) -> None:
-        self.controls.welcoming = value
-
-    @property
-    def busy(self) -> bool:
-        return self._bot_speaking or self._active is not None or any(not t.done() for r in self._resp.values() for t in r.calls)
+    def _tools_running(self) -> bool:
+        return any(not t.done() for r in self._resp.values() for t in r.calls)
 
     async def settle(self) -> None:
         """Wait for background work (tool calls, fixed lines, endings) started so far; used by tests."""
         while True:
+            await self.floor.settle()
             pending = [t for t in self._background if not t.done()]
             if not pending:
                 return
@@ -270,43 +248,41 @@ class RealtimeBridge(FrameProcessor):
             await self._provider_lost()
 
     async def _update_session(self) -> None:
-        await self._send(session_update(self.session, self.controls.turn, welcoming=self._welcoming, closing=self._closing))
+        await self._send(session_update(self.session, self.controls.turn, welcoming=self.floor.welcoming, closing=self.floor.closing))
+
+    # ------------------------------------------------------------ the floor's Stage
+    def working(self) -> bool:
+        return self._active is not None or self._tools_running()
+
+    async def say(self, text: str) -> None:
+        await self._say_exact(text)
+
+    async def drained(self) -> None:
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(self._idle.wait(), self.FINISH_WAIT_S)  # the closing line was fully produced
+        if not self.floor.bot_speaking:
+            await asyncio.sleep(self.FINISH_GRACE_S)
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(self._bot_stopped.wait(), self.FINISH_WAIT_S)
+
+    async def guard_changed(self) -> None:
+        await self._update_session()  # welcome or closing protection: the service's turn detection follows
 
     # ------------------------------------------------------------ startup and welcome
     async def start(self) -> None:
         """Open the session: tools, instructions, voice and turn detection; then read provider events."""
-        self.clock = CallClock(self.session.config.get("policy"), time.monotonic())
+        self.floor.start()
         await self._update_session()
         self._reader = asyncio.ensure_future(self._read_loop())
-        if self.RUN_WATCHDOG:
-            self._watchdog = asyncio.ensure_future(self._watch())
 
     async def greet(self) -> None:
         """RV-07: the welcome is spoken once, as exact text, and nothing interrupts or answers during it."""
-        if self._greeted:
-            return
-        self._greeted = True
-        self._welcoming = True
-        await self._update_session()  # welcome protection: no interruption, no automatic reply
-        if self.send_ready:
-            await self.push_frame(OutputTransportMessageUrgentFrame(message={"type": "ready"}))
-        greeting = await self.session.start()
-        timeout = max(self.WELCOME_MIN_TIMEOUT_S, len(greeting) / self.WELCOME_SLOW_CHARS_PER_S)
-        self._welcome_timeout = asyncio.get_running_loop().call_later(timeout, lambda: self._spawn(self._end_welcome()))
-        await self._say_exact(greeting)
+        async def opening() -> str:
+            if self.send_ready:
+                await self.push_frame(OutputTransportMessageUrgentFrame(message={"type": "ready"}))
+            return await self.session.start()
 
-    async def _end_welcome(self) -> None:
-        if not self._welcoming:
-            return
-        self._welcoming = False
-        for handle in (self._welcome_end, self._welcome_timeout):
-            if handle:
-                handle.cancel()
-        self._welcome_end = self._welcome_timeout = None
-        if not self._closing:
-            await self._update_session()  # the agent's own turn detection applies from here on
-        if not self.busy:
-            self.clock.wait_for_caller(time.monotonic())
+        await self.floor.welcome(opening)  # protected first: no interruption, no automatic reply
 
     # ------------------------------------------------------------ audio in
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
@@ -316,12 +292,12 @@ class RealtimeBridge(FrameProcessor):
             await self.start()
             return
         if isinstance(frame, InputAudioRawFrame):
-            if not self._closing:
+            if not self.floor.closing:
                 await self._audio_in(frame)
             return
         if isinstance(frame, InputTransportMessageFrame):
             if isinstance(frame.message, dict) and frame.message.get("type") == "hangup":
-                await self._finish_now("hangup")
+                await self.floor.end("hangup")
             return
         if isinstance(frame, BotStartedSpeakingFrame):
             self.on_bot_started()
@@ -339,32 +315,20 @@ class RealtimeBridge(FrameProcessor):
             await self._send({"type": "input_audio_buffer.append", "audio": base64.b64encode(audio).decode("ascii")})
 
     async def shutdown(self) -> None:
-        self._closing = True
-        for task in (self._watchdog, self._reader, *self._background):
+        await self.floor.stop()
+        for task in (self._reader, *self._background):
             if task and not task.done() and task is not asyncio.current_task():
                 task.cancel()
-        for handle in (self._welcome_end, self._welcome_timeout):
-            if handle:
-                handle.cancel()
         await self.conn.close()
 
     # ------------------------------------------------------------ bot speaking (from the output transport)
     def on_bot_started(self) -> None:
-        self._bot_speaking = True
         self._bot_stopped.clear()
-        self.clock.agent_started()
-        if self._welcoming:
-            self._welcome_spoken = True
-            if self._welcome_end:
-                self._welcome_end.cancel()
-                self._welcome_end = None
+        self.floor.bot_started()
 
     async def on_bot_stopped(self) -> None:
-        self._bot_speaking = False
         self._bot_stopped.set()
-        self.clock.agent_finished(time.monotonic(), waiting=self._active is None and not self._welcoming)
-        if self._welcoming and self._welcome_spoken and self._welcome_response_done and not self._welcome_end:
-            self._welcome_end = asyncio.get_running_loop().call_later(self.WELCOME_GRACE_S, lambda: self._spawn(self._end_welcome()))
+        self.floor.bot_stopped(waiting=self._active is None and not self.floor.welcoming)
 
     # ------------------------------------------------------------ provider events
     async def _read_loop(self) -> None:
@@ -420,7 +384,7 @@ class RealtimeBridge(FrameProcessor):
         resp.waits_for_user = not self._user_recorded.is_set()
         self._active = rid
         self._idle.clear()
-        self.clock.agent_started()
+        self.floor.reply_started()
 
     async def _on_audio_delta(self, evt: dict[str, Any]) -> None:
         rid = evt.get("response_id", "")
@@ -440,20 +404,20 @@ class RealtimeBridge(FrameProcessor):
         await self.push_frame(TTSAudioRawFrame(audio=audio, sample_rate=RATE, num_channels=1))
 
     async def _on_speech_started(self) -> None:
-        self.clock.caller_started()
+        self.floor.caller_started()
         self._user_recorded.clear()
-        if self._closing or self._welcoming or not self.controls.turn.allow_interruptions:
+        if not self.floor.may_interrupt(self.controls.turn.allow_interruptions):
             return
         if self._active is not None:  # VO-03 for the realtime pipeline: drop queued audio and tell the service what was heard
             await self._interrupt()
 
     async def _on_speech_stopped(self) -> None:
         self._speech_stopped_at = time.perf_counter()
-        if not self.controls.turn.allow_interruptions and not self._welcoming and not self._closing:
+        if not self.controls.turn.allow_interruptions and self.floor.listening:
             await self._respond_when_free()  # hold mode: the service never replies by itself
 
     async def _respond_when_free(self) -> None:
-        if self.busy and (self._active is not None or any(not t.done() for r in self._resp.values() for t in r.calls)):
+        if self.working():
             self._hold_pending = True
             return
         self._hold_pending = False
@@ -474,9 +438,9 @@ class RealtimeBridge(FrameProcessor):
 
     async def _on_user_transcript(self, text: str) -> None:
         text = (text or "").strip()
-        if self._closing:
+        if self.floor.closing:
             return
-        if self._welcoming:  # VO-08: heard during the welcome (often our own echo): not a caller turn
+        if self.floor.welcoming:  # VO-08: heard during the welcome (often our own echo): not a caller turn
             log.debug("dropping caller turn heard during the welcome: %r", text)
             self._user_recorded.set()
             return
@@ -497,11 +461,11 @@ class RealtimeBridge(FrameProcessor):
         """Speak a decision's exact line and, when it ends the call, close once the line was spoken."""
         await self.session.commit(decision)
         if decision.end:
-            await self._begin_closing()
+            await self.floor.begin_closing()
         if decision.say is not None:
             await self._say_exact(decision.say)
         if decision.end:
-            self._spawn(self._finish(decision.end))
+            self.floor.finish_after_drain(decision.end)
 
     # ------------------------------------------------------------ tool calls
     def _on_function_call(self, evt: dict[str, Any]) -> None:
@@ -523,7 +487,7 @@ class RealtimeBridge(FrameProcessor):
 
     async def _after_tools(self, resp: _Resp, status: str, spoke: bool) -> None:
         await asyncio.gather(*resp.calls, return_exceptions=True)
-        if self._closing or status == "cancelled":
+        if self.floor.closing or status == "cancelled":
             return
         decision = await self.session.tools_finished(spoke)
         if decision.model_turn:
@@ -551,24 +515,22 @@ class RealtimeBridge(FrameProcessor):
         decision = Decision()
         if resp.exact is not None or resp.suppressed:
             await self.session.reply_finished("", usage=usage, decide=False)  # the line was stored when the platform chose it
-            if resp.exact is not None and self._welcoming and not self._welcome_response_done:
-                self._welcome_response_done = True
-                if self._welcome_spoken and not self._bot_speaking and not self._welcome_end:
-                    self._welcome_end = asyncio.get_running_loop().call_later(self.WELCOME_GRACE_S, lambda: self._spawn(self._end_welcome()))
+            if resp.exact is not None and self.floor.welcoming:
+                self.floor.welcome_produced()
         else:
             await self._after_user_transcript(resp)
-            decide = not resp.calls and status == "completed" and not self._closing  # ES-02, ES-03, max turns, end_call
+            decide = not resp.calls and status == "completed" and not self.floor.closing  # ES-02, ES-03, max turns, end_call
             decision = await self.session.reply_finished(
                 resp.text, resp.latency_ms, usage, interrupted=(status == "cancelled" and spoke), decide=decide,
             )
-        if self._hold_pending and not resp.calls and not self._closing:
+        if self._hold_pending and not resp.calls and not self.floor.closing:
             await self._respond_when_free()
         if resp.calls:
             self._spawn(self._after_tools(resp, status, spoke))
         elif decision.end:
             await self._carry_out(decision)
-        if self._active is None and not self._bot_speaking and not self._welcoming:
-            self.clock.wait_for_caller(time.monotonic())
+        if self._active is None:
+            self.floor.settled()
 
     async def _cancel_active(self, suppress: bool) -> None:
         rid = self._active
@@ -595,61 +557,13 @@ class RealtimeBridge(FrameProcessor):
             },
         })
 
-    async def _begin_closing(self) -> None:
-        """Nothing may interrupt or start a reply once the call is closing."""
-        if self._closing:
-            return
-        self._closing = True
-        await self._update_session()
-
     # ------------------------------------------------------------ ending
-    async def _finish(self, reason: str) -> None:
-        self._closing = True
-        with contextlib.suppress(asyncio.TimeoutError):
-            await asyncio.wait_for(self._idle.wait(), self.FINISH_WAIT_S)  # the closing line was fully produced
-        if not self._bot_speaking:
-            await asyncio.sleep(self.FINISH_GRACE_S)
-        with contextlib.suppress(asyncio.TimeoutError):
-            await asyncio.wait_for(self._bot_stopped.wait(), self.FINISH_WAIT_S)
-        await self._finish_now(reason)
-
-    async def _finish_now(self, reason: str) -> None:
-        if self._ended:
-            return
-        self._ended = True
-        self._closing = True
-        await self.on_end(reason)
-
     async def _provider_lost(self) -> None:
         """RV-13: the service went away mid-call."""
-        if self._closing or self._ended:
+        if self.floor.closing:
             return
-        self._closing = True
+        await self.floor.begin_closing(tell_stage=False)  # nothing can be sent any more
         log.warning("realtime provider connection lost on call %s", self.session.call_id)
         with contextlib.suppress(Exception):
             await self.session.escalate("other", "The realtime voice service was unavailable")
-        await self._finish_now("error")
-
-    # ------------------------------------------------------------ clocks (RV-11)
-    async def _watch(self) -> None:
-        while not self._closing:
-            await asyncio.sleep(self.WATCHDOG_TICK_S)
-            await self.check_clocks()
-
-    async def check_clocks(self, now: float | None = None) -> None:
-        if self._closing:
-            return
-        action = self.clock.tick(time.monotonic() if now is None else now, quiet=not (self._welcoming or self.busy))
-        if action is None:
-            return
-        if action.kind == "close":
-            await self._close_with(action.line, action.reason or "idle")
-        else:
-            line = await self.session.announce(action.line, {"silence_reminder": True})
-            await self._say_exact(line)
-
-    async def _close_with(self, line: str, reason: str) -> None:
-        text = await self.session.announce(line, {"closing": reason})
-        await self._begin_closing()
-        await self._say_exact(text)
-        self._spawn(self._finish(reason))
+        await self.floor.end("error")

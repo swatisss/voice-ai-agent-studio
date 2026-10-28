@@ -22,6 +22,14 @@ os.environ.update({
     "TWILIO_AUTH_TOKEN": "",
     "PUBLIC_BASE_URL": "",
     "TENANT_SECRETS_KEY": "",
+    # a developer's LLM_ROLE_* lines in apps/api/.env must not change the default roles the tests expect
+    "LLM_ROLE_REALTIME": "",
+    "LLM_ROLE_ANALYSIS": "",
+    "LLM_ROLE_DRAFTING": "",
+    "LLM_ROLE_SIMULATOR": "",
+    "LLM_ROLE_JUDGE": "",
+    "LLM_ROLE_TURN": "",
+    "LLM_ROLE_SPEECH": "",
     "WEB_DIST_DIR": str(_TMP / "no-web"),
 })
 

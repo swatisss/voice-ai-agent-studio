@@ -1,4 +1,4 @@
-"""ORM models - the 23 tables of the data model.
+"""ORM models - the 25 tables of the data model.
 
 Spec: /data/data-model.md
 """
@@ -348,6 +348,48 @@ class PhoneNumber(Base):
     agent_id: Mapped[str] = mapped_column(String(32), index=True)
     label: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = _created()
+
+
+class MemberMemory(Base):
+    """One episode or fact an agent remembers about a verified member (/architecture/agent-memory.md)."""
+
+    __tablename__ = "member_memories"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    member_ref: Mapped[str] = mapped_column(String(64), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # episode | fact
+    category: Mapped[str] = mapped_column(String(32))
+    text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | retired
+    valid_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    invalid_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    superseded_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
+    source_call_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+    prompt_version: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class MemoryEvent(Base):
+    """Append-only history of member memory; content is emptied by expiry and erasure."""
+
+    __tablename__ = "memory_events"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    agent_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    member_ref: Mapped[str] = mapped_column(String(64), index=True)
+    memory_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    action: Mapped[str] = mapped_column(String(16))  # added | superseded | confirmed | restored | expired | erased
+    actor: Mapped[str] = mapped_column(String(16))   # agent | studio | system
+    call_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    text_before: Mapped[str | None] = mapped_column(Text, nullable=True)
+    text_after: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
 
 
 class Job(Base):

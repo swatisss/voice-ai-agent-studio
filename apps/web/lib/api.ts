@@ -93,3 +93,32 @@ export type Escalation = {
   packet_status: string; packet: Packet | null; assignee: string | null; disposition: string | null;
   resolution_note: string | null; created_at: string; accepted_at: string | null; resolved_at: string | null; call?: any;
 };
+
+// Spec: /architecture/agent-memory.md (Memory item), /ui/member-memory.md
+export type MemoryItem = {
+  id: string; agent_id: string; member_ref: string; kind: "episode" | "fact"; category: string; text: string;
+  status: "active" | "retired"; valid_at: string; invalid_at: string | null; superseded_by: string | null; expires_at: string;
+  source_call_id: string | null; source_seq: number | null; created_at: string; updated_at: string;
+};
+export type MemoryEvent = {
+  id: string; agent_id: string | null; member_ref: string; memory_id: string | null;
+  action: "added" | "superseded" | "confirmed" | "restored" | "expired" | "erased"; actor: "agent" | "studio" | "system";
+  call_id: string | null; text_before: string | null; text_after: string | null; reason: string | null; at: string;
+};
+export type MemberMemory = {
+  member_ref: string; first_name: string | null; agents: { id: string; name: string }[];
+  facts: MemoryItem[]; episodes: MemoryItem[]; retired: MemoryItem[]; events: MemoryEvent[];
+};
+
+/** GET a JSON resource and save it as a file in the browser. */
+export async function downloadJson(path: string, filename: string): Promise<void> {
+  const data = await api(path);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

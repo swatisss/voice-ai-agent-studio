@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from voiceai.agents import publish
 from voiceai.config import get_settings
-from voiceai.db import sessionmaker
+from voiceai.db import sessionmaker, utcnow
 from voiceai.knowledge import okf
 from voiceai.knowledge.embeddings import embed
 from voiceai.knowledge.ingest import import_okf
@@ -22,7 +22,8 @@ from voiceai.learning.analyze import refresh_stats
 from voiceai.call_settings import persona_dict
 from voiceai.mock import data as mock_data
 from voiceai.models import (
-    Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, Persona, Skill, Tenant, TenantSettings, Tool, UseCase,
+    Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, MemberMemory, MemoryEvent, Persona, Skill, Tenant,
+    TenantSettings, Tool, UseCase,
 )
 from voiceai.schemas import FIXABLE
 from voiceai.seed import catalog
@@ -95,9 +96,27 @@ async def seed(reset: bool = False) -> dict[str, Any]:
             ))
         summary["use_cases"] = len(catalog.USE_CASES)
         summary["history_calls"] = await _seed_history(s, care_agent)
+        summary["memories"] = await _seed_memories(s, care, agents)
         await s.commit()
     log.info("seeded: %s", summary)
     return summary
+
+
+async def _seed_memories(s, tenant_id: str, agents: dict[str, Agent]) -> int:  # noqa: ANN001
+    """Seeded member memory, so the first demo call is already personal (/architecture/agent-memory.md)."""
+    now = utcnow()
+    vectors = await embed([text for _, _, kind, _, text, _ in catalog.MEMORIES])
+    for (key, member, kind, category, text, days), vector in zip(catalog.MEMORIES, vectors):
+        learned = now - timedelta(days=days)
+        keep = timedelta(days=90 if kind == "episode" else 365)
+        m = MemberMemory(tenant_id=tenant_id, agent_id=agents[key].id, member_ref=member, kind=kind, category=category, text=text,
+                         valid_at=learned, expires_at=learned + keep, embedding=vector.tolist() if kind == "fact" else None,
+                         prompt_version="seed", created_at=learned, updated_at=learned)
+        s.add(m)
+        await s.flush()
+        s.add(MemoryEvent(tenant_id=tenant_id, agent_id=m.agent_id, member_ref=member, memory_id=m.id, action="added",
+                          actor="system", text_after=text, at=learned))
+    return len(catalog.MEMORIES)
 
 
 async def _seed_history(s, agent: Agent) -> int:  # noqa: ANN001

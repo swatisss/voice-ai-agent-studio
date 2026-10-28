@@ -91,18 +91,55 @@ def _owned_policy(policy_id: str, member: str) -> tuple[str, dict[str, Any] | No
 
 # ================================================================ member services
 class VerifyBody(BaseModel):
-    member_id: str
+    member_id: str | None = None
     date_of_birth: str
 
 
-@router.post("/healthcare/verify")
-async def verify(body: VerifyBody) -> dict[str, Any]:
-    ref = norm_member(body.member_id)
+class IdentifyBody(BaseModel):
+    phone: str
+
+
+def norm_phone(raw: str) -> str:
+    digits = re.sub(r"\D", "", raw or "")
+    return f"+{digits}" if digits else ""
+
+
+@router.post("/healthcare/identify")
+async def identify(body: IdentifyBody) -> dict[str, Any]:
+    """MOCK-15: who a registered phone number belongs to - the first name and nothing more."""
+    ref = data.PHONES.get(norm_phone(body.phone))
+    if not ref:
+        return {"matched": False}
+    return {"matched": True, "member_ref": ref, "first_name": data.MEMBERS[ref]["first_name"]}
+
+
+@router.post("/healthcare/verify", response_model=None)
+async def verify(body: VerifyBody, x_identified_ref: str | None = Header(default=None)) -> dict[str, Any] | JSONResponse:
+    if body.member_id:
+        ref = norm_member(body.member_id)
+    elif x_identified_ref:  # MOCK-16: an identified caller verifies with the date of birth alone
+        ref = x_identified_ref
+    else:
+        return err(422, "member_id_required", "Give the member ID, or call from the number on the member's record")
     member = data.MEMBERS.get(ref or "")
     dob = parse_date(body.date_of_birth)
     if not member or not dob or dob.isoformat() != member["dob"]:
         return {"verified": False, "reason": "Member ID and date of birth do not match our records."}
     return {"verified": True, "member_ref": ref, "first_name": member["first_name"], "plan_name": member["plan"]}
+
+
+@router.get("/healthcare/members/me", response_model=None)
+async def member_profile(x_member_ref: str | None = Header(default=None)) -> dict[str, Any] | JSONResponse:
+    """MOCK-17: the verified member's profile, used to personalise the call; never stored by the platform."""
+    member = data.MEMBERS.get(x_member_ref or "")
+    if not member:
+        return unverified()
+    policies = [{"policy_id": pid, "product": p["product"], "status": p["status"]}
+                for pid, p in data.POLICIES.items() if p["member"] == x_member_ref]
+    open_claims = [{"claim_id": cid, "status": c["status"]}
+                   for cid, c in data.CLAIMS.items() if c["member"] == x_member_ref and c["status"] != "paid"]
+    return {"first_name": member["first_name"], "plan_name": member["plan"], "policies": policies, "open_claims": open_claims,
+            "preferred_contact": data.PREFERRED_CONTACT.get(x_member_ref or "")}
 
 
 @router.get("/healthcare/benefits", response_model=None)

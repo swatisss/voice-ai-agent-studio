@@ -40,7 +40,6 @@ from voiceai import prompts
 from voiceai.live import LiveControls
 from voiceai.llm.gateway import Usage, gateway
 from voiceai.runtime.call_floor import CallFloor
-from voiceai.runtime.prompt import system_prompt
 from voiceai.runtime.session import AgentSession, Decision
 from voiceai.runtime.tools import all_schemas
 from voiceai.voice.turn_detection import TurnSettings
@@ -139,7 +138,7 @@ def realtime_tools(config: dict[str, Any]) -> list[dict[str, Any]]:
 def realtime_instructions(session: AgentSession) -> str:
     """RV-04: the assembled system prompt of the agent version followed by the realtime addendum (both loaded from specs/prompts)."""
     policy = session.config.get("policy", {})
-    base = system_prompt(session.config, session.tenant_name, session.state.verified_member_ref, session.started_at, session.context)
+    base = session.prompt()
     addendum = prompts.render("realtime-addendum", filler_instruction=FILLER_ON if policy.get("voice_filler", True) else FILLER_OFF)
     return f"{base}\n\n{addendum}".strip()
 

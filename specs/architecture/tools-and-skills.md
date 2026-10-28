@@ -19,7 +19,7 @@ Schema in [/data/agent-config.md](/data/agent-config.md). Key fields: `name` (sn
 4. Headers: `X-Tenant-Id` and `X-Call-Id` are always sent. Once the call is verified, `X-Member-Ref` carries the verified member reference, so member-specific APIs never trust a member ID chosen by the model (minimum-necessary access; see [/product/healthcare-compliance.md](/product/healthcare-compliance.md)).
 5. Relative URLs (starting `/`) execute **in-process** against the platform's own ASGI app (no network hop). Absolute URLs use a shared `httpx.AsyncClient`.
 6. Response: JSON body (or `{"text": <body>}` for non-JSON), serialized and truncated to 2,000 characters. HTTP ≥ 400 → `{"error": "http_<code>", "detail": <body excerpt>}`. Timeout → `{"error":"timeout"}`.
-7. **Verification tools** (`is_verification: true`): if the JSON response has `verified: true`, the call state becomes verified and `member_ref` (if present) is stored on the call.
+7. **Verification tools** (`is_verification: true`): if the JSON response has `verified: true`, the call state becomes verified and `member_ref` (if present) is stored on the call. On an identified call the request also carries `X-Identified-Ref` with the identified member reference, so the business API can check a date of birth alone (flow A). A `verified: false` result counts a failed attempt and reaches the model as `{"verified": false, "say": "I'm sorry, I couldn't verify those details."}`, without the API's reason ([/architecture/caller-verification.md](/architecture/caller-verification.md)).
 8. Every execution appends `{name, ok, summary}` to `state.tools_used`, where `summary` is a ≤ 160-char human-readable digest (status code + key fields).
 
 # Skill format
@@ -54,4 +54,5 @@ v1 includes all of an agent's skills in every prompt (no on-demand loading).
 - **TS-05** — Given a response body over 2,000 characters, when returned to the model, then it is truncated to 2,000 characters.
 - **TS-06** — Given a tool named `search_knowledge`, when created, then the API rejects it with 422.
 - **TS-07** — Given a skill whose `required_tools` includes a tool not on the agent, when publishing, then publish fails with a message naming the missing tool.
+- **TS-09** — Given an identified call, when the verification tool runs, then the request carries `X-Identified-Ref`; given a failed verification, the model receives the uniform `say` text and not the API's reason.
 - **TS-08** — Given a verified call, when any agent tool executes, then the request carries `X-Member-Ref` with the verified member reference; given an unverified call, the header is absent.

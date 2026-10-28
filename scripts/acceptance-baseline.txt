@@ -68,3 +68,11 @@ TEL-09
 
 # One-command phone demo: needs Twilio, OpenAI, a tunnel tool and a phone (the pieces and a real run against local fakes are tested)
 DEV-11
+# CP-0019 builder Memory tab, Test call "Call from", call detail Memory card, member memory page: no browser harness; the API
+# behind each is covered by tests/test_member_memory.py and tests/test_caller_verification.py, the web build and type check
+# pass. Click-through in the browser still to be done; these lines need the reviewer's approval (asked for with CP-0019).
+UI-42
+UI-43
+UI-44
+UI-45
+UI-46

@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None
     openai_api_key: str | None = None
     deepgram_api_key: str | None = None
+    member_identify_url: str = "/mock/healthcare/identify"   # business API: who a registered phone number belongs to (IDV)
+    member_profile_url: str = "/mock/healthcare/members/me"   # business API: the verified member's profile (agent memory)
     openai_realtime_url: str = "wss://api.openai.com/v1/realtime"  # realtime pipeline endpoint; overridden for tests and proxies
     # telephony (/architecture/telephony.md): the public base URL must equal the URL configured in Twilio
     twilio_account_sid: str | None = None

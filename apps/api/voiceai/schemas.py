@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 BUILTIN_TOOLS = {"search_knowledge", "escalate_to_human", "end_call"}
 ESCALATION_CATEGORIES = (
-    "caller_requested", "policy_required", "safety", "knowledge_gap", "capability_gap", "tool_failure", "frustration", "other",
+    "caller_requested", "policy_required", "safety", "knowledge_gap", "capability_gap", "tool_failure", "frustration",
+    "verification_failed", "other",
 )
 ROOT_CAUSES = (
     "none", "missing_knowledge", "missing_skill", "tool_error", "policy_required", "safety",
@@ -156,6 +157,29 @@ class TelephonyConfig(BaseModel):
         return v
 
 
+MEMORY_REMEMBER_DEFAULT = (
+    "Contact preferences, the best time to call back, family members or representatives who help with the member's requests, "
+    "what the agent promised to do, and the outcome of each request."
+)
+MEMORY_NEVER_DEFAULT = (
+    "Diagnoses, symptoms, medications or treatments; payment card or bank details; member IDs, dates of birth or full phone numbers."
+)
+
+
+class MemoryConfig(BaseModel):
+    """What the agent remembers about verified members between calls (/architecture/agent-memory.md, DM-07)."""
+
+    enabled: bool = True
+    remember: str = Field(default=MEMORY_REMEMBER_DEFAULT, max_length=600)
+    never_remember: str = Field(default=MEMORY_NEVER_DEFAULT, max_length=600)
+    episode_days: int = Field(default=90, ge=7, le=365)
+    fact_days: int = Field(default=365, ge=30, le=730)
+
+
+class VerificationConfig(BaseModel):
+    trust_attested_caller_id: bool = False  # demo only (/architecture/caller-verification.md, IDV-05)
+
+
 class AgentConfig(BaseModel):
     mode: Literal["inbound", "outbound", "internal"] = "inbound"
     outbound: OutboundConfig = Field(default_factory=OutboundConfig)
@@ -168,6 +192,8 @@ class AgentConfig(BaseModel):
     skill_ids: list[str] = Field(default_factory=list)
     knowledge_doc_ids: list[str] = Field(default_factory=list)
     models: ModelChoice = Field(default_factory=ModelChoice)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    verification: VerificationConfig = Field(default_factory=VerificationConfig)
 
     @model_validator(mode="after")
     def _outbound_needs_targets(self) -> AgentConfig:
@@ -278,3 +304,24 @@ class JudgeOut(BaseModel):
     grounded: bool = True
     policy_violations: list[str] = Field(default_factory=list)
     notes: str = ""
+
+
+# ------------------------------------------------------------------ member memory (LLM outputs)
+MEMORY_CATEGORIES = ("preference", "relationship", "commitment", "circumstance")
+
+
+class MemoryFactOut(BaseModel):
+    text: str = Field(min_length=1, max_length=300)
+    category: Literal["preference", "relationship", "commitment", "circumstance"] = "circumstance"
+    seq: int | None = None
+
+
+class MemoryExtractOut(BaseModel):
+    episode: str = Field(default="", max_length=600)
+    facts: list[MemoryFactOut] = Field(default_factory=list, max_length=5)
+
+
+class MemoryDecisionOut(BaseModel):
+    action: Literal["ADD", "SUPERSEDE", "CONFIRM", "NOOP"]
+    target_id: str | None = None
+    reason: str = Field(default="", max_length=300)

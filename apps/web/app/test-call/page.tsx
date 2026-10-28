@@ -19,6 +19,15 @@ type Mode = "talk" | "type";
 
 const TECH_KEY = "test-call-technical";  // UI-32: remembered per browser, off by default
 
+/** UI-43: who the playground call comes from; sent as caller_number, never shown on screen. */
+const CALL_FROM: { id: string; label: string; number?: string }[] = [
+  { id: "none", label: "No number" },
+  { id: "maria", label: "Maria Lopez — registered number", number: "+12025550141" },
+  { id: "james", label: "James Carter — registered number", number: "+12025550142" },
+  { id: "priya", label: "Priya Nair — registered number", number: "+12025550143" },
+  { id: "unknown", label: "An unknown number", number: "+12025550199" },
+];
+
 export default function Page() {
   return <Suspense fallback={<Spinner />}><TestCall /></Suspense>;
 }
@@ -46,8 +55,11 @@ function TestCall() {
   const [scriptOpen, setScriptOpen] = useState(true);
   const [technical, setTechnicalState] = useState(false);
   const [targetRef, setTargetRef] = useState("");
+  const [callFrom, setCallFrom] = useState("none");
   const { data: useCases } = useApi<{ items: any[] }>("/api/use-cases", [tenant]);
   const outbound = agent?.mode === "outbound";
+  const inbound = !agent?.mode || agent.mode === "inbound";
+  const callerNumber = inbound ? CALL_FROM.find((o) => o.id === callFrom)?.number : undefined;
   const { data: targets } = useApi<{ items: any[] }>(outbound ? `/api/outbound/targets?agent_id=${agentId}` : null, [agentId, outbound]);
   const agentUcs = (useCases?.items ?? []).filter((u) => u.agent_id === agentId);  // what the selected agent handles (UI-24)
   const target = (targets?.items ?? []).find((t) => t.member_ref === targetRef) ?? targets?.items?.[0];
@@ -103,7 +115,7 @@ function TestCall() {
     reset();
     setStatus("connecting");
     try {
-      const r = await api("/api/calls", { method: "POST", json: { agent_id: agentId, channel: mode === "talk" ? "voice" : "text", persona_id: personaId || undefined, turn_detection: mode === "talk" ? turn : undefined, context: outbound ? { member_ref: target?.member_ref } : undefined } });
+      const r = await api("/api/calls", { method: "POST", json: { agent_id: agentId, channel: mode === "talk" ? "voice" : "text", persona_id: personaId || undefined, turn_detection: mode === "talk" ? turn : undefined, context: outbound ? { member_ref: target?.member_ref } : undefined, caller_number: callerNumber } });
       setCallId(r.call_id);
       if (mode === "type") {
         await sync(r.call_id);
@@ -203,6 +215,14 @@ function TestCall() {
               </Select>
               {!targets?.items?.length && <div className="text-xs text-muted">No one is due a call right now.</div>}
               <div className="text-xs text-muted">The agent speaks first. Answer as {target?.first_name ?? "the callee"}.</div>
+            </div>
+          )}
+          {inbound && (  // UI-43
+            <div className="mb-3 max-w-md space-y-1">
+              <label className="text-xs font-medium text-muted" htmlFor="call-from">Call from</label>
+              <Select id="call-from" value={callFrom} disabled={busy} onChange={(e) => setCallFrom(e.target.value)}>
+                {CALL_FROM.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </Select>
             </div>
           )}
           <div className="flex h-[52vh] flex-col">

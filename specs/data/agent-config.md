@@ -90,6 +90,20 @@ The snapshot carries `persona` (resolved, with `id` when from the library), `voi
 * `mode`: `inbound` (default), `outbound` or `internal` ([/architecture/call-modes.md](/architecture/call-modes.md)).
 * `outbound.targets_url`: required for outbound agents: a relative (in-process) or absolute URL that returns `{"targets": [{"member_ref", "first_name", "summary", "context"}]}`.
 
+# Memory and verification settings
+
+```json
+"memory": { "enabled": true, "remember": "Contact preferences, …", "never_remember": "Diagnoses, …", "episode_days": 90, "fact_days": 365 },
+"verification": { "trust_attested_caller_id": false }
+```
+
+| Field | Rules |
+|---|---|
+| `memory.enabled` | default `true`; a config without `memory` gets the defaults on save ([/architecture/agent-memory.md](/architecture/agent-memory.md)) |
+| `memory.remember`, `memory.never_remember` | ≤ 600 chars each; defaults in the memory spec |
+| `memory.episode_days`, `memory.fact_days` | 7–365 (default 90), 30–730 (default 365) |
+| `verification.trust_attested_caller_id` | default `false`; "demo only" ([/architecture/caller-verification.md](/architecture/caller-verification.md)) |
+
 # Tool definition (`tools` row / API body)
 
 ```json
@@ -142,4 +156,5 @@ Later edits to a tool or skill never change existing versions. Knowledge docs ar
 
 - **DM-04** — Given a draft config with `max_turns: 2`, when saved, then the API returns 422. (Turn-detection bounds: TD-08.)
 - **DM-06** — Given a draft config with `telephony.transfer_to: "0123"`, or `voice.realtime.voice` not in the `speech` role's list, or `models.speech` set to a chat model, when saved, then the API returns 422; `+15557654321` and `sip:claims@example.com` are accepted. (`voice.pipeline` values: RV-01.)
+- **DM-07** — Given a draft config with `memory.episode_days: 3` or `memory.remember` longer than 600 characters, when saved, then the API returns 422; a config without `memory` is saved with the defaults and published with them in the snapshot.
 - **DM-05** — Given a published version, when the underlying tool is edited, then the version's snapshot still holds the old definition.

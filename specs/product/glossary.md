@@ -42,3 +42,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | **Media Stream** | Twilio's feature that sends a live phone call's audio to our WebSocket and plays audio back ([/architecture/telephony.md](/architecture/telephony.md)). |
 | **Voice pipeline** | How a voice call turns audio into answers: `cascade` (speech-to-text, brain, text-to-speech) or `realtime` (one speech-to-speech model) ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)). |
 | **Transfer** | Redirecting a live phone call to a person's number after a hand-off. |
+| **Identified caller** | A caller whose phone number is registered on a member's record; addressed by first name, not yet verified ([/architecture/caller-verification.md](/architecture/caller-verification.md)). |
+| **Verified caller** | A caller who proved who they are in this call: registered number + date of birth, or member ID + date of birth. |
+| **Member memory** | What one agent remembers about one verified member across calls: **episodes** (call summaries) and **facts** (preferences, relationships, commitments) ([/architecture/agent-memory.md](/architecture/agent-memory.md)). |
+| **Supersede** | The agent replacing a remembered fact with a newer one; the old fact is retired, not deleted. |
+| **Erase member** | Removing everything every agent remembers about a member; only a content-free record that it happened remains. |

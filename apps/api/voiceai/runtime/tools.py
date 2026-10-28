@@ -19,6 +19,9 @@ from voiceai.schemas import ESCALATION_CATEGORIES
 
 MAX_RESULT_CHARS = 2000
 VERIFY_FIRST = "I need to verify your identity first. Can I have your member ID and date of birth?"
+VERIFY_FIRST_IDENTIFIED = "I need to verify your identity first. Can I have your date of birth?"
+VERIFY_FAILED = "I'm sorry, I couldn't verify those details."  # never says which detail was wrong (IDV-04)
+MAX_VERIFICATION_ATTEMPTS = 3
 
 BUILTIN_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -104,6 +107,16 @@ def _summary(name: str, status: int | None, body: Any) -> str:
 Escalate = Callable[[str, str], Awaitable[None]]
 
 
+def business_client(absolute: bool, app: Any | None = None) -> httpx.AsyncClient:  # noqa: ANN401
+    """An HTTP client for business APIs: relative URLs run in-process against the platform's own app."""
+    from voiceai.runtime import app_ref
+
+    app = app or app_ref.APP
+    if absolute or app is None:
+        return httpx.AsyncClient(follow_redirects=True)
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://internal")
+
+
 class ToolExecutor:
     """Runs every tool of one call, built-in and HTTP, and owns their effects on the call state: the no-answer and
     tool-error streaks (ES-02, ES-03), verification (TS-02), the end request and `tools_used`. Relative URLs run
@@ -144,6 +157,8 @@ class ToolExecutor:
         result, ok = await self.execute(name, raw_args)
         if name in self.tools:
             self.state.tool_error_streak = 0 if ok else self.state.tool_error_streak + 1
+        if (self.tools.get(name) or {}).get("is_verification") and self.state.verification_attempts >= MAX_VERIFICATION_ATTEMPTS                 and not self.state.verified and not self.state.escalated and self.escalate is not None:  # IDV-04
+            await self.escalate("verification_failed", "Three failed identity verification attempts")
         return result, ok
 
     async def _search_knowledge(self, query: str) -> dict[str, Any]:
@@ -160,12 +175,7 @@ class ToolExecutor:
         return result
 
     def _client(self, absolute: bool) -> httpx.AsyncClient:
-        from voiceai.runtime import app_ref
-
-        app = self.app or app_ref.APP
-        if absolute or app is None:
-            return httpx.AsyncClient(follow_redirects=True)
-        return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://internal")
+        return business_client(absolute, self.app)
 
     async def execute(self, name: str, raw_args: str) -> tuple[dict[str, Any], bool]:
         """Returns (result, ok). ok=False counts toward the tool-error streak."""
@@ -178,14 +188,20 @@ class ToolExecutor:
                 raise ValueError
         except ValueError:
             return {"error": "invalid_arguments"}, False
-        if tool.get("requires_verification") and not self.state.verified:  # TS-01
+        method = tool.get("method", "GET").upper()
+        attested = self.state.verification_level == "attested" and method == "GET"  # IDV-05: read-only before the date of birth
+        if tool.get("requires_verification") and not self.state.verified and not attested:  # TS-01
             self.state.tools_used.append({"name": name, "ok": False, "summary": f"{name}: blocked until identity verified"})
-            return {"error": "identity_not_verified", "say": VERIFY_FIRST}, True
+            say = VERIFY_FIRST_IDENTIFIED if self.state.identified_member_ref else VERIFY_FIRST
+            return {"error": "identity_not_verified", "say": say}, True
         url, rest = render_url(tool["url"], args)
         headers = {"X-Tenant-Id": self.tenant_id, "X-Call-Id": self.call_id}
         if self.state.verified and self.state.verified_member_ref:  # TS-08
             headers["X-Member-Ref"] = self.state.verified_member_ref
-        method = tool.get("method", "GET").upper()
+        elif attested and self.state.identified_member_ref:
+            headers["X-Member-Ref"] = self.state.identified_member_ref
+        if tool.get("is_verification") and self.state.identified_member_ref:  # IDV-02, TS-09: flow A
+            headers["X-Identified-Ref"] = self.state.identified_member_ref
         absolute = url.startswith("http://") or url.startswith("https://")
         try:
             async with self._client(absolute) as client:
@@ -209,7 +225,12 @@ class ToolExecutor:
             return result, False
         if tool.get("is_verification") and isinstance(body, dict) and body.get("verified") is True:  # TS-02
             self.state.verified = True
+            self.state.verification_level = "verified"
             self.state.verified_member_ref = body.get("member_ref") or self.state.verified_member_ref
+        elif tool.get("is_verification") and isinstance(body, dict) and body.get("verified") is False:  # IDV-04, TS-09
+            self.state.verification_attempts += 1
+            self.state.tools_used.append({"name": name, "ok": False, "summary": f"{name}: not verified"})
+            return {"verified": False, "say": VERIFY_FAILED}, True
         self.state.tools_used.append({"name": name, "ok": True, "summary": _summary(name, resp.status_code, body)})
         return body if isinstance(body, dict) else {"result": body}, True
 

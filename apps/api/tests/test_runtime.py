@@ -56,7 +56,7 @@ async def test_tool_round_trip_and_usage(client, seeded, fake_llm):
     out = await _say(client, call_id, "My ID is 482913, April 12 1986")
     assert out["reply"] == "Thanks Maria, you're verified."
     kinds = [e.kind for e in await _events(call_id)]
-    assert kinds == ["assistant", "user", "tool_call", "tool_result", "assistant"]
+    assert kinds == ["assistant", "user", "tool_call", "tool_result", "system", "assistant"]  # "Memory loaded" on verification (MEM-05)
     assert any(m["role"] == "tool" and '"verified": true' in m["content"] for m in seen[1])
     async with sessionmaker()() as s:
         call = await s.get(Call, call_id)
@@ -175,7 +175,8 @@ async def test_text_and_simulation_behave_identically(client, seeded, fake_llm):
     sim = await AgentSession.open(call.id, "evergreen-care")
     await sim.start()
     await sim.reply("482913 April 12 1986")
-    strip = lambda evs: [(e.kind, e.text, e.data.get("name")) for e in evs]  # noqa: E731
+    real_only = lambda e: "memory_used" in (e.data or {})  # noqa: E731  simulations never read member memory (MEM-10)
+    strip = lambda evs: [(e.kind, e.text, e.data.get("name")) for e in evs if not real_only(e)]  # noqa: E731
     assert strip(await _events(text_id)) == strip(await _events(call.id))
 
 

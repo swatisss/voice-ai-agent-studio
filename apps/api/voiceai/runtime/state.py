@@ -13,6 +13,11 @@ class CallState:
     turns: int = 0
     verified: bool = False
     verified_member_ref: str | None = None
+    verification_level: str = "unknown"  # unknown | identified | attested | verified (/architecture/caller-verification.md)
+    identified_member_ref: str | None = None
+    identified_first_name: str | None = None
+    verification_attempts: int = 0
+    memory_used: list[str] = field(default_factory=list)  # member memory loaded at verification (/architecture/agent-memory.md)
     no_answer_streak: int = 0
     tool_error_streak: int = 0
     no_answer_queries: list[str] = field(default_factory=list)

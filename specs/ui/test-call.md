@@ -18,6 +18,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 * The agent select is the only way to choose. Changing it (when no call is running) updates `?agent=`, the Handles line and the Test script; it never starts a call.
 * **Test script** card (collapsible, open by default): for each use case of the selected agent, in catalog order, its title as a plain subheading and its **starting phrase** — the first of the use case's sample phrases from `GET /api/use-cases` (for example "Is my health policy still active, and when does it renew?"). Nothing else is shown: demo callers (names, member IDs, dates of birth) are not listed on screen; they are in [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md) and the [demo script](/product/demo-script.md). A phrase is a button that fills the message box only while a chat is running; in every other situation it is plain text to read aloud (no disabled buttons).
+* **Call from** (inbound agents, before a call): *No number*, each demo member with a registered number ("Maria Lopez — registered number"), or *An unknown number*. The choice is sent as `caller_number`, so the call is identified exactly like a phone call ([/architecture/caller-verification.md](/architecture/caller-verification.md)). The page never shows the number itself.
 * For an **outbound** agent the call card shows **Who should the agent call?** (a select of the agent's targets from `GET /api/outbound/targets`, each with its summary) and the start button reads **Place outbound call**. The agent speaks first with the persona's opening; the tester answers as the callee.
 
 # Talk | Type
@@ -68,6 +69,7 @@ For an agent on the realtime voice pipeline ([/architecture/realtime-voice.md](/
 
 # Acceptance
 
+- **UI-43** — Given an inbound agent and Call from set to Maria Lopez's registered number, when a chat starts and the tester asks about a claim, then the agent addresses Maria by first name and asks only for the date of birth; with *An unknown number* it asks for member ID and date of birth; in Talk mode on both pipelines the behaviour is the same.
 - **UI-24** — Given the seeded business unit, when Test call opens, then there is no card gallery; the agent select lists the published agents; the "Handles:" line under it names the use cases of the selected agent; the Test script shows one starting phrase per use case of that agent and no demo caller details; and choosing another agent updates all three without starting a call.
 - **UI-25** — Given an outbound agent, when a target is chosen and Place outbound call is clicked, then the first message in the transcript is the agent's opening addressed to that person, and the call is labelled outbound.
 - **UI-23** — Given a running call, when the persona or the turn-detection mode is changed in Live controls, then a system notice appears in the transcript, the call continues without restarting, and the next agent reply (or turn decision) uses the new setting.

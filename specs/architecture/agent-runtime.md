@@ -25,7 +25,7 @@ Behavior MUST NOT differ between channels except: voice may emit a short *filler
 |---|---|
 | `start() -> str` | Returns the greeting: persona greeting + disclosure. Records it as an `assistant` event. |
 | `respond(user_text) -> AsyncIterator[str]` | Runs one turn (below), yielding reply text chunks as they stream. |
-| `end(reason)` | Ends the call (`end_call`, `farewell`, `handoff`, `idle`, `max_duration`, `hangup`, `error`; see [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)); sets `ended_at`; queues `analyze_call`. Idempotent. |
+| `end(reason)` | Ends the call (`end_call`, `farewell`, `handoff`, `idle`, `max_duration`, `hangup`, `error`; see [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)); sets `ended_at`; queues `analyze_call` and, for a verified non-evaluation call whose version has memory enabled, `extract_memory` ([/architecture/agent-memory.md](/architecture/agent-memory.md)). Idempotent. |
 | `state` | Current `CallState` (below). |
 | turn policy (below) | Events in, decisions out, for channels where an external model produces the words, such as the realtime speech-to-speech pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)). `respond()` applies the same policy with the platform's own text model. |
 
@@ -35,7 +35,7 @@ A session is constructed from a `call` row and the **config snapshot** of the ag
 
 # Call modes
 
-A session knows its agent's `mode` (`inbound`, `outbound`, `internal`) and, for outbound calls, the call `context`. `start()` returns the persona greeting plus disclosure for inbound and internal calls, and the rendered persona **opening** for outbound calls. The mode prompt is part of the system prompt. Identity verification state is never inferred from the context. See [/architecture/call-modes.md](/architecture/call-modes.md).
+A session knows its agent's `mode` (`inbound`, `outbound`, `internal`) and, for outbound calls, the call `context`. `start()` returns the persona greeting plus disclosure for inbound and internal calls, and the rendered persona **opening** for outbound calls. The mode prompt is part of the system prompt. Identity verification state is never inferred from the context; a registered calling number only *identifies* the caller ([/architecture/caller-verification.md](/architecture/caller-verification.md)). Once the caller is verified, the member profile and the member memory are added to the prompt ([/architecture/agent-memory.md](/architecture/agent-memory.md)). See [/architecture/call-modes.md](/architecture/call-modes.md).
 
 # Turn algorithm
 
@@ -89,6 +89,10 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 | `turns` | caller turns so far |
 | `verified` | identity verified in this call |
 | `verified_member_ref` | e.g. `EVG-482913` (stored on `calls.caller_ref`) |
+| `verification_level` | `unknown`, `identified`, `attested` or `verified` ([/architecture/caller-verification.md](/architecture/caller-verification.md)) |
+| `identified_member_ref`, `identified_first_name` | set when the calling number is registered to a member; never shown to the model except the first name |
+| `verification_attempts` | failed verification results in this call; the third escalates with `verification_failed` |
+| `memory_used` | ids of the member memories loaded at verification (working memory of what the agent was told) |
 | `no_answer_streak` | consecutive `search_knowledge` calls returning `no_answer` |
 | `tool_error_streak` | consecutive agent-tool calls returning an error |
 | `tools_used` | ordered list of `{name, ok, summary}` — feeds the groundwork packet |
@@ -106,7 +110,7 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 - **RT-04** — Given the model keeps requesting tools, when 4 rounds are reached in one turn, then the runtime stops calling tools and returns the model's text (or an apology) for that turn.
 - **RT-05** — Given the model calls `end_call`, when the reply finishes, then the call is ended with reason `end_call` and an `analyze_call` job is queued.
 - **RT-06** — Given the realtime LLM raises after fallback, when a turn runs, then the caller hears the apology line and the call is escalated with category `other`.
-- **RT-07** — Given the same agent version and the same scripted LLM responses, when run via text and via simulation, then the stored event sequences are identical apart from channel and timestamps.
+- **RT-07** — Given the same agent version and the same scripted LLM responses, when run via text and via simulation, then the stored event sequences are identical apart from channel, timestamps and the "Memory loaded" event that only real calls record ([/architecture/agent-memory.md](/architecture/agent-memory.md): simulations never read member memory).
 - **RT-08** — Given a session, when `end()` is called twice, then only one `analyze_call` job exists for the call.
 - **~~RT-10~~** — Retired by CP-0016: `run_tool` and `record_turn` are no longer the session's interface; parity between the text loop and an externally driven channel is RT-15. Was: given the same scripted tool results, when a tool is run through `run_tool` and through the text turn loop, then the stored `tool_call`/`tool_result` events, the verification outcome and the escalation behavior are identical; and `record_turn` stores a `user` and an `assistant` event, increments `turns` and adds the reported usage to the call totals.
 - **RT-11** — Given a session, when a caller turn event arrives while the call is escalated, is a farewell phrase, or contains a safety phrase, then the decision is to say the holding message, the closing line then end `farewell`, or the safety message then escalate `safety` and end `handoff`, respectively, and no model request is made; any other text returns *let the model answer*.

@@ -18,6 +18,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `capability_gap` | Request needs an action the agent has no tool for | LLM |
 | `tool_failure` | Business API errors prevent progress | Tool-error streak |
 | `frustration` | Caller is upset and not progressing | LLM |
+| `verification_failed` | Three failed identity-verification attempts in one call ([/architecture/caller-verification.md](/architecture/caller-verification.md)) | Runtime |
 | `other` | Anything else, incl. max turns and LLM outage | Runtime |
 
 # Triggers
@@ -80,4 +81,5 @@ The `resolution_note` is required (min 10 characters) — it is the evidence fle
 - **ES-05** — Given the packet LLM fails, when the packet is built, then the fallback packet is stored with `packet_status: fallback` and `already_tried` lists the tools used.
 - **ES-06** — Given an escalation in `waiting`, when resolve is called without accept, then the API returns 409.
 - **ES-07** — Given resolve with a note shorter than 10 characters, then the API returns 422.
+- **ES-09** — Given three verification results with `verified: false` in one call, then exactly one escalation with category `verification_failed` exists and the call ends `handoff`.
 - **ES-08** — Given the model calls `escalate_to_human` twice, then only one escalation row exists.

@@ -19,5 +19,7 @@
 * [Jobs and events](jobs-and-events.md) - Background job queue and server-sent event bus
 * [Multi-tenancy](multi-tenancy.md) - Tenant resolution and isolation rules
 * [Call admission](call-admission.md) - One decision for every way a voice call starts: pipeline allowed, credential available, the call plan
+* [Agent memory](agent-memory.md) - What an agent remembers about a verified member across calls, maintained by the agent itself after each call; expiry, erasure and what the Studio shows
+* [Caller verification](caller-verification.md) - Registered number identifies, date of birth verifies; member ID and date of birth otherwise; attempts, attestation and playground testing
 * [Tenant settings and credentials](tenant-settings.md) - Per-tenant voice pipeline allowlist and own OpenAI key for realtime calls
 * [Deployment](deployment.md) - Local dev and GCP Cloud Run topology

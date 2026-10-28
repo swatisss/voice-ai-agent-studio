@@ -17,10 +17,12 @@ Filters: agent, outcome, channel, direction, feedback (Any · Not helpful · Hel
 * Transcript (same rendering as test call) with tool calls inline as expandable rows (`JsonView` of args/result).
 * **Escalation** card (if any): status, reason, disposition, resolution note, packet (same component as the console).
 * **Caller feedback** card (when given): the rating as "Helpful" / "Not helpful", the comment and when it was given.
+* **Memory** card (verified calls on agents with memory): **Memory used** (the facts and earlier calls the agent was given, each linked to its source) and **Memory updated** (what the agent added, superseded or confirmed after the call, with its reason; "Nothing new to remember" when empty), and a **Member memory** link to [/ui/member-memory.md](/ui/member-memory.md). For an identified call the header also shows "Identified by caller ID" and the attestation.
 * **Analysis** card: intent, root cause, fixable, gap summary, caller goal, resolution summary, sentiment, cluster link.
 
 # Acceptance
 
+- **UI-46** — Given a verified call that loaded two facts and after which the agent superseded one, then the Memory card lists both loaded facts and the superseded fact with its replacement and reason, and Member memory opens that member's page for this agent.
 - **UI-11** — Given a call with an escalation and analysis, when opened, then the packet, disposition, note and analysis fields are all visible.
 - **UI-39** — Given a phone call and a browser voice call, then the explorer shows a **Phone** badge only on the phone call, and the phone call's detail header shows the dialled number and the caller's last four digits but no full caller number.
 - **UI-36** — Given calls with and without feedback, then the explorer shows "Helpful" / "Not helpful" badges, filtering by Not helpful lists only those calls, and a call's detail page shows the caller's comment.

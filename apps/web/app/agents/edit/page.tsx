@@ -1,4 +1,4 @@
-// Spec: /ui/agent-builder.md (Voice tab), /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md
+// Spec: /ui/agent-builder.md (Voice tab, Memory tab), /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md, /architecture/agent-memory.md, /architecture/caller-verification.md
 "use client";
 
 import { Eye, Pencil, Plus, Trash2, Upload } from "lucide-react";
@@ -12,7 +12,7 @@ import { when } from "@/lib/format";
 import { DEFAULT_TURN, VOICES, voiceLabel } from "@/lib/voices";
 import { TurnDetectionEditor } from "@/components/voice-settings";
 
-type Tab = "overview" | "persona" | "policy" | "voice" | "knowledge" | "tools" | "skills" | "versions";
+type Tab = "overview" | "persona" | "policy" | "voice" | "memory" | "knowledge" | "tools" | "skills" | "versions";
 
 export default function Page() {
   return <Suspense fallback={<Spinner />}><Builder /></Suspense>;
@@ -95,7 +95,7 @@ function Builder() {
         </div>
       </div>
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[
-        { id: "overview", label: "Overview" }, { id: "persona", label: "Persona" }, { id: "policy", label: "Policy" }, { id: "voice", label: "Voice" },
+        { id: "overview", label: "Overview" }, { id: "persona", label: "Persona" }, { id: "policy", label: "Policy" }, { id: "voice", label: "Voice" }, { id: "memory", label: "Memory" },
         { id: "knowledge", label: `Knowledge (${draft.knowledge_doc_ids.length})` }, { id: "tools", label: `Tools (${draft.tool_ids.length})` },
         { id: "skills", label: `Skills (${draft.skill_ids.length})` }, { id: "versions", label: "Versions" },
       ]} />
@@ -103,6 +103,7 @@ function Builder() {
       {tab === "persona" && <Persona draft={draft} update={update} />}
       {tab === "policy" && <PolicyTab draft={draft} update={update} />}
       {tab === "voice" && <VoiceTab draft={draft} update={update} />}
+      {tab === "memory" && <MemoryTab draft={draft} update={update} />}
       {tab === "knowledge" && <KnowledgeTab draft={draft} update={update} />}
       {tab === "tools" && <ToolsTab draft={draft} update={update} />}
       {tab === "skills" && <SkillsTab draft={draft} update={update} />}
@@ -246,6 +247,57 @@ function VoiceTab({ draft, update }: TabProps) {
       <Card title="Turn detection">
         <p className="mb-4 max-w-3xl text-sm text-muted">Decide when the agent starts replying. These are the agent's defaults and are versioned when you publish; on the Test call page you can compare modes and change them live during a call{realtime ? " (cascade calls only)" : ""}.</p>
         <TurnDetectionEditor value={value} realtime={realtime} onChange={(v) => setVoice({ turn_detection: v })} />
+      </Card>
+    </div>
+  );
+}
+
+/** Defaults for drafts saved before memory existed (/architecture/agent-memory.md, Builder settings). */
+const MEMORY_DEFAULTS = {
+  enabled: true,
+  remember: "Contact preferences, the best time to call back, family members or representatives who help with the member's requests, what the agent promised to do, and the outcome of each request.",
+  never_remember: "Diagnoses, symptoms, medications or treatments; payment card or bank details; member IDs, dates of birth or full phone numbers.",
+  episode_days: 90,
+  fact_days: 365,
+};
+
+function MemoryTab({ draft, update }: TabProps) {  // UI-42
+  const m = { ...MEMORY_DEFAULTS, ...(draft.memory ?? {}) };
+  const setMemory = (patch: Partial<typeof MEMORY_DEFAULTS>) => update(["memory"], { ...m, ...patch });
+  const trust = !!draft.verification?.trust_attested_caller_id;
+  return (
+    <div className="space-y-4">
+      <Card title="Member memory">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input type="checkbox" role="switch" className="h-4 w-4 accent-[var(--accent)]" checked={m.enabled} onChange={(e) => setMemory({ enabled: e.target.checked })} />
+          Remember callers between calls
+        </label>
+        <p className="mt-1 max-w-3xl text-sm text-muted">After each verified call the agent keeps a short summary and lasting facts about the member, and uses them the next time that member calls this agent. Switching it off keeps existing memory until it expires or is erased.</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Field label="Remember things like…" hint={`${m.remember.length}/600`}>
+            <Textarea className="min-h-28" maxLength={600} value={m.remember} onChange={(e) => setMemory({ remember: e.target.value })} />
+          </Field>
+          <Field label="Never remember…" hint={`${m.never_remember.length}/600`}>
+            <Textarea className="min-h-28" maxLength={600} value={m.never_remember} onChange={(e) => setMemory({ never_remember: e.target.value })} />
+          </Field>
+        </div>
+        <p className="mt-2 rounded-lg bg-info-soft px-3 py-2 text-sm text-info">Health details, payment details and ID numbers are never remembered, whatever you write here.</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 max-w-xl">
+          <Field label="Forget call summaries after (days)" hint="7–365">
+            <Input type="number" min={7} max={365} value={m.episode_days} onChange={(e) => setMemory({ episode_days: Number(e.target.value) })} />
+          </Field>
+          <Field label="Forget facts after (days)" hint="30–730, counted from when a fact was last confirmed">
+            <Input type="number" min={30} max={730} value={m.fact_days} onChange={(e) => setMemory({ fact_days: Number(e.target.value) })} />
+          </Field>
+        </div>
+      </Card>
+      <Card title="Caller verification">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input type="checkbox" role="switch" className="h-4 w-4 accent-[var(--accent)]" checked={trust}
+            onChange={(e) => update(["verification"], { ...(draft.verification ?? {}), trust_attested_caller_id: e.target.checked })} />
+          Trust verified caller ID (demo only)
+        </label>
+        <p className="mt-1 max-w-3xl text-sm text-muted">Skips the date of birth only for read-only lookups on US calls whose number the carrier fully attested. Anything that changes data still needs the date of birth.</p>
       </Card>
     </div>
   );

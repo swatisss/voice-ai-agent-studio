@@ -10,8 +10,9 @@ function argsSummary(args: unknown): string {
   return Object.entries(args as Record<string, unknown>).map(([k, v]) => `${k}=${String(v)}`).join(", ").slice(0, 80);
 }
 
-/** Pairs tool_call with tool_result for compact rendering. */
-export function Transcript({ events, showTools = true }: { events: CallEvent[]; showTools?: boolean }) {
+/** Pairs tool_call with tool_result for compact rendering. Each row carries `id="seq-<n>"` so a link can open the transcript at a turn (UI-44). */
+export function Transcript({ events, showTools = true, highlightSeq }: { events: CallEvent[]; showTools?: boolean; highlightSeq?: number | null }) {
+  const hl = (seq: number) => (seq === highlightSeq ? "rounded-2xl ring-[3px] ring-accent ring-offset-2" : "");
   const results = new Map<string, CallEvent>();
   for (const e of events) if (e.kind === "tool_result") results.set(e.data?.tool_call_id ?? `${e.data?.name}-${e.seq}`, e);
   return (
@@ -19,20 +20,20 @@ export function Transcript({ events, showTools = true }: { events: CallEvent[]; 
       {events.map((e) => {
         if (e.kind === "user") {
           return (
-            <div key={e.seq} className="flex justify-end">
+            <div key={e.seq} id={`seq-${e.seq}`} className={cx("flex scroll-mt-24 justify-end", hl(e.seq))}>
               <div className="max-w-[75%] rounded-2xl rounded-br-sm bg-accent px-3 py-2 text-sm text-on-accent">{e.text}</div>
             </div>
           );
         }
         if (e.kind === "assistant") {
           return (
-            <div key={e.seq} className="flex justify-start">
+            <div key={e.seq} id={`seq-${e.seq}`} className={cx("flex scroll-mt-24 justify-start", hl(e.seq))}>
               <div className="max-w-[75%] rounded-2xl rounded-bl-sm bg-neutral-soft px-3 py-2 text-sm">{e.text}</div>
             </div>
           );
         }
         if (e.kind === "system") {
-          return <div key={e.seq} className="text-center"><Badge tone={e.data?.category === "safety" ? "bad" : "warn"}>{e.text}</Badge></div>;
+          return <div key={e.seq} id={`seq-${e.seq}`} className={cx("scroll-mt-24 text-center", hl(e.seq))}><Badge tone={e.data?.category === "safety" ? "bad" : "warn"}>{e.text}</Badge></div>;
         }
         if (e.kind === "tool_call" && showTools) {
           const r = results.get(e.data?.tool_call_id) ?? events.find((x) => x.kind === "tool_result" && x.seq > e.seq && x.data?.name === e.data?.name);
@@ -40,7 +41,7 @@ export function Transcript({ events, showTools = true }: { events: CallEvent[]; 
           const isSearch = e.data?.name === "search_knowledge";
           const top = isSearch && r?.data?.result?.results?.[0];
           return (
-            <div key={e.seq} className="ml-2 rounded-lg border border-line bg-panel px-2.5 py-1.5 text-xs">
+            <div key={e.seq} id={`seq-${e.seq}`} className={cx("ml-2 scroll-mt-24 rounded-lg border border-line bg-panel px-2.5 py-1.5 text-xs", hl(e.seq))}>
               <div className="flex items-center gap-1.5">
                 {isSearch ? <Search size={12} className="text-info" /> : <Wrench size={12} className="text-info" />}
                 <span className="mono font-medium">{e.data?.name}</span>

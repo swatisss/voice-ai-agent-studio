@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request, WebSocket
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,11 +19,11 @@ from voiceai.call_settings import effective_settings, persona_dict
 from voiceai import jobs
 from voiceai.db import utcnow
 from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Escalation, Persona
-from voiceai.schemas import TurnDetectionPatch
+from voiceai.schemas import E164_RE, TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
 from voiceai.runtime.session import AgentSession, create_call
 from voiceai.tenancy import current_tenant, resolve_tenant
-from voiceai import admission, voice_calls
+from voiceai import admission, caller_id, memory, voice_calls
 
 router = APIRouter(prefix="/api")
 
@@ -34,6 +34,14 @@ class CallCreate(BaseModel):
     persona_id: str | None = None
     turn_detection: TurnDetectionPatch | None = None
     context: dict[str, Any] | None = None  # outbound agents: {member_ref} of a listed target (OB-01)
+    caller_number: str | None = Field(default=None, max_length=20)  # test calls: identified like a phone call (IDV-06)
+
+    @field_validator("caller_number")
+    @classmethod
+    def _e164(cls, v: str | None) -> str | None:
+        if v is not None and not E164_RE.fullmatch(v.strip()):
+            raise ValueError("caller_number must be an E.164 number such as +12025550141")
+        return v.strip() if v else None
 
 
 class LiveBody(BaseModel):
@@ -92,6 +100,10 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
     if body.turn_detection:
         live["turn_detection"] = body.turn_detection.model_dump(exclude_none=True)
     call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None, context=body.context, app=request.app)
+    if body.caller_number and call.direction == "inbound":  # IDV-06: only the identification is kept, never the number
+        match = await caller_id.identify(body.caller_number, request.app)
+        if match:
+            call.meta = {**(call.meta or {}), "identification": caller_id.identification(match)}
     if body.channel == "voice":  # ADM-02: refused up front, and no call row is kept
         decided = await voice_calls.admit(s, tenant_id, call)
         if isinstance(decided, admission.Refusal):
@@ -229,7 +241,15 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
         "analysis": analysis_out(analysis),
         "settings": await effective_settings(s, call),
         "telephony": (call.meta or {}).get("telephony"),
+        "identification": _identification_out((call.meta or {}).get("identification")),
+        "memory": await memory.for_call(s, call, list(events)),
     }
+
+
+def _identification_out(ident: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not ident:
+        return None
+    return {"first_name": ident.get("first_name"), "method": ident.get("method"), "attestation": ident.get("attestation")}
 
 
 @router.websocket("/voice/{call_id}")

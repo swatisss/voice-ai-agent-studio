@@ -89,3 +89,12 @@ Your IVR transfers or forwards to the Twilio number (PSTN forward) or to a Twili
 | Trial message then hang-up | Trial accounts only call or receive from verified numbers; press a key when prompted. |
 | Agent talks over you / echo | Use a handset or headset; the browser's echo cancellation is not there on the phone. |
 | Hand-off does not ring | `transfer_to` empty or not E.164, `TWILIO_ACCOUNT_SID` missing, or a trial restriction on the destination; the call still ends with the hand-off message and the console shows the escalation. |
+
+# Testing caller identification
+
+A call is identified when its number is registered on a synthetic member ([/architecture/caller-verification.md](/architecture/caller-verification.md)); the demo numbers are fictional, so to test flow A with a real call, add the number you will call from to a member in the mock data for your run (never commit a real number).
+
+* **Twilio Dev Phone** (`twilio plugins:install @twilio-labs/plugin-dev-phone`, then `twilio dev-phone`): a browser softphone on a spare Twilio number. Register that number on a member, call the agent's number from the Dev Phone, answer the date of birth. It needs a paid account and overwrites that spare number's webhooks.
+* **Calls API**: place a call from a second Twilio number to the agent's number (`twilio api:core:calls:create --from <spare> --to <agent> --url <TwiML that plays or gathers>`); the agent's webhook sees the spare number as `From`.
+* **Without Twilio**: the Test call page's **Call from** choice runs the same lookup in the browser ([/ui/test-call.md](/ui/test-call.md)).
+* `StirVerstat` is only present on calls that reach Twilio with a SHAKEN token (mostly US carriers); calls between Twilio numbers or from abroad usually have none, so the attestation shortcut stays off.

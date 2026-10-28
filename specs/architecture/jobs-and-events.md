@@ -14,6 +14,8 @@ Table `jobs` ([/data/data-model.md](/data/data-model.md)). One worker task runs 
 | Kind | Payload | Handler |
 |---|---|---|
 | `analyze_call` | `{call_id}` | [/architecture/fleet-learning.md](/architecture/fleet-learning.md) §1–2 |
+| `extract_memory` | `{call_id}` (dedupe `extract_memory:{call_id}`) | [/architecture/agent-memory.md](/architecture/agent-memory.md) |
+| `purge_memory` | `{}` (daily, dedupe `purge_memory:{date}`) | [/architecture/agent-memory.md](/architecture/agent-memory.md) |
 | `draft_fix` | `{cluster_id}` | fleet learning §4 |
 | `run_eval` | `{proposal_id, eval_run_id}` | [/architecture/evaluation.md](/architecture/evaluation.md) |
 

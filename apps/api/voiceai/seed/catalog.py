@@ -473,3 +473,16 @@ USE_CASES: list[dict[str, Any]] = [
                       _caller("Aisha Okafor", "725031", "September 15, 1990", "Report an urgent care visit as a new claim"),
                       _caller("James Carter", "337120", "November 2, 1979", "Documents for a collision; dispute claim C-31544 to see the escalation")]},
 ]
+
+
+# ---- member memory (/demo-data/members-and-claims.md, Seeded memory): (agent key, member, kind, category, text, days ago)
+MEMORIES = [
+    ("care", "EVG-482913", "fact", "preference", "Prefers a call back after 5pm on weekdays", 12),
+    ("care", "EVG-482913", "fact", "relationship", "Her daughter Ana helps her with claim paperwork", 12),
+    ("care", "EVG-482913", "episode", "outcome",
+     "Asked why claim C-20931 was not paid yet; the agent explained the missing itemised bill and promised the claims team "
+     "would follow up within 5 business days.", 12),
+    ("care", "EVG-337120", "fact", "preference", "Wants all letters by email", 20),
+    ("care", "EVG-337120", "episode", "outcome", "Asked how to appeal a denied claim and was handed to an appeals specialist.", 20),
+    ("claims", "EVG-559804", "fact", "circumstance", "Is filing a motor claim after a collision on 2026-10-02", 5),
+]

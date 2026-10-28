@@ -26,12 +26,14 @@ Tabs:
 | Knowledge | Tenant docs with checkboxes (attached to this agent) + status badges; add via **Paste text**, **Upload** (.md/.txt/.pdf/.zip OKF), **From URL**; doc preview drawer showing chunks; **Test search** box showing scored results or "No answer" |
 | Tools | Tenant tools with checkboxes; create/edit form: name, description, method, URL, parameters (JSON editor with validation), requires verification, is verification, timeout |
 | Skills | Tenant skills with checkboxes; create/edit form: name, description, instructions (textarea), required tools (multi-select), escalate when |
+| Memory | **Remember callers between calls** toggle (on by default); **Remember things like…** and **Never remember…** text boxes, pre-filled with the defaults and a note "Health details, payment details and ID numbers are never remembered, whatever you write here"; **Forget call summaries after** (days) and **Forget facts after** (days); **Trust verified caller ID (demo only)** toggle with a note that it skips the date of birth only for read-only lookups on US calls with full carrier attestation ([/architecture/agent-memory.md](/architecture/agent-memory.md), [/architecture/caller-verification.md](/architecture/caller-verification.md)) |
 | Versions | Table of versions (number, change note, source proposal link, date) |
 
 Unsaved changes show a sticky bar "Unsaved changes — Save draft". Navigating away with unsaved changes asks for confirmation.
 
 # Acceptance
 
+- **UI-42** — Given the Memory tab of a draft agent, when memory is switched off, the retention is set to 30 and 180 days and Publish is clicked, then the new version's snapshot holds those values; a retention outside the allowed range shows the API's validation error; a new agent shows the toggle on and the default texts.
 - **UI-05** — Given an agent with a skill requiring a tool that is not attached, when Publish is clicked, then the modal shows the API error naming the missing tool and no version is created.
 - **UI-06** — Given the Knowledge tab, when a `.zip` OKF bundle is uploaded, then each imported doc appears in the list with source "OKF".
 - **UI-26** — Given the Agents list and an agent's Overview tab, then each agent shows its mode, and changing the mode and targets URL saves with the draft and is part of the published version.

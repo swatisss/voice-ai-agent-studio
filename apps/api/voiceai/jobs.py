@@ -9,7 +9,7 @@ import contextlib
 import logging
 import traceback
 from collections.abc import Awaitable, Callable
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import select, update
@@ -121,6 +121,7 @@ class Worker:
         self._task: asyncio.Task[None] | None = None
         self._sem = asyncio.Semaphore(CONCURRENCY)
         self._running: set[asyncio.Task[None]] = set()
+        self._last_day: date | None = None
 
     async def start(self) -> None:
         await reset_stale()
@@ -145,6 +146,7 @@ class Worker:
                 job = await _claim()
                 if job is None:
                     self._sem.release()
+                    await self._daily()
                     await asyncio.sleep(POLL_SECONDS)
                     continue
                 task = asyncio.create_task(self._run(job))
@@ -156,6 +158,16 @@ class Worker:
                 log.exception("job worker loop error")
                 self._sem.release()
                 await asyncio.sleep(POLL_SECONDS)
+
+    async def _daily(self) -> None:
+        """Housekeeping that runs once a day while the worker is idle: member memory expiry (/architecture/agent-memory.md)."""
+        today = utcnow().date()
+        if self._last_day == today:
+            return
+        self._last_day = today
+        from voiceai import memory
+
+        await memory.schedule_purges()
 
     async def _run(self, job: Job) -> None:
         try:

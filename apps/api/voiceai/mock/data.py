@@ -30,6 +30,10 @@ MEMBERS = {
     "EVG-801456": {"first_name": "Daniel", "last_name": "Kim", "dob": "2001-03-08", "plan": "Evergreen Silver PPO", "ded_met": 0, "oop_met": 60, "email": "daniel.kim@example.com"},
 }
 
+# Registered phone numbers (fictional 555-01xx) and preferred contact, used to identify callers (/architecture/caller-verification.md)
+PHONES = {"+12025550141": "EVG-482913", "+12025550142": "EVG-337120", "+12025550143": "EVG-559804"}
+PREFERRED_CONTACT = {"EVG-482913": "phone, after 5pm", "EVG-337120": "email", "EVG-559804": "SMS"}
+
 CLAIMS = {
     "C-20931": {"member": "EVG-482913", "type": "health", "service": "Office visit - dermatology", "provider": "Mission Dermatology", "service_date": "2026-09-10",
                 "billed": 220.0, "status": "paid", "plan_paid": 185.0, "member_responsibility": 35.0, "paid_date": "2026-09-28",

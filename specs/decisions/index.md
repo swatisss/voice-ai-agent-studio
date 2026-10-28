@@ -8,3 +8,5 @@
 * [ADR-0006 Turn detection on Pipecat](adr-0006-turn-detection.md) - Own normal/semantic turn detection instead of adopting LiveKit's turn detector
 * [ADR-0007 OpenAI as a third LLM provider](adr-0007-openai-provider.md) - OpenAI beside Groq and OpenRouter; Groq stays primary, OpenAI is every role's last fallback and a one-line switch
 * [ADR-0008 Telephony and realtime voice](adr-0008-telephony-and-realtime-voice.md) - Twilio Media Streams for inbound phone calls on Cloud Run; OpenAI Realtime speech-to-speech as an optional per-agent pipeline
+* [ADR-0009 Agent memory](adr-0009-agent-memory.md) - Our own mem0-style memory maintenance after each call that retires instead of deleting; research on mem0, Zep, Memory Bank and SaaS builders
+* [ADR-0010 Caller verification](adr-0010-caller-verification.md) - A registered number identifies, the date of birth verifies; research on health-plan practice, caller-ID spoofing and Twilio testing

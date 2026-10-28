@@ -1,6 +1,7 @@
 """AgentSession - the shared brain for voice, text and simulation channels.
 
-Spec: /architecture/agent-runtime.md (Turn policy), /architecture/escalation.md (Triggers), /architecture/realtime-voice.md
+Spec: /architecture/agent-runtime.md (Turn policy), /architecture/escalation.md (Triggers), /architecture/realtime-voice.md,
+/architecture/caller-verification.md, /architecture/agent-memory.md
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import jobs
+from voiceai import caller_id, jobs, memory
 from voiceai.db import new_id, sessionmaker, utcnow
 from voiceai.errors import ApiError
 from voiceai.events import bus
@@ -26,7 +27,7 @@ from voiceai.call_settings import CallSettings
 from voiceai.live import SettingsChange
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, Tenant
 from voiceai.runtime import endings, escalation, outbound
-from voiceai.runtime.prompt import system_prompt
+from voiceai.runtime.prompt import NOT_VERIFIED, NOTHING, system_prompt
 from voiceai.runtime.state import CallState
 from voiceai.runtime.tools import ToolExecutor, all_schemas, truncate
 
@@ -138,6 +139,8 @@ class AgentSession:
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[SettingsChange], Awaitable[None]]] = []  # the running voice pipeline (TD-09)
         self._tool_rounds = 0  # tool calls in the current caller turn of an externally driven channel (RT-12)
+        self.member_profile = NOT_VERIFIED  # filled at verification for this call only (/architecture/agent-memory.md)
+        self.member_memory = NOTHING
 
     # ------------------------------------------------------------ loading
     @classmethod
@@ -155,6 +158,12 @@ class AgentSession:
             meta = call.meta or {}
             state = CallState(**meta["state"]) if meta.get("state") else CallState()
             state.ended = state.ended or call.ended_at is not None
+            ident = meta.get("identification")
+            if ident and not meta.get("state"):  # IDV-01: identified, not verified
+                state.identified_member_ref, state.identified_first_name = ident.get("member_ref"), ident.get("first_name")
+                state.verification_level = "identified"
+                if caller_id.attested(ident) and (settings.config.get("verification") or {}).get("trust_attested_caller_id"):
+                    state.verification_level = "attested"  # IDV-05
             sess = cls(call=call, config=settings.config, tenant_name=tenant.name if tenant else tenant_id, app=app,
                        history=list(meta.get("history", [])), state=state, seq=seq, context=meta.get("context"), settings=settings)
         if not sess.state.ended:
@@ -266,6 +275,7 @@ class AgentSession:
                 call.outcome = "escalated"
             if not self.is_eval:
                 await jobs.enqueue(s, self.tenant_id, "analyze_call", {"call_id": self.call_id}, dedupe_key=f"analyze_call:{self.call_id}")
+            await memory.enqueue_extraction(s, call, self.config)  # MEM-01
             await s.commit()
             data = {"call_id": self.call_id, "status": call.status, "outcome": call.outcome, "end_reason": reason}
         bus.publish(self.tenant_id, f"call:{self.call_id}", "call.ended", data)
@@ -449,7 +459,7 @@ class AgentSession:
         first_chunk_ms: int | None = None
 
         while True:
-            system = system_prompt(self.config, self.tenant_name, self.state.verified_member_ref, self.started_at, self.context)
+            system = self.prompt()
             messages = [{"role": "system", "content": system}, *_trim_history(self.history)]
             result = None
             round_text = ""
@@ -528,7 +538,31 @@ class AgentSession:
             args = None
         await self._event("tool_call", None, {"tool_call_id": call_id, "name": name, "args": args if isinstance(args, dict) else arguments})
         started = time.perf_counter()
+        was_verified = self.state.verified
         result, ok = await self.tools.run(name, arguments)
         duration = int((time.perf_counter() - started) * 1000)
         await self._event("tool_result", None, {"tool_call_id": call_id, "name": name, "ok": ok and "error" not in result, "result": result, "duration_ms": duration})
+        if self.state.verified and not was_verified:
+            await self._on_verified()
         return truncate(result)
+
+    async def _on_verified(self) -> None:
+        """MEM-05, MEM-06: once the caller is verified, the member profile and the member memory join the prompt."""
+        if self.is_eval or self.channel == "simulation":
+            return
+        ref = self.state.verified_member_ref
+        if not ref or not memory.settings_of(self.config).enabled:
+            self.member_profile = NOTHING
+            return
+        async with sessionmaker()() as s:
+            facts, episodes = await memory.load(s, self.tenant_id, self.agent_id, ref)
+        self.member_memory = memory.render(facts, episodes)
+        self.member_profile = caller_id.render_profile(await caller_id.profile(ref, self.tenant_id, self.call_id, self.tools.app))
+        self.state.memory_used = [m.id for m in (*facts, *episodes)]
+        await self._event("system", "Memory loaded", {"memory_used": self.state.memory_used})
+
+    def prompt(self) -> str:
+        """The system prompt for the next model request (all channels)."""
+        return system_prompt(self.config, self.tenant_name, self.state.verified_member_ref, self.started_at, self.context,
+                             identified_first_name=self.state.identified_first_name, member_profile=self.member_profile,
+                             member_memory=self.member_memory)

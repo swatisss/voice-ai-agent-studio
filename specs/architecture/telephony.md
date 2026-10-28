@@ -39,7 +39,7 @@ Twilio posts form fields including `CallSid`, `From`, `To`, `CallStatus`. Steps:
 
 1. **Validate the signature** (below). Invalid → 403, no call.
 2. Look up `To` in `phone_numbers`. Unknown number, an agent that is not published, missing Twilio credentials, or a refusal from [call admission](/architecture/call-admission.md) (pipeline not allowed for the tenant, or no usable provider credential for the agent's pipeline) → answer TwiML `<Say>` "Sorry, this number is not in service." and `<Hangup/>`; no call row, no stream.
-3. Create the call: `channel: voice`, `direction: inbound`, the agent's published version, `meta.telephony = {provider: "twilio", call_sid, from_last4, to}`. The full caller number is **not** stored (last four digits only). The call context is built from the IVR parameters (below).
+3. Create the call: `channel: voice`, `direction: inbound`, the agent's published version, `meta.telephony = {provider: "twilio", call_sid, from_last4, to}`. The full caller number is **not** stored (last four digits only). Before the call is created, a non-withheld `From` is looked up with the business API's identify endpoint; a match is stored as `meta.identification` together with Twilio's `StirVerstat` attestation ([/architecture/caller-verification.md](/architecture/caller-verification.md)). The call context is built from the IVR parameters (below).
 4. Answer TwiML:
 
 ```xml

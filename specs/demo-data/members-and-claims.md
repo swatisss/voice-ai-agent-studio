@@ -28,6 +28,10 @@ Everything is synthetic. Dates written `T±n` are relative to the day the app ru
 | EVG-725031 | Aisha Okafor | 1990-09-15 | aisha.okafor@example.com | Bronze EPO | $1,120 | $1,120 |
 | EVG-801456 | Daniel Kim | 2001-03-08 | daniel.kim@example.com | Silver PPO | $0 | $60 |
 
+**Registered phone numbers** (fictional `555-01xx` numbers, used to identify callers, [/architecture/caller-verification.md](/architecture/caller-verification.md)): EVG-482913 Maria Lopez `+12025550141` (preferred contact: phone after 5pm), EVG-337120 James Carter `+12025550142` (email), EVG-559804 Priya Nair `+12025550143` (SMS). The other members have no registered number.
+
+**Seeded memory** ([/architecture/agent-memory.md](/architecture/agent-memory.md)) on the Customer Care agent: Maria Lopez — facts "Prefers a call back after 5pm on weekdays" (preference) and "Her daughter Ana helps her with claim paperwork" (relationship), and one episode "Asked why claim C-20931 was not paid yet; the agent explained the missing itemised bill and promised the claims team would follow up within 5 business days." James Carter — fact "Wants all letters by email" (preference) and one episode. On the Insurance Claims agent: Priya Nair — fact "Is filing a motor claim after a collision on 2026-10-02" (circumstance).
+
 # Policies
 
 | policy_id | member | type | product | status | start | end / renewal | annual premium | payments | payment status | notes |

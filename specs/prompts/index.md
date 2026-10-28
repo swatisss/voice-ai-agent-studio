@@ -14,3 +14,5 @@ The code loads each prompt directly from the fenced `text` block under the `# Pr
 * [Mode: outbound](mode-outbound.md) - Mode instructions for agents that place the call: identity first, purpose, respect refusals
 * [Mode: internal](mode-internal.md) - Mode instructions for the staff-facing knowledge assistant
 * [Realtime addendum](realtime-addendum.md) - Spoken-style, read-back and exact-text rules appended to the system prompt for agents on the realtime speech-to-speech pipeline
+* [Memory extraction](memory-extract.md) - After a verified call: one episode summary and a few candidate member facts, within the remember and never-remember rules
+* [Memory update decision](memory-update.md) - Add a candidate fact, let it supersede or confirm a remembered one, or do nothing

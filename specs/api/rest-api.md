@@ -69,14 +69,23 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Calls
 | Method | Path | Body → Result |
 |---|---|---|
-| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?}` → `{call_id, greeting, settings}` (`settings`: `{pipeline, persona, turn_detection}`); 409 if agent unpublished; for `voice`, 409 `pipeline_not_allowed` or `voice_unavailable` when [call admission](/architecture/call-admission.md) refuses (no call row is created). For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. |
+| POST | `/api/calls` | `{agent_id, channel: "voice"\|"text", persona_id?, turn_detection?, context?, caller_number?}` → `{call_id, greeting, settings}` (`settings`: `{pipeline, persona, turn_detection}`); 409 if agent unpublished; for `voice`, 409 `pipeline_not_allowed` or `voice_unavailable` when [call admission](/architecture/call-admission.md) refuses (no call row is created). For an outbound agent `context: {member_ref}` is required (422 `unknown_target`) and `greeting` is the persona opening ([/architecture/call-modes.md](/architecture/call-modes.md)). `persona_id` and `turn_detection` (any subset of the turn-detection fields) override the agent's for this call. For `text`, the greeting is already recorded; for `voice`, it is spoken on connect. `caller_number` (E.164, test calls only) is looked up as a phone call's number would be, and only the identification result is kept ([/architecture/caller-verification.md](/architecture/caller-verification.md)). |
 | POST | `/api/calls/{id}/messages` | `{text}` → `{reply, call_status, ended, escalated}` (text channel only) |
 | POST | `/api/calls/{id}/end` | → `{status, outcome}` |
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |
 | PATCH | `/api/calls/{id}/live` | `{persona_id?, turn_detection?}` → `{settings}`; changes persona and/or turn detection of a running call (404 unknown, 409 ended, 422 invalid). 409 `realtime_pipeline` for a call on the realtime pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md), RV-15). See [/architecture/personas.md](/architecture/personas.md), [/architecture/turn-detection.md](/architecture/turn-detection.md). |
 | GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `direction?`, `feedback?` (`up`\|`down`\|`none`), `include_seed=true` → `{items: [call summary]}` (eval calls excluded); each summary carries `feedback` (`"up"`, `"down"` or `null`) and `transport` (`"phone"` for a call that came in through Twilio, else `"browser"`) |
-| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `telephony` (`{provider, call_sid, from_last4, to}` for a phone call, else `null`) |
+| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `telephony` (`{provider, call_sid, from_last4, to}` for a phone call, else `null`) + `identification` (`{first_name, method, attestation}` or `null`) + `memory` (`{used: [memory], updated: [memory event]}`) |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
+
+## Member memory
+
+| Method | Path | Body / query → result |
+|---|---|---|
+| GET | `/api/members/{member_ref}/memory` | query `agent_id` → `{agents: [{id, name}], facts, episodes, retired, events}` for that agent ([/architecture/agent-memory.md](/architecture/agent-memory.md)); 404 when the tenant holds nothing for the member |
+| POST | `/api/members/{member_ref}/memory/{memory_id}/restore` | → the restored item; 409 if it is not retired |
+| POST | `/api/members/{member_ref}/memory/erase` | → `{erased: <count>}`; removes every memory and event content of the member in the tenant |
+| GET | `/api/members/{member_ref}/memory/export` | → JSON file of all memories and events of the member in the tenant |
 
 ## Phone numbers and telephony
 | Method | Path | Body → Result |
@@ -129,4 +138,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 - **API-01** — Given an unpublished agent, when `POST /api/calls` is made, then the response is 409 `agent_not_published`.
 - **API-02** — Given a text call, when `POST /messages` is made on a voice call id, then the response is 409 `wrong_channel`.
 - **API-03** — Given any validation failure, then the response is 422 with `{error, detail}`.
+- **API-05** — Given `POST /api/calls` with `caller_number` set to a registered number, then `GET /api/calls/{id}` shows `identification.first_name` and never the number; a value that is not E.164 returns 422.
+- **API-06** — Given a verified call that loaded memory and a finished `extract_memory` job, then `GET /api/calls/{id}` lists the loaded items under `memory.used` and the job's changes under `memory.updated`.
+- **API-07** — Given a member erased with `POST …/memory/erase`, then `GET …/memory` returns no facts, episodes or retired items and only the content-free erasure event, and so does the export; for a member the tenant never held anything about, `GET …/memory` returns 404.
 - **API-04** — Given `GET /api/calls`, then simulation calls created by evaluations never appear.

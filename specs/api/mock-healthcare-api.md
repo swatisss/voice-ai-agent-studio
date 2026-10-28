@@ -13,7 +13,9 @@ Served by the platform at `/mock/*` (no `/api` prefix, no tenant header needed).
 
 | Method | Path | Input | Output |
 |---|---|---|---|
-| POST | `/verify` | `{member_id, date_of_birth}` | `{verified: true, member_ref, first_name, plan_name}` or `{verified: false, reason}` |
+| POST | `/verify` | `{member_id, date_of_birth}`, or `{date_of_birth}` with header `X-Identified-Ref` (flow A) | `{verified: true, member_ref, first_name, plan_name}` or `{verified: false, reason}` |
+| POST | `/identify` | `{phone}` (E.164) | `{matched: true, member_ref, first_name}` or `{matched: false}`; never more ([/architecture/caller-verification.md](/architecture/caller-verification.md)) |
+| GET | `/members/me` | — (needs `X-Member-Ref`) | `{first_name, plan_name, policies: [{policy_id, product, status}], open_claims: [{claim_id, status}], preferred_contact}`: the member profile used for personalisation ([/architecture/agent-memory.md](/architecture/agent-memory.md)) |
 | GET | `/benefits` | member | `{plan_name, plan_type, deductible: {individual, met, remaining}, out_of_pocket_max: {…}, copays: {…}, referral_required_for_specialists}` |
 | GET | `/claims` | member | `{claims: [{claim_id, type, service, service_date, status}]}` newest first |
 | GET | `/claims/{claim_id}` | member | `{claim_id, type, service, provider, service_date, status, billed, plan_paid, member_responsibility, paid_date, denial_reason, appeal_deadline, expected_decision_date, notes, timeline: [{date, event}], next_step}`; 404 if not the member's |
@@ -70,5 +72,8 @@ Served by the platform at `/mock/*` (no `/api` prefix, no tenant header needed).
 - **MOCK-10** — Given Aisha's onboarding checklist, when `confirm_contact_details` is already done and `communication_preferences` is completed with `email`, then `remaining` drops by one; an invalid preference returns 422 and an unknown step 404.
 - **MOCK-11** — Given the outreach endpoints, then renewals list James, Maria and Robert in that order and drop a policy once its renewal is decided; onboarding lists only members with open steps.
 - **MOCK-13** — Given Aisha Okafor verified and her health policy active, when a first notice of type `urgent_care` for yesterday at Harbor Urgent Care with a 20-character description is posted, then the response is a new claim `C-90001` with status `received`, `expected_decision_days: 30` and the urgent care documents, and listing her claims includes it; posting the same policy, date and provider again returns 409 `duplicate_claim` naming `C-90001`; type `motor_glass` on the health policy returns 409 `claim_type_mismatch`; a future date returns 422; without verification it returns 401.
+- **MOCK-15** — Given `{phone: "+12025550141"}`, when identifying, then the result is `{matched: true, member_ref: "EVG-482913", first_name: "Maria"}`; an unregistered number returns `{matched: false}`.
+- **MOCK-16** — Given header `X-Identified-Ref: EVG-482913` and `{date_of_birth: "1986-04-12"}`, when verifying, then the result is `verified: true`; with another date of birth it is `verified: false`; without the header a body lacking `member_id` returns 422.
+- **MOCK-17** — Given `X-Member-Ref: EVG-482913`, when requesting `/members/me`, then the profile lists Maria Lopez's plan, policies and open claims and no other member's data; without the header it is 401.
 - **MOCK-14** — Given the requirements endpoint with no member header, when `claim_type=motor_collision` is requested, then the documents are the repair estimate or invoice, photos of all vehicles, the other party's details and the police report number; every one of the six types returns a non-empty list; an unknown type returns 422.
 - **MOCK-12** — Given the internal endpoints, then they work without a member header; `claims_handler` inpatient limit is 5,000; an unknown topic returns 404 listing the valid topics.

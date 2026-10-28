@@ -16,7 +16,7 @@ from voiceai import telephony
 from voiceai.config import get_settings
 from voiceai.db import sessionmaker
 from voiceai.errors import ApiError
-from voiceai import admission, voice_calls
+from voiceai import admission, caller_id, voice_calls
 from voiceai.models import Agent, AgentVersion, Call, PhoneNumber
 from voiceai.runtime.session import create_call
 
@@ -44,6 +44,8 @@ async def voice_webhook(request: Request) -> Response:
     dialled = (params.get("To") or [""])[0].strip()
     caller = (params.get("From") or [""])[0]
     call_sid = (params.get("CallSid") or [""])[0]
+    attestation = (params.get("StirVerstat") or [""])[0] or None
+    match = await caller_id.identify(caller, request.app)  # IDV-01: before the call exists; the number itself is never stored
 
     async with sessionmaker()() as db:
         number = await db.scalar(select(PhoneNumber).where(PhoneNumber.e164 == dialled))
@@ -63,6 +65,8 @@ async def voice_webhook(request: Request) -> Response:
         }
         if context:
             meta["context"] = context
+        if match:
+            meta["identification"] = caller_id.identification(match, attestation)
         call.meta = meta
         await db.commit()
         call_id = call.id

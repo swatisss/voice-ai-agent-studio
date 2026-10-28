@@ -23,10 +23,12 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 5. Events are delivered only to subscribers of the same tenant.
 6. Tools always send `X-Tenant-Id`; the mock API serves both demo tenants from separate data sets.
 7. A tenant's settings and stored credentials apply only to that tenant's agents and calls; a tenant's OpenAI key is never used for another tenant's call and is never returned by the API ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)).
+8. Member memory belongs to one tenant, one agent and one verified member; no other agent or tenant reads it, and erasure removes it from every agent of the tenant ([/architecture/agent-memory.md](/architecture/agent-memory.md)).
 
 # Acceptance
 
 - **MT-01** — Given an agent of tenant A, when tenant B requests it by id, then the response is 404.
 - **MT-02** — Given a request without `X-Tenant-Id` to `/api/agents`, then the response is 400 `tenant_required`.
 - **MT-03** — Given tenant B's doc id in tenant A's agent config, when publishing, then publish fails with 422.
+- **MT-13** — Given member memory for EVG-482913 in tenant A, when tenant B (or another agent of tenant A) handles a verified call for a member with the same reference, then none of it is loaded, listed or exported.
 - **MT-04** — Given calls in both tenants, when tenant A loads the dashboard, then only tenant A's calls are counted.

@@ -1,5 +1,10 @@
 # Directory Update Log
 
+## 2026-10-28 (CP-0017 effective call settings)
+* **Creation**: [CP-0017](changes/cp-0017-effective-call-settings.md) (proposed 2026-10-27 from the architecture review, accepted then; implemented 2026-10-28).
+* **Update**: [turn detection](architecture/turn-detection.md) (Live controls written by the session only; TD-09), [personas](architecture/personas.md) (effective call settings resolved once; PER-07).
+* Implemented: `voiceai/call_settings.py` (persona override, pipeline, turn detection, key source and the `settings` view, used by `AgentSession` and every call response); `live.py` keeps only `LiveControls`, the `LIVE` registry and `follow()`; `AgentSession.subscribe()` notifies the running pipeline of persona and turn-detection changes and drops subscribers when the call ends; `PATCH /api/calls/{id}/live` calls the session only. 3 new tests (`tests/test_call_settings.py`, PER-07, TD-09); `tests/test_personas.py` now registers its controls through `follow()` like the pipeline.
+
 ## 2026-10-27 (CP-0016 turn policy inside AgentSession)
 * **Creation**: [CP-0016](changes/cp-0016-turn-policy-in-agent-session.md) (proposed from the architecture review, accepted and implemented the same day).
 * **Update**: [agent runtime](architecture/agent-runtime.md) (Turn policy section replaces `run_tool`/`record_turn`; RT-10 retired; RT-11…RT-15), [realtime voice](architecture/realtime-voice.md) (the bridge is an adapter over the turn policy).

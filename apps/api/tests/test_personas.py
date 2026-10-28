@@ -9,7 +9,8 @@ from typing import Any
 from sqlalchemy import select
 
 from voiceai.db import sessionmaker
-from voiceai.live import LIVE, LiveControls
+from voiceai.live import LIVE, LiveControls, follow
+from voiceai.runtime.session import AgentSession
 from voiceai.llm.gateway import FakeReply
 from voiceai.models import AgentVersion, CallEvent
 from voiceai.voice.turn_detection import TurnSettings
@@ -99,7 +100,7 @@ async def test_live_persona_switch_changes_next_turn_only(client, seeded, fake_l
 
 
 async def test_live_turn_detection_and_voice_callback(client, seeded):
-    """Covers: TD-06, PER-04"""
+    """Covers: TD-06, PER-04, TD-09"""
     call = (await client.post("/api/calls", headers=M, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})).json()
     cid = call["call_id"]
     heard: list[tuple[str, float]] = []
@@ -107,7 +108,8 @@ async def test_live_turn_detection_and_voice_callback(client, seeded):
     async def on_voice(voice: str, speed: float) -> None:
         heard.append((voice, speed))
 
-    LIVE[cid] = LiveControls(turn=TurnSettings(mode="vad"), on_voice=on_voice)  # as the voice pipeline registers it
+    LIVE[cid] = LiveControls(turn=TurnSettings(mode="vad"), on_voice=on_voice)  # as the voice pipeline registers it ...
+    unfollow = follow(await AgentSession.open(cid, "evergreen-care"), LIVE[cid])  # ... and follows its session (TD-09)
     try:
         r = await client.patch(f"/api/calls/{cid}/live", headers=M, json={"turn_detection": {"mode": "vad", "min_silence_ms": 400, "allow_interruptions": False}})
         assert r.json()["settings"]["turn_detection"]["min_silence_ms"] == 400
@@ -115,6 +117,9 @@ async def test_live_turn_detection_and_voice_callback(client, seeded):
         leo = next(p for p in (await client.get("/api/personas", headers=M)).json()["items"] if p["name"] == "Leo")
         await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": leo["id"]})
         assert heard == [("aura-2-apollo-en", 1.05)]
+        unfollow()
+        await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": ""})
+        assert len(heard) == 1  # unsubscribed: nothing more arrives
     finally:
         LIVE.pop(cid, None)
     assert (await client.patch(f"/api/calls/{cid}/live", headers=M, json={"turn_detection": {"min_silence_ms": 50}})).status_code == 422

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.db import get_session
 from voiceai.errors import ApiError
-from voiceai.live import persona_dict
+from voiceai.call_settings import persona_dict
 from voiceai.models import Agent, Persona
 from voiceai.schemas import PersonaIn
 from voiceai.tenancy import current_tenant

@@ -9,7 +9,7 @@ import json
 import logging
 import statistics
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -22,8 +22,9 @@ from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.knowledge.search import search as kb_search
 from voiceai.llm.gateway import LLMError, Usage, gateway
-from voiceai.live import effective_turn, persona_dict, pipeline_of, settings_view
-from voiceai.models import Agent, AgentVersion, Call, CallEvent, Persona, Tenant
+from voiceai.call_settings import effective_turn, persona_override, view
+from voiceai.live import SettingsChange
+from voiceai.models import Agent, AgentVersion, Call, CallEvent, Tenant
 from voiceai.runtime import endings, escalation, outbound
 from voiceai.runtime.prompt import system_prompt
 from voiceai.runtime.state import CallState
@@ -133,6 +134,8 @@ class AgentSession:
         self.seq = seq
         self.tools = ToolExecutor(self.tenant_id, self.call_id, config.get("tools", []), self.state, app)
         self._lock = asyncio.Lock()
+        self._listeners: list[Callable[[SettingsChange], Awaitable[None]]] = []  # the running voice pipeline (TD-09)
+        self._call_meta: dict[str, Any] = {}  # admission plan and key source, for settings() (PER-07)
         self._tool_rounds = 0  # tool calls in the current caller turn of an externally driven channel (RT-12)
 
     # ------------------------------------------------------------ loading
@@ -155,15 +158,15 @@ class AgentSession:
             meta = call.meta or {}
             live = dict(meta.get("live") or {})
             base_persona = dict(config.get("persona") or {})
-            if live.get("persona_id"):  # call-start or live persona override
-                row = await s.get(Persona, live["persona_id"])
-                if row is not None and row.tenant_id == tenant_id:
-                    config = {**config, "persona": persona_dict(row)}
+            override = await persona_override(s, tenant_id, live)  # call-start or live persona override (PER-07)
+            if override:
+                config = {**config, "persona": override}
             state = CallState(**meta["state"]) if meta.get("state") else CallState()
             state.ended = state.ended or call.ended_at is not None
             sess = cls(call=call, config=config, tenant_name=tenant.name if tenant else tenant_id, app=app,
                        history=list(meta.get("history", [])), state=state, seq=seq, live=live, context=meta.get("context"))
             sess.base_persona = base_persona
+            sess._call_meta = {k: meta[k] for k in ("admission", "openai_key_source") if k in meta}
         if not sess.state.ended:
             REGISTRY[call_id] = sess
         return sess
@@ -197,7 +200,26 @@ class AgentSession:
         return effective_turn(self.config, self.live)
 
     def settings(self) -> dict[str, Any]:
-        return settings_view(self.config.get("persona") or {}, self.turn_settings(), pipeline_of(self.config))
+        return view(self.config, self.live, self._call_meta)
+
+    def subscribe(self, listener: Callable[[SettingsChange], Awaitable[None]]) -> Callable[[], None]:
+        """TD-09: the voice pipeline follows live changes; returns the unsubscribe function. Ending the call drops all."""
+        self._listeners.append(listener)
+
+        def unsubscribe() -> None:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
+
+        return unsubscribe
+
+    async def _notify(self, persona_changed: bool) -> None:
+        if self.state.ended:
+            return
+        persona = self.config.get("persona") or {}
+        voice = (persona.get("voice") or "aura-2-thalia-en", float(persona.get("speed") or 1.0)) if persona_changed else None
+        change = SettingsChange(turn=self.turn_settings(), voice=voice)
+        for listener in list(self._listeners):
+            await listener(change)
 
     async def switch_persona(self, persona: dict[str, Any] | None) -> None:
         """Live persona switch (PER-04); None restores the agent's own persona."""
@@ -206,6 +228,7 @@ class AgentSession:
         self.live["persona_id"] = persona.get("id") if persona is not self.base_persona else None
         await self._event("system", f"Persona switched to {persona.get('name', 'default')}", {"persona_id": persona.get("id")})
         await self._persist()
+        await self._notify(persona_changed=True)
 
     async def change_turn_detection(self, patch: dict[str, Any]) -> None:
         merged = {**(self.live.get("turn_detection") or {}), **patch}
@@ -214,6 +237,7 @@ class AgentSession:
         label = "Semantic" if t.mode == "semantic" else "Normal"
         await self._event("system", f"Turn detection: {label} detection, {t.min_silence_ms} ms silence", {"turn_detection": t.to_dict()})
         await self._persist()
+        await self._notify(persona_changed=False)
 
     # ------------------------------------------------------------ lifecycle
     async def start(self) -> str:
@@ -234,6 +258,7 @@ class AgentSession:
         self.state.ended = True
         self.end_reason = reason
         REGISTRY.pop(self.call_id, None)
+        self._listeners.clear()  # TD-09: no change reaches a pipeline after its call ended
         await self._persist()
         async with sessionmaker()() as s:
             call = await s.get(Call, self.call_id)

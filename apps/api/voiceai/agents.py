@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.llm.gateway import gateway
-from voiceai.live import persona_dict
+from voiceai.call_settings import persona_dict
 from voiceai.models import Agent, AgentVersion, KnowledgeDoc, Persona, Skill, Tool
 from voiceai.schemas import AgentConfig
 

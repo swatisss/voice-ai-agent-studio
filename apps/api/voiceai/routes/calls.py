@@ -15,7 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.db import get_session, sessionmaker
 from voiceai.errors import ApiError
-from voiceai.live import LIVE, LiveControls, effective_settings, persona_dict, pipeline_of
+from voiceai.call_settings import effective_settings, persona_dict, pipeline_of
+from voiceai.live import LIVE, LiveControls, follow
 from voiceai.llm.gateway import gateway
 from voiceai import jobs
 from voiceai.db import utcnow
@@ -123,16 +124,10 @@ async def live_settings(call_id: str, body: LiveBody, request: Request, tenant_i
     persona = await _persona(s, tenant_id, body.persona_id) if body.persona_id else None
     await s.close()
     session = await AgentSession.open(call_id, tenant_id, app=request.app)
-    controls = LIVE.get(call_id)
-    if body.persona_id is not None:
+    if body.persona_id is not None:  # the session notifies the running pipeline itself (TD-09)
         await session.switch_persona(persona_dict(persona) if persona else None)
-        voice = session.config.get("persona") or {}
-        if controls and controls.on_voice:
-            await controls.on_voice(voice.get("voice", "aura-2-thalia-en"), float(voice.get("speed", 1.0)))
     if body.turn_detection is not None:
         await session.change_turn_detection(body.turn_detection.model_dump(exclude_none=True))
-        if controls:
-            controls.turn = session.turn_settings()
     return {"settings": session.settings()}
 
 
@@ -273,6 +268,7 @@ async def serve_voice(websocket: WebSocket, tenant_id: str, call: Call, phone: A
     session = await AgentSession.open(call.id, tenant_id, app=websocket.app)
     controls = LiveControls(turn=session.turn_settings())
     LIVE[call.id] = controls
+    unfollow = follow(session, controls)  # live changes reach the pipeline through the session (TD-09)
     try:
         if kind == "realtime":
             ref = plan.model_ref or gateway().speech_ref((config.get("models") or {}).get("speech"))
@@ -288,6 +284,7 @@ async def serve_voice(websocket: WebSocket, tenant_id: str, call: Call, phone: A
         else:
             await pipeline.run(websocket, session, key, controls, phone)
     finally:
+        unfollow()
         LIVE.pop(call.id, None)
 
 

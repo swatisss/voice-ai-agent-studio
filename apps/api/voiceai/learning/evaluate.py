@@ -19,7 +19,7 @@ from voiceai.db import sessionmaker, utcnow
 from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.learning.propose import candidate_config, cluster_evidence, proposal_summary
-from voiceai.live import pipeline_of
+from voiceai.call_settings import pipeline_of
 from voiceai.llm.gateway import gateway
 from voiceai.mock import data as mock
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, EvalResult, EvalRun, EvalScenario, FixProposal, Tenant

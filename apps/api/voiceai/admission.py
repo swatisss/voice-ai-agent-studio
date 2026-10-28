@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai import tenant_settings
 from voiceai.config import get_settings
-from voiceai.live import pipeline_of
+from voiceai.call_settings import pipeline_of
 from voiceai.llm.gateway import gateway
 
 Reason = Literal["pipeline_not_allowed", "voice_unavailable"]

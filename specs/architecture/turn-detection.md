@@ -55,7 +55,7 @@ Role `turn` ([/architecture/llm-gateway.md](/architecture/llm-gateway.md)) with 
 
 # Live controls
 
-For each active voice call a `LiveControls` object (in-memory registry keyed by call id) holds the current turn settings and an optional voice-change callback. `PATCH /api/calls/{id}/live` updates it and persists the override in the call's metadata; the pipeline reads it on every decision. Persona changes are described in [/architecture/personas.md](/architecture/personas.md).
+For each active voice call a `LiveControls` object (in-memory registry keyed by call id) holds the current turn settings and an optional voice-change callback; only the voice pipeline reads and writes it. `PATCH /api/calls/{id}/live` changes the **session** only: the session persists the override in the call's metadata, recomputes the effective call settings ([/architecture/personas.md](/architecture/personas.md)) and notifies the running pipeline, which updates its `LiveControls` and reads them on every decision. Persona changes are described in [/architecture/personas.md](/architecture/personas.md).
 
 # Acceptance
 
@@ -65,5 +65,6 @@ For each active voice call a `LiveControls` object (in-memory registry keyed by 
 - **TD-04** — Given `semantic` mode and an unfinished utterance, when `max_extra_wait_ms` elapses with no new speech, then the turn is dispatched anyway; with `max_extra_wait_ms: 0` it is dispatched at the silence threshold.
 - **TD-05** — Given evaluator `llm` and the model call raising an error or returning invalid JSON, then the heuristic verdict is used and the turn still completes.
 - **TD-06** — Given a live call in `vad` mode, when settings are changed to `semantic`, then the next decision uses semantic detection without restarting the call.
+- **TD-09** — Given a running cascade voice call, when `PATCH /api/calls/{id}/live` changes turn detection and persona, then the route calls only the session; the pipeline receives both changes through the session's notification (new turn settings for the next decision, new voice and speed for the next sentence); and after the call ends no notification is delivered to its pipeline.
 - **TD-07** — Given `allow_interruptions: false` and the agent speaking, when the caller speaks, then no interruption is broadcast and the reply is not cancelled; the caller's turn is answered after the agent finishes. With `true`, the reply is cancelled and an interruption is broadcast.
 - **TD-08** — Given a config with `min_silence_ms: 100`, `max_extra_wait_ms: 9000` or an unknown `mode`, when saved, then the API returns 422.

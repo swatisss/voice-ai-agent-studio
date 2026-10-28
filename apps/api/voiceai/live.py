@@ -1,6 +1,6 @@
-"""Live call controls: registry of mutable per-call settings and effective-settings computation.
+"""Live controls of an active voice call: the pipeline's mutable settings, kept in step with its session.
 
-Spec: /architecture/turn-detection.md (Live controls), /architecture/personas.md
+Spec: /architecture/turn-detection.md (Live controls, TD-09), /architecture/personas.md (PER-04)
 """
 from __future__ import annotations
 
@@ -8,9 +8,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from voiceai.models import AgentVersion, Call, Persona
 from voiceai.voice.turn_detection import TurnSettings
 
 
@@ -23,51 +20,23 @@ class LiveControls:
     welcoming: bool = False  # the opening welcome is playing: caller speech is ignored (VO-08); set by the brain
 
 
+@dataclass(frozen=True)
+class SettingsChange:
+    """What a session tells its pipeline after a live change (TD-09)."""
+
+    turn: TurnSettings
+    voice: tuple[str, float] | None = None  # new TTS voice and speed when the persona changed
+
+
 LIVE: dict[str, LiveControls] = {}
 
 
-def persona_dict(p: Persona) -> dict[str, Any]:
-    return {"id": p.id, "name": p.name, "voice": p.voice, "speed": p.speed, "greeting": p.greeting,
-            "disclosure": p.disclosure, "opening": p.opening, "style": p.style}
+def follow(session: Any, controls: LiveControls) -> Callable[[], None]:  # noqa: ANN401
+    """Keep `controls` in step with the session's live changes; returns the unsubscribe function."""
 
+    async def apply(change: SettingsChange) -> None:
+        controls.turn = change.turn
+        if change.voice and controls.on_voice:
+            await controls.on_voice(*change.voice)
 
-def pipeline_of(config: dict[str, Any]) -> str:
-    """RV-01: `cascade` unless the version says `realtime`."""
-    return "realtime" if ((config.get("voice") or {}).get("pipeline")) == "realtime" else "cascade"
-
-
-def effective_turn(config: dict[str, Any], live: dict[str, Any] | None) -> TurnSettings:
-    base = ((config.get("voice") or {}).get("turn_detection")) or {}
-    patch = (live or {}).get("turn_detection") or {}
-    return TurnSettings.from_dict({**base, **patch})
-
-
-def settings_view(persona: dict[str, Any], turn: TurnSettings, pipeline: str = "cascade", key_source: str | None = None) -> dict[str, Any]:
-    view = {
-        "pipeline": pipeline,
-        "persona": {"id": persona.get("id"), "name": persona.get("name"), "voice": persona.get("voice"), "speed": persona.get("speed", 1.0)},
-        "turn_detection": turn.to_dict(),
-    }
-    if key_source:  # RV-16: which OpenAI key served a realtime call
-        view["openai_key_source"] = key_source
-    return view
-
-
-async def effective_settings(s: AsyncSession, call: Call) -> dict[str, Any]:
-    """Effective persona and turn detection of a call without opening a session."""
-    version = await s.get(AgentVersion, call.agent_version_id)
-    config = version.config if version else {}
-    live = (call.meta or {}).get("live") or {}
-    persona = config.get("persona") or {}
-    if live.get("persona_id"):
-        row = await s.get(Persona, live["persona_id"])
-        if row is not None and row.tenant_id == call.tenant_id:
-            persona = persona_dict(row)
-    return settings_view(persona, effective_turn(config, live), pipeline_of(config), key_source(call.meta or {}, pipeline_of(config)))
-
-
-def key_source(meta: dict[str, Any], pipeline: str) -> str | None:
-    """RV-16, ADM-05: which OpenAI key a realtime call uses, known from the moment the call is admitted."""
-    if pipeline != "realtime":
-        return None
-    return ((meta.get("admission") or {}).get("credential_source")) or meta.get("openai_key_source")
+    return session.subscribe(apply)

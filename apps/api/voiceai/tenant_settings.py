@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai import vault
 from voiceai.errors import ApiError
-from voiceai.live import pipeline_of
+from voiceai.call_settings import pipeline_of
 from voiceai.llm.gateway import gateway
 from voiceai.models import Agent, AgentVersion, Tenant, TenantCredential, TenantSettings
 

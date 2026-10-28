@@ -36,7 +36,7 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
   3. the greeting is **not** repeated;
   4. on a voice call, a TTS settings update with the new voice and speed is sent so the **next spoken sentence** uses it;
   5. the override is persisted in the call metadata so a restarted session keeps it.
-* The effective persona for a call is: live override, else call-start override, else the version snapshot.
+* The effective persona for a call is: live override, else call-start override, else the version snapshot. This is resolved in one place, the **effective call settings** (persona, turn detection, pipeline), used by the session and by every call response's `settings`; a persona row of another tenant or a deleted one is ignored and the snapshot persona applies.
 
 # Acceptance
 
@@ -44,5 +44,6 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 - **PER-02** — Given an agent whose draft has `persona_id`, when published, then the version snapshot contains the resolved persona, and editing the persona afterwards leaves that version unchanged.
 - **PER-03** — Given `POST /api/calls` with `persona_id`, when the call starts, then the greeting uses that persona's greeting and name.
 - **PER-04** — Given a running text call, when `PATCH /api/calls/{id}/live` sets a different `persona_id`, then the next model request's system prompt names the new persona, a "Persona switched to …" system event is stored, and no second greeting is produced.
+- **PER-07** — Given a call with a call-start persona override and a later live persona change, then `POST /api/calls`, `PATCH /api/calls/{id}/live` and `GET /api/calls/{id}` report the same effective `settings` as the session uses for its next turn; given an override that names a deleted persona, all of them fall back to the snapshot persona.
 - **PER-05** — Given a persona referenced by an agent draft, when deleted, then the API returns 409 `persona_in_use`; after unreferencing it, deletion succeeds.
 - **PER-06** — Given a persona of another tenant, when referenced by an agent config or call, then the API rejects it (422 on publish/config, 404 on the call endpoints).

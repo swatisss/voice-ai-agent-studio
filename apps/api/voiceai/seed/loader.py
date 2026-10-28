@@ -19,7 +19,7 @@ from voiceai.knowledge import okf
 from voiceai.knowledge.embeddings import embed
 from voiceai.knowledge.ingest import import_okf
 from voiceai.learning.analyze import refresh_stats
-from voiceai.live import persona_dict
+from voiceai.call_settings import persona_dict
 from voiceai.mock import data as mock_data
 from voiceai.models import (
     Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, Persona, Skill, Tenant, TenantSettings, Tool, UseCase,

@@ -15,9 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.db import get_session, sessionmaker
 from voiceai.errors import ApiError
-from voiceai.call_settings import effective_settings, persona_dict, pipeline_of
+from voiceai import call_settings
+from voiceai.call_settings import effective_settings, persona_dict
 from voiceai.live import LIVE, LiveControls, follow
-from voiceai.llm.gateway import gateway
 from voiceai import jobs
 from voiceai.db import utcnow
 from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Escalation, Persona
@@ -96,8 +96,7 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
         live["turn_detection"] = body.turn_detection.model_dump(exclude_none=True)
     call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None, context=body.context, app=request.app)
     if body.channel == "voice":  # ADM-02: refused up front, and no call row is kept
-        version = await s.get(AgentVersion, call.agent_version_id)
-        decided = await admission.admit(s, tenant_id, version.config if version else {})
+        decided = await admission.admit(s, tenant_id, (await call_settings.load(s, call)).config)
         if isinstance(decided, admission.Refusal):
             raise ApiError(409, decided.reason, "Voice is not available for this agent right now"
                            if decided.reason == "voice_unavailable" else "The agent's voice pipeline is not enabled for this business unit")
@@ -118,8 +117,7 @@ async def live_settings(call_id: str, body: LiveBody, request: Request, tenant_i
         raise ApiError(404, "call_not_found", "Call not found")
     if call.ended_at:
         raise ApiError(409, "call_ended", "This call has ended")
-    version = await s.get(AgentVersion, call.agent_version_id)
-    if pipeline_of(version.config if version else {}) == "realtime":  # RV-15
+    if (await call_settings.load(s, call)).pipeline == "realtime":  # RV-15
         raise ApiError(409, "realtime_pipeline", "Live persona and turn-detection changes apply to cascade calls only")
     persona = await _persona(s, tenant_id, body.persona_id) if body.persona_id else None
     await s.close()
@@ -245,8 +243,7 @@ async def serve_voice(websocket: WebSocket, tenant_id: str, call: Call, phone: A
     (VO-05 for the cascade, RV-03 and RV-13 for the realtime pipeline).
     """
     async with sessionmaker()() as s:
-        version = await s.get(AgentVersion, call.agent_version_id)
-        config = version.config if version else {}
+        config = (await call_settings.load(s, call)).config
         decided = await admission.admit_socket(s, tenant_id, config, (call.meta or {}).get("admission"))
         if isinstance(decided, admission.Refusal):  # MT-08, VO-05, RV-03, ADM-04
             await websocket.close(code=4500, reason=decided.reason)
@@ -271,7 +268,7 @@ async def serve_voice(websocket: WebSocket, tenant_id: str, call: Call, phone: A
     unfollow = follow(session, controls)  # live changes reach the pipeline through the session (TD-09)
     try:
         if kind == "realtime":
-            ref = plan.model_ref or gateway().speech_ref((config.get("models") or {}).get("speech"))
+            ref = plan.model_ref or session.call_settings.speech_ref()
 
             async def connector() -> rt.RealtimeConnection:
                 return await rt.connect_openai(key, ref)

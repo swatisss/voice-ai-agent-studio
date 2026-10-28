@@ -111,11 +111,8 @@ def build(
             model=settings.deepgram_stt_model, language="en-US", smart_format=True, punctuate=True, interim_results=True,
         ),
     )
-    persona = session.config.get("persona") or {}
-    tts = DeepgramTTSService(
-        api_key=deepgram_key, sample_rate=OUT_RATE,
-        settings=DeepgramTTSService.Settings(voice=persona.get("voice") or "aura-2-thalia-en", speed=float(persona.get("speed") or 1.0)),
-    )
+    voice, speed = session.call_settings.cascade_voice
+    tts = DeepgramTTSService(api_key=deepgram_key, sample_rate=OUT_RATE, settings=DeepgramTTSService.Settings(voice=voice, speed=speed))
     turns = TurnAggregator(controls, TurnEvaluator(), last_agent_text=lambda: last_agent_message(session), vad_stop_ms=int(settings.voice_vad_stop_secs * 1000))
 
     on_end = CallEnder(session, serializer, phone)

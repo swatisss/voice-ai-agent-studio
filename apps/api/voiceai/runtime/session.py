@@ -22,7 +22,8 @@ from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.knowledge.search import search as kb_search
 from voiceai.llm.gateway import LLMError, Usage, gateway
-from voiceai.call_settings import effective_turn, persona_override, view
+from voiceai import call_settings
+from voiceai.call_settings import CallSettings
 from voiceai.live import SettingsChange
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, Tenant
 from voiceai.runtime import endings, escalation, outbound
@@ -115,7 +116,7 @@ class AgentSession:
     def __init__(
         self, *, call: Call, config: dict[str, Any], tenant_name: str, app: Any | None,
         history: list[dict[str, Any]] | None = None, state: CallState | None = None, seq: int = 0,
-        live: dict[str, Any] | None = None, context: dict[str, Any] | None = None,
+        live: dict[str, Any] | None = None, context: dict[str, Any] | None = None, settings: CallSettings | None = None,
     ) -> None:
         self.call_id = call.id
         self.context: dict[str, Any] = dict(context or {})  # outbound call context (OB-01)
@@ -124,9 +125,7 @@ class AgentSession:
         self.channel = call.channel
         self.is_eval = call.is_eval
         self.started_at = call.started_at or utcnow()
-        self.config = config
-        self.base_persona: dict[str, Any] = dict(config.get("persona") or {})  # the version's persona, for "reset to default"
-        self.live: dict[str, Any] = dict(live or {})  # persisted overrides: persona_id, turn_detection
+        self.call_settings = settings or CallSettings.of(config, live)  # effective persona, turn detection, plan (PER-07)
         self.tenant_name = tenant_name
         self.history: list[dict[str, Any]] = history or []
         self.state = state or CallState()
@@ -135,7 +134,6 @@ class AgentSession:
         self.tools = ToolExecutor(self.tenant_id, self.call_id, config.get("tools", []), self.state, app)
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[SettingsChange], Awaitable[None]]] = []  # the running voice pipeline (TD-09)
-        self._call_meta: dict[str, Any] = {}  # admission plan and key source, for settings() (PER-07)
         self._tool_rounds = 0  # tool calls in the current caller turn of an externally driven channel (RT-12)
 
     # ------------------------------------------------------------ loading
@@ -148,25 +146,14 @@ class AgentSession:
             call = await s.scalar(select(Call).where(Call.id == call_id, Call.tenant_id == tenant_id))
             if not call:
                 raise ApiError(404, "call_not_found", "Call not found")
-            if config_override is not None:
-                config = config_override
-            else:
-                version = await s.get(AgentVersion, call.agent_version_id)
-                config = version.config if version else {}
+            settings = await call_settings.load(s, call, config_override)
             tenant = await s.get(Tenant, tenant_id)
             seq = await s.scalar(select(func.max(CallEvent.seq)).where(CallEvent.call_id == call_id)) or 0
             meta = call.meta or {}
-            live = dict(meta.get("live") or {})
-            base_persona = dict(config.get("persona") or {})
-            override = await persona_override(s, tenant_id, live)  # call-start or live persona override (PER-07)
-            if override:
-                config = {**config, "persona": override}
             state = CallState(**meta["state"]) if meta.get("state") else CallState()
             state.ended = state.ended or call.ended_at is not None
-            sess = cls(call=call, config=config, tenant_name=tenant.name if tenant else tenant_id, app=app,
-                       history=list(meta.get("history", [])), state=state, seq=seq, live=live, context=meta.get("context"))
-            sess.base_persona = base_persona
-            sess._call_meta = {k: meta[k] for k in ("admission", "openai_key_source") if k in meta}
+            sess = cls(call=call, config=settings.config, tenant_name=tenant.name if tenant else tenant_id, app=app,
+                       history=list(meta.get("history", [])), state=state, seq=seq, context=meta.get("context"), settings=settings)
         if not sess.state.ended:
             REGISTRY[call_id] = sess
         return sess
@@ -196,11 +183,20 @@ class AgentSession:
             await s.commit()
 
     # ------------------------------------------------------------ live settings
+    @property
+    def config(self) -> dict[str, Any]:
+        """The agent version's config with the effective persona."""
+        return self.call_settings.config
+
+    @property
+    def live(self) -> dict[str, Any]:
+        return self.call_settings.live
+
     def turn_settings(self):  # noqa: ANN201
-        return effective_turn(self.config, self.live)
+        return self.call_settings.turn
 
     def settings(self) -> dict[str, Any]:
-        return view(self.config, self.live, self._call_meta)
+        return self.call_settings.view()
 
     def subscribe(self, listener: Callable[[SettingsChange], Awaitable[None]]) -> Callable[[], None]:
         """TD-09: the voice pipeline follows live changes; returns the unsubscribe function. Ending the call drops all."""
@@ -215,24 +211,21 @@ class AgentSession:
     async def _notify(self, persona_changed: bool) -> None:
         if self.state.ended:
             return
-        persona = self.config.get("persona") or {}
-        voice = (persona.get("voice") or "aura-2-thalia-en", float(persona.get("speed") or 1.0)) if persona_changed else None
+        voice = self.call_settings.cascade_voice if persona_changed else None
         change = SettingsChange(turn=self.turn_settings(), voice=voice)
         for listener in list(self._listeners):
             await listener(change)
 
     async def switch_persona(self, persona: dict[str, Any] | None) -> None:
         """Live persona switch (PER-04); None restores the agent's own persona."""
-        persona = persona or self.base_persona
-        self.config = {**self.config, "persona": persona}
-        self.live["persona_id"] = persona.get("id") if persona is not self.base_persona else None
+        self.call_settings = self.call_settings.with_persona(persona)
+        persona = self.call_settings.persona
         await self._event("system", f"Persona switched to {persona.get('name', 'default')}", {"persona_id": persona.get("id")})
         await self._persist()
         await self._notify(persona_changed=True)
 
     async def change_turn_detection(self, patch: dict[str, Any]) -> None:
-        merged = {**(self.live.get("turn_detection") or {}), **patch}
-        self.live["turn_detection"] = merged
+        self.call_settings = self.call_settings.with_turn(patch)
         t = self.turn_settings()
         label = "Semantic" if t.mode == "semantic" else "Normal"
         await self._event("system", f"Turn detection: {label} detection, {t.min_silence_ms} ms silence", {"turn_detection": t.to_dict()})

@@ -12,10 +12,11 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from voiceai.runtime import endings
+from voiceai.schemas import Policy
 
-DEFAULT_REMINDER_S = 10.0
-DEFAULT_END_S = 30.0
-DEFAULT_MAX_CALL_S = 600.0
+DEFAULT_REMINDER_S = float(Policy.model_fields["silence_reminder_s"].default)
+DEFAULT_END_S = float(Policy.model_fields["silence_end_s"].default)
+DEFAULT_MAX_CALL_S = float(Policy.model_fields["max_call_seconds"].default)
 
 
 @dataclass(frozen=True)

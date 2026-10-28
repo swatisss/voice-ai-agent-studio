@@ -182,8 +182,8 @@ def collect_acceptance(rep: Report, files: list[Path]) -> dict[str, tuple[str, s
             ident, loc = m.group(1), f"{rel(f)}:{i}"
             if ident in seen:
                 rep.err(f"duplicate acceptance ID {ident}: {seen[ident][0]} and {loc}")
-            else:
-                seen[ident] = (loc, status)
+            else:  # a struck-through ID is retired (conventions): still defined, never counted as untested
+                seen[ident] = (loc, "retired" if "~~" in m.group(0) else status)
     return seen
 
 
@@ -222,7 +222,7 @@ def check_coverage(rep: Report, ids: dict[str, tuple[str, str]], ratchet: bool, 
         if uncited:
             rep.warn(f"{len(uncited)} acceptance IDs not cited by any test: {', '.join(uncited)}")
     else:
-        counted = [i for i in uncited if ids[i][1] == "stable"]  # draft specs are not implemented yet
+        counted = [i for i in uncited if ids[i][1] == "stable"]  # draft specs are not implemented yet; retired IDs need no test
         fresh = [i for i in counted if i not in baseline]
         if fresh:  # SDD-07
             rep.err(

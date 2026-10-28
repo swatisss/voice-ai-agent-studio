@@ -203,6 +203,15 @@ def test_ratchet_stable_vs_draft_and_baseline(tmp_path):
     assert any("remove them" in e and "ZZ-01" in e for e in _run(mod, ratchet=True, baseline={"ZZ-01"}).errors)  # stale baseline
 
 
+def test_retired_ids_need_no_test(tmp_path):
+    """Covers: SDD-07 (an ID retired by strike-through, per the conventions, is exempt from the ratchet but still defined)"""
+    _bundle(tmp_path, {"index.md": "* [a](a.md) - a\n", "log.md": "# Log\n",
+                       "a.md": _concept(body="- **~~ZZ-01~~** — Retired by CP-9999.\n- **ZZ-02** — Given x, then y.")})
+    _write(tmp_path, {"apps/api/tests/test_zz.py": f'"""{MARK}ZZ-01"""\n'})  # an old citation stays valid
+    errors = _run(_load(tmp_path), ratchet=True).errors
+    assert any("ZZ-02" in e for e in errors) and not any("ZZ-01" in e for e in errors)
+
+
 def test_tests_may_only_cite_existing_ids(tmp_path):
     """Covers: SDD-08"""
     _bundle(tmp_path, {"index.md": "* [a](a.md) - a\n", "a.md": _concept(body="- **ZZ-01** — Given x, then y.")})

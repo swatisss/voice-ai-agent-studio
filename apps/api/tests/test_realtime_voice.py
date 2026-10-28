@@ -129,9 +129,9 @@ async def build(seeded, agent: str = "claims", turn: dict | None = None):  # noq
     conn = FakeConn()
     ended: list[str] = []
 
-    async def on_end(reason: str) -> None:
-        ended.append(reason)
+    async def on_end(reason: str) -> None:  # like CallEnder: the session has ended before anyone sees the call end
         await session.end(reason)
+        ended.append(reason)
 
     controls = LiveControls(turn=session.turn_settings())
     bridge = Bridge(session, controls, conn, on_end)

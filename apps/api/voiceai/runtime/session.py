@@ -20,7 +20,6 @@ from voiceai import jobs
 from voiceai.db import new_id, sessionmaker, utcnow
 from voiceai.errors import ApiError
 from voiceai.events import bus
-from voiceai.knowledge.search import search as kb_search
 from voiceai.llm.gateway import LLMError, Usage, gateway
 from voiceai import call_settings
 from voiceai.call_settings import CallSettings
@@ -131,7 +130,11 @@ class AgentSession:
         self.state = state or CallState()
         self.end_reason: str | None = None  # why this session ended (CE-06: the voice pipeline reports it to the browser)
         self.seq = seq
-        self.tools = ToolExecutor(self.tenant_id, self.call_id, config.get("tools", []), self.state, app)
+        self.tools = ToolExecutor(
+            self.tenant_id, self.call_id, config.get("tools", []), self.state, app,
+            knowledge_doc_ids=list(config.get("knowledge_doc_ids", [])), escalate=lambda category, detail: self.escalate(category, detail),
+            handoff_message=(config.get("policy") or {}).get("handoff_message", ""),
+        )
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[SettingsChange], Awaitable[None]]] = []  # the running voice pipeline (TD-09)
         self._tool_rounds = 0  # tool calls in the current caller turn of an externally driven channel (RT-12)
@@ -283,6 +286,10 @@ class AgentSession:
         self.history.append({"role": "assistant", "content": text})
         await self._event("assistant", text, data or {})
         return text
+
+    async def note(self, text: str, data: dict[str, Any] | None = None) -> None:
+        """A system line in the call's transcript (a transfer, a setting change): not something the caller hears."""
+        await self._event("system", text, data)
 
     async def announce(self, text: str, data: dict[str, Any] | None = None) -> str:
         """A line the runtime says outside a caller turn (silence reminder, closing lines); recorded like any assistant line."""
@@ -532,38 +539,7 @@ class AgentSession:
             args = None
         await self._event("tool_call", None, {"tool_call_id": call_id, "name": name, "args": args if isinstance(args, dict) else arguments})
         started = time.perf_counter()
-        ok = True
-        if name == "search_knowledge":
-            query = str((args or {}).get("query", ""))
-            async with sessionmaker()() as s:
-                result = await kb_search(s, self.tenant_id, list(self.config.get("knowledge_doc_ids", [])), query)
-            if result.get("no_answer"):
-                self.state.no_answer_streak += 1
-                self.state.no_answer_queries.append(query)
-            else:
-                self.state.no_answer_streak = 0
-            top = (result.get("results") or [{}])[0]
-            self.state.tools_used.append({"name": name, "ok": True, "summary": f"Searched knowledge for '{query}': " + ("no answer" if result.get("no_answer") else f"found '{top.get('title')}'")})
-        elif name == "escalate_to_human":
-            a = args or {}
-            category = str(a.get("reason_category") or "other")
-            if category not in escalation_categories():
-                category = "other"
-            await self.escalate(category, str(a.get("reason_detail") or ""))
-            result = {"status": "escalated", "say": self.config.get("policy", {}).get("handoff_message", "")}
-        elif name == "end_call":
-            self.state.end_requested = True
-            result = {"status": "ending"}
-        else:
-            result, ok = await self.tools.execute(name, arguments)
-            if name in self.tools.tools:
-                self.state.tool_error_streak = 0 if ok else self.state.tool_error_streak + 1
+        result, ok = await self.tools.run(name, arguments)
         duration = int((time.perf_counter() - started) * 1000)
         await self._event("tool_result", None, {"tool_call_id": call_id, "name": name, "ok": ok and "error" not in result, "result": result, "duration_ms": duration})
         return truncate(result)
-
-
-def escalation_categories() -> tuple[str, ...]:
-    from voiceai.schemas import ESCALATION_CATEGORIES
-
-    return ESCALATION_CATEGORIES

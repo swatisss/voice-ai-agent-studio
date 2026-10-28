@@ -5,7 +5,6 @@ Spec: /api/rest-api.md (Calls), /api/voice-protocol.md, /architecture/agent-runt
 """
 from __future__ import annotations
 
-import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request, WebSocket
@@ -17,7 +16,6 @@ from voiceai.db import get_session, sessionmaker
 from voiceai.errors import ApiError
 from voiceai import call_settings
 from voiceai.call_settings import effective_settings, persona_dict
-from voiceai.live import LIVE, LiveControls, follow
 from voiceai import jobs
 from voiceai.db import utcnow
 from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Escalation, Persona
@@ -25,9 +23,8 @@ from voiceai.schemas import TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
 from voiceai.runtime.session import AgentSession, create_call
 from voiceai.tenancy import current_tenant, resolve_tenant
-from voiceai import admission
+from voiceai import admission, voice_calls
 
-log = logging.getLogger("voiceai.calls")
 router = APIRouter(prefix="/api")
 
 
@@ -96,11 +93,10 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
         live["turn_detection"] = body.turn_detection.model_dump(exclude_none=True)
     call = await create_call(s, tenant_id, body.agent_id, body.channel, live=live or None, context=body.context, app=request.app)
     if body.channel == "voice":  # ADM-02: refused up front, and no call row is kept
-        decided = await admission.admit(s, tenant_id, (await call_settings.load(s, call)).config)
+        decided = await voice_calls.admit(s, tenant_id, call)
         if isinstance(decided, admission.Refusal):
             raise ApiError(409, decided.reason, "Voice is not available for this agent right now"
                            if decided.reason == "voice_unavailable" else "The agent's voice pipeline is not enabled for this business unit")
-        call.meta = {**(call.meta or {}), "admission": decided.to_meta()}
     await s.commit()
     greeting = None
     if body.channel == "text":
@@ -236,55 +232,6 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
     }
 
 
-async def serve_voice(websocket: WebSocket, tenant_id: str, call: Call, phone: Any | None = None) -> None:
-    """Run the voice pipeline the call's agent version asks for, on a socket that is already accepted.
-
-    Shared by the browser socket and the Twilio stream. Close 4500 when the pipeline's provider is unavailable
-    (VO-05 for the cascade, RV-03 and RV-13 for the realtime pipeline).
-    """
-    async with sessionmaker()() as s:
-        config = (await call_settings.load(s, call)).config
-        decided = await admission.admit_socket(s, tenant_id, config, (call.meta or {}).get("admission"))
-        if isinstance(decided, admission.Refusal):  # MT-08, VO-05, RV-03, ADM-04
-            await websocket.close(code=4500, reason=decided.reason)
-            return
-        plan, key = decided
-        if not (call.meta or {}).get("admission"):  # a call created before admission existed: record its plan now
-            row = await s.get(Call, call.id)
-            if row is not None:
-                row.meta = {**(row.meta or {}), "admission": plan.to_meta()}
-                await s.commit()
-    kind = plan.pipeline
-    try:
-        from voiceai.voice import pipeline
-        from voiceai.voice import realtime as rt
-    except Exception as exc:  # noqa: BLE001
-        log.error("voice pipeline unavailable: %s", exc)
-        await websocket.close(code=4500, reason="voice_unavailable")
-        return
-    session = await AgentSession.open(call.id, tenant_id, app=websocket.app)
-    controls = LiveControls(turn=session.turn_settings())
-    LIVE[call.id] = controls
-    unfollow = follow(session, controls)  # live changes reach the pipeline through the session (TD-09)
-    try:
-        if kind == "realtime":
-            ref = plan.model_ref or session.call_settings.speech_ref()
-
-            async def connector() -> rt.RealtimeConnection:
-                return await rt.connect_openai(key, ref)
-
-            try:
-                await pipeline.run_realtime(websocket, session, controls, connector, phone)
-            except rt.ProviderUnavailable as exc:  # RV-13
-                log.warning("realtime provider unavailable: %s", exc)
-                await websocket.close(code=4500, reason="voice_unavailable")
-        else:
-            await pipeline.run(websocket, session, key, controls, phone)
-    finally:
-        unfollow()
-        LIVE.pop(call.id, None)
-
-
 @router.websocket("/voice/{call_id}")
 async def voice(websocket: WebSocket, call_id: str) -> None:
     await websocket.accept()
@@ -301,4 +248,4 @@ async def voice(websocket: WebSocket, call_id: str) -> None:
     if call.channel != "voice":
         await websocket.close(code=4400, reason="wrong channel")
         return
-    await serve_voice(websocket, tenant_id, call)
+    await voice_calls.serve(websocket, tenant_id, call)

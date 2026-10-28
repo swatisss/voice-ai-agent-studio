@@ -20,6 +20,7 @@ from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPIWebsocketTransport
 
+from voiceai import telephony
 from voiceai.config import get_settings
 from voiceai.live import LiveControls
 from voiceai.runtime.session import AgentSession
@@ -56,8 +57,8 @@ class CallEnder:
     async def __call__(self, reason: str) -> None:
         self.serializer.end_reason = reason
         await self.session.end(reason)
-        if self.phone and self.phone.on_end:  # TEL-07: the transfer must happen before the stream closes
-            await self.phone.on_end(self.session, reason)
+        if self.phone:  # TEL-07: the transfer must happen before the stream closes
+            await telephony.on_phone_end(self.session, reason, self.phone.call_sid)
         if self.task:
             await self.task.queue_frame(EndFrame())
 
@@ -113,10 +114,12 @@ def build(
     )
     voice, speed = session.call_settings.cascade_voice
     tts = DeepgramTTSService(api_key=deepgram_key, sample_rate=OUT_RATE, settings=DeepgramTTSService.Settings(voice=voice, speed=speed))
-    turns = TurnAggregator(controls, TurnEvaluator(), last_agent_text=lambda: last_agent_message(session), vad_stop_ms=int(settings.voice_vad_stop_secs * 1000))
-
     on_end = CallEnder(session, serializer, phone)
     brain = BrainProcessor(session, on_end, controls)
+    turns = TurnAggregator(
+        controls, TurnEvaluator(), last_agent_text=lambda: last_agent_message(session),
+        vad_stop_ms=int(settings.voice_vad_stop_secs * 1000), welcoming=lambda: brain.floor.welcoming,
+    )
 
     async def apply_voice(voice: str, speed: float) -> None:  # live persona switch: next sentence uses the new voice
         if on_end.task:

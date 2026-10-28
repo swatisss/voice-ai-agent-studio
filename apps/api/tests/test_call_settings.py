@@ -5,7 +5,7 @@ Covers: PER-07, TD-09
 from __future__ import annotations
 
 from voiceai.db import sessionmaker
-from voiceai.live import LIVE, LiveControls, SettingsChange, follow
+from voiceai.live import LiveControls, SettingsChange, follow
 from voiceai.models import Persona
 from voiceai.runtime.session import AgentSession
 from voiceai.voice.turn_detection import TurnSettings
@@ -50,12 +50,9 @@ async def test_live_changes_reach_the_pipeline_only_through_the_session(client, 
     """Covers: TD-09"""
     cid = (await client.post("/api/calls", headers=M, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})).json()["call_id"]
     untouched = LiveControls(turn=TurnSettings(mode="vad", min_silence_ms=700))
-    LIVE[cid] = untouched  # registered but not following the session: the route must not write to it
-    try:
-        await client.patch(f"/api/calls/{cid}/live", headers=M, json={"turn_detection": {"min_silence_ms": 400}})
-        assert untouched.turn.min_silence_ms == 700
-    finally:
-        LIVE.pop(cid, None)
+    # controls not following the session: the route has no other way to reach a pipeline
+    await client.patch(f"/api/calls/{cid}/live", headers=M, json={"turn_detection": {"min_silence_ms": 400}})
+    assert untouched.turn.min_silence_ms == 700
 
     session = await AgentSession.open(cid, "evergreen-care")
     voices: list[tuple[str, float]] = []

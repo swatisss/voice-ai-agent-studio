@@ -81,7 +81,8 @@ async def test_welcome_is_not_interrupted_and_echo_is_not_answered():
 async def test_aggregator_ignores_speech_while_welcoming():
     """Covers: VO-08"""
     controls = LiveControls(turn=TurnSettings(min_silence_ms=250, max_extra_wait_ms=400))
-    agg = TurnAggregator(controls)
+    welcoming = [True]
+    agg = TurnAggregator(controls, welcoming=lambda: welcoming[0])
     turns: list[str] = []
 
     async def capture(frame, direction=None) -> None:  # noqa: ANN001
@@ -89,11 +90,10 @@ async def test_aggregator_ignores_speech_while_welcoming():
             turns.append(frame.text)
 
     agg.push_frame = capture  # type: ignore[method-assign]
-    controls.welcoming = True
     await agg.handle(VADUserStartedSpeakingFrame())
     await agg.handle(VADUserStoppedSpeakingFrame())
     assert await agg.handle(TranscriptionFrame("this is Ava", "u", "t")) is True  # consumed and dropped
-    controls.welcoming = False
+    welcoming[0] = False
     await asyncio.sleep(0.5)
     assert turns == [] and agg.buffer == []  # nothing left over to fire as a turn after the welcome
     await agg.handle(TranscriptionFrame("what is my claim status", "u", "t"))
@@ -109,7 +109,7 @@ async def test_protection_ends_after_the_audio_and_normal_rules_return():
     await brain.on_bot_stopped()
     assert brain.floor.welcoming  # still inside the grace period
     await asyncio.sleep(0.1)
-    assert not brain.floor.welcoming and not brain.controls.welcoming
+    assert not brain.floor.welcoming
 
     brain.floor.bot_started()  # the agent talks again; the caller speaks over it
     await brain.on_user_started()

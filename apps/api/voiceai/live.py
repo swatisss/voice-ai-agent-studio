@@ -17,7 +17,6 @@ class LiveControls:
 
     turn: TurnSettings
     on_voice: Callable[[str, float], Awaitable[None]] | None = None  # set by the pipeline: change TTS voice/speed
-    welcoming: bool = False  # the opening welcome is playing: caller speech is ignored (VO-08); set by the brain
 
 
 @dataclass(frozen=True)
@@ -26,9 +25,6 @@ class SettingsChange:
 
     turn: TurnSettings
     voice: tuple[str, float] | None = None  # new TTS voice and speed when the persona changed
-
-
-LIVE: dict[str, LiveControls] = {}
 
 
 def follow(session: Any, controls: LiveControls) -> Callable[[], None]:  # noqa: ANN401

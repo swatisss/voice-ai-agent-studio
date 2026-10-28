@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 
 from voiceai.db import sessionmaker
-from voiceai.live import LIVE, LiveControls, follow
+from voiceai.live import LiveControls, follow
 from voiceai.runtime.session import AgentSession
 from voiceai.llm.gateway import FakeReply
 from voiceai.models import AgentVersion, CallEvent
@@ -108,20 +108,17 @@ async def test_live_turn_detection_and_voice_callback(client, seeded):
     async def on_voice(voice: str, speed: float) -> None:
         heard.append((voice, speed))
 
-    LIVE[cid] = LiveControls(turn=TurnSettings(mode="vad"), on_voice=on_voice)  # as the voice pipeline registers it ...
-    unfollow = follow(await AgentSession.open(cid, "evergreen-care"), LIVE[cid])  # ... and follows its session (TD-09)
-    try:
-        r = await client.patch(f"/api/calls/{cid}/live", headers=M, json={"turn_detection": {"mode": "vad", "min_silence_ms": 400, "allow_interruptions": False}})
-        assert r.json()["settings"]["turn_detection"]["min_silence_ms"] == 400
-        assert LIVE[cid].turn.min_silence_ms == 400 and LIVE[cid].turn.allow_interruptions is False and LIVE[cid].turn.mode == "vad"
-        leo = next(p for p in (await client.get("/api/personas", headers=M)).json()["items"] if p["name"] == "Leo")
-        await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": leo["id"]})
-        assert heard == [("aura-2-apollo-en", 1.05)]
-        unfollow()
-        await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": ""})
-        assert len(heard) == 1  # unsubscribed: nothing more arrives
-    finally:
-        LIVE.pop(cid, None)
+    controls = LiveControls(turn=TurnSettings(mode="vad"), on_voice=on_voice)  # as the voice pipeline builds it ...
+    unfollow = follow(await AgentSession.open(cid, "evergreen-care"), controls)  # ... and follows its session (TD-09)
+    r = await client.patch(f"/api/calls/{cid}/live", headers=M, json={"turn_detection": {"mode": "vad", "min_silence_ms": 400, "allow_interruptions": False}})
+    assert r.json()["settings"]["turn_detection"]["min_silence_ms"] == 400
+    assert controls.turn.min_silence_ms == 400 and controls.turn.allow_interruptions is False and controls.turn.mode == "vad"
+    leo = next(p for p in (await client.get("/api/personas", headers=M)).json()["items"] if p["name"] == "Leo")
+    await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": leo["id"]})
+    assert heard == [("aura-2-apollo-en", 1.05)]
+    unfollow()
+    await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": ""})
+    assert len(heard) == 1  # unsubscribed: nothing more arrives
     assert (await client.patch(f"/api/calls/{cid}/live", headers=M, json={"turn_detection": {"min_silence_ms": 50}})).status_code == 422
     await client.post(f"/api/calls/{cid}/end", headers=M)
     assert (await client.patch(f"/api/calls/{cid}/live", headers=M, json={"turn_detection": {"mode": "semantic"}})).status_code == 409

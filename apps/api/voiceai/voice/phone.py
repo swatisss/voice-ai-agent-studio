@@ -5,7 +5,6 @@ Spec: /architecture/telephony.md (Media stream), /api/voice-protocol.md
 from __future__ import annotations
 
 import json
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -18,9 +17,6 @@ from pipecat.frames.frames import (
 )
 from pipecat.serializers.twilio import TwilioFrameSerializer
 
-OnPhoneEnd = Callable[[Any, str], Awaitable[None]]  # (session, end reason): runs after the closing speech, before the stream closes
-
-
 @dataclass
 class PhoneStream:
     """What the pipeline needs to know about one Twilio call."""
@@ -28,7 +24,6 @@ class PhoneStream:
     call_sid: str
     stream_sid: str
     parameters: dict[str, str] = field(default_factory=dict)
-    on_end: OnPhoneEnd | None = None
 
 
 class PhoneSerializer(TwilioFrameSerializer):

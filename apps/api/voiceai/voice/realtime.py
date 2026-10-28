@@ -219,7 +219,7 @@ class RealtimeBridge(FrameProcessor):
         self._speech_stopped_at: float | None = None
         self._hold_pending = False
         # the protected welcome, the silence and call-length clock and the closing state (RV-07, RV-11, CE-04..CE-06)
-        self.floor = CallFloor(session, controls, self, on_end)
+        self.floor = CallFloor(session, self, on_end)
 
     # ------------------------------------------------------------ helpers
     def _tools_running(self) -> bool:

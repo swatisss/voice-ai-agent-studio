@@ -146,7 +146,7 @@ async def finish_welcome(bridge: Bridge, conn: FakeConn) -> None:
     await bridge.on_bot_stopped()
     await asyncio.sleep(0.1)
     await pump(bridge)
-    assert not bridge.controls.welcoming
+    assert not bridge.floor.welcoming
 
 
 async def events(session: AgentSession) -> list[CallEvent]:

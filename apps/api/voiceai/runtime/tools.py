@@ -6,11 +6,14 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
+from voiceai.db import sessionmaker
+from voiceai.knowledge.search import search as kb_search
 from voiceai.runtime.state import CallState
 from voiceai.schemas import ESCALATION_CATEGORIES
 
@@ -98,15 +101,63 @@ def _summary(name: str, status: int | None, body: Any) -> str:
     return f"{name}: HTTP {status}"[:160]
 
 
-class ToolExecutor:
-    """Executes agent HTTP tools for one call. Relative URLs run in-process (ASGI)."""
+Escalate = Callable[[str, str], Awaitable[None]]
 
-    def __init__(self, tenant_id: str, call_id: str, tools: list[dict[str, Any]], state: CallState, app: Any | None = None) -> None:
+
+class ToolExecutor:
+    """Runs every tool of one call, built-in and HTTP, and owns their effects on the call state: the no-answer and
+    tool-error streaks (ES-02, ES-03), verification (TS-02), the end request and `tools_used`. Relative URLs run
+    in-process (ASGI)."""
+
+    def __init__(
+        self, tenant_id: str, call_id: str, tools: list[dict[str, Any]], state: CallState, app: Any | None = None,  # noqa: ANN401
+        *, knowledge_doc_ids: list[str] | None = None, escalate: Escalate | None = None, handoff_message: str = "",
+    ) -> None:
         self.tenant_id = tenant_id
         self.call_id = call_id
         self.tools = {t["name"]: t for t in tools}
         self.state = state
         self.app = app
+        self.knowledge_doc_ids = list(knowledge_doc_ids or [])
+        self.escalate = escalate
+        self.handoff_message = handoff_message
+
+    async def run(self, name: str, raw_args: str) -> tuple[dict[str, Any], bool]:
+        """Any tool by name. Returns (result, ok)."""
+        try:
+            args = json.loads(raw_args or "{}")
+        except json.JSONDecodeError:
+            args = None
+        a = args if isinstance(args, dict) else {}
+        if name == "search_knowledge":
+            return await self._search_knowledge(str(a.get("query", ""))), True
+        if name == "escalate_to_human":
+            category = str(a.get("reason_category") or "other")
+            if category not in ESCALATION_CATEGORIES:
+                category = "other"
+            if self.escalate is not None:
+                await self.escalate(category, str(a.get("reason_detail") or ""))
+            return {"status": "escalated", "say": self.handoff_message}, True
+        if name == "end_call":
+            self.state.end_requested = True
+            return {"status": "ending"}, True
+        result, ok = await self.execute(name, raw_args)
+        if name in self.tools:
+            self.state.tool_error_streak = 0 if ok else self.state.tool_error_streak + 1
+        return result, ok
+
+    async def _search_knowledge(self, query: str) -> dict[str, Any]:
+        async with sessionmaker()() as s:
+            result = await kb_search(s, self.tenant_id, self.knowledge_doc_ids, query)
+        if result.get("no_answer"):
+            self.state.no_answer_streak += 1
+            self.state.no_answer_queries.append(query)
+        else:
+            self.state.no_answer_streak = 0
+        top = (result.get("results") or [{}])[0]
+        found = "no answer" if result.get("no_answer") else f"found '{top.get('title')}'"
+        self.state.tools_used.append({"name": "search_knowledge", "ok": True, "summary": f"Searched knowledge for '{query}': {found}"})
+        return result
 
     def _client(self, absolute: bool) -> httpx.AsyncClient:
         from voiceai.runtime import app_ref

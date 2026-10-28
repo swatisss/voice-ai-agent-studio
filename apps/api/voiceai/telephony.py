@@ -160,4 +160,4 @@ async def on_phone_end(session: Any, reason: str, call_sid: str, client: httpx.A
         return
     ok = await transfer_call(call_sid, destination, client)
     note = f"Call transferred to {destination}" if ok else f"Transfer to {destination} failed; the caller was disconnected"
-    await session._event("system", note, {"transfer": {"to": destination, "ok": ok}})  # noqa: SLF001
+    await session.note(note, {"transfer": {"to": destination, "ok": ok}})

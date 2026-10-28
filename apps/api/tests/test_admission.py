@@ -166,7 +166,7 @@ def test_the_source_is_chosen_once_per_call(phone, monkeypatch):
     _, call_id = stream_of(signed_post(c, call_params()).text)            # admitted by the webhook on the platform key
     assert c.get(f"/api/calls/{call_id}", headers=H).json()["settings"]["openai_key_source"] == "platform"
     assert c.put("/api/tenant-settings/openai-key", headers=H, json={"api_key": OWN_KEY}).status_code == 200
-    with c.websocket_connect(f"/api/voice/{call_id}?tenant={TENANT}") as ws:  # same serve_voice as the Twilio stream
+    with c.websocket_connect(f"/api/voice/{call_id}?tenant={TENANT}") as ws:  # same voice_calls.serve as the Twilio stream
         with pytest.raises(WebSocketDisconnect):
             ws.receive_text()
     assert used == ["sk-test"]                                            # still the platform key

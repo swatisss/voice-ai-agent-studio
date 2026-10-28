@@ -270,10 +270,10 @@ class _Stub:
 def _phone_session(transfer_to: str | None, escalated: bool = True):  # noqa: ANN202
     events: list[tuple] = []
 
-    async def _event(kind, text=None, data=None):  # noqa: ANN001, ANN202
-        events.append((kind, text, data))
+    async def note(text, data=None):  # noqa: ANN001, ANN202
+        events.append(("system", text, data))
 
-    return SimpleNamespace(config={"telephony": {"transfer_to": transfer_to}}, state=SimpleNamespace(escalated=escalated), _event=_event), events
+    return SimpleNamespace(config={"telephony": {"transfer_to": transfer_to}}, state=SimpleNamespace(escalated=escalated), note=note), events
 
 
 async def test_hand_off_redirects_the_live_call(monkeypatch):

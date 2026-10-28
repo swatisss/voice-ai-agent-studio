@@ -5,7 +5,6 @@ Spec: /architecture/telephony.md, /api/rest-api.md (Phone numbers and telephony)
 """
 from __future__ import annotations
 
-import functools
 import logging
 import re
 
@@ -17,9 +16,8 @@ from voiceai import telephony
 from voiceai.config import get_settings
 from voiceai.db import sessionmaker
 from voiceai.errors import ApiError
-from voiceai import admission
+from voiceai import admission, voice_calls
 from voiceai.models import Agent, AgentVersion, Call, PhoneNumber
-from voiceai.routes.calls import serve_voice
 from voiceai.runtime.session import create_call
 
 log = logging.getLogger("voiceai.telephony")
@@ -53,13 +51,13 @@ async def voice_webhook(request: Request) -> Response:
         version = await db.get(AgentVersion, agent.published_version_id) if agent and agent.published_version_id else None
         if not version or version.config.get("mode") == "outbound":  # TEL-03: unmapped, unpublished or not an answering agent
             return _xml(telephony.twiml_not_in_service())
-        decided = await admission.admit(db, number.tenant_id, version.config)
-        if isinstance(decided, admission.Refusal):  # TEL-03, MT-08, ADM-03
-            return _xml(telephony.twiml_not_in_service())
         call = await create_call(db, number.tenant_id, agent.id, "voice", app=request.app)
+        decided = await voice_calls.admit(db, number.tenant_id, call)  # ADM-05: the stream uses this plan's credential source
+        if isinstance(decided, admission.Refusal):  # TEL-03, MT-08, ADM-03: rolled back, no call row is kept
+            await db.rollback()
+            return _xml(telephony.twiml_not_in_service())
         context = telephony.ivr_context({**dict(request.query_params), **{k: v for k, v in params.items()}})  # TEL-05
         meta = dict(call.meta or {})
-        meta["admission"] = decided.to_meta()  # ADM-05: the stream uses this plan's credential source
         meta["telephony"] = {
             "provider": "twilio", "call_sid": call_sid, "from_last4": re.sub(r"\D", "", caller)[-4:], "to": dialled,
         }
@@ -92,14 +90,7 @@ async def stream(websocket: WebSocket, call_id: str) -> None:
         await websocket.close(code=1000)
         return
     call_sid = str(start.get("callSid") or ((call.meta or {}).get("telephony") or {}).get("call_sid") or "")
-    phone = PhoneStream(
-        call_sid=call_sid, stream_sid=str(start.get("streamSid") or ""), parameters=dict(start.get("customParameters") or {}),
-        on_end=functools.partial(_on_end, call_sid=call_sid),
-    )
-    await serve_voice(websocket, call.tenant_id, call, phone)
+    phone = PhoneStream(call_sid=call_sid, stream_sid=str(start.get("streamSid") or ""), parameters=dict(start.get("customParameters") or {}))
+    await voice_calls.serve(websocket, call.tenant_id, call, phone)
     if websocket.client_state != WebSocketState.DISCONNECTED and websocket.application_state != WebSocketState.DISCONNECTED:
         await websocket.close(code=1000)  # TEL-11: a call that ended closes its stream normally, so Twilio moves on to <Hangup/>
-
-
-async def _on_end(session, reason: str, call_sid: str) -> None:  # noqa: ANN001
-    await telephony.on_phone_end(session, reason, call_sid)

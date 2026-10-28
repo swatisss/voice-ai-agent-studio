@@ -53,10 +53,12 @@ class TurnAggregator(FrameProcessor):
 
     def __init__(
         self, controls: LiveControls, evaluator: TurnEvaluator | None = None,
-        last_agent_text: Callable[[], str | None] | None = None, vad_stop_ms: int = VAD_STOP_MS, **kwargs,  # noqa: ANN003
+        last_agent_text: Callable[[], str | None] | None = None, vad_stop_ms: int = VAD_STOP_MS,
+        welcoming: Callable[[], bool] | None = None, **kwargs,  # noqa: ANN003
     ) -> None:
         super().__init__(**kwargs)
         self.controls = controls
+        self.welcoming = welcoming or (lambda: False)  # the call floor's welcome protection (VO-08)
         self.evaluator = evaluator or TurnEvaluator()
         self.last_agent_text = last_agent_text or (lambda: None)
         self.vad_stop_ms = vad_stop_ms
@@ -111,7 +113,7 @@ class TurnAggregator(FrameProcessor):
             self.speaking = False
             self._schedule(self.controls.turn.first_delay_s(self.vad_stop_ms), "first")
         elif isinstance(frame, TranscriptionFrame):
-            if self.controls.welcoming:  # VO-08: speech heard during the welcome is never a caller turn
+            if self.welcoming():  # VO-08: speech heard during the welcome is never a caller turn
                 return True
             self.buffer.append(frame.text)
             if not self.speaking:
@@ -144,7 +146,7 @@ class BrainProcessor(FrameProcessor):
         super().__init__(**kwargs)
         self.session = session
         self.controls = controls
-        self.floor = CallFloor(session, controls, self, on_end)
+        self.floor = CallFloor(session, self, on_end)
         self._task: asyncio.Task[None] | None = None
         self._greeted = False
         self._held: list[str] = []

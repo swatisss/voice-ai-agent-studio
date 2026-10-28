@@ -34,15 +34,13 @@ class CallFloor:
     RUN_WATCHDOG = True
     WATCHDOG_TICK_S = 0.5
 
-    def __init__(
-        self, session: Any, controls: Any, stage: Stage, on_end: Callable[[str], Awaitable[None]],  # noqa: ANN401
-    ) -> None:
+    def __init__(self, session: Any, stage: Stage, on_end: Callable[[str], Awaitable[None]]) -> None:  # noqa: ANN401
         self.session = session
-        self.controls = controls     # `controls.welcoming` is read by the cascade's TurnAggregator
         self.stage = stage
         self.on_end = on_end
         self.clock = CallClock(self._policy(), time.monotonic())
         self.bot_speaking = False
+        self.welcoming = False       # the opening welcome is playing: caller speech is ignored (VO-08)
         self.closing = False         # the call is ending: nothing may interrupt or restart it
         self.ended = False
         self._greeted = False
@@ -57,14 +55,6 @@ class CallFloor:
         return (getattr(self.session, "config", None) or {}).get("policy")
 
     # ------------------------------------------------------------ state
-    @property
-    def welcoming(self) -> bool:
-        return self.controls.welcoming
-
-    @welcoming.setter
-    def welcoming(self, value: bool) -> None:
-        self.controls.welcoming = value
-
     @property
     def busy(self) -> bool:
         return self.bot_speaking or self.stage.working()

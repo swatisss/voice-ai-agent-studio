@@ -53,7 +53,7 @@ A session knows its agent's `mode` (`inbound`, `outbound`, `internal`) and, for 
 9. **Post-turn triggers** (deterministic, see [/architecture/escalation.md](/architecture/escalation.md)): no-answer streak, tool-error streak, max turns. If one fires and the call is not yet escalated, yield the handoff message and escalate.
 10. **End.** If the call was escalated in this turn (model decision, safety screen or post-turn trigger), end the session with reason `handoff` once the handoff message has been yielded (CE-01); otherwise, if the model called `end_call`, end it with reason `end_call` after yielding its final text.
 
-`respond()` carries out these steps by driving the turn-policy events below with the platform's own text model, so each rule and each stored event shape exists once ([CP-0018](/changes/cp-0018-text-loop-drives-turn-policy.md), proposed).
+`respond()` carries out these steps by driving the turn-policy events below with the platform's own text model, so each rule and each stored event shape exists once ([CP-0018](/changes/cp-0018-text-loop-drives-turn-policy.md)). The tool rounds stay the loop's own: RT-04 limits *model rounds* (each may request several tools), while RT-12 limits the tool calls a channel reports one by one. After `end_call` the loop lets its model finish the round, so the closing words come from the model when it has any; the decision is taken at *reply finished*.
 
 If the LLM fails after gateway fallback, yield `"I'm sorry, I'm having trouble right now. Let me connect you with someone who can help."` and escalate with category `other`.
 

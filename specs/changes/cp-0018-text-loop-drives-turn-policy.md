@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0018 The text loop drives the turn policy
 description: respond() becomes one more driver of the turn-policy events, so each turn rule and each stored event shape exists once; text calls store the same event data as realtime calls.
-status: draft
-cp_state: proposed
+status: stable
+cp_state: implemented
 tags: [architecture, runtime]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-28T00:00:00Z" }
 ---
@@ -16,7 +16,7 @@ The architecture review of 2026-10-28 found that CP-0016 shared only part of the
 * recording the assistant line with its latency (twice, with different `data`);
 * the goodbye after `end_call` (`_turn` yields and records it itself; *reply finished* uses `_end_call_decision`);
 * the hand-off after `escalate_to_human` (`_turn` records it itself; *tools finished* announces it);
-* the tool-round count (a local `rounds` in `_turn`, `_tool_rounds` for the events).
+* the tool-round count (a local `rounds` in `_turn`, `_tool_rounds` for the events) — on implementation this turned out not to be a duplicate; see *Clarifications*.
 
 RT-15 exists only to check that the two copies still agree, and it compares event kinds and texts but not their `data`, which already differ. A fix to one rule has to be made twice, and the realtime and text transcripts of the same conversation are not identical.
 
@@ -48,6 +48,13 @@ RT-15 exists only to check that the two copies still agree, and it compares even
 * Stored events of calls made before the change keep their old `data`; nothing reads the changed fields except the call detail view, which shows them as they are.
 * Insights and analysis read event kinds and texts, not these `data` fields; to be confirmed while implementing.
 * The cascade voice pipeline streams text from `respond()`; streaming must keep working with the loop restructured (covered by the existing voice tests).
+
+# Clarifications (while implementing)
+
+* **Tool rounds stay in the loop.** RT-04 limits the text loop to 4 *model rounds*, each of which may request several tools at once; RT-12 limits an externally driven turn to 4 *tool calls*. Merging the two would change RT-04, so `_turn` keeps its round count and runs tools through the same execution path (`_run_tool`: gate, events, state) without the per-call limit.
+* **`end_call` lets the model finish its round.** A realtime service reports *tools finished* and the session closes there; the text loop asks its model once more after the tools, as before, and takes the decision at *reply finished*. What callers hear is unchanged.
+* **Order of a silent `end_call` and a post-turn trigger in the same turn.** The turn algorithm runs the post-turn triggers (step 9) before ending (step 10), as the turn-policy table does. The old loop said the goodbye before the hand-off in that rare case; it now says only the hand-off, like realtime calls.
+* **Latency of text spoken before a model hand-off** now counts toward the call's latencies, as on realtime calls (the call state must match, RT-15).
 
 # Out of scope
 

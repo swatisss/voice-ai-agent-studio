@@ -1,7 +1,11 @@
 # Directory Update Log
 
+## 2026-10-28 (CP-0018 the text loop drives the turn policy)
+* **Implemented** [CP-0018](changes/cp-0018-text-loop-drives-turn-policy.md) (accepted 2026-10-28): `AgentSession._turn()` drives `caller_turn`, `reply_finished`, `tools_finished` and `commit` and speaks their decisions (`_carry_out`); the hand-rolled usage, assistant-line, goodbye and hand-off code is gone (`_add_usage` is shared). Two new RT-15 tests (model hand-off, silent `end_call`); the parity test now compares event `data`, state and token totals.
+* **Clarification** while implementing (recorded in the CP and [agent runtime](architecture/agent-runtime.md)): the loop keeps its RT-04 round count (model rounds, not RT-12 tool calls) and lets its model finish the round after `end_call`; a silent `end_call` and a post-turn trigger in the same turn now give only the hand-off, in the order of the turn algorithm.
+
 ## 2026-10-28 (CP-0018 proposed: the text loop drives the turn policy)
-* **Creation**: [CP-0018](changes/cp-0018-text-loop-drives-turn-policy.md) (proposed from the architecture review of 2026-10-28; awaiting review).
+* **Creation**: [CP-0018](changes/cp-0018-text-loop-drives-turn-policy.md) (proposed from the architecture review of 2026-10-28).
 * **Update**: [agent runtime](architecture/agent-runtime.md) (Turn algorithm: `respond()` drives the turn policy; RT-15 also compares event `data`).
 * Same review, code-only (`[no-spec]`, no behavior change): one call floor for both voice pipelines (`runtime/call_floor.py`, welcome protection, silence and call-length clock, closing); effective call settings resolved once (`call_settings.load`, `CallSettings`); the phone transfer runs from the end-of-call sequence and records through `AgentSession.note`; built-in tools run in `ToolExecutor.run`; `voice_calls.py` admits voice calls and serves their sockets for both routes; the unused `LIVE` registry and `LiveControls.welcoming` are gone.
 

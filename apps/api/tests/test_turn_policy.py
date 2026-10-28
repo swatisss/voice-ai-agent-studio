@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from tests.conftest import script
 from voiceai.db import sessionmaker
-from voiceai.llm.gateway import FakeReply
+from voiceai.llm.gateway import FakeReply, Usage
 from voiceai.models import CallEvent, Escalation
 from voiceai.runtime import endings, escalation
 from voiceai.runtime.session import GOODBYE, HANDOFF_DEFAULT, AgentSession, create_call
@@ -122,6 +122,21 @@ async def test_goodbye_after_end_call_only_when_silent(client, seeded, fake_llm)
     assert (decision.say, decision.end) == (None, "end_call")
 
 
+ROUND = Usage(input_tokens=100, output_tokens=20)  # what the fake model reports for each round, as a realtime service does per response
+MEASURED = {"latency_ms", "duration_ms", "tool_call_id", "escalation_id"}  # timings and generated ids differ by run
+
+
+def shape(events: list[CallEvent]) -> list[tuple]:
+    """Each stored event with its data, apart from timestamps, measured latencies and generated ids (RT-15)."""
+    return [(e.kind, e.text, {k: v for k, v in (e.data or {}).items() if k not in MEASURED}) for e in events]
+
+
+def state_of(session: AgentSession) -> tuple:
+    st = session.state
+    return (st.turns, st.verified_member_ref, st.escalated, st.ended, st.end_requested, [t.get("name") for t in st.tools_used],
+            st.tokens_in, st.tokens_out, session.end_reason)
+
+
 async def test_text_loop_and_policy_events_match(client, seeded, fake_llm):
     """Covers: RT-15"""
     fake_llm(script(FakeReply(tool_calls=[CLAIM]), FakeReply(tool_calls=[VERIFY]), FakeReply(tool_calls=[CLAIM]), FakeReply(text="Paid.")))
@@ -133,12 +148,51 @@ async def test_text_loop_and_policy_events_match(client, seeded, fake_llm):
     await driven.caller_turn("What about claim C-20931?")
     for name, args in (CLAIM, VERIFY, CLAIM):
         await driven.tool_requested(name, args)
-    await driven.reply_finished("Paid.")
-
-    def shape(events: list[CallEvent]) -> list[tuple]:
-        return [(e.kind, e.text, (e.data or {}).get("name"), (e.data or {}).get("ok")) for e in events]
+        await driven.reply_finished("", usage=ROUND, decide=False)
+    await driven.reply_finished("Paid.", usage=ROUND)
 
     assert shape(await stored(loop)) == shape(await stored(driven))
-    assert (loop.state.turns, loop.state.verified_member_ref, [t.get("name") for t in loop.state.tools_used]) == \
-           (driven.state.turns, driven.state.verified_member_ref, [t.get("name") for t in driven.state.tools_used])
+    assert state_of(loop) == state_of(driven)
     assert len(await escalations(loop)) == len(await escalations(driven)) == 0
+
+
+async def test_text_loop_and_policy_match_on_a_model_handoff(client, seeded, fake_llm):
+    """Covers: RT-15"""
+    handoff = ("escalate_to_human", {"reason_category": "policy_required", "reason_detail": "Caller wants to appeal"})
+    fake_llm(script(FakeReply(text="Let me get someone. ", tool_calls=[handoff])))
+    loop = await open_session(seeded, channel="text")
+    reply = await loop.reply("I want to appeal this decision")
+
+    fake_llm(no_model)
+    driven = await open_session(seeded, channel="text")
+    await driven.caller_turn("I want to appeal this decision")
+    await driven.tool_requested(*handoff)
+    await driven.reply_finished("Let me get someone. ", usage=ROUND, decide=False)
+    await driven.commit(decision := await driven.tools_finished(spoke=True))
+    await driven.end(decision.end)
+
+    assert reply.endswith(loop.config["policy"]["handoff_message"]) and loop.end_reason == "handoff"
+    assert shape(await stored(loop)) == shape(await stored(driven))
+    assert state_of(loop) == state_of(driven)
+    assert len(await escalations(loop)) == len(await escalations(driven)) == 1
+
+
+async def test_text_loop_and_policy_match_on_a_silent_end_call(client, seeded, fake_llm):
+    """Covers: RT-15"""
+    end_call = ("end_call", {"summary": "Answered the coverage question"})
+    fake_llm(script(FakeReply(tool_calls=[end_call]), FakeReply(text="")))
+    loop = await open_session(seeded, channel="text")
+    assert await loop.reply("That answers it") == GOODBYE
+
+    fake_llm(no_model)
+    driven = await open_session(seeded, channel="text")
+    await driven.caller_turn("That answers it")
+    await driven.tool_requested(*end_call)
+    await driven.reply_finished("", usage=ROUND, decide=False)
+    await driven.reply_finished("", usage=ROUND, decide=False)  # the model's second round said nothing
+    await driven.commit(decision := await driven.tools_finished(spoke=False))
+    await driven.end(decision.end)
+
+    assert loop.end_reason == driven.end_reason == "end_call"
+    assert shape(await stored(loop)) == shape(await stored(driven))
+    assert state_of(loop) == state_of(driven)

@@ -397,12 +397,15 @@ class AgentSession:
         self.history.append({"role": "user", "content": text})
         await self._event("user", text)
 
-    async def _record_reply(self, text: str, latency_ms: int | None, usage: Usage | None, interrupted: bool) -> None:
-        text = text.strip()
-        if usage is not None:
+    def _add_usage(self, usage: Usage | None) -> None:
+        if usage is not None:  # RT-09
             self.state.tokens_in += usage.input_tokens
             self.state.tokens_out += usage.output_tokens
             self.state.cost_usd += usage.cost_usd
+
+    async def _record_reply(self, text: str, latency_ms: int | None, usage: Usage | None, interrupted: bool) -> None:
+        text = text.strip()
+        self._add_usage(usage)
         if not text:
             await self._persist()
             return
@@ -425,24 +428,22 @@ class AgentSession:
         return " ".join(p.strip() for p in parts if p.strip())
 
     async def _turn(self, user_text: str) -> AsyncIterator[str]:
+        """The platform's own text model as one more driver of the turn policy (CP-0018): the rules, their order and
+        the stored events are the policy's; this loop streams the model, runs its tool rounds and speaks decisions."""
         text = user_text.strip()
         if not text or self.state.ended:
             return
-        await self._record_user(text)
-        policy = self.config.get("policy", {})
-
-        rule = self._caller_rule(text)  # RT-02 holding, CE-02 farewell, ES-01 safety: no model needed
-        if rule is not None:
-            yield await self._apply_rule(rule)
-            if rule.end_reason:
-                await self.end(rule.end_reason)  # CE-01, CE-02
+        decision = await self.caller_turn(text)  # RT-02 holding, CE-02 farewell, ES-01 safety: no model needed
+        if not decision.model_turn:
+            async for line in self._carry_out(decision):
+                yield line
             return
 
-        handoff = self._handoff_line()
+        policy = self.config.get("policy", {})
         override = (self.config.get("models") or {}).get("realtime")
         schemas = all_schemas(self.config.get("tools", []))
         spoken = ""
-        rounds = 0
+        rounds = 0  # RT-04 counts model rounds (several tool calls each), unlike RT-12's per-call limit
         filler_done = False
         turn_started = time.perf_counter()
         first_chunk_ms: int | None = None
@@ -471,9 +472,7 @@ class AgentSession:
                 await self.end("handoff")  # CE-01
                 return
             assert result is not None
-            self.state.tokens_in += result.usage.input_tokens
-            self.state.tokens_out += result.usage.output_tokens
-            self.state.cost_usd += result.usage.cost_usd
+            self._add_usage(result.usage)
             spoken += round_text
 
             if not result.tool_calls:
@@ -495,33 +494,23 @@ class AgentSession:
             outputs = await asyncio.gather(*(self._run_tool(tc.id, tc.name, tc.arguments) for tc in result.tool_calls))
             for tc, output in zip(result.tool_calls, outputs):
                 self.history.append({"role": "tool", "tool_call_id": tc.id, "content": output})
-            if self.state.escalated:  # model called escalate_to_human: runtime speaks the handoff
-                if spoken.strip():
-                    await self._event("assistant", spoken.strip(), {"latency_ms": first_chunk_ms})
-                    self.history.append({"role": "assistant", "content": spoken.strip()})
-                yield await self._say(handoff)
-                await self._persist()
-                await self.end("handoff")  # CE-01
+            if self.state.escalated:  # the model called escalate_to_human: what it said, then the hand-off (RV-09)
+                await self.reply_finished(spoken, first_chunk_ms, decide=False)
+                async for line in self._carry_out(await self.tools_finished(bool(spoken.strip()))):
+                    yield line
                 return
 
-        final = spoken.strip()
-        if self.state.end_requested and not final:
-            final = GOODBYE
-            yield GOODBYE
-        if final:
-            if first_chunk_ms is not None:
-                self.state.latencies_ms.append(first_chunk_ms)
-            self.history.append({"role": "assistant", "content": final})
-            await self._event("assistant", final, {"latency_ms": first_chunk_ms, "tokens_in": self.state.tokens_in, "tokens_out": self.state.tokens_out})
-
-        line = await self._post_turn_handoff()
-        if line:
+        decision = await self.reply_finished(spoken, first_chunk_ms)  # ES-02, ES-03, max turns, end_call (RT-05)
+        async for line in self._carry_out(decision):
             yield line
-        await self._persist()
-        if self.state.escalated:  # a post-turn trigger fired this turn (an earlier escalation returned above)
-            await self.end("handoff")  # CE-01
-        elif self.state.end_requested:
-            await self.end("end_call")  # RT-05
+
+    async def _carry_out(self, decision: Decision) -> AsyncIterator[str]:
+        """Speak a decision's line and end the call when it says so (CE-01, CE-02, RT-05)."""
+        await self.commit(decision)
+        if decision.say is not None:
+            yield decision.say
+        if decision.end:
+            await self.end(decision.end)
 
     def _post_turn_trigger(self, policy: dict[str, Any]) -> tuple[str, str] | None:
         if self.state.no_answer_streak >= 2:  # ES-02

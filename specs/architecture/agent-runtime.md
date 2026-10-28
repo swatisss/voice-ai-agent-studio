@@ -53,6 +53,8 @@ A session knows its agent's `mode` (`inbound`, `outbound`, `internal`) and, for 
 9. **Post-turn triggers** (deterministic, see [/architecture/escalation.md](/architecture/escalation.md)): no-answer streak, tool-error streak, max turns. If one fires and the call is not yet escalated, yield the handoff message and escalate.
 10. **End.** If the call was escalated in this turn (model decision, safety screen or post-turn trigger), end the session with reason `handoff` once the handoff message has been yielded (CE-01); otherwise, if the model called `end_call`, end it with reason `end_call` after yielding its final text.
 
+`respond()` carries out these steps by driving the turn-policy events below with the platform's own text model, so each rule and each stored event shape exists once ([CP-0018](/changes/cp-0018-text-loop-drives-turn-policy.md), proposed).
+
 If the LLM fails after gateway fallback, yield `"I'm sorry, I'm having trouble right now. Let me connect you with someone who can help."` and escalate with category `other`.
 
 # Turn policy
@@ -111,5 +113,5 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 - **RT-12** — Given five tool-call events in one caller turn, then the first four run with their events stored and the fifth returns `tool_round_limit` without running; the count restarts with the next caller turn; a `verify_member` call that verifies the caller returns its result with *refresh instructions*.
 - **RT-13** — Given a reply-finished event after which a post-turn trigger fires (ES-02, ES-03, max turns), then the decision is to say the hand-off message, the call is escalated once and then ends `handoff`; with no `policy.handoff_message` the line is "I'm connecting you with a specialist.".
 - **RT-14** — Given the model called `end_call`, when the reply-finished event carries no spoken text, then the decision is to say "Thank you for calling. Take care!" and end `end_call`; when it carries text, the decision is to end `end_call` with nothing more said.
-- **RT-15** — Given the same scripted caller turns, model replies and tool results, when driven through `respond()` and through the turn-policy events, then the stored event sequences (`user`, `assistant`, `tool_call`, `tool_result`, `system`), the call state and the escalation rows are identical apart from timestamps.
+- **RT-15** — Given the same scripted caller turns, model replies and tool results, when driven through `respond()` and through the turn-policy events, then the stored event sequences (`user`, `assistant`, `tool_call`, `tool_result`, `system`) including each event's `data` (apart from timestamps and measured latencies), the call state and the escalation rows are identical; this holds for a turn that ends with a model hand-off and for one that ends with `end_call` and no spoken text.
 - **RT-09** — Given a turn that used the LLM, when it completes, then the call's token counts and `llm_cost_usd` increase by the gateway-reported usage.

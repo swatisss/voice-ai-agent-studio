@@ -1,5 +1,10 @@
 # Directory Update Log
 
+## 2026-10-28 (CP-0018 proposed: the text loop drives the turn policy)
+* **Creation**: [CP-0018](changes/cp-0018-text-loop-drives-turn-policy.md) (proposed from the architecture review of 2026-10-28; awaiting review).
+* **Update**: [agent runtime](architecture/agent-runtime.md) (Turn algorithm: `respond()` drives the turn policy; RT-15 also compares event `data`).
+* Same review, code-only (`[no-spec]`, no behavior change): one call floor for both voice pipelines (`runtime/call_floor.py`, welcome protection, silence and call-length clock, closing); effective call settings resolved once (`call_settings.load`, `CallSettings`); the phone transfer runs from the end-of-call sequence and records through `AgentSession.note`; built-in tools run in `ToolExecutor.run`; `voice_calls.py` admits voice calls and serves their sockets for both routes; the unused `LIVE` registry and `LiveControls.welcoming` are gone.
+
 ## 2026-10-28 (CP-0017 effective call settings)
 * **Creation**: [CP-0017](changes/cp-0017-effective-call-settings.md) (proposed 2026-10-27 from the architecture review, accepted then; implemented 2026-10-28).
 * **Update**: [turn detection](architecture/turn-detection.md) (Live controls written by the session only; TD-09), [personas](architecture/personas.md) (effective call settings resolved once; PER-07).

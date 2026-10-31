@@ -2,7 +2,7 @@
 type: UI Spec
 title: Agent builder
 description: Agents list and the builder tabs - overview, persona, policy, knowledge, tools, skills, versions - with save, publish and test actions.
-status: stable
+status: draft
 tags: [ui, builder]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -27,7 +27,7 @@ Tabs:
 | Tools | Tenant tools with checkboxes; create/edit form: name, description, method, URL, parameters (JSON editor with validation), requires verification, is verification, timeout |
 | Skills | Tenant skills with checkboxes; create/edit form: name, description, instructions (textarea), required tools (multi-select), escalate when |
 | Memory | **Remember callers between calls** toggle (on by default); **Remember things like…** and **Never remember…** text boxes, pre-filled with the defaults and a note "Health details, payment details and ID numbers are never remembered, whatever you write here"; **Forget call summaries after** (days) and **Forget facts after** (days); **Trust verified caller ID (demo only)** toggle with a note that it skips the date of birth only for read-only lookups on US calls with full carrier attestation ([/architecture/agent-memory.md](/architecture/agent-memory.md), [/architecture/caller-verification.md](/architecture/caller-verification.md)) |
-| Evaluation | **Checks this agent is scored on** (`GET /api/agents/{id}/checks` for the draft): grouped list with *Built-in*, *From your policy* or *Custom* tags and a *Hard gate* badge, refreshed after Save draft, so a new Never rule visibly becomes a check; **Custom checks** editor (question, group, hard gate; up to ten); **Judge share of calls** (0–100 %, note: "Escalated, thumbs-down and hard-failed calls are always judged"); **Slow-response limit** (p95, ms); **Run tests when publishing** switch (`evaluation.test_on_publish`); links **Test scenarios** (`/evaluation/?agent=…&view=tests`) and **See scores** to `/evaluation/?agent=…` ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
+| Evaluation | **Checks this agent is scored on** (`GET /api/agents/{id}/checks` for the draft): grouped list with *Built-in*, *From your policy* or *Custom* tags and a *Hard gate* badge, refreshed after Save draft, so a new Never rule visibly becomes a check; **Custom checks** editor (question, group, hard gate; up to ten); **Judge share of calls** (0–100 %, note: "Escalated, thumbs-down and hard-failed calls are always judged"); **Slow-response limit** (p95, ms); **Run tests when publishing** switch (`evaluation.test_on_publish`); **Learning**: *Learn from calls overnight* switch (`learning.nightly`), *Proposals per night* (0–10), *Test repeats when checking a proposal* (1–5), *Wait after a rejection* (days), with the note "Proposals always wait for your review; the agent never changes itself"; links **Test scenarios** (`/evaluation/?agent=…&view=tests`) and **See scores** to `/evaluation/?agent=…` ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
 | Versions | Table of versions (number, change note, source proposal link, date) |
 
 Unsaved changes show a sticky bar "Unsaved changes — Save draft". Navigating away with unsaved changes asks for confirmation.

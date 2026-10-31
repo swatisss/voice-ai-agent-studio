@@ -17,7 +17,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 6. **Safety screen.** Before any LLM call, each caller utterance is checked for emergency or self-harm language. On a match the agent responds with the fixed safety message and escalates with category `safety` ([/architecture/escalation.md](/architecture/escalation.md)). Safety message:
    > "If this is a medical emergency, please hang up and call 911. If you are thinking about harming yourself, you can call or text 988 at any time. I'm connecting you with a nurse right now."
 7. **Appeals and grievances go to humans.** Filing an appeal or grievance is always escalated with category `policy_required`.
-8. **Approved fixes only.** Drafted knowledge or skills affect callers only after a human approves them.
+8. **Approved fixes only.** Drafted knowledge, tools, skills or rules affect callers only after a named human approves them; the nightly learning run only proposes ([/architecture/self-learning.md](/architecture/self-learning.md)).
 9. **Caller ID identifies, it never verifies.** A call from a registered number is addressed by first name only; member data, the profile and memory need the date of birth (or member ID and date of birth). Three failed attempts go to a human; changes to contact or identity details always go to a human ([/architecture/caller-verification.md](/architecture/caller-verification.md)).
 10. **Memory without health details.** Member memory never holds clinical details, payment details or identifiers, is read only after verification, expires automatically and can be erased per member at any time ([/architecture/agent-memory.md](/architecture/agent-memory.md)).
 

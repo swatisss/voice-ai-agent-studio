@@ -2,7 +2,7 @@
 type: UI Spec
 title: Dashboard
 description: Four headline metrics (calls, containment rate, escalated to human, response time), containment trend, escalations by root cause and recent agent versions for the selected tenant.
-status: stable
+status: draft
 tags: [ui, dashboard]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -20,12 +20,14 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 3. **Escalations by root cause** (horizontal bar chart, human labels per [/ui/design-system.md](/ui/design-system.md)).
 4. **Top clusters** (table: name, escalations/week, label/status; no cost column) linking to Insights.
 5. **Recent versions** (list: version, change note, date) — fix-driven versions show "From fix: …".
+6. **Self-learning** card ([/architecture/self-learning.md](/architecture/self-learning.md)): "Runs every night at 02:00 UTC", the last run (when it finished, calls reviewed, signals, proposals drafted and passed, from `GET /api/learning/runs`), the number of proposals waiting for review with a link **Review proposals** to the learning inbox, and a **Run learning now** button that starts a run (`POST /api/learning/run`). While a run is going the button reads "Learning…" and is disabled; the card refreshes on `learning.run.finished`; an API error shows as a toast.
 
-Live: refetch on `call.ended` and `agent.published` (debounced 2 s).
+Live: refetch on `call.ended` and `agent.published` (debounced 2 s); the Self-learning card also on `learning.run.finished` (topic `insights`).
 
 # Acceptance
 
 - **UI-27** — Given seeded data, when the dashboard loads, then the stat row shows exactly four tiles in the order Calls, Containment rate, Escalated to human, Response time; the Escalated to human tile carries the hint "handed to a human reviewer"; and no tile shows cost saved or LLM cost.
 - **UI-30** — Given seeded data with at least one cluster, when the dashboard loads, then the Top clusters table has exactly the columns Cluster, Esc./week and Status, and no dollar amount appears anywhere on the dashboard.
 - **UI-03** — Given seeded data, when the dashboard loads, then containment rate equals resolved ÷ (resolved + escalated) over non-eval calls, shown as a whole percent.
+- **UI-55** — Given the dashboard, when **Run learning now** is clicked, then a run starts, the button reads "Learning…" until `learning.run.finished`, and the card then shows that run's counts and the proposals waiting for review with a link to the inbox; while a run is going a second click is not possible.
 - **UI-04** — Given a proposal is approved, when the dashboard is open, then the recent versions list shows the new version without reload.

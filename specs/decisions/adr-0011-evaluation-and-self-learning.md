@@ -53,7 +53,7 @@ Delivered as three change proposals:
 |---|---|
 | [CP-0020](/changes/cp-0020-call-scoring-and-online-evaluation.md) | Scoring core and online evaluation: check catalogue derived from the version, scorecards, the judge's check list, structured knowledge retrievals, `score_call`, rollups and drift, reviews and calibration, the Evaluation page, the builder's Evaluation tab |
 | [CP-0021](/changes/cp-0021-test-suites.md) | Test suites: eval runs decoupled from proposals, editable scenarios with expectations and memory preconditions, k runs and pass^k, runs on any version or the draft, **Run tests** in the builder (report only) |
-| CP-0022 (planned) | Self-learning: nightly scheduler, signal gathering, new proposal kinds, held-out gating, a learning inbox; gating publish on test results |
+| [CP-0022](/changes/cp-0022-nightly-self-learning.md) | Self-learning: nightly scheduler, signal gathering, new proposal kinds, held-out gating, a learning inbox; gating publish on test results |
 
 * Insights keeps clusters and proposals ("what is going wrong, what fix is proposed"); Evaluation answers "how good is each agent, measured".
 * Out of reach in text simulation: WER, voice quality, audio-level noise and accents; realtime agents keep the `text_approximation` label.

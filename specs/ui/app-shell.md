@@ -2,7 +2,7 @@
 type: UI Spec
 title: App shell
 description: Left sidebar navigation, the Echo Mind Voice Agent Studio brand, business-unit switcher, routing scheme for the static export, and the shared API/SSE client.
-status: stable
+status: draft
 tags: [ui, shell, routing]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -12,7 +12,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 A fixed **left sidebar** (16 rem wide, full height, scrolls on its own if the window is short) next to the content, in the portal style of [/ui/design-system.md](/ui/design-system.md). There is no top header on viewports 768 px and wider.
 
 * **Brand** (top of the sidebar): a generic mark, the product name **Echo Mind** and the caption "Voice Agent Studio" beneath it; the link to `/` has the accessible name "Echo Mind Voice Agent Studio home". The brand is the product's and does not change with the selected business unit. The browser tab title is "Echo Mind Voice Agent Studio".
-* **Navigation** (icon + label, vertical, labels always visible): **Dashboard** `/`, **Agents** `/agents/`, **Personas** `/personas/`, **Test call** `/test-call/`, **Calls** `/calls/`, **Agent console** `/console/` (badge = waiting escalations), **Insights** `/insights/` (badge = clusters ready for a fix), **Evaluation** `/evaluation/` ([/ui/evaluation.md](/ui/evaluation.md)), **Settings** `/settings/` ([/ui/settings.md](/ui/settings.md)). The active item has an accent-soft background, accent text and a 4 px accent bar on its left edge.
+* **Navigation** (icon + label, vertical, labels always visible): **Dashboard** `/`, **Agents** `/agents/`, **Personas** `/personas/`, **Test call** `/test-call/`, **Calls** `/calls/`, **Agent console** `/console/` (badge = waiting escalations), **Insights** `/insights/` (badge = clusters ready for a fix plus proposals waiting for review), **Evaluation** `/evaluation/` ([/ui/evaluation.md](/ui/evaluation.md)), **Settings** `/settings/` ([/ui/settings.md](/ui/settings.md)). The active item has an accent-soft background, accent text and a 4 px accent bar on its left edge.
 * **Business-unit switcher** and provider status, pinned at the bottom of the sidebar. The switcher is a select listing `GET /api/tenants` (choice persisted in `localStorage` key `tenant`; default first tenant); each option shows only the unit part of the tenant name, the text after ` · ` (for example "Customer Support & Channels"), or the whole name when it has no ` · `. Provider health dots come from `/healthz` (Groq, OpenRouter, OpenAI, Deepgram: configured or not), each with its label.
 * **Below 768 px** the sidebar is hidden and a slim sticky top bar shows the brand and a menu button; the button opens the same sidebar content as a drawer over the page, which closes after a navigation or on the close button.
 * A **Skip to content** link is the first focusable element and jumps to the main region.

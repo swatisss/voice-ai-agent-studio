@@ -2,7 +2,7 @@
 type: Component Spec
 title: Fleet learning
 description: Post-call analysis, gap clustering, impact estimation, fix drafting from human resolutions, and approval into a new agent version.
-status: stable
+status: draft
 tags: [architecture, learning, clustering]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -24,11 +24,11 @@ Output stored in `call_analyses`:
 | `resolution_summary` | What resolved it (agent answer or human note), may be empty |
 | `sentiment_start`, `sentiment_end` | as in the packet |
 
-When the job finishes for a real call it queues `score_call` ([/architecture/call-scoring.md](/architecture/call-scoring.md)), which uses `caller_goal` as the goal it judges against. The call's `outcome` column is set from the analysis. If the escalation is resolved **after** analysis ran, analysis re-runs once (`analyze_call` re-queued by the resolve endpoint) to capture the human note. Likewise a **thumbs down** re-queues `analyze_call` once (dedupe key `analyze_call:{call_id}:feedback`) so the analysis sees the feedback; a thumbs up queues nothing. The `outcome` is unchanged by feedback: a resolved call the caller disliked stays `resolved` (containment is not affected) but becomes a learning candidate.
+When the job finishes for a real call it queues `score_call` ([/architecture/call-scoring.md](/architecture/call-scoring.md)), which uses `caller_goal` as the goal it judges against. The call's `outcome` column is set from the analysis. If the escalation is resolved **after** analysis ran, analysis re-runs once (`analyze_call` re-queued by the resolve endpoint) to capture the human note. The nightly [self-learning](/architecture/self-learning.md) run re-queues it once more for a call with **quality signals** (a no-answer search, a tool error, a code hard fail or a calibrated judge failure) whose root cause is `none` (dedupe `analyze_call:{call_id}:signals`); the prompt gets the signals and treats them like a thumbs down. Likewise a **thumbs down** re-queues `analyze_call` once (dedupe key `analyze_call:{call_id}:feedback`) so the analysis sees the feedback; a thumbs up queues nothing. The `outcome` is unchanged by feedback: a resolved call the caller disliked stays `resolved` (containment is not affected) but becomes a learning candidate.
 
 # 2. Clustering
 
-Only analyses with a non-empty `gap_summary` are clustered, and only if the call's outcome is `escalated` **or** its caller gave a thumbs down. Clusters are per agent.
+Only analyses with a non-empty `gap_summary` are clustered, and only if the call's outcome is `escalated`, its caller gave a thumbs down, **or** it was re-analysed with quality signals (a *quality candidate*). Clusters are per agent.
 
 1. Embed `gap_summary` (same provider as knowledge).
 2. Find the cluster (same agent, status ≠ `ignored`) with highest cosine similarity between its centroid and the embedding.
@@ -42,28 +42,30 @@ Seeded history creates clusters directly from its `cluster_key` (deterministic d
 
 * `weekly_escalations` = escalations in the last 28 days ÷ 4.
 * `est_weekly_cost_usd` = `weekly_escalations` × (`HUMAN_COST_PER_CALL` 9.50 − `AI_COST_PER_CALL` 1.20).
-* `dislike_count` = member calls with a thumbs down in the last 28 days; `signal_count` = distinct member calls in that window that were escalated **or** thumbs-down (a call that is both counts once).
-* A cluster is **ready for a fix** when `fixable` and `signal_count` ≥ `FL_MIN_CLUSTER_SIZE` (default 5) and no open proposal exists. "Watching (n of 5)" shows `signal_count`.
+* `dislike_count` = member calls with a thumbs down in the last 28 days; `signal_count` = distinct member calls in that window that were escalated, thumbs-down **or** quality candidates (a call that is several counts once).
+* A cluster is **ready for a fix** when `fixable` and `signal_count` ≥ `FL_MIN_CLUSTER_SIZE` (default 5), no open proposal exists and it is not snoozed (`snoozed_until` in the future, set when a proposal is rejected; [/architecture/self-learning.md](/architecture/self-learning.md)). "Watching (n of 5)" shows `signal_count`.
 * The dashboard's escalation root-cause chart and `weekly_escalations` still count escalations only; thumbs-down resolved calls appear in neither.
 * Non-fixable clusters show the label **"Correct escalation — no fix"** (policy, safety, caller-requested) or **"Investigate"** (tool_error, asr_error, other).
 
-# 4. Fix drafting (`draft_fix` job, triggered by the Insights UI)
+# 4. Fix drafting (`draft_fix` job, triggered by the Insights UI or the nightly run)
 
-Prompt [/prompts/fix-draft.md](/prompts/fix-draft.md), role `drafting`. Evidence: up to 10 member calls — gap summaries, caller goals, and **human resolution notes** (the ground truth of what a human told the caller). Output `kind`:
+Prompt [/prompts/fix-draft.md](/prompts/fix-draft.md), role `drafting`. Evidence: up to 10 member calls — gap summaries, caller goals, and **human resolution notes** (the ground truth of what a human told the caller); the cluster's other members are held out for the gate and never shown. The prompt also gets the attached articles closest to the gap (title and content, up to 3) and the tenant's tools that the agent does not have. A proposal records its `origin` (`manual` or `nightly`) and up to 2 derived scenarios. Output `kind` (the full table, with `knowledge_edit` and `tool_attach`, is in [/architecture/self-learning.md](/architecture/self-learning.md)):
 
 | Kind | When | Payload |
 |---|---|---|
 | `knowledge_article` | `missing_knowledge` | `{title, content_markdown}` — becomes a `knowledge_docs` row with status `draft` |
 | `skill` | `missing_skill` | `{skill: {name, description, instructions, required_tools, escalate_when}, tool: <tool def or null>, existing_tool_name: <name or null>}` — tool drafts may only target endpoints listed in the tenant's tool catalog ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)) |
 | `policy_rule` | `agent_error` | `{rule: "one sentence added to policy.rules"}` |
+| `knowledge_edit` | `missing_knowledge`, an attached article covers the topic | `{doc_id, article: {title, content_markdown}}` — the revised article becomes a `draft` doc |
+| `tool_attach` | `missing_skill`, an existing tenant tool fits | `{tool_name}` |
 
 Proposal status: `draft` → `evaluating` → `ready` (eval done) → `approved` | `rejected`. Editing the draft payload in the UI is allowed in `draft`/`ready`; any edit returns it to `draft` (needs re-evaluation).
 
 # 5. Approval (`POST /api/proposals/{id}/approve`)
 
-Allowed only in `ready` with an eval run whose candidate pass rate ≥ baseline pass rate and **no regression failures** (unless `force: true` with a note).
+Allowed only in `ready` with an eval run whose **gate passed** ([/architecture/self-learning.md](/architecture/self-learning.md), Gate), unless `force: true` with a note.
 
-1. Apply the payload to the agent draft config: activate the draft doc and add it to `knowledge_doc_ids`; or create the skill (and tool) and attach; or append the policy rule.
+1. Apply the payload to the agent draft config: activate the draft doc and add it to `knowledge_doc_ids` (for `knowledge_edit`, in place of `doc_id`, which is archived); or attach the named tool; or create the skill (and tool) and attach; or append the policy rule. Add the proposal's derived scenarios to the agent's test suite.
 2. Publish a new agent version with `change_note` = "Fix: {proposal title}" and `source_proposal_id`.
 3. Proposal → `approved` with `resulting_version_id`; cluster → `fixed`.
 4. Publish `proposal.approved` and `agent.published` events.
@@ -75,6 +77,6 @@ Allowed only in `ready` with an eval run whose candidate pass rate ≥ baseline 
 - **FL-03** — Given an analysis whose best similarity is below threshold, when clustered, then a new cluster is created with an LLM-generated name.
 - **FL-04** — Given a cluster whose majority root cause is `policy_required`, then it is not fixable and shows "Correct escalation — no fix".
 - **FL-05** — Given a ready cluster with resolution notes, when `draft_fix` runs for `missing_knowledge`, then a proposal with kind `knowledge_article` and a `draft` doc are created.
-- **FL-06** — Given a proposal whose eval has a regression failure, when approved without `force`, then the API returns 409.
+- **FL-06** — Given a proposal whose eval gate failed (for example a test scenario regressed), when approved without `force` and a note, then the API returns 409 `evaluation_gate` naming the reason.
 - **FL-07** — Given an approved knowledge proposal, then a new agent version exists whose config lists the (now active) doc, and the cluster status is `fixed`.
 - **FL-08** — Given an escalation resolved after its call was analyzed, when resolved, then the call is re-analyzed once and the analysis includes the resolution summary.

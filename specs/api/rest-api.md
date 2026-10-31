@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -127,7 +127,10 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | GET | `/api/proposals/{id}` | proposal + draft doc + latest eval run (summary + results) |
 | PUT | `/api/proposals/{id}` | `{title?, payload?}` → proposal (status back to `draft`) |
 | POST | `/api/proposals/{id}/evaluate` | → `{eval_run_id}` |
-| POST | `/api/proposals/{id}/approve` | `{decided_by, note?, force?}` → `{proposal, version}`; 409 per [/architecture/fleet-learning.md](/architecture/fleet-learning.md) |
+| GET | `/api/insights/inbox` | query `agent_id?` → `{items: [proposal + cluster name + latest eval summary with its gate]}`: proposals in `ready` that nobody decided, newest first ([/architecture/self-learning.md](/architecture/self-learning.md), Review) |
+| GET | `/api/learning/runs` | → `{items: [{id, trigger, status, since, summary, started_at, finished_at}]}`, newest first, at most 30 |
+| POST | `/api/learning/run` | → `{learning_run_id}`; 409 `run_in_progress` |
+| POST | `/api/proposals/{id}/approve` | `{decided_by, note?, force?}` → `{proposal, version}`; 409 `evaluation_gate` when the gate failed and no `force` with a note ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)) |
 | POST | `/api/proposals/{id}/reject` | `{decided_by, note}` → proposal |
 
 ## Evaluation

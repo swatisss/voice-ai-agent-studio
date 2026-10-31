@@ -2,7 +2,7 @@
 type: API Contract
 title: Server-sent events
 description: The SSE endpoint, topic subscription rules and event payloads the web app consumes for live updates.
-status: stable
+status: draft
 tags: [api, events, sse]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -33,6 +33,7 @@ A `: ping` comment every 15 s keeps proxies open. Topics and the bus semantics a
 | `cluster.updated` | cluster summary |
 | `proposal.updated` | `{id, cluster_id, status, kind, title}` |
 | `eval.progress` | `{proposal_id, eval_run_id, done, total, last: {case_key, arm, passed}}` |
+| `learning.run.finished` | `{learning_run_id, status, trigger, summary}` |
 | `proposal.approved` | `{id, version_id, version}` |
 | `test_run.progress` | `{eval_run_id, agent_id, done, total, last: {scenario_id, repeat, passed}}` |
 | `test_run.finished` | `{eval_run_id, agent_id, status, summary}` |

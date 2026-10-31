@@ -2,7 +2,7 @@
 type: Component Spec
 title: Jobs and events
 description: The database-backed background job queue and the in-process event bus streamed to the browser as server-sent events.
-status: stable
+status: draft
 tags: [architecture, jobs, events, sse]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -19,6 +19,7 @@ Table `jobs` ([/data/data-model.md](/data/data-model.md)). One worker task runs 
 | `purge_memory` | `{}` (daily, dedupe `purge_memory:{date}`) | [/architecture/agent-memory.md](/architecture/agent-memory.md) |
 | `draft_fix` | `{cluster_id}` | fleet learning §4 |
 | `run_eval` | `{proposal_id, eval_run_id}` | [/architecture/evaluation.md](/architecture/evaluation.md) |
+| `nightly_learning` | `{learning_run_id}` (daily per tenant after `LEARNING_NIGHTLY_HOUR_UTC`, dedupe `nightly_learning:{tenant}:{date}`; or manual) | [/architecture/self-learning.md](/architecture/self-learning.md) |
 | `run_test_suite` | `{eval_run_id}` | [/architecture/test-suites.md](/architecture/test-suites.md) |
 
 Rules:
@@ -38,7 +39,7 @@ In-process async pub/sub. Each event: `{id, topic, type, tenant_id, at, data}`.
 |---|---|
 | `call:{id}` | `call.event` (each stored call event), `call.escalated`, `call.ended` |
 | `console` | `escalation.created`, `escalation.updated` |
-| `insights` | `analysis.created`, `cluster.updated`, `proposal.updated`, `eval.progress`, `proposal.approved` |
+| `insights` | `analysis.created`, `cluster.updated`, `proposal.updated`, `eval.progress`, `proposal.approved`, `learning.run.finished` |
 | `dashboard` | `call.ended`, `agent.published` |
 | `evaluation` | `scorecard.updated`, `test_run.progress`, `test_run.finished` |
 

@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: stable
+status: draft
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -47,9 +47,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **call_analyses** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `outcome`, `intent`, `root_cause`, `fixable` bool, `gap_summary`, `caller_goal`, `resolution_summary`, `sentiment_start`, `sentiment_end`, `embedding` JSON (nullable), `cluster_id` (nullable), `source` (`llm`|`seed`), `created_at`
 
-**clusters** — `id`, `tenant_id`, `agent_id`, `name`, `description`, `root_cause`, `fixable` bool, `centroid` JSON, `call_count`, `escalation_count`, `first_seen_at`, `last_seen_at`, `status` (`open`|`fix_proposed`|`fixed`|`ignored`), `created_at`, `updated_at`
+**clusters** — `id`, `tenant_id`, `agent_id`, `name`, `description`, `root_cause`, `fixable` bool, `centroid` JSON, `call_count`, `escalation_count`, `first_seen_at`, `last_seen_at`, `status` (`open`|`fix_proposed`|`fixed`|`ignored`), `snoozed_until` (nullable), `created_at`, `updated_at`
 
-**fix_proposals** — `id`, `tenant_id`, `agent_id`, `cluster_id`, `kind` (`knowledge_article`|`skill`|`policy_rule`), `title`, `rationale`, `payload` JSON, `draft_doc_id` (nullable), `status` (`draft`|`evaluating`|`ready`|`approved`|`rejected`), `latest_eval_run_id` (nullable), `resulting_version_id` (nullable), `decided_by`, `decision_note`, `created_at`, `decided_at`
+**fix_proposals** — `id`, `tenant_id`, `agent_id`, `cluster_id`, `kind` (`knowledge_article`|`knowledge_edit`|`tool_attach`|`skill`|`policy_rule`), `origin` (`manual`|`nightly`, default `manual`), `title`, `rationale`, `payload` JSON (may carry `scenarios`), `draft_doc_id` (nullable), `status` (`draft`|`evaluating`|`ready`|`approved`|`rejected`), `latest_eval_run_id` (nullable), `resulting_version_id` (nullable), `decided_by`, `decision_note`, `created_at`, `decided_at`
 
 **eval_runs** — `id`, `tenant_id`, `agent_id`, `kind` (`proposal`|`suite`, default `proposal`), `proposal_id` (nullable; set for proposal runs), `baseline_version_id` (nullable for a suite run on a draft of an unpublished agent; for suite runs the version the target is based on), `target` (`published`|`draft`|`version`, suite runs), `config` JSON (suite runs: the resolved config simulated), `repeats` int (default 1), `trigger` (`manual`|`builder`|`publish`|`proposal`), `scenario_ids` JSON list, `status` (`running`|`done`|`failed`), `summary` JSON, `error`, `created_at`, `finished_at` ([/architecture/test-suites.md](/architecture/test-suites.md))
 
@@ -69,6 +69,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **memory_events** — `id`, `tenant_id`, `agent_id` (nullable for erasure), `member_ref`, `memory_id` (nullable), `action` (`added`|`superseded`|`confirmed`|`restored`|`expired`|`erased`), `actor` (`agent`|`studio`|`system`), `call_id` (nullable), `text_before`, `text_after`, `reason` (all nullable; emptied by expiry and erasure), `at`
 
+**learning_runs** — `id`, `tenant_id`, `trigger` (`nightly`|`manual`), `status` (`running`|`done`|`failed`), `since` (start of the reviewed window), `summary` JSON (per agent: calls reviewed, signals by kind, re-analysed, ready clusters, proposals drafted and passed), `error`, `started_at`, `finished_at` ([/architecture/self-learning.md](/architecture/self-learning.md))
+
 **jobs** — `id`, `tenant_id`, `kind`, `payload` JSON, `dedupe_key` (nullable, indexed), `status` (`queued`|`running`|`done`|`failed`), `attempts`, `last_error`, `run_after`, `created_at`, `updated_at`
 
 # Relationships
@@ -85,6 +87,6 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 27 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards` or `check_reviews`, when the app starts, then those tables are created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 28 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards`, `check_reviews` or `learning_runs`, when the app starts, then those tables are created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.

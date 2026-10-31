@@ -242,6 +242,15 @@ class ScenarioIn(BaseModel):
         return {r.name for r in self.required_tools} | set(self.forbidden_tools) | {e.tool for e in self.expected_results}
 
 
+class LearningConfig(BaseModel):
+    """Nightly self-learning for this agent; it only ever proposes (/architecture/self-learning.md, DM-09)."""
+
+    nightly: bool = True
+    max_proposals_per_night: int = Field(default=3, ge=0, le=10)
+    regression_repeats: int = Field(default=3, ge=1, le=5)
+    snooze_days: int = Field(default=7, ge=1, le=90)
+
+
 class AgentConfig(BaseModel):
     mode: Literal["inbound", "outbound", "internal"] = "inbound"
     outbound: OutboundConfig = Field(default_factory=OutboundConfig)
@@ -257,6 +266,7 @@ class AgentConfig(BaseModel):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     verification: VerificationConfig = Field(default_factory=VerificationConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
+    learning: LearningConfig = Field(default_factory=LearningConfig)
 
     @model_validator(mode="after")
     def _outbound_needs_targets(self) -> AgentConfig:
@@ -351,7 +361,9 @@ class ArticleDraft(BaseModel):
 
 
 class FixDraft(BaseModel):
-    kind: Literal["knowledge_article", "skill", "policy_rule"]
+    kind: Literal["knowledge_article", "knowledge_edit", "tool_attach", "skill", "policy_rule"]
+    doc_id: str | None = None  # knowledge_edit: the attached article it revises
+    tool_name: str | None = None  # tool_attach
     title: str
     rationale: str = ""
     article: ArticleDraft | None = None

@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0022 Nightly self-learning
 description: A nightly run drafts knowledge, tool, skill and rule proposals from each agent's signals, gates them offline (held-out cases, the test suite on both arms, no new hard fails, no slowdown) and queues them in a learning inbox; only a human publishes.
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [learning, evaluation, jobs, ui, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
@@ -129,7 +129,7 @@ Always include title (short, for the reviewer) and rationale (2-3 sentences: why
 
 # Tasks
 
-1. Spec edits (done in this CP, except the two prompts: apply the texts above with tasks 3 and 4).
+1. Spec edits (done in this CP; the two prompt texts above were applied with tasks 3 and 4).
 2. Data and config: `learning_runs`, `fix_proposals.origin`, `clusters.snoozed_until`, the `learning` block — covers DM-01, DM-09.
 3. Signals and re-analysis: signal gathering from scorecards and calibration, the call-analysis prompt, quality candidates in clustering and readiness, snooze — covers SL-02, SL-03, SL-05.
 4. Drafting: the fix-draft prompt, `knowledge_edit` and `tool_attach` (draft, candidate config, approval), derived scenarios, held-out split — covers SL-06, SL-07, SL-09.

@@ -1,6 +1,6 @@
 """Database-backed background job queue with an in-process worker.
 
-Spec: /architecture/jobs-and-events.md (Job queue)
+Spec: /architecture/jobs-and-events.md (Job queue), /architecture/self-learning.md (Nightly run)
 """
 from __future__ import annotations
 
@@ -122,6 +122,8 @@ class Worker:
         self._sem = asyncio.Semaphore(CONCURRENCY)
         self._running: set[asyncio.Task[None]] = set()
         self._last_day: date | None = None
+        self._next_learning_check = 0.0
+        self._started_at = utcnow()  # the nightly schedule fires only for hours that pass while this worker runs
 
     async def start(self) -> None:
         await reset_stale()
@@ -147,6 +149,7 @@ class Worker:
                 if job is None:
                     self._sem.release()
                     await self._daily()
+                    await self._nightly_learning()
                     await asyncio.sleep(POLL_SECONDS)
                     continue
                 task = asyncio.create_task(self._run(job))
@@ -168,6 +171,20 @@ class Worker:
         from voiceai import memory
 
         await memory.schedule_purges()
+
+    async def _nightly_learning(self) -> None:
+        """At most once a minute while idle: start each tenant's nightly self-learning run once its hour has passed
+        (/architecture/self-learning.md, SL-01)."""
+        now = asyncio.get_running_loop().time()
+        if now < self._next_learning_check:
+            return
+        self._next_learning_check = now + 60
+        from voiceai.learning import nightly
+
+        try:
+            await nightly.schedule_nightly(running_since=self._started_at)
+        except Exception:  # noqa: BLE001 - scheduling must never stop the worker
+            log.exception("nightly learning schedule failed")
 
     async def _run(self, job: Job) -> None:
         try:

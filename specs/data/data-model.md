@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: draft
+status: stable
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -45,7 +45,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **escalations** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `status` (`waiting`|`accepted`|`resolved`), `reason_category`, `reason_detail`, `packet` JSON (nullable), `packet_status` (`pending`|`ready`|`fallback`), `assignee` (nullable), `disposition` (nullable), `resolution_note` (nullable), `created_at`, `accepted_at`, `resolved_at`
 
-**call_analyses** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `outcome`, `intent`, `root_cause`, `fixable` bool, `gap_summary`, `caller_goal`, `resolution_summary`, `sentiment_start`, `sentiment_end`, `embedding` JSON (nullable), `cluster_id` (nullable), `source` (`llm`|`seed`), `created_at`
+**call_analyses** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `outcome`, `intent`, `root_cause`, `fixable` bool, `gap_summary`, `caller_goal`, `resolution_summary`, `sentiment_start`, `sentiment_end`, `signals` JSON list (quality signals of a re-analysis, [/architecture/self-learning.md](/architecture/self-learning.md)), `embedding` JSON (nullable), `cluster_id` (nullable), `source` (`llm`|`seed`), `created_at`
 
 **clusters** — `id`, `tenant_id`, `agent_id`, `name`, `description`, `root_cause`, `fixable` bool, `centroid` JSON, `call_count`, `escalation_count`, `first_seen_at`, `last_seen_at`, `status` (`open`|`fix_proposed`|`fixed`|`ignored`), `snoozed_until` (nullable), `created_at`, `updated_at`
 

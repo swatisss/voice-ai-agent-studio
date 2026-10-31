@@ -1,6 +1,6 @@
 """Cluster impact, readiness and labels.
 
-Spec: /architecture/fleet-learning.md (3. Impact and readiness)
+Spec: /architecture/fleet-learning.md (3. Impact and readiness), /architecture/self-learning.md (snooze)
 """
 from __future__ import annotations
 
@@ -27,7 +27,8 @@ def impact(c: Cluster, recent_escalations: int | None = None, now=None, recent_s
         recent = 0
     signals = recent if recent_signals is None else recent_signals
     weekly = recent / 4
-    ready = bool(c.fixable and signals >= s.fl_min_cluster_size and c.status == "open")
+    snoozed = c.snoozed_until is not None and c.snoozed_until > now  # SL-05: a rejected proposal holds the cluster back
+    ready = bool(c.fixable and signals >= s.fl_min_cluster_size and c.status == "open" and not snoozed)
     if c.status == "fixed":
         label = "fixed"
     elif c.status == "fix_proposed":
@@ -38,6 +39,8 @@ def impact(c: Cluster, recent_escalations: int | None = None, now=None, recent_s
         label = "correct_escalation" if c.root_cause in CORRECT else "investigate"
     elif ready:
         label = "ready_for_fix"
+    elif snoozed and c.fixable and signals >= s.fl_min_cluster_size:
+        label = "snoozed"
     else:
         label = "watching"
     return {
@@ -46,4 +49,5 @@ def impact(c: Cluster, recent_escalations: int | None = None, now=None, recent_s
         "ready_for_fix": ready,
         "label": label,
         "min_cluster_size": s.fl_min_cluster_size,
+        "snoozed_until": c.snoozed_until.isoformat() if c.snoozed_until else None,
     }

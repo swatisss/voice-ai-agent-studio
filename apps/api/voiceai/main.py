@@ -18,6 +18,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 # register job handlers
 import voiceai.learning.analyze  # noqa: F401
 import voiceai.learning.evaluate  # noqa: F401
+import voiceai.learning.gate  # noqa: F401
+import voiceai.learning.nightly  # noqa: F401
 import voiceai.learning.propose  # noqa: F401
 import voiceai.learning.scoring  # noqa: F401
 import voiceai.learning.test_suites  # noqa: F401

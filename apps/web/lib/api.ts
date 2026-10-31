@@ -69,7 +69,7 @@ export function useEvents(topics: string[], handler: (e: BusEvent) => void, tena
       es.onopen = () => { delay = 1000; };
       es.onmessage = () => undefined;
       const types = ["call.event", "call.escalated", "call.ended", "escalation.created", "escalation.updated", "analysis.created",
-        "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published", "scorecard.updated", "test_run.progress", "test_run.finished"];
+        "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published", "scorecard.updated", "test_run.progress", "test_run.finished", "learning.run.finished"];
       for (const t of types) es.addEventListener(t, (ev) => { try { ref.current(JSON.parse((ev as MessageEvent).data)); } catch { /* ignore */ } });
       es.onerror = () => {
         es?.close();

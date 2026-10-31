@@ -60,6 +60,7 @@ class Settings(BaseSettings):
 
     ev_max_cluster_cases: int = 6
     ev_concurrency: int = 4
+    learning_nightly_hour_utc: int = 2  # /architecture/self-learning.md (Nightly run)
 
     voice_vad_stop_secs: float = 0.2
     deepgram_stt_model: str = "nova-3"

@@ -1,7 +1,7 @@
 """Post-call analysis and gap clustering.
 
 Spec: /architecture/fleet-learning.md (1. Call analysis, 2. Clustering), /prompts/call-analysis.md, /prompts/cluster-naming.md,
-/architecture/call-scoring.md (score_call is queued after each analysis)
+/architecture/call-scoring.md (score_call is queued after each analysis), /architecture/self-learning.md (quality signals)
 """
 from __future__ import annotations
 
@@ -59,6 +59,20 @@ def feedback_text(fb: CallFeedback | None) -> str:
     return f"thumbs down: {fb.comment or ''}".rstrip()
 
 
+SIGNAL_CAUSE = (("Knowledge search found nothing", "missing_knowledge"), ("Tool ", "tool_error"))
+
+
+def apply_signals(out: AnalysisOut, signals: list[str]) -> None:
+    """SL-02: a call re-analysed with quality signals is a learning candidate, like a thumbs down: never root cause
+    `none`, never an empty gap summary."""
+    if not signals:
+        return
+    if out.root_cause == "none":
+        out.root_cause = next((cause for prefix, cause in SIGNAL_CAUSE if signals[0].startswith(prefix)), "agent_error")
+    if not out.gap_summary.strip():
+        out.gap_summary = signals[0][:200]
+
+
 def apply_feedback(out: AnalysisOut, fb: CallFeedback | None) -> None:
     """A thumbs-down call is always a learning candidate: never root cause `none`, never an empty gap summary (FB-03)."""
     if fb is None or fb.rating != "down":
@@ -83,12 +97,14 @@ async def analyze_call(tenant_id: str, payload: dict[str, Any]) -> None:
         tools = (version.config if version else {}).get("tools", [])
         state = (call.meta or {}).get("state", {})
         no_answers = state.get("no_answer_queries", [])
+        signals = [str(x) for x in payload.get("signals") or []]  # SL-02: sent by the nightly run
         prompt = prompts.render(
             "call-analysis",
             tools_available="\n".join(f"- {t['name']}: {t.get('description', '')}" for t in tools) or "- (none)",
             search_results_summary=f"{len(no_answers)} ({'; '.join(no_answers)})" if no_answers else "0",
             escalation=_escalation_text(esc),
             caller_feedback=feedback_text(fb),
+            quality_signals="\n".join(f"- {x}" for x in signals) or "none",
             transcript=transcript_lines(events) or "(empty)",
         )
         out, _ = await gateway().complete_json("analysis", [{"role": "user", "content": prompt}], AnalysisOut)
@@ -97,12 +113,13 @@ async def analyze_call(tenant_id: str, payload: dict[str, Any]) -> None:
         if out.outcome == "resolved":
             out.root_cause = "none"
         apply_feedback(out, fb)  # after the resolved rule: a disliked resolved call keeps a cause
-        await save_analysis(s, call, out, source="llm")
+        apply_signals(out, signals)
+        await save_analysis(s, call, out, source="llm", signals=signals)
         await scoring.enqueue_after_analysis(s, call)  # SC-01: the scorer judges against this analysis' caller goal
         await s.commit()
 
 
-async def save_analysis(s: AsyncSession, call: Call, out: AnalysisOut, source: str) -> CallAnalysis:
+async def save_analysis(s: AsyncSession, call: Call, out: AnalysisOut, source: str, signals: list[str] | None = None) -> CallAnalysis:
     """Upsert the analysis (FL-01), set call outcome, embed + cluster escalations."""
     analysis = await s.scalar(select(CallAnalysis).where(CallAnalysis.call_id == call.id))
     if analysis is None:
@@ -112,10 +129,11 @@ async def save_analysis(s: AsyncSession, call: Call, out: AnalysisOut, source: s
         setattr(analysis, field, getattr(out, field))
     analysis.fixable = out.root_cause in FIXABLE
     analysis.source = source
+    analysis.signals = list(signals or [])
     call.outcome = out.outcome
     await s.flush()
     disliked = await s.scalar(select(CallFeedback.rating).where(CallFeedback.call_id == call.id)) == "down"
-    if (out.outcome == "escalated" or disliked) and out.gap_summary.strip():  # FB-04: a thumbs down is a candidate like an escalation
+    if (out.outcome == "escalated" or disliked or analysis.signals) and out.gap_summary.strip():  # FB-04, SL-02: candidates like escalations
         analysis.embedding = await embed_one(out.gap_summary)
         await assign_cluster(s, analysis, when=call.started_at)
     bus.publish(call.tenant_id, "insights", "analysis.created",

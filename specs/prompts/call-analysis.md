@@ -10,7 +10,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Variables
 
-`transcript`, `escalation` (category, detail, disposition, resolution note — or `none`), `caller_feedback` (`none`, `thumbs up`, or `thumbs down: <comment, may be empty>`), `search_results_summary` (count of `no_answer` searches and queries), `tools_available` (names + descriptions of the agent's tools).
+`transcript`, `escalation` (category, detail, disposition, resolution note — or `none`), `caller_feedback` (`none`, `thumbs up`, or `thumbs down: <comment, may be empty>`), `search_results_summary` (count of `no_answer` searches and queries), `tools_available` (names + descriptions of the agent's tools), `quality_signals` (one line per signal found after the call — "Knowledge search found nothing for: …", "Tool get_claim_status failed", "Check failed: …" — or `none`; [/architecture/self-learning.md](/architecture/self-learning.md)).
 
 # Output
 
@@ -30,13 +30,15 @@ Escalation: {{escalation}}
 
 Caller feedback after the call: {{caller_feedback}}
 
+Quality signals found after the call: {{quality_signals}}
+
 Transcript:
 {{transcript}}
 
 Return JSON with:
 - outcome: "resolved" if the assistant fully handled the caller's request without a human; "escalated" if the call was handed to a human; "abandoned" if the caller left before resolution without escalation.
 - intent: snake_case label of the caller's main goal (policy_status, claim_status, document_request, coverage_question, find_provider, claim_appeal, add_dependent_newborn, prior_auth_status, ...).
-- root_cause: for resolved calls "none", unless the caller gave a thumbs down (see caller feedback): then never "none"; pick the most likely cause from the list below (agent_error if the assistant had what it needed but answered badly, missing_knowledge if the answer lacked approved detail, missing_skill if an action was missing, other if unclear), using the caller's comment as evidence. Otherwise exactly one of:
+- root_cause: for resolved calls "none", unless the caller gave a thumbs down or quality signals are listed: then never "none"; pick the most likely cause from the list below (agent_error if the assistant had what it needed but answered badly, missing_knowledge if the answer lacked approved detail, missing_skill if an action was missing, tool_error if a business system failed, other if unclear), using the caller's comment and the signals as evidence. Otherwise exactly one of:
   missing_knowledge (the assistant lacked approved information to answer),
   missing_skill (the request needed an action or lookup the assistant had no tool for),
   tool_error (a business system failed),
@@ -46,7 +48,7 @@ Return JSON with:
   asr_error (speech was misrecognized),
   agent_error (the assistant had what it needed but behaved incorrectly),
   other.
-- gap_summary: for escalated or abandoned calls, one generic sentence naming what was missing, written so similar calls produce similar sentences (for example "How to add a newborn to an existing plan" or "Checking the status of a prior authorization"). Empty string for resolved calls without a thumbs down. If the caller gave a thumbs down, always give one, even for a call you judge resolved: what the caller was probably unhappy about, written generically in the same style (for example "Explaining why a payment is overdue and what grace period applies").
+- gap_summary: for escalated or abandoned calls, one generic sentence naming what was missing, written so similar calls produce similar sentences (for example "How to add a newborn to an existing plan" or "Checking the status of a prior authorization"). Empty string for resolved calls without a thumbs down or quality signals. If the caller gave a thumbs down or signals are listed, always give one, even for a call you judge resolved: what went wrong, written generically in the same style (for example "Explaining why a payment is overdue and what grace period applies").
 - caller_goal: one sentence describing what the caller wanted, written as an instruction for someone role-playing this caller (for example "You recently had a baby and want to know how to add her to your health plan").
 - resolution_summary: what actually resolved the request: the assistant's answer, or the human specialist's resolution note. Empty string if unresolved.
 - sentiment_start and sentiment_end: one of positive, neutral, frustrated, angry, distressed.

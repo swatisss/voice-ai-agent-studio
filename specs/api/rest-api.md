@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: draft
+status: stable
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -120,11 +120,11 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Insights
 | Method | Path | Body → Result |
 |---|---|---|
-| GET | `/api/insights/clusters` | query `agent_id?` → `{items: [cluster + weekly_escalations, est_weekly_cost_usd, dislike_count, signal_count, ready_for_fix, label]}`; `dislike_count` = member calls with a thumbs down in the last 28 days, `signal_count` = distinct member escalations plus thumbs-down calls in that window ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)) |
+| GET | `/api/insights/clusters` | query `agent_id?` → `{items: [cluster + weekly_escalations, est_weekly_cost_usd, dislike_count, signal_count, ready_for_fix, label, snoozed_until]}`; `dislike_count` = member calls with a thumbs down in the last 28 days, `signal_count` = distinct member escalations plus thumbs-down calls in that window ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)) |
 | GET | `/api/insights/clusters/{id}` | cluster + member calls (analysis + resolution notes + `feedback`) + proposals |
 | POST | `/api/insights/clusters/{id}/draft-fix` | → `{job_id}` (proposal arrives via `proposal.updated` event); 409 if not ready |
 | POST | `/api/insights/clusters/{id}/ignore` | → cluster |
-| GET | `/api/proposals/{id}` | proposal + draft doc + latest eval run (summary + results) |
+| GET | `/api/proposals/{id}` | proposal (with `origin`) + draft doc + `original_doc` (the article a `knowledge_edit` revises, else `null`) + latest eval run (summary with its gate + results, each with `repeat`, `failures`, `call_id` and `scenario_name`) |
 | PUT | `/api/proposals/{id}` | `{title?, payload?}` → proposal (status back to `draft`) |
 | POST | `/api/proposals/{id}/evaluate` | → `{eval_run_id}` |
 | GET | `/api/insights/inbox` | query `agent_id?` → `{items: [proposal + cluster name + latest eval summary with its gate]}`: proposals in `ready` that nobody decided, newest first ([/architecture/self-learning.md](/architecture/self-learning.md), Review) |

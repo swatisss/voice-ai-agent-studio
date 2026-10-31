@@ -1,6 +1,6 @@
-"""ORM models - the 27 tables of the data model.
+"""ORM models - the 28 tables of the data model.
 
-Spec: /data/data-model.md, /architecture/call-scoring.md
+Spec: /data/data-model.md, /architecture/call-scoring.md, /architecture/self-learning.md
 """
 from __future__ import annotations
 
@@ -237,6 +237,7 @@ class CallAnalysis(Base):
     resolution_summary: Mapped[str] = mapped_column(Text, default="")
     sentiment_start: Mapped[str] = mapped_column(String(16), default="neutral")
     sentiment_end: Mapped[str] = mapped_column(String(16), default="neutral")
+    signals: Mapped[list[str]] = mapped_column(JSON, default=list)  # quality signals it was re-analysed with (SL-02)
     embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
     cluster_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     source: Mapped[str] = mapped_column(String(8), default="llm")
@@ -258,6 +259,7 @@ class Cluster(Base):
     first_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="open")
+    snoozed_until: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)  # SL-05
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
@@ -308,6 +310,7 @@ class FixProposal(Base):
     agent_id: Mapped[str] = mapped_column(String(32), index=True)
     cluster_id: Mapped[str] = mapped_column(String(32), index=True)
     kind: Mapped[str] = mapped_column(String(24))
+    origin: Mapped[str] = mapped_column(String(16), default="manual")  # manual | nightly
     title: Mapped[str] = mapped_column(String(300))
     rationale: Mapped[str] = mapped_column(Text, default="")
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -446,6 +449,21 @@ class MemoryEvent(Base):
     text_after: Mapped[str | None] = mapped_column(Text, nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+
+
+class LearningRun(Base):
+    """One nightly (or manual) self-learning run of a tenant (/architecture/self-learning.md)."""
+
+    __tablename__ = "learning_runs"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    trigger: Mapped[str] = mapped_column(String(16), default="nightly")  # nightly | manual
+    status: Mapped[str] = mapped_column(String(16), default="running")
+    since: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
 
 class Job(Base):

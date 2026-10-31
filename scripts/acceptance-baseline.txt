@@ -92,3 +92,8 @@ UI-50
 UI-51
 UI-52
 UI-53
+# CP-0022 Insights learning inbox and the dashboard's Self-learning card: no browser harness; the API behind each is covered
+# by tests/test_self_learning.py, and the web build and type check pass. These lines need the reviewer's approval
+# (asked for with CP-0022).
+UI-54
+UI-55

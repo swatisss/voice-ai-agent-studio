@@ -2,7 +2,7 @@
 type: UI Spec
 title: Insights
 description: Cluster list with impact, cluster detail with evidence, fix proposal review, live evaluation results, and approve or reject.
-status: draft
+status: stable
 tags: [ui, insights, learning]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

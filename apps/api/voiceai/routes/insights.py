@@ -1,6 +1,7 @@
 """Insights: clusters, fix proposals, evaluation, approval.
 
-Spec: /api/rest-api.md (Insights), /architecture/fleet-learning.md, /architecture/evaluation.md, /architecture/test-suites.md (Triggers)
+Spec: /api/rest-api.md (Insights), /architecture/fleet-learning.md, /architecture/evaluation.md, /architecture/test-suites.md (Triggers),
+/architecture/self-learning.md (Review, Nightly run)
 """
 from __future__ import annotations
 
@@ -14,10 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.db import get_session, utcnow
 from voiceai.errors import ApiError
-from voiceai.learning import evaluate, propose, test_suites
+from voiceai.learning import evaluate, nightly, propose, test_suites
 from voiceai.learning.analyze import cluster_summary
 from voiceai.learning.impact import impact
-from voiceai.models import Agent, Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc
+from voiceai.models import Agent, Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc, LearningRun
 from voiceai.tenancy import current_tenant
 
 router = APIRouter(prefix="/api")
@@ -25,26 +26,26 @@ router = APIRouter(prefix="/api")
 _NO_STATS = {"escalations": 0, "dislikes": 0, "signals": 0}
 
 
-async def _recent_stats(s: AsyncSession, tenant_id: str) -> dict[str, dict[str, int]]:
+async def recent_stats(s: AsyncSession, tenant_id: str) -> dict[str, dict[str, int]]:
     """Per cluster, over the last 28 days: escalations, thumbs-down calls, and distinct signals (a call that is both counts once)."""
     since = utcnow() - timedelta(days=28)
     rows = (await s.execute(
-        select(CallAnalysis.cluster_id, CallAnalysis.outcome, CallFeedback.rating)
+        select(CallAnalysis.cluster_id, CallAnalysis.outcome, CallFeedback.rating, CallAnalysis.signals)
         .join(Call, Call.id == CallAnalysis.call_id)
         .outerjoin(CallFeedback, CallFeedback.call_id == CallAnalysis.call_id)
         .where(CallAnalysis.tenant_id == tenant_id, Call.started_at >= since, CallAnalysis.cluster_id.is_not(None))
     )).all()
     stats: dict[str, dict[str, int]] = {}
-    for cid, outcome, rating in rows:
+    for cid, outcome, rating, signals in rows:
         st = stats.setdefault(cid, dict(_NO_STATS))
         escalated, disliked = outcome == "escalated", rating == "down"
         st["escalations"] += escalated
         st["dislikes"] += disliked
-        st["signals"] += escalated or disliked
+        st["signals"] += escalated or disliked or bool(signals)  # SL-02: quality candidates count too
     return stats
 
 
-def _cluster_out(c: Cluster, stats: dict[str, dict[str, int]]) -> dict[str, Any]:
+def cluster_out(c: Cluster, stats: dict[str, dict[str, int]]) -> dict[str, Any]:
     st = stats.get(c.id, _NO_STATS)
     return {
         **cluster_summary(c), **impact(c, st["escalations"], recent_signals=st["signals"]),
@@ -57,8 +58,8 @@ async def clusters(agent_id: str | None = None, tenant_id: str = Depends(current
     q = select(Cluster).where(Cluster.tenant_id == tenant_id)
     if agent_id:
         q = q.where(Cluster.agent_id == agent_id)
-    recent = await _recent_stats(s, tenant_id)
-    items = [_cluster_out(c, recent) for c in (await s.scalars(q)).all()]
+    recent = await recent_stats(s, tenant_id)
+    items = [cluster_out(c, recent) for c in (await s.scalars(q)).all()]
     items.sort(key=lambda c: (-c["est_weekly_cost_usd"], c["name"]))
     return {"items": items}
 
@@ -73,17 +74,17 @@ async def _cluster(s: AsyncSession, tenant_id: str, cluster_id: str) -> Cluster:
 @router.get("/insights/clusters/{cluster_id}")
 async def cluster_detail(cluster_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     c = await _cluster(s, tenant_id, cluster_id)
-    recent = await _recent_stats(s, tenant_id)
+    recent = await recent_stats(s, tenant_id)
     evidence = await propose.cluster_evidence(s, c.id, limit=50)
     proposals = (await s.scalars(select(FixProposal).where(FixProposal.cluster_id == c.id).order_by(FixProposal.created_at.desc()))).all()
-    return {**_cluster_out(c, recent), "calls": evidence, "proposals": [propose.proposal_summary(p) for p in proposals]}
+    return {**cluster_out(c, recent), "calls": evidence, "proposals": [propose.proposal_summary(p) for p in proposals]}
 
 
 @router.post("/insights/clusters/{cluster_id}/draft-fix")
 async def draft_fix(cluster_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     c = await _cluster(s, tenant_id, cluster_id)
-    recent = await _recent_stats(s, tenant_id)
-    if not _cluster_out(c, recent)["ready_for_fix"]:
+    recent = await recent_stats(s, tenant_id)
+    if not cluster_out(c, recent)["ready_for_fix"]:
         raise ApiError(409, "cluster_not_ready", "Cluster is not fixable, below threshold, or already has a proposal")
     from voiceai import jobs
 
@@ -97,7 +98,7 @@ async def ignore(cluster_id: str, tenant_id: str = Depends(current_tenant), s: A
     c = await _cluster(s, tenant_id, cluster_id)
     c.status = "ignored"
     await s.commit()
-    return _cluster_out(c, await _recent_stats(s, tenant_id))
+    return cluster_out(c, await recent_stats(s, tenant_id))
 
 
 class ProposalUpdate(BaseModel):
@@ -117,13 +118,52 @@ async def _proposal_out(s: AsyncSession, p: FixProposal) -> dict[str, Any]:
     results = []
     if run:
         results = [{"case_key": r.case_key, "case_type": r.case_type, "arm": r.arm, "passed": r.passed, "expected": r.expected,
-                    "judge": r.judge, "call_id": r.call_id}
+                    "judge": r.judge, "call_id": r.call_id, "repeat": r.repeat, "failures": r.failures or [],
+                    "scenario_name": (r.scenario or {}).get("name")}
                    for r in (await s.scalars(select(EvalResult).where(EvalResult.eval_run_id == run.id).order_by(EvalResult.created_at))).all()]
     return {
         **propose.proposal_summary(p),
         "draft_doc": {"id": doc.id, "title": doc.title, "content": doc.content, "status": doc.status} if doc else None,
+        "original_doc": await _original(s, p),
         "eval_run": {"id": run.id, "status": run.status, "summary": run.summary, "error": run.error, "results": results} if run else None,
     }
+
+
+@router.get("/insights/inbox")
+async def inbox(agent_id: str | None = None, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    """Proposals waiting for a human decision, newest first (/architecture/self-learning.md, Review)."""
+    q = select(FixProposal).where(FixProposal.tenant_id == tenant_id, FixProposal.status == "ready", FixProposal.decided_at.is_(None))
+    if agent_id:
+        q = q.where(FixProposal.agent_id == agent_id)
+    items = []
+    for p in (await s.scalars(q.order_by(FixProposal.created_at.desc()))).all():
+        cluster = await s.get(Cluster, p.cluster_id)
+        run = await s.get(EvalRun, p.latest_eval_run_id) if p.latest_eval_run_id else None
+        items.append({**propose.proposal_summary(p), "cluster_name": cluster.name if cluster else None,
+                      "eval_summary": run.summary if run and run.status == "done" else None})
+    return {"items": items}
+
+
+@router.get("/learning/runs")
+async def learning_runs(tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    rows = (await s.scalars(select(LearningRun).where(LearningRun.tenant_id == tenant_id).order_by(LearningRun.started_at.desc()).limit(30))).all()
+    return {"items": [nightly.run_out(r) for r in rows]}
+
+
+@router.post("/learning/run")
+async def learning_run_now(tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    """Run now (dashboard and Insights): the same run as the nightly one (SL-01)."""
+    run = await nightly.start_run(s, tenant_id, "manual")
+    await s.commit()
+    return {"learning_run_id": run.id}
+
+
+async def _original(s: AsyncSession, p: FixProposal) -> dict[str, Any] | None:
+    """The article a knowledge_edit revises, for the side-by-side view."""
+    if p.kind != "knowledge_edit" or not p.payload.get("doc_id"):
+        return None
+    doc = await s.get(KnowledgeDoc, p.payload["doc_id"])
+    return {"id": doc.id, "title": doc.title, "content": doc.content, "status": doc.status} if doc else None
 
 
 @router.get("/proposals/{proposal_id}")

@@ -58,11 +58,13 @@ export function Shell({ children }: { children: ReactNode }) {
   const refreshBadges = useCallback(() => {
     if (!tenant) return;
     api<{ items: unknown[] }>("/api/escalations?status=waiting").then((r) => setWaiting(r.items.length)).catch(() => undefined);
-    api<{ items: { ready_for_fix: boolean }[] }>("/api/insights/clusters").then((r) => setReady(r.items.filter((c) => c.ready_for_fix).length)).catch(() => undefined);
+    Promise.all([  // clusters ready for a fix plus proposals waiting for review
+      api<{ items: { ready_for_fix: boolean }[] }>("/api/insights/clusters"), api<{ items: unknown[] }>("/api/insights/inbox"),
+    ]).then(([c, inbox]) => setReady(c.items.filter((x) => x.ready_for_fix).length + inbox.items.length)).catch(() => undefined);
   }, [tenant]);
   useEffect(() => { refreshBadges(); }, [refreshBadges]);
   useEvents(["console", "insights"], (e) => {  // UI-02
-    if (e.type.startsWith("escalation") || e.type.startsWith("cluster") || e.type.startsWith("proposal")) refreshBadges();
+    if (e.type.startsWith("escalation") || e.type.startsWith("cluster") || e.type.startsWith("proposal") || e.type.startsWith("learning")) refreshBadges();
   }, tenant);
   useEffect(() => { setMenuOpen(false); }, [path]);
   useEffect(() => {

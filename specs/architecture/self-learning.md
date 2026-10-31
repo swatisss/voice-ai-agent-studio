@@ -2,7 +2,7 @@
 type: Component Spec
 title: Self-learning
 description: A nightly job turns each agent's day of calls into typed config change proposals - knowledge, tools, skills, rules - proves each one offline against the current version, and queues it for a human; agents never change themselves.
-status: draft
+status: stable
 tags: [architecture, learning, evaluation, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
@@ -15,7 +15,7 @@ It extends [fleet learning](/architecture/fleet-learning.md) (analysis, clusteri
 
 # Nightly run
 
-The job worker starts `nightly_learning` once a day per tenant after `LEARNING_NIGHTLY_HOUR_UTC` (default 2, i.e. 02:00 UTC), dedupe `nightly_learning:{tenant}:{date}` ([/architecture/jobs-and-events.md](/architecture/jobs-and-events.md)); `POST /api/learning/run` starts one now (409 `run_in_progress` while one runs). Each run is a `learning_runs` row with a per-agent summary. For every published agent with `learning.nightly` on ([/data/agent-config.md](/data/agent-config.md)):
+The job worker starts `nightly_learning` once a day per tenant when `LEARNING_NIGHTLY_HOUR_UTC` (default 2, i.e. 02:00 UTC) passes while the service is running (a night missed while it was down is not caught up at start, so starting the service never launches the loop by itself), dedupe `nightly_learning:{tenant}:{date}` ([/architecture/jobs-and-events.md](/architecture/jobs-and-events.md)); `POST /api/learning/run` starts one now (409 `run_in_progress` while one runs). Each run is a `learning_runs` row with a per-agent summary. For every published agent with `learning.nightly` on ([/data/agent-config.md](/data/agent-config.md)):
 
 1. **Signals.** Real calls (not simulations, not seeded) that ended since the previous finished run (at most 7 days back) and carry an **external signal**:
 
@@ -33,7 +33,7 @@ The job worker starts `nightly_learning` once a day per tenant after `LEARNING_N
 3. **Readiness.** A cluster's `signal_count` counts escalations, thumbs-down calls and quality candidates in the last 28 days ([fleet learning](/architecture/fleet-learning.md) §3). Clusters snoozed until a later date are skipped.
 4. **Drafting.** Ready clusters without an open proposal, highest estimated weekly cost first, up to `learning.max_proposals_per_night` (default 3): `draft_fix` with origin `nightly`. Each proposal also gets up to 2 **derived scenarios** from its evidence calls (the caller goal, the member profile of a verified caller, expected `resolved`, persona `calm`).
 5. **Gate.** Each new proposal is evaluated (below). Whatever the result, it waits in the inbox; nothing is approved or published by the run.
-6. **Report.** The run stores per agent: calls reviewed, signals by kind, re-analysed calls, ready clusters, proposals drafted and how many passed the gate; publishes `learning.run.finished` (topic `insights`).
+6. **Report.** The run stores per agent: calls reviewed, signals by kind, re-analysed calls, ready clusters, proposals drafted, how many passed the gate and drafts that failed (with the error); publishes `learning.run.finished` (topic `insights`).
 
 # Proposal kinds
 
@@ -63,7 +63,7 @@ A derived scenario that **passes on the baseline** is dropped from the proposal 
 1. **Lift** — candidate passes on cluster + held-out cases exceed the baseline's by at least one, and the candidate passes at least half of the held-out cases when there are any.
 2. **No regression** — no test scenario that passed every repeat on the baseline passes fewer than `repeats − 1` on the candidate.
 3. **No new hard fails** — the candidate has no hard-failed scorecard on a case where the baseline had none.
-4. **No slowdown** — the candidate's p95 response time over all its simulated calls is at most 1.2 × the baseline's.
+4. **No slowdown** — the candidate's p95 response time over all its simulated calls is at most 1.2 × the baseline's, or at most 200 ms above it.
 
 The summary keeps each part with its numbers and a `gate: {passed, reasons}`; the reasons are shown to the reviewer ("2 test scenarios regressed: Claim paid 3/3 → 1/3").
 
@@ -85,10 +85,10 @@ The summary keeps each part with its numbers and a `gate: {passed, reasons}`; th
 
 # Acceptance
 
-- **SL-01** — Given the worker idle after 02:00 UTC, then one `nightly_learning` job per tenant runs per day; a second start the same day is deduplicated, and `POST /api/learning/run` while one runs returns 409 `run_in_progress`.
+- **SL-01** — Given the worker running when 02:00 UTC passes, then one `nightly_learning` job per tenant runs per day, and a service started after 02:00 starts none that day; a second start the same day is deduplicated, and `POST /api/learning/run` while one runs returns 409 `run_in_progress`.
 - **SL-02** — Given a resolved call with a no-answer knowledge search and analysis root cause `none`, when the nightly run reviews it, then it is re-analysed once with its signals, gets a root cause other than `none` and joins a cluster.
 - **SL-03** — Given a resolved call whose only failed check is an uncalibrated judge check, then the nightly run does not re-analyse it; given the same check calibrated, it does.
-- **SL-04** — Given four ready clusters for an agent with `max_proposals_per_night: 3`, then the run drafts three proposals with origin `nightly`, for the three highest estimated weekly costs.
+- **SL-04** — Given more ready clusters for an agent than its `max_proposals_per_night`, then the run drafts exactly that many proposals with origin `nightly`, for the clusters with the highest estimated weekly cost.
 - **SL-05** — Given a cluster whose proposal was rejected, then no nightly run drafts for it until its snooze date has passed.
 - **SL-06** — Given a `knowledge_edit` proposal for an attached doc, when approved, then the new version lists a new active doc instead of the old one and the old doc is archived.
 - **SL-07** — Given a `tool_attach` proposal, when approved, then the new version's snapshot contains that tool and no new tool row was created.

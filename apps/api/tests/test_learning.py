@@ -28,16 +28,24 @@ ARTICLE = {
 def responder(judge_fail_case: str | None = None, simulator_line: str | None = None):  # noqa: ANN201
     def r(role: str, messages: list[dict[str, Any]], tools: Any) -> Any:
         prompt = messages[-1]["content"] if messages else ""
-        if role == "realtime":
+        if role == "realtime":  # looks the gap up: only a candidate with the drafted article finds an answer
+            if not any(m.get("role") == "tool" for m in messages):
+                return FakeReply(tool_calls=[("search_knowledge", {"query": "newborn"})])
             return FakeReply(text="Okay, I can help with that.")
         if role == "simulator":
             if simulator_line:
                 return simulator_line
             return "[HANGUP]" if "Agent: Okay" in prompt else "Hi, I have a question."
         if role == "judge":
-            fail = judge_fail_case and judge_fail_case in prompt
-            outcome = "escalated" if "Expected outcome: escalated" in prompt else "resolved"
-            return {"outcome": outcome, "goal_met": not fail, "grounded": True, "policy_violations": [], "notes": "graded"}
+            answered = "Adding a newborn to your coverage" in prompt  # the drafted article: only the candidate arm can find it
+            fail = bool(judge_fail_case and judge_fail_case in prompt and answered)  # a candidate-only failure
+            expected_escalated = "Expected outcome: escalated" in prompt
+            outcome = "escalated" if expected_escalated and not fail else "resolved"
+            block = prompt.split("Checks:\n", 1)[1].split("\n\nReturn JSON", 1)[0] if "Checks:\n" in prompt else ""
+            keys = [line.split(":", 1)[0] for line in block.splitlines() if line and line != "(none)"]
+            checks = {k: {"verdict": "pass", "reason": "ok"} for k in keys}
+            checks["outcome.goal_met"] = {"verdict": "pass" if answered and not fail else "fail", "reason": "graded"}
+            return {"outcome": outcome, "goal_met": not fail, "grounded": True, "policy_violations": [], "notes": "graded", "checks": checks}
         if role == "analysis":
             return {"outcome": "resolved", "intent": "claim_status", "root_cause": "none", "gap_summary": "", "caller_goal": "Check a claim.",
                     "resolution_summary": "Explained claim.", "sentiment_start": "neutral", "sentiment_end": "positive"}
@@ -125,16 +133,19 @@ async def test_eval_then_approve(client, seeded, fake_llm):
     p = (await client.get(f"/api/proposals/{pid}", headers=H)).json()
     run = p["eval_run"]
     assert run["status"] == "done", run
-    cluster_cases = run["summary"]["cluster_cases"]
+    summary = run["summary"]
+    cluster_cases = summary["cluster_cases"]
     assert sum(1 for r in run["results"] if r["case_type"] == "cluster") == 2 * cluster_cases
-    assert sum(1 for r in run["results"] if r["case_type"] == "regression") == 8  # the enabled test scenarios (UC-04)
+    assert sum(1 for r in run["results"] if r["case_type"] == "held_out") == 2 * summary["held_out_cases"] > 0
+    assert sum(1 for r in run["results"] if r["case_type"] == "regression") == 8 * 3 * 2  # enabled scenarios × repeats × arms
+    assert {r["arm"] for r in run["results"]} == {"baseline", "candidate"} and summary["gate"]["passed"], summary["gate"]
     progress = []
     while not sub.queue.empty():
         ev = sub.queue.get_nowait()
         if ev["type"] == "eval.progress":
             progress.append(ev)
     bus.unsubscribe(sub)
-    assert len(progress) == 2 * cluster_cases + 8
+    assert len(progress) == len(run["results"])
     async with sessionmaker()() as s:  # EV-02: nothing changed before approval
         assert await s.scalar(select(func.count()).select_from(AgentVersion).where(AgentVersion.agent_id == agent_id)) == versions_before
         assert (await s.get(KnowledgeDoc, p["draft_doc_id"])).status == "draft"
@@ -152,12 +163,15 @@ async def test_eval_then_approve(client, seeded, fake_llm):
 
 
 async def test_regression_failure_blocks_approval(client, seeded, fake_llm):
-    """Covers: FL-06"""
-    pid = await _draft(client, fake_llm, judge_fail_case="Green Card")
+    """Covers: FL-06, SL-10"""
+    pid = await _draft(client, fake_llm, judge_fail_case="surgery claim C-31544")  # the appeal scenario fails on the candidate only
     await client.post(f"/api/proposals/{pid}/evaluate", headers=H)
     await jobs.drain()
     r = await client.post(f"/api/proposals/{pid}/approve", headers=H, json={"decided_by": "Reviewer"})
-    assert r.status_code == 409 and "regression" in r.json()["detail"]
+    assert r.status_code == 409 and r.json()["error"] == "evaluation_gate"
+    assert "Appeal denied claim 3/3 → 0/3" in r.json()["detail"]
+    forced = await client.post(f"/api/proposals/{pid}/approve", headers=H, json={"decided_by": "Reviewer", "force": True, "note": "Known flake"})
+    assert forced.status_code == 200
 
 
 async def test_simulation_turn_cap(client, seeded, fake_llm):

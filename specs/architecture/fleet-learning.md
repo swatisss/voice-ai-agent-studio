@@ -2,7 +2,7 @@
 type: Component Spec
 title: Fleet learning
 description: Post-call analysis, gap clustering, impact estimation, fix drafting from human resolutions, and approval into a new agent version.
-status: draft
+status: stable
 tags: [architecture, learning, clustering]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -45,6 +45,7 @@ Seeded history creates clusters directly from its `cluster_key` (deterministic d
 * `dislike_count` = member calls with a thumbs down in the last 28 days; `signal_count` = distinct member calls in that window that were escalated, thumbs-down **or** quality candidates (a call that is several counts once).
 * A cluster is **ready for a fix** when `fixable` and `signal_count` ≥ `FL_MIN_CLUSTER_SIZE` (default 5), no open proposal exists and it is not snoozed (`snoozed_until` in the future, set when a proposal is rejected; [/architecture/self-learning.md](/architecture/self-learning.md)). "Watching (n of 5)" shows `signal_count`.
 * The dashboard's escalation root-cause chart and `weekly_escalations` still count escalations only; thumbs-down resolved calls appear in neither.
+* A fixable cluster above the threshold that is snoozed shows **"Snoozed after a rejection"** with its date.
 * Non-fixable clusters show the label **"Correct escalation — no fix"** (policy, safety, caller-requested) or **"Investigate"** (tool_error, asr_error, other).
 
 # 4. Fix drafting (`draft_fix` job, triggered by the Insights UI or the nightly run)

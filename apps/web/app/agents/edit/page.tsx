@@ -335,6 +335,7 @@ function MemoryTab({ draft, update }: TabProps) {  // UI-42
 }
 
 /** Defaults for drafts saved before evaluation settings existed (/data/agent-config.md, Evaluation settings). */
+const LEARNING_DEFAULTS = { nightly: true, max_proposals_per_night: 3, regression_repeats: 3, snooze_days: 7 };
 const EVAL_DEFAULTS = { judge_sample_pct: 100, latency_p95_ms: 2000, test_on_publish: true, custom_checks: [] as { question: string; group: string; hard_gate: boolean }[] };
 
 function EvaluationTab({ id, draft, update, savedAt }: TabProps & { id: string; savedAt: string }) {  // UI-49
@@ -405,7 +406,27 @@ function EvaluationTab({ id, draft, update, savedAt }: TabProps & { id: string; 
         </label>
         <p className="mt-1 text-sm text-muted">Every new version gets a test run, so each version has a baseline to compare with.</p>
       </Card>
+      <LearningSettings draft={draft} update={update} />
     </div>
+  );
+}
+
+function LearningSettings({ draft, update }: TabProps) {
+  const l: typeof LEARNING_DEFAULTS = { ...LEARNING_DEFAULTS, ...(draft.learning ?? {}) };
+  const set = (patch: Partial<typeof LEARNING_DEFAULTS>) => update(["learning"], { ...l, ...patch });
+  return (
+    <Card title="Learning">
+      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+        <input type="checkbox" role="switch" className="h-4 w-4 accent-[var(--accent)]" checked={l.nightly} onChange={(e) => set({ nightly: e.target.checked })} />
+        Learn from calls overnight
+      </label>
+      <p className="mt-1 text-sm text-muted">Proposals always wait for your review; the agent never changes itself.</p>
+      <div className="mt-4 grid max-w-2xl gap-4 md:grid-cols-3">
+        <Field label="Proposals per night" hint="0–10"><Input type="number" min={0} max={10} value={l.max_proposals_per_night} onChange={(e) => set({ max_proposals_per_night: Number(e.target.value) })} /></Field>
+        <Field label="Test repeats when checking a proposal" hint="1–5"><Input type="number" min={1} max={5} value={l.regression_repeats} onChange={(e) => set({ regression_repeats: Number(e.target.value) })} /></Field>
+        <Field label="Wait after a rejection (days)" hint="1–90"><Input type="number" min={1} max={90} value={l.snooze_days} onChange={(e) => set({ snooze_days: Number(e.target.value) })} /></Field>
+      </div>
+    </Card>
   );
 }
 

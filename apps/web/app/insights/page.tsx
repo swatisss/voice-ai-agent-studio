@@ -1,10 +1,11 @@
-// Spec: /ui/insights.md (Cluster list)
+// Spec: /ui/insights.md (Learning inbox, Cluster list)
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ClusterLabel } from "@/components/cluster-label";
+import { LearningInbox } from "@/components/learning";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, EmptyState, Select, Spinner, Stat, useToast } from "@/components/ui";
 import { api, ApiError, useApi, useEvents } from "@/lib/api";
@@ -45,6 +46,7 @@ export default function InsightsPage() {
         <h1 className="text-xl font-semibold">Insights</h1>
         <Select className="ml-auto w-60" value={agent} onChange={(e) => setAgent(e.target.value)}><option value="">All agents</option>{agents?.items.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
       </div>
+      <LearningInbox tenant={tenant} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Open clusters" value={items.filter((c) => c.status === "open" || c.status === "fix_proposed").length} />
         <Stat label="Ready for a fix" value={ready.length} />

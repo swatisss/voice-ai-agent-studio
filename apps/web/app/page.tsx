@@ -1,10 +1,11 @@
-// Spec: /ui/dashboard.md
+// Spec: /ui/dashboard.md, /architecture/self-learning.md
 "use client";
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ClusterLabel } from "@/components/cluster-label";
+import { LearningCard } from "@/components/learning";
 import { useTenant } from "@/components/shell";
 import { Badge, Card, EmptyState, Spinner, Stat } from "@/components/ui";
 import { useApi, useEvents } from "@/lib/api";
@@ -22,7 +23,12 @@ export default function Dashboard() {
 
   if (!data) return <Spinner label="Loading dashboard…" />;
   const t = data.totals;
-  if (!t.calls) return <EmptyState title="No calls yet">Publish an agent and run a test call to see metrics here.</EmptyState>;
+  if (!t.calls) return (
+    <div className="space-y-5">
+      <EmptyState title="No calls yet">Publish an agent and run a test call to see metrics here.</EmptyState>
+      <LearningCard tenant={tenant} />
+    </div>
+  );
   const weekly = data.weekly.map((w: any) => ({ week: w.week_start.slice(5), containment: w.containment_rate == null ? null : Math.round(w.containment_rate * 100), calls: w.calls }));
   const causes = data.by_root_cause.map((c: any) => ({ cause: ROOT_CAUSE[c.root_cause] ?? c.root_cause, count: c.count }));
 
@@ -89,6 +95,7 @@ export default function Dashboard() {
           </ul>
         </Card>
       </div>
+      <LearningCard tenant={tenant} />  {/* UI-55 */}
     </div>
   );
 }

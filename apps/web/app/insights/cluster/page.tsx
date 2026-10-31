@@ -1,7 +1,6 @@
-// Spec: /ui/insights.md (Cluster detail)
+// Spec: /ui/insights.md (Cluster detail), /architecture/self-learning.md (Gate, Review)
 "use client";
 
-import { CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -10,25 +9,31 @@ import { FeedbackBadge } from "@/components/feedback";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, Card, Field, Input, JsonView, Spinner, Textarea, useToast } from "@/components/ui";
 import { api, ApiError, useApi, useEvents } from "@/lib/api";
-import { label, money, ROOT_CAUSE, when } from "@/lib/format";
+import { label, money, ROOT_CAUSE, secs, when } from "@/lib/format";
 
 export default function Page() {
   return <Suspense fallback={<Spinner />}><ClusterDetail /></Suspense>;
 }
 
-function Markdown({ text }: { text: string }) {
+function Markdown({ text, mark }: { text: string; mark?: (line: string) => boolean }) {
   return (
     <div className="prose-md text-sm">
       {text.split("\n").map((line, i) => {
-        if (line.startsWith("## ")) return <h2 key={i}>{line.slice(3)}</h2>;
-        if (line.startsWith("# ")) return <h1 key={i}>{line.slice(2)}</h1>;
-        if (/^[-*] /.test(line)) return <ul key={i}><li>{line.slice(2)}</li></ul>;
+        const hl = mark?.(line) ? "rounded bg-ok-soft px-1" : "";
+        if (line.startsWith("## ")) return <h2 key={i} className={hl}>{line.slice(3)}</h2>;
+        if (line.startsWith("# ")) return <h1 key={i} className={hl}>{line.slice(2)}</h1>;
+        if (/^[-*] /.test(line)) return <ul key={i}><li className={hl}>{line.slice(2)}</li></ul>;
         if (!line.trim()) return <div key={i} className="h-2" />;
-        return <p key={i}>{line}</p>;
+        return <p key={i} className={hl}>{line}</p>;
       })}
     </div>
   );
 }
+
+const CASE_TYPE: Record<string, string> = { cluster: "Cluster", held_out: "Held out", derived: "Derived", regression: "Test scenario" };
+const ARTICLE_KINDS = ["knowledge_article", "knowledge_edit"];
+
+type Result = { case_key: string; case_type: string; arm: string; passed: boolean; repeat: number; failures: string[]; call_id: string | null; scenario_name: string | null };
 
 function ClusterDetail() {
   const id = useSearchParams().get("id") ?? "";
@@ -40,25 +45,23 @@ function ClusterDetail() {
   const [editing, setEditing] = useState(false);
   const [draftText, setDraftText] = useState("");
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [live, setLive] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [forceNote, setForceNote] = useState<string | null>(null);
   const [approved, setApproved] = useState<{ version: number } | null>(null);
+  const [opened, setOpened] = useState<Result[] | null>(null);
 
   const loadProposal = useCallback(async () => {
     if (!proposalId) return setP(null);
     const d = await api(`/api/proposals/${proposalId}`);
     setP(d);
-    if (d.kind === "knowledge_article") setDraftText(d.payload.article?.content_markdown ?? "");
+    if (ARTICLE_KINDS.includes(d.kind)) setDraftText(d.payload.article?.content_markdown ?? "");
     else setDraftText(JSON.stringify(d.payload, null, 2));
   }, [proposalId]);
   useEffect(() => { loadProposal(); }, [loadProposal]);
 
   useEvents(["insights"], (e) => {
-    if (e.type === "eval.progress" && e.data.proposal_id === proposalId) {  // UI-16
-      setProgress({ done: e.data.done, total: e.data.total });
-      setLive((m) => ({ ...m, [`${e.data.last.case_key}|${e.data.last.arm}`]: e.data.last.passed }));
-    }
+    if (e.type === "eval.progress" && e.data.proposal_id === proposalId) setProgress({ done: e.data.done, total: e.data.total });  // UI-16
     if (e.type === "proposal.updated" && (e.data.cluster_id === id || e.data.id === proposalId)) {  // UI-15
       setBusy(null);
       reload();
@@ -73,18 +76,20 @@ function ClusterDetail() {
     try { await fn(); } catch (e) { setBusy(null); toast((e as ApiError).detail, "bad"); }
   }
   const draftFix = () => act("draft", () => api(`/api/insights/clusters/${id}/draft-fix`, { method: "POST" }));
-  const evaluate = () => act("eval", async () => { setLive({}); setProgress({ done: 0, total: 1 }); await api(`/api/proposals/${proposalId}/evaluate`, { method: "POST" }); });
+  const evaluate = () => act("eval", async () => { setProgress({ done: 0, total: 1 }); await api(`/api/proposals/${proposalId}/evaluate`, { method: "POST" }); });
   async function saveEdit() {
-    const payload = p.kind === "knowledge_article"
-      ? { article: { title: p.payload.article?.title ?? p.title, content_markdown: draftText } }
+    const payload = ARTICLE_KINDS.includes(p.kind)
+      ? { ...p.payload, article: { title: p.payload.article?.title ?? p.title, content_markdown: draftText } }
       : JSON.parse(draftText);
     await act("save", async () => { await api(`/api/proposals/${proposalId}`, { method: "PUT", json: { payload } }); setEditing(false); setBusy(null); loadProposal(); });
   }
-  async function approve() {
+  async function approve(force = false) {
+    if (force && !forceNote?.trim()) return toast("Say why you publish although the check failed", "warn");
     setBusy("approve");
     try {
-      const r = await api(`/api/proposals/${proposalId}/approve`, { method: "POST", json: { decided_by: "Reviewer" } });
+      const r = await api(`/api/proposals/${proposalId}/approve`, { method: "POST", json: { decided_by: "Reviewer", ...(force ? { force: true, note: forceNote } : {}) } });
       setApproved({ version: r.version.version });
+      setForceNote(null);
       reload(); loadProposal();
     } catch (e) { toast((e as ApiError).detail, "bad"); } finally { setBusy(null); }
   }
@@ -95,18 +100,24 @@ function ClusterDetail() {
 
   const run = p?.eval_run;
   const summary = run?.status === "done" ? run.summary : null;
-  const regressFail = summary ? summary.regression_cases - summary.regression_pass : 0;
-  const worse = summary ? summary.candidate_pass < summary.baseline_pass : false;
-  const approveBlock = !p ? "" : p.status !== "ready" ? "Run an evaluation first" : regressFail ? `${regressFail} regression${regressFail > 1 ? "s" : ""} failed` : worse ? "Candidate scored below baseline" : "";  // UI-17
-  const cases: { key: string; type: string }[] = [];
-  for (const r of run?.results ?? []) if (!cases.some((x) => x.key === r.case_key)) cases.push({ key: r.case_key, type: r.case_type });
-  for (const k of Object.keys(live)) { const key = k.split("|")[0]; if (!cases.some((x) => x.key === key)) cases.push({ key, type: key.startsWith("cluster-") ? "cluster" : "regression" }); }
+  const gate = summary?.gate as { passed: boolean; reasons: string[] } | undefined;
+  const notReady = !p ? "" : p.status !== "ready" ? "Run an evaluation first" : "";
+  const gateFailed = !!summary && gate && !gate.passed;
+  const results: Result[] = run?.results ?? [];
+  const caseKeys: { key: string; type: string; name: string }[] = [];
+  for (const r of results) if (!caseKeys.some((x) => x.key === r.case_key)) caseKeys.push({ key: r.case_key, type: r.case_type, name: r.scenario_name ?? r.case_key });
   const cell = (key: string, arm: string) => {
-    const r = run?.results?.find((x: any) => x.case_key === key && x.arm === arm);
-    const v = r ? r.passed : live[`${key}|${arm}`];
-    if (v === undefined) return <span className="text-muted">{arm === "baseline" && key && !key.startsWith("cluster-") ? "—" : "…"}</span>;
-    return <span title={r?.judge?.notes ?? ""}>{v ? <CheckCircle2 size={16} className="inline text-ok" /> : <XCircle size={16} className="inline text-bad" />}</span>;
+    const rows = results.filter((x) => x.case_key === key && x.arm === arm);
+    if (!rows.length) return <span className="text-muted">…</span>;
+    const n = rows.filter((x) => x.passed).length;
+    const text = rows.length === 1 ? (n ? "✓" : "✕") : `${n}/${rows.length}`;
+    return (
+      <button className={n === rows.length ? "text-ok" : n === 0 ? "text-bad" : "text-warn"} onClick={() => setOpened(rows)}
+        title={rows.flatMap((x) => x.failures).join("\n") || "Passed"} aria-label={`${key} ${arm}: ${text}`}>{text}</button>
+    );
   };
+  const original = p?.original_doc?.content as string | undefined;
+  const originalLines = new Set((original ?? "").split("\n").map((l) => l.trim()));
 
   return (
     <div className="space-y-4">
@@ -125,6 +136,7 @@ function ClusterDetail() {
         <span>{c.escalations_28d} escalations in 28 days</span>
         {c.dislike_count > 0 && <span className="font-medium">{c.dislike_count} not helpful</span>}
         <span>{c.weekly_escalations}/week</span><span className="font-medium">{money(c.est_weekly_cost_usd)}/week</span>
+        {c.snoozed_until && new Date(c.snoozed_until) > new Date() && <span className="text-muted">Snoozed until {when(c.snoozed_until)}</span>}
       </div>
 
       {approved && (
@@ -135,7 +147,9 @@ function ClusterDetail() {
       )}
 
       {p && (
-        <Card title={<span className="flex items-center gap-2">Proposed fix <Badge tone="info">{label(p.kind)}</Badge><Badge tone={p.status === "approved" ? "ok" : p.status === "rejected" ? "bad" : "warn"}>{label(p.status)}</Badge></span>}
+        <Card title={<span className="flex flex-wrap items-center gap-2">Proposed fix <Badge tone="info">{label(p.kind)}</Badge>
+          <Badge tone={p.origin === "nightly" ? "accent" : "neutral"}>{p.origin === "nightly" ? "Nightly" : "Manual"}</Badge>
+          <Badge tone={p.status === "approved" ? "ok" : p.status === "rejected" ? "bad" : "warn"}>{label(p.status)}</Badge></span>}
           actions={p.status === "draft" || p.status === "ready" ? <Button variant="ghost" onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit"}</Button> : null}>
           <div className="space-y-3">
             <div className="font-medium">{p.title}</div>
@@ -145,10 +159,27 @@ function ClusterDetail() {
                 <Textarea className="mono min-h-64 text-xs" value={draftText} onChange={(e) => setDraftText(e.target.value)} />
                 <Button variant="primary" loading={busy === "save"} onClick={saveEdit}>Save (requires re-evaluation)</Button>
               </div>
-            ) : p.kind === "knowledge_article" ? (
+            ) : p.kind === "knowledge_edit" && original != null ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-line p-3"><div className="mb-1 text-xs font-medium text-muted">Current — {p.original_doc.title}</div><Markdown text={original} /></div>
+                <div className="rounded-lg border border-ok p-3"><div className="mb-1 text-xs font-medium text-ok">Revised (changes highlighted)</div>
+                  <Markdown text={p.payload.article?.content_markdown ?? ""} mark={(l) => !!l.trim() && !originalLines.has(l.trim())} /></div>
+              </div>
+            ) : ARTICLE_KINDS.includes(p.kind) ? (
               <div className="rounded-lg border border-line p-3"><Markdown text={p.payload.article?.content_markdown ?? ""} /></div>
+            ) : p.kind === "tool_attach" ? (
+              <div className="rounded-lg border border-line p-3 text-sm">
+                <div>Attach the existing tool <span className="mono font-medium">{p.payload.tool_name}</span></div>
+                {p.payload.tool && <div className="mt-1 text-muted">{p.payload.tool.description} <span className="mono">({p.payload.tool.method} {p.payload.tool.url})</span></div>}
+              </div>
             ) : (
-              <JsonView value={p.payload} collapsed={false} label="Payload" />
+              <JsonView value={Object.fromEntries(Object.entries(p.payload).filter(([k]) => !["scenarios", "evidence_call_ids"].includes(k)))} collapsed={false} label="Payload" />
+            )}
+            {(p.payload.scenarios ?? []).length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-muted">Derived test scenarios (added to the test suite on approval)</div>
+                <ul className="mt-1 list-disc pl-5 text-sm">{p.payload.scenarios.map((s: any) => <li key={s.name}>{s.caller_goal}</li>)}</ul>
+              </div>
             )}
           </div>
         </Card>
@@ -163,24 +194,61 @@ function ClusterDetail() {
             </div>
           )}
           {summary && (
-            <div className="mb-3 rounded-lg bg-accent-soft px-3 py-2 text-sm">
-              Baseline {summary.baseline_pass}/{summary.cluster_cases} → Candidate <b>{summary.candidate_pass}/{summary.cluster_cases}</b> ({summary.lift_pct >= 0 ? "+" : ""}{summary.lift_pct} pts) · Regressions {summary.regression_pass}/{summary.regression_cases} passed · {summary.duration_s}s
+            <div className="mb-3 space-y-2">
+              <div className="rounded-lg bg-accent-soft px-3 py-2 text-sm">
+                Baseline {summary.baseline_pass}/{summary.cluster_cases} → Candidate <b>{summary.candidate_pass}/{summary.cluster_cases}</b> ({summary.lift_pct >= 0 ? "+" : ""}{summary.lift_pct} pts)
+                {summary.held_out_cases > 0 && <> · Held out {summary.held_out_candidate_pass}/{summary.held_out_cases}</>}
+                {" "}· {summary.regression_cases - summary.regression_pass ? `${summary.regression_cases - summary.regression_pass} regressed` : "No regressions"}
+                {summary.p95_ms && <> · p95 {secs(summary.p95_ms.baseline)} → {secs(summary.p95_ms.candidate)}</>} · {summary.duration_s}s
+              </div>
+              {gate && (
+                <div className={gate.passed ? "rounded-lg bg-ok-soft px-3 py-2 text-sm text-ok" : "rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad"} role="status">
+                  <b>{gate.passed ? "Check passed" : "Check failed"}</b>
+                  {!gate.passed && <ul className="mt-1 list-disc pl-5">{gate.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+                </div>
+              )}
             </div>
           )}
           {run?.status === "failed" && <div className="mb-3 text-sm text-bad">Evaluation failed: {run.error}</div>}
-          {cases.length > 0 ? (
+          {caseKeys.length > 0 ? (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs text-muted"><tr><th className="pb-2">Case</th><th>Type</th><th className="text-center">Baseline</th><th className="text-center">Candidate</th></tr></thead>
-              <tbody>{cases.map((k) => (
-                <tr key={k.key} className="border-t border-line"><td className="py-1.5">{k.key}</td><td>{label(k.type)}</td><td className="text-center">{k.type === "cluster" ? cell(k.key, "baseline") : <span className="text-muted">—</span>}</td><td className="text-center">{cell(k.key, "candidate")}</td></tr>
+              <thead className="text-left text-xs text-muted"><tr><th className="pb-2">Case</th><th>Type</th><th className="text-center">Current version</th><th className="text-center">With the fix</th></tr></thead>
+              <tbody>{caseKeys.map((k) => (
+                <tr key={k.key} className="border-t border-line"><td className="py-1.5">{k.name}</td><td>{CASE_TYPE[k.type] ?? label(k.type)}</td>
+                  <td className="text-center">{cell(k.key, "baseline")}</td><td className="text-center">{cell(k.key, "candidate")}</td></tr>
               ))}</tbody>
             </table>
-          ) : <div className="text-sm text-muted">Simulated callers replay this cluster's calls against the current version and the fix, plus regression scenarios.</div>}
+          ) : <div className="text-sm text-muted">Simulated callers replay this cluster's calls, calls held back from drafting, derived scenarios and the agent's test suite against the current version and the fix.</div>}
+          {opened && (
+            <div className="mt-3 rounded-lg border border-line p-3 text-sm">
+              <div className="flex items-center"><b>{opened[0].scenario_name ?? opened[0].case_key} · {opened[0].arm === "baseline" ? "current version" : "with the fix"}</b>
+                <button className="ml-auto text-xs text-muted" onClick={() => setOpened(null)}>Close</button></div>
+              <ul className="mt-1 space-y-1">
+                {opened.map((r) => (
+                  <li key={r.repeat}>Run {r.repeat}: {r.passed ? <span className="text-ok">passed</span> : <span className="text-bad">{r.failures.join("; ") || "failed"}</span>}
+                    {r.call_id && <Link className="ml-2 text-accent" href={`/calls/detail/?id=${r.call_id}`}>Call</Link>}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {(p.status === "ready" || p.status === "draft") && (
-            <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-line pt-3">
-              <Button variant="primary" disabled={!!approveBlock} loading={busy === "approve"} onClick={approve}>Approve & publish</Button>
-              {approveBlock && <span className="text-xs text-muted">{approveBlock}</span>}
-              <div className="ml-auto flex items-end gap-2"><Field label="Reject note"><Input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} /></Field><Button variant="danger" onClick={reject}>Reject</Button></div>
+            <div className="mt-4 space-y-3 border-t border-line pt-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <Button variant="primary" disabled={!!notReady || gateFailed} loading={busy === "approve" && forceNote === null} onClick={() => approve(false)}>Approve & publish</Button>
+                {notReady && <span className="text-xs text-muted">{notReady}</span>}
+                {gateFailed && forceNote === null && <button className="text-xs text-accent underline" onClick={() => setForceNote("")}>Publish anyway</button>}
+                <div className="ml-auto flex items-end gap-2">
+                  <Field label="Reject note" hint="The next nights skip this cluster for a while"><Input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} /></Field>
+                  <Button variant="danger" onClick={reject}>Reject</Button>
+                </div>
+              </div>
+              {forceNote !== null && (
+                <div className="flex flex-wrap items-end gap-2 rounded-lg bg-warn-soft p-3">
+                  <Field label="Why publish although the check failed?"><Input className="w-96" value={forceNote} onChange={(e) => setForceNote(e.target.value)} /></Field>
+                  <Button variant="danger" loading={busy === "approve"} onClick={() => approve(true)}>Publish anyway</Button>
+                  <Button variant="ghost" onClick={() => setForceNote(null)}>Cancel</Button>
+                </div>
+              )}
             </div>
           )}
         </Card>

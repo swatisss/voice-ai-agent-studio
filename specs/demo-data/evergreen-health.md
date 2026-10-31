@@ -2,7 +2,7 @@
 type: Seed Data
 title: Evergreen Health tenants, agents, tools and skills
 description: The two demo business units, the persona library, the five agents of Customer Support & Channels with their tools, skills and knowledge, the use-case catalog, and the regression scenarios.
-status: draft
+status: stable
 tags: [demo-data, seed, healthcare]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---

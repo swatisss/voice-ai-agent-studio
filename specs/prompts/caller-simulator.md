@@ -10,7 +10,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Variables
 
-`caller_goal`, `caller_profile` (name, member ID, date of birth, extra facts like claim numbers — or "not a member / no details"), `transcript` (so far).
+`caller_goal`, `caller_profile` (name, member ID, date of birth, extra facts like claim numbers — or "not a member / no details"), `caller_style` (one line from the persona table of [/architecture/test-suites.md](/architecture/test-suites.md); cluster cases of proposal runs use the `calm` line), `transcript` (so far).
 
 # Output
 
@@ -23,10 +23,11 @@ You are role-playing a caller phoning a health insurer's automated assistant. St
 
 Your goal: {{caller_goal}}
 Your details (share only when asked): {{caller_profile}}
+How you behave: {{caller_style}}
 
 Conversation so far:
 {{transcript}}
 
-Write only your next line as the caller: one or two short, natural spoken sentences. Answer the assistant's questions using your details. Do not volunteer details before you are asked. Do not help the assistant or suggest answers.
+Write only your next line as the caller: one or two short, natural spoken sentences. Answer the assistant's questions using your details, except where how you behave says otherwise. Do not volunteer details before you are asked. Do not help the assistant or suggest answers.
 If your goal has been fully answered, or the assistant has transferred you to a person, or the assistant clearly cannot help after you asked twice, reply with exactly [HANGUP].
 ```

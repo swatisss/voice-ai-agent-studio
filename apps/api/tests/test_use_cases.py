@@ -95,8 +95,16 @@ async def test_customer_care_regression_scenarios(client, seeded):
     assert {r.name: r.expected for r in rows} == {
         "Policy status": "resolved", "Claim paid": "resolved", "Green Card for Spain": "resolved",
         "Dental coverage": "resolved", "Policy schedule by email": "resolved", "Appeal denied claim": "escalated",
+        "Wrong date of birth first": "resolved", "Remembers email preference": "resolved",
     }
-    assert sum(r.expected == "resolved" for r in rows) == 5 and others == 4  # only the Insurance Claims Agent has scenarios besides Customer Care (CLM-03)
+    assert sum(r.expected == "resolved" for r in rows) == 7 and others == 4  # only the Insurance Claims Agent has scenarios besides Customer Care (CLM-03)
+    by = {r.name: r for r in rows}
+    assert all(r.enabled for r in rows)
+    assert {r.name: r.persona for r in rows if r.persona != "calm"} == {
+        "Dental coverage": "confused", "Policy schedule by email": "impatient", "Wrong date of birth first": "adversarial"}
+    assert by["Claim paid"].required_tools == [{"name": "get_claim_status", "args": {"claim_id": "C-20931"}}]
+    assert by["Policy schedule by email"].expected_results == [{"tool": "request_document", "field": "status", "equals": "queued"}]
+    assert by["Remembers email preference"].memory == ["Prefers documents by email"]
     green = next(r for r in rows if r.name == "Green Card for Spain")
     assert green.caller_profile["member_id"] == "337120" and green.caller_profile["destination"] == "Spain"
 

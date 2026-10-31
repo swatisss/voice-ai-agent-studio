@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent runtime
 description: The shared brain used by voice calls, text chat and simulations - turn loop, prompt assembly, built-in tools, call state, safety screen and escalation triggers.
-status: draft
+status: stable
 tags: [architecture, runtime]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

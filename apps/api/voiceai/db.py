@@ -1,6 +1,6 @@
 """Database engine, sessions and portable column types.
 
-Spec: /data/data-model.md, /decisions/adr-0004-storage-and-vectors.md
+Spec: /data/data-model.md (DM-01), /decisions/adr-0004-storage-and-vectors.md
 """
 from __future__ import annotations
 
@@ -101,3 +101,98 @@ async def init_db(drop: bool = False) -> None:
         if drop:
             await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+        missing = await conn.run_sync(_add_missing_columns)
+        relax = await conn.run_sync(_not_null_to_relax)
+        if relax and conn.dialect.name != "sqlite":
+            for table, column in relax:
+                await conn.exec_driver_sql(f'ALTER TABLE "{table}" ALTER COLUMN "{column}" DROP NOT NULL')
+    if relax and engine().dialect.name == "sqlite":
+        await _sqlite_rebuild(sorted({table for table, _ in relax}))
+    if missing or relax:
+        import logging
+
+        logging.getLogger("voiceai.db").info("schema upgraded: added %s, relaxed %s", missing, relax)
+
+
+def _column_default(col) -> object:  # noqa: ANN001
+    """The Python default of a model column as a SQL literal value (callables such as `list` are called)."""
+    if col.default is None:
+        return None
+    arg = col.default.arg
+    if callable(arg):
+        try:
+            arg = arg(None)
+        except TypeError:
+            arg = arg()
+    return arg if isinstance(arg, str | int | float | bool | list | dict) else None  # timestamps stay NULL
+
+
+def _add_missing_columns(sync_conn) -> list[str]:  # noqa: ANN001
+    """DM-01: columns added to an existing table by a later CP are added on start, filled with the model default."""
+    import json
+
+    from sqlalchemy import inspect
+
+    insp = inspect(sync_conn)
+    existing = set(insp.get_table_names())
+    added = []
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing:
+            continue
+        have = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in have:
+                continue
+            ddl = col.type.compile(dialect=sync_conn.dialect)
+            value = _column_default(col)
+            sql = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl}'
+            if value is not None:
+                literal = json.dumps(value) if isinstance(value, list | dict) else (int(value) if isinstance(value, bool) else value)
+                sql += " DEFAULT " + (f"'{literal}'" if isinstance(literal, str) else str(literal))
+            sync_conn.exec_driver_sql(sql)
+            added.append(f"{table.name}.{col.name}")
+    return added
+
+
+def _not_null_to_relax(sync_conn) -> list[tuple[str, str]]:  # noqa: ANN001
+    """Columns a later CP made nullable that an existing database still declares NOT NULL."""
+    from sqlalchemy import inspect
+
+    insp = inspect(sync_conn)
+    existing = set(insp.get_table_names())
+    out = []
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing:
+            continue
+        db_cols = {c["name"]: c for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.nullable and not col.primary_key and col.name in db_cols and not db_cols[col.name]["nullable"]:
+                out.append((table.name, col.name))
+    return out
+
+
+async def _sqlite_rebuild(tables: list[str]) -> None:
+    """SQLite cannot drop NOT NULL: recreate the table from the model and copy its rows, with foreign keys off so
+    rows that reference it (e.g. eval_results -> eval_runs) are neither cascaded nor re-pointed."""
+    async with engine().connect() as raw:
+        conn = await raw.execution_options(isolation_level="AUTOCOMMIT")
+        await conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        await conn.exec_driver_sql("PRAGMA legacy_alter_table=ON")
+        try:
+            for name in tables:
+                table = Base.metadata.tables[name]
+                old = f"{name}__old"
+                await conn.exec_driver_sql("BEGIN")
+                await conn.exec_driver_sql(f'ALTER TABLE "{name}" RENAME TO "{old}"')
+                rows = (await conn.exec_driver_sql(
+                    f"SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='{old}' AND sql IS NOT NULL")).all()
+                for (index,) in rows:
+                    await conn.exec_driver_sql(f'DROP INDEX "{index}"')
+                await conn.run_sync(lambda c: table.create(c))
+                cols = ", ".join(f'"{c.name}"' for c in table.columns)
+                await conn.exec_driver_sql(f'INSERT INTO "{name}" ({cols}) SELECT {cols} FROM "{old}"')
+                await conn.exec_driver_sql(f'DROP TABLE "{old}"')
+                await conn.exec_driver_sql("COMMIT")
+        finally:
+            await conn.exec_driver_sql("PRAGMA legacy_alter_table=OFF")
+            await conn.exec_driver_sql("PRAGMA foreign_keys=ON")

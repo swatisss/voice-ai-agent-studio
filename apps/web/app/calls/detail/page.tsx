@@ -45,6 +45,7 @@ function CallDetail() {
         <h1 className="text-xl font-semibold">Call <span className="mono text-base">{c.id.slice(0, 8)}</span></h1>
         {c.outcome ? <Badge tone={outcomeTone(c.outcome)}>{label(c.outcome)}</Badge> : <Badge>{label(c.status)}</Badge>}
         <Badge>{label(c.channel)}</Badge>
+        {c.channel === "simulation" && <Badge tone="info">Simulated</Badge>}
         {c.transport === "phone" && <Badge tone="info">Phone</Badge>}
         <Badge tone={MODE_TONE[c.direction] ?? "neutral"}>{MODE_LABEL[c.direction] ?? "Inbound"}</Badge>
         {c.agent_version && <Badge tone="ok">v{c.agent_version}</Badge>}
@@ -84,10 +85,8 @@ function CallDetail() {
               <div className="mt-2 text-xs text-muted">{when(c.feedback.at)}</div>
             </Card>
           )}
-          {c.channel !== "simulation" && (
-            <ScorecardCard card={c.scorecard} events={c.events} onEvidence={showTurn} onChange={reload}
-              onRescore={async () => { await api(`/api/calls/${id}/rescore`, { method: "POST" }); }} />
-          )}
+          <ScorecardCard card={c.scorecard} events={c.events} onEvidence={showTurn} onChange={reload}
+            onRescore={c.channel === "simulation" ? undefined : async () => { await api(`/api/calls/${id}/rescore`, { method: "POST" }); }} />
           {a && (
             <Card title="Analysis">
               <dl className="space-y-1.5 text-sm">

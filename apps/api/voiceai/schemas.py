@@ -194,6 +194,7 @@ class EvaluationConfig(BaseModel):
 
     judge_sample_pct: int = Field(default=100, ge=0, le=100)
     latency_p95_ms: int = Field(default=2000, ge=300, le=10000)
+    test_on_publish: bool = True  # publishing starts a test-suite run (/architecture/test-suites.md)
     custom_checks: list[CustomCheck] = Field(default_factory=list, max_length=10)
 
     @field_validator("custom_checks")
@@ -203,6 +204,42 @@ class EvaluationConfig(BaseModel):
         if len(seen) != len(set(seen)):
             raise ValueError("custom check questions must be unique")
         return v
+
+
+class RequiredTool(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    args: dict[str, str | int | float | bool] = Field(default_factory=dict)
+
+
+class ExpectedResult(BaseModel):
+    tool: str = Field(min_length=1, max_length=64)
+    field: str = Field(min_length=1, max_length=120)
+    equals: str | int | float | bool
+
+
+class ScenarioIn(BaseModel):
+    """A test scenario (/architecture/test-suites.md, Scenario)."""
+
+    name: str = Field(min_length=1, max_length=120)
+    caller_goal: str = Field(min_length=10, max_length=600)
+    caller_profile: dict[str, Any] = Field(default_factory=dict)
+    persona: Literal["calm", "confused", "impatient", "adversarial"] = "calm"
+    expected: Literal["resolved", "escalated"] = "resolved"
+    required_tools: list[RequiredTool] = Field(default_factory=list, max_length=10)
+    forbidden_tools: list[str] = Field(default_factory=list, max_length=10)
+    expected_results: list[ExpectedResult] = Field(default_factory=list, max_length=10)
+    memory: list[str] = Field(default_factory=list, max_length=5)
+    enabled: bool = True
+
+    @field_validator("memory")
+    @classmethod
+    def _short_facts(cls, v: list[str]) -> list[str]:
+        if any(len(f) > 200 or not f.strip() for f in v):
+            raise ValueError("memory facts must be 1-200 characters")
+        return [f.strip() for f in v]
+
+    def tool_names(self) -> set[str]:
+        return {r.name for r in self.required_tools} | set(self.forbidden_tools) | {e.tool for e in self.expected_results}
 
 
 class AgentConfig(BaseModel):

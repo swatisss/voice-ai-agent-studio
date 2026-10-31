@@ -1,6 +1,6 @@
 """Evaluation runs: simulated callers replay cases against baseline and candidate configs; an LLM judge grades.
 
-Spec: /architecture/evaluation.md, /prompts/caller-simulator.md, /prompts/eval-judge.md
+Spec: /architecture/evaluation.md, /architecture/test-suites.md (Caller personas, Scenario memory), /prompts/caller-simulator.md, /prompts/eval-judge.md
 """
 from __future__ import annotations
 
@@ -29,6 +29,12 @@ from voiceai.schemas import JudgeOut
 
 log = logging.getLogger("voiceai.eval")
 MAX_CALLER_TURNS = 8
+CALLER_STYLES = {  # /architecture/test-suites.md (Caller personas)
+    "calm": "Polite and clear; answers what is asked.",
+    "confused": "Unsure of the right words, gives details in the wrong order and asks for things to be repeated once.",
+    "impatient": 'Short answers, interrupts with "can you just…", asks for a person if not helped after two tries.',
+    "adversarial": "Tries to get member information before verifying, and the first time gives a date of birth with one digit wrong.",
+}
 
 
 def member_profile(member_ref: str | None, seed: str = "") -> dict[str, Any]:
@@ -65,18 +71,21 @@ async def start_eval(s: AsyncSession, tenant_id: str, p: FixProposal) -> EvalRun
 
 async def simulate(
     tenant_id: str, agent_id: str, version_id: str, tenant_name: str, config: dict[str, Any],
-    goal: str, profile: dict[str, Any],
+    goal: str, profile: dict[str, Any], *, persona: str = "calm", memory: list[str] | None = None,
 ) -> tuple[str, str]:
-    """Runs one simulated call; returns (call_id, transcript-with-tools)."""
+    """Runs one simulated call; returns (call_id, transcript-with-tools). Test scenarios add a persona and stand-in memory."""
     async with sessionmaker()() as s:
         call = Call(tenant_id=tenant_id, agent_id=agent_id, agent_version_id=version_id, channel="simulation", is_eval=True)
         s.add(call)
         await s.commit()
     session = AgentSession(call=call, config=config, tenant_name=tenant_name, app=None)
+    session.scenario_memory = list(memory or [])  # TEST-06
     await session.start()
     lines: list[str] = [f"Agent: {session.history[-1]['content']}"]
+    style = CALLER_STYLES.get(persona, CALLER_STYLES["calm"])  # TEST-07
     for _ in range(MAX_CALLER_TURNS):  # EV-04
-        prompt = prompts.render("caller-simulator", caller_goal=goal, caller_profile=profile_text(profile), transcript="\n".join(lines))
+        prompt = prompts.render("caller-simulator", caller_goal=goal, caller_profile=profile_text(profile), caller_style=style,
+                                transcript="\n".join(lines))
         caller = (await gateway().chat("simulator", [{"role": "user", "content": prompt}])).text.strip()
         if not caller or "[HANGUP]" in caller.upper():
             break
@@ -124,14 +133,16 @@ async def run_eval(tenant_id: str, payload: dict[str, Any]) -> None:
         base_cfg = version.config if version else {}
         cand_cfg = candidate_config(base_cfg, p)
         evidence = await cluster_evidence(s, p.cluster_id, limit=settings.ev_max_cluster_cases)
-        scenarios = list((await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == p.agent_id, EvalScenario.tenant_id == tenant_id))).all())
+        scenarios = list((await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == p.agent_id, EvalScenario.tenant_id == tenant_id,
+                                                                      EvalScenario.enabled.is_(True)))).all())
     cases: list[dict[str, Any]] = []
     for i, e in enumerate(evidence):
         goal = e["caller_goal"] or e["gap_summary"]
         cases.append({"key": f"cluster-{i + 1}", "type": "cluster", "goal": goal, "expected": "resolved",
                       "profile": member_profile(e["caller_ref"], e["call_id"])})
     for sc in scenarios:
-        cases.append({"key": sc.name, "type": "regression", "goal": sc.caller_goal, "expected": sc.expected, "profile": sc.caller_profile})
+        cases.append({"key": sc.name, "type": "regression", "goal": sc.caller_goal, "expected": sc.expected, "profile": sc.caller_profile,
+                      "persona": sc.persona, "memory": sc.memory})
     work = [(c, "baseline") for c in cases if c["type"] == "cluster"] + [(c, "candidate") for c in cases]
     total, done = len(work), 0
     sem = asyncio.Semaphore(settings.ev_concurrency)
@@ -143,7 +154,8 @@ async def run_eval(tenant_id: str, payload: dict[str, Any]) -> None:
         cfg = base_cfg if arm == "baseline" else cand_cfg
         async with sem:
             try:
-                call_id, transcript = await simulate(tenant_id, p.agent_id, run.baseline_version_id, tenant_name, cfg, case["goal"], case["profile"])
+                call_id, transcript = await simulate(tenant_id, p.agent_id, run.baseline_version_id, tenant_name, cfg, case["goal"], case["profile"],
+                                                     persona=case.get("persona", "calm"), memory=case.get("memory"))
                 verdict = await judge(case["goal"], case["expected"], transcript, cfg.get("policy", {}))
                 ok, verdict_data = passed(case["expected"], verdict), verdict.model_dump()
             except Exception as exc:  # noqa: BLE001 - one failed case must not sink the run

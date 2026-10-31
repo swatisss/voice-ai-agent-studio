@@ -391,24 +391,40 @@ AGENTS: list[dict[str, Any]] = [
 SANDBOX_KB = "sandbox"
 
 
-# ---- regression scenarios (Customer Care Agent)
+# ---- test scenarios (Customer Care Agent; /demo-data/evergreen-health.md, /architecture/test-suites.md)
 def _profile(name: str, member_id: str, dob: str, **extra: str) -> dict[str, str]:
     return {"name": name, "member_id": member_id, "date_of_birth": dob, **extra}
 
 
+def _tool(name: str, **args: str) -> dict[str, Any]:
+    return {"name": name, "args": args}
+
+
 SCENARIOS = [
     {"name": "Policy status", "caller_goal": "You want to know if your health policy is active and when it renews.",
-     "caller_profile": _profile("Maria Lopez", "482913", "1986-04-12"), "expected": "resolved"},
+     "caller_profile": _profile("Maria Lopez", "482913", "1986-04-12"), "expected": "resolved",
+     "required_tools": [_tool("verify_member")]},
     {"name": "Claim paid", "caller_goal": "You want to know whether claim C-20931 was paid and how much you owe.",
-     "caller_profile": _profile("Maria Lopez", "482913", "1986-04-12", claim_number="C-20931"), "expected": "resolved"},
+     "caller_profile": _profile("Maria Lopez", "482913", "1986-04-12", claim_number="C-20931"), "expected": "resolved",
+     "required_tools": [_tool("get_claim_status", claim_id="C-20931")]},
     {"name": "Green Card for Spain", "caller_goal": "You are driving to Spain next month and need a Green Card for your car policy, emailed to you.",
-     "caller_profile": _profile("James Carter", "337120", "1979-11-02", destination="Spain", travel="leaving in three weeks, for ten days", delivery="email"), "expected": "resolved"},
+     "caller_profile": _profile("James Carter", "337120", "1979-11-02", destination="Spain", travel="leaving in three weeks, for ten days", delivery="email"),
+     "expected": "resolved", "required_tools": [_tool("request_document", document_type="green_card", delivery="email")]},
     {"name": "Dental coverage", "caller_goal": "You want to know how much of your dental allowance is left and whether there is a waiting period.",
-     "caller_profile": _profile("Priya Nair", "559804", "1992-07-23"), "expected": "resolved"},
+     "caller_profile": _profile("Priya Nair", "559804", "1992-07-23"), "persona": "confused", "expected": "resolved",
+     "required_tools": [_tool("get_coverage_detail", benefit="dental")]},
     {"name": "Policy schedule by email", "caller_goal": "You want your policy schedule emailed to you.",
-     "caller_profile": _profile("Daniel Kim", "801456", "2001-03-08"), "expected": "resolved"},
+     "caller_profile": _profile("Daniel Kim", "801456", "2001-03-08"), "persona": "impatient", "expected": "resolved",
+     "required_tools": [_tool("request_document", document_type="policy_schedule", delivery="email")],
+     "expected_results": [{"tool": "request_document", "field": "status", "equals": "queued"}]},
     {"name": "Appeal denied claim", "caller_goal": "Your surgery claim C-31544 was denied and you want to appeal it.",
      "caller_profile": _profile("James Carter", "337120", "1979-11-02", claim_number="C-31544"), "expected": "escalated"},
+    {"name": "Wrong date of birth first", "caller_goal": "You want to know whether claim C-20931 was paid.",
+     "caller_profile": _profile("Maria Lopez", "482913", "1986-04-12", claim_number="C-20931"), "persona": "adversarial", "expected": "resolved",
+     "required_tools": [_tool("verify_member"), _tool("get_claim_status", claim_id="C-20931")]},
+    {"name": "Remembers email preference", "caller_goal": "You want your membership card sent to you.",
+     "caller_profile": _profile("Daniel Kim", "801456", "2001-03-08"), "expected": "resolved", "memory": ["Prefers documents by email"],
+     "required_tools": [_tool("request_document", document_type="membership_card", delivery="email")]},
 ]
 
 

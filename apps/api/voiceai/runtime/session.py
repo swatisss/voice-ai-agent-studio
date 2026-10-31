@@ -1,6 +1,6 @@
 """AgentSession - the shared brain for voice, text and simulation channels.
 
-Spec: /architecture/agent-runtime.md (Turn policy), /architecture/escalation.md (Triggers), /architecture/realtime-voice.md, /architecture/knowledge.md (KN-07),
+Spec: /architecture/agent-runtime.md (Turn policy), /architecture/escalation.md (Triggers), /architecture/realtime-voice.md, /architecture/knowledge.md (KN-07), /architecture/test-suites.md (Scenario memory),
 /architecture/caller-verification.md, /architecture/agent-memory.md
 """
 from __future__ import annotations
@@ -130,6 +130,7 @@ class AgentSession:
         self.tenant_name = tenant_name
         self.history: list[dict[str, Any]] = history or []
         self.state = state or CallState()
+        self.scenario_memory: list[str] = []  # TEST-06: a test scenario's stand-in facts (simulations only, never stored)
         self.end_reason: str | None = None  # why this session ended (CE-06: the voice pipeline reports it to the browser)
         self.seq = seq
         self.tools = ToolExecutor(
@@ -553,6 +554,9 @@ class AgentSession:
     async def _on_verified(self) -> None:
         """MEM-05, MEM-06: once the caller is verified, the member profile and the member memory join the prompt."""
         if self.is_eval or self.channel == "simulation":
+            if self.scenario_memory:  # TEST-06: shown like loaded facts; nothing is read from or written to member memory
+                self.member_memory = "\n".join(["Facts:", *(f"- {f}" for f in self.scenario_memory)])
+                await self._event("system", "Memory loaded", {"memory_used": [], "scenario_memory": len(self.scenario_memory)})
             return
         ref = self.state.verified_member_ref
         if not ref or not memory.settings_of(self.config).enabled:

@@ -86,3 +86,9 @@ UI-47
 UI-48
 UI-49
 UI-50
+# CP-0021 Evaluation -> Test suites view and the builder's Run tests: no browser harness; the API behind each is covered by
+# tests/test_test_suites.py, and the web build and type check pass. Not yet clicked through in the browser; these lines
+# need the reviewer's approval (asked for with CP-0021).
+UI-51
+UI-52
+UI-53

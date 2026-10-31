@@ -2,7 +2,7 @@
 type: UI Spec
 title: Calls
 description: Call explorer with filters and a call detail page showing transcript, tool calls, escalation packet and analysis.
-status: draft
+status: stable
 tags: [ui, calls]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -18,7 +18,7 @@ Filters: agent, outcome, channel, direction, feedback (Any · Not helpful · Hel
 * **Escalation** card (if any): status, reason, disposition, resolution note, packet (same component as the console).
 * **Caller feedback** card (when given): the rating as "Helpful" / "Not helpful", the comment and when it was given.
 * **Memory** card (verified calls on agents with memory): **Memory used** (the facts and earlier calls the agent was given, each linked to its source) and **Memory updated** (what the agent added, superseded or confirmed after the call, with its reason; "Nothing new to remember" when empty), and a **Member memory** link to [/ui/member-memory.md](/ui/member-memory.md). For an identified call the header also shows "Identified by caller ID" and the attestation.
-* **Scorecard** card ([/architecture/call-scoring.md](/architecture/call-scoring.md)): a red **Hard fail** banner naming the failed hard-gate checks when there are any; the score; measures (first response, p50/p95 latency, tool calls and errors, knowledge searches and no-answers); checks grouped by Outcome, Responsiveness, Knowledge, Tools, Memory and Safety, each with its text, a verdict badge (Pass / Fail / N/A / Unknown / Not judged), a *Code* or *Judge* tag, the reason, and evidence links that scroll the transcript to the cited events (chunks show their doc title and heading). Judge checks have **Agree** / **Disagree** controls; Disagree asks for the correct verdict and an optional note; the reviewer name is remembered in `localStorage`. **Rescore** queues a new scoring. "Not scored yet" shows while the job runs and is replaced on `scorecard.updated` without reload. Simulation calls (opened from a test run) show their card too, with a **Simulated** badge in the header; reviews on them are allowed but never count in the Evaluation page's calibration.
+* **Scorecard** card ([/architecture/call-scoring.md](/architecture/call-scoring.md)): a red **Hard fail** banner naming the failed hard-gate checks when there are any; the score; measures (first response, p50/p95 latency, tool calls and errors, knowledge searches and no-answers); checks grouped by Outcome, Responsiveness, Knowledge, Tools, Memory and Safety, each with its text, a verdict badge (Pass / Fail / N/A / Unknown / Not judged), a *Code* or *Judge* tag, the reason, and evidence links that scroll the transcript to the cited events (chunks show their doc title and heading). Judge checks have **Agree** / **Disagree** controls; Disagree asks for the correct verdict and an optional note; the reviewer name is remembered in `localStorage`. **Rescore** queues a new scoring. "Not scored yet" shows while the job runs and is replaced on `scorecard.updated` without reload. Simulation calls (opened from a test run) show their card too, with a **Simulated** badge in the header and no **Rescore** (their test run scored them); reviews on them are allowed but never count in the Evaluation page's calibration.
 * **Analysis** card: intent, root cause, fixable, gap summary, caller goal, resolution summary, sentiment, cluster link.
 
 # Acceptance

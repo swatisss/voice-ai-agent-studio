@@ -1,4 +1,4 @@
-// Spec: /ui/agent-builder.md (Voice tab, Memory tab, Evaluation tab), /architecture/call-scoring.md, /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md, /architecture/agent-memory.md, /architecture/caller-verification.md
+// Spec: /ui/agent-builder.md (Header, Voice tab, Memory tab, Evaluation tab), /architecture/call-scoring.md, /architecture/test-suites.md, /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md, /architecture/agent-memory.md, /architecture/caller-verification.md
 "use client";
 
 import { Eye, Pencil, Plus, Trash2, Upload } from "lucide-react";
@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, Card, Field, Input, JsonView, Modal, Select, Spinner, Tabs, Textarea, useToast } from "@/components/ui";
-import { api, ApiError, useApi } from "@/lib/api";
+import { api, ApiError, useApi, useEvents } from "@/lib/api";
 import { when } from "@/lib/format";
 import { DEFAULT_TURN, VOICES, voiceLabel } from "@/lib/voices";
 import { TurnDetectionEditor } from "@/components/voice-settings";
@@ -31,6 +31,16 @@ function Builder() {
   const [publishOpen, setPublishOpen] = useState(false);
   const [note, setNote] = useState("");
   const [publishError, setPublishError] = useState<string | null>(null);
+  const { data: scenarios } = useApi<{ items: { enabled: boolean }[] }>(id ? `/api/agents/${id}/scenarios` : null, [tenant]);
+  const [testRun, setTestRun] = useState<{ id: string; done: number; total: number; result?: string } | null>(null);
+  useEvents(["evaluation"], (e) => {  // UI-53: progress, then the pass^k result
+    if (e.data?.agent_id !== id || !testRun || e.data?.eval_run_id !== testRun.id) return;
+    if (e.type === "test_run.progress") setTestRun((r) => r && { ...r, done: e.data.done, total: e.data.total });
+    if (e.type === "test_run.finished") {
+      const s = e.data.summary ?? {};
+      setTestRun((r) => r && { ...r, result: e.data.status === "done" ? `${s.pass_all} of ${s.scenarios} scenarios passed every run` : "The test run failed" });
+    }
+  }, tenant);
 
   useEffect(() => {
     if (agent) {
@@ -69,6 +79,16 @@ function Builder() {
     }
   }
 
+  async function runTests() {
+    if (dirty && !(await save())) return;
+    try {
+      const r = await api<{ eval_run_id: string }>(`/api/agents/${id}/test-runs`, { method: "POST", json: { target: "draft", trigger: "builder" } });
+      setTestRun({ id: r.eval_run_id, done: 0, total: 0 });
+    } catch (e) {
+      toast((e as ApiError).detail, "bad");
+    }
+  }
+
   async function publish() {
     setPublishError(null);
     if (dirty && !(await save())) return;
@@ -92,9 +112,18 @@ function Builder() {
         <div className="ml-auto flex gap-2">
           <Button onClick={save} loading={saving} disabled={!dirty}>Save draft</Button>
           <Button variant="primary" onClick={() => setPublishOpen(true)}>Publish</Button>
+          <Button onClick={runTests} disabled={!scenarios?.items.some((x) => x.enabled) || (!!testRun && !testRun.result)}
+            title={scenarios?.items.some((x) => x.enabled) ? "Run the test scenarios against this draft" : "Add test scenarios on the Evaluation page first"}>Run tests</Button>
           <Link href={`/test-call/?agent=${id}`}><Button disabled={!agent.published_version}>Test call</Button></Link>
         </div>
       </div>
+      {testRun && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-info-soft px-3 py-2 text-sm text-info" role="status">
+          <span>{testRun.result ?? (testRun.total ? `Testing ${testRun.done} of ${testRun.total}` : "Starting the test run…")}</span>
+          <Link className="font-medium underline" href={`/evaluation/?agent=${id}&view=tests`}>See the run</Link>
+          {testRun.result && <button className="ml-auto text-xs" onClick={() => setTestRun(null)}>Dismiss</button>}
+        </div>
+      )}
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[
         { id: "overview", label: "Overview" }, { id: "persona", label: "Persona" }, { id: "policy", label: "Policy" }, { id: "voice", label: "Voice" }, { id: "memory", label: "Memory" },
         { id: "knowledge", label: `Knowledge (${draft.knowledge_doc_ids.length})` }, { id: "tools", label: `Tools (${draft.tool_ids.length})` },
@@ -306,7 +335,7 @@ function MemoryTab({ draft, update }: TabProps) {  // UI-42
 }
 
 /** Defaults for drafts saved before evaluation settings existed (/data/agent-config.md, Evaluation settings). */
-const EVAL_DEFAULTS = { judge_sample_pct: 100, latency_p95_ms: 2000, custom_checks: [] as { question: string; group: string; hard_gate: boolean }[] };
+const EVAL_DEFAULTS = { judge_sample_pct: 100, latency_p95_ms: 2000, test_on_publish: true, custom_checks: [] as { question: string; group: string; hard_gate: boolean }[] };
 
 function EvaluationTab({ id, draft, update, savedAt }: TabProps & { id: string; savedAt: string }) {  // UI-49
   const { tenant } = useTenant();
@@ -318,7 +347,7 @@ function EvaluationTab({ id, draft, update, savedAt }: TabProps & { id: string; 
     setEval({ custom_checks: ev.custom_checks.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
   return (
     <div className="space-y-4">
-      <Card title="Checks this agent is scored on" actions={<Link className="text-sm font-medium text-accent" href={`/evaluation/?agent=${id}`}>See scores</Link>}>
+      <Card title="Checks this agent is scored on" actions={<span className="flex gap-3"><Link className="text-sm font-medium text-accent" href={`/evaluation/?agent=${id}&view=tests`}>Test scenarios</Link><Link className="text-sm font-medium text-accent" href={`/evaluation/?agent=${id}`}>See scores</Link></span>}>
         <p className="mb-3 max-w-3xl text-sm text-muted">Every call is scored on these checks after it ends. Rules you write on the Policy tab become checks automatically; hard gates fail the whole call. Save the draft to refresh this list.</p>
         {!data ? <Spinner /> : (
           <div className="space-y-3">
@@ -370,6 +399,11 @@ function EvaluationTab({ id, draft, update, savedAt }: TabProps & { id: string; 
             <Input type="number" min={300} max={10000} step={100} value={ev.latency_p95_ms} onChange={(e) => setEval({ latency_p95_ms: Number(e.target.value) })} />
           </Field>
         </div>
+        <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input type="checkbox" role="switch" className="h-4 w-4 accent-[var(--accent)]" checked={ev.test_on_publish} onChange={(e) => setEval({ test_on_publish: e.target.checked })} />
+          Run tests when publishing
+        </label>
+        <p className="mt-1 text-sm text-muted">Every new version gets a test run, so each version has a baseline to compare with.</p>
       </Card>
     </div>
   );

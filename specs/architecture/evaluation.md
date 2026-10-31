@@ -2,7 +2,7 @@
 type: Component Spec
 title: Evaluation
 description: Proving a fix before shipping it - simulated callers replay cluster cases and regression scenarios against baseline and candidate configs, graded by an LLM judge.
-status: draft
+status: stable
 tags: [architecture, evaluation, simulation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -14,7 +14,7 @@ An eval run is either a **proposal** run (`kind: proposal`, this page) or a **su
 ## Cases
 
 * **Cluster cases** — up to `EV_MAX_CLUSTER_CASES` (default 6) member calls of the proposal's cluster, newest first. Each case: `caller_goal` (from analysis), caller profile (member ID + DOB if the original call was verified), `expected: resolved`.
-* **Regression scenarios** — all `eval_scenarios` for the agent ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md) seeds 6). Each has its own `expected` (`resolved` or `escalated`).
+* **Regression scenarios** — all enabled `eval_scenarios` for the agent, the same scenarios as its [test suite](/architecture/test-suites.md) ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md) seeds 8), each played once with its own persona and memory. Each has its own `expected` (`resolved` or `escalated`).
 
 ## Arms
 
@@ -28,7 +28,7 @@ Cluster cases run on both arms; regression scenarios run on the candidate only (
 For each (case, arm): a `simulation` call is created (`is_eval: true`, excluded from dashboard, clustering and [call scoring](/architecture/call-scoring.md)) and driven by:
 
 1. `AgentSession.start()` (greeting).
-2. Simulator ([/prompts/caller-simulator.md](/prompts/caller-simulator.md), role `simulator`) produces the caller's next line given goal, profile, caller style (`calm` for proposal runs; a scenario's persona in suite runs) and transcript; it outputs `[HANGUP]` when done or stuck.
+2. Simulator ([/prompts/caller-simulator.md](/prompts/caller-simulator.md), role `simulator`) produces the caller's next line given goal, profile, caller style (`calm` for cluster cases; the scenario's persona, with its stand-in memory, for regression scenarios and suite runs) and transcript; it outputs `[HANGUP]` when done or stuck.
 3. `AgentSession.respond()`.
 4. Stop when the simulator hangs up, the agent ends or escalates (one extra caller line allowed after escalation is not needed — stop), or after 8 caller turns.
 

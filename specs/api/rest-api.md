@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: draft
+status: stable
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -43,7 +43,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/agents/{id}/scenarios` | `{name, caller_goal, caller_profile?, persona?, expected?, required_tools?, forbidden_tools?, expected_results?, memory?, enabled?}` → scenario; 422 invalid or `unknown_tool`, 409 `name_taken` |
 | PUT | `/api/scenarios/{id}` | same body, any subset → scenario |
 | DELETE | `/api/scenarios/{id}` | → 204; finished runs keep their copy |
-| POST | `/api/agents/{id}/test-runs` | `{target?: "published"\|"draft"\|"version", version_id?, repeats?: 1–5, scenario_ids?}` → `{eval_run_id}`; 409 `run_in_progress`, 409 `not_published`, 422 `no_scenarios`, 422 when the draft would not publish |
+| POST | `/api/agents/{id}/test-runs` | `{target?: "published"\|"draft"\|"version", version_id?, repeats?: 1–5, scenario_ids?, trigger?: "manual"\|"builder"}` → `{eval_run_id}`; 409 `run_in_progress`, 409 `not_published`, 422 `no_scenarios`, 422 when the draft would not publish |
 | GET | `/api/agents/{id}/test-runs` | → `{items: [{id, target, version, trigger, status, repeats, summary, created_at, finished_at}]}`, newest first, at most 50 |
 | GET | `/api/agents/{id}/checks` | query `source=draft\|published` (default `draft`) → `{items: [{key, group, method, hard_gate, text, source: "built_in"\|"config"\|"custom"}]}`, the checks [call scoring](/architecture/call-scoring.md) would apply; 409 `not_published` for `published` on an unpublished agent |
 

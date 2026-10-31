@@ -20,6 +20,7 @@ import voiceai.learning.analyze  # noqa: F401
 import voiceai.learning.evaluate  # noqa: F401
 import voiceai.learning.propose  # noqa: F401
 import voiceai.learning.scoring  # noqa: F401
+import voiceai.learning.test_suites  # noqa: F401
 import voiceai.memory  # noqa: F401  (memory jobs)
 from voiceai import db
 from voiceai.config import get_settings

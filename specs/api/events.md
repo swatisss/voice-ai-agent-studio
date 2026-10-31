@@ -2,7 +2,7 @@
 type: API Contract
 title: Server-sent events
 description: The SSE endpoint, topic subscription rules and event payloads the web app consumes for live updates.
-status: draft
+status: stable
 tags: [api, events, sse]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

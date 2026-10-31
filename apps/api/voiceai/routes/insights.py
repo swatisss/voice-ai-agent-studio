@@ -1,6 +1,6 @@
 """Insights: clusters, fix proposals, evaluation, approval.
 
-Spec: /api/rest-api.md (Insights), /architecture/fleet-learning.md, /architecture/evaluation.md
+Spec: /api/rest-api.md (Insights), /architecture/fleet-learning.md, /architecture/evaluation.md, /architecture/test-suites.md (Triggers)
 """
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.db import get_session, utcnow
 from voiceai.errors import ApiError
-from voiceai.learning import evaluate, propose
+from voiceai.learning import evaluate, propose, test_suites
 from voiceai.learning.analyze import cluster_summary
 from voiceai.learning.impact import impact
-from voiceai.models import Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc
+from voiceai.models import Agent, Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc
 from voiceai.tenancy import current_tenant
 
 router = APIRouter(prefix="/api")
@@ -147,6 +147,9 @@ async def evaluate_proposal(proposal_id: str, tenant_id: str = Depends(current_t
 async def approve(proposal_id: str, body: Decision, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     p = await propose.get_proposal(s, tenant_id, proposal_id)
     version = await propose.approve(s, p, body.decided_by, body.note, body.force)
+    agent = await s.get(Agent, p.agent_id)
+    if agent and await test_suites.start_on_publish(s, agent, version):  # TEST-08
+        await s.commit()
     return {"proposal": await _proposal_out(s, p), "version": {"id": version.id, "version": version.version}}
 
 

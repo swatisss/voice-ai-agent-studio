@@ -26,15 +26,15 @@ function savedReviewer(): string {
 
 /** UI-48: the call's scorecard - hard-fail banner, measures, grouped checks with evidence, reviews and rescore. */
 export function ScorecardCard({ card, events, onEvidence, onRescore, onChange }: {
-  card: Scorecard | null; events: CallEvent[]; onEvidence: (seq: number) => void; onRescore: () => Promise<void>; onChange: () => void;
+  card: Scorecard | null; events: CallEvent[]; onEvidence: (seq: number) => void; onRescore?: () => Promise<void>; onChange: () => void;
 }) {
   const [rescoring, setRescoring] = useState(false);
   const toast = useToast();
   const rescore = async () => {
     setRescoring(true);
-    try { await onRescore(); toast("Scoring queued", "ok"); } catch (e) { toast((e as ApiError).detail, "bad"); } finally { setRescoring(false); }
+    try { await onRescore?.(); toast("Scoring queued", "ok"); } catch (e) { toast((e as ApiError).detail, "bad"); } finally { setRescoring(false); }
   };
-  const action = <Button variant="ghost" onClick={rescore} loading={rescoring}>Rescore</Button>;
+  const action = onRescore ? <Button variant="ghost" onClick={rescore} loading={rescoring}>Rescore</Button> : null;  // simulated calls are scored by their test run
   if (!card) return <Card title="Scorecard" actions={action}><div className="text-sm text-muted">Not scored yet.</div></Card>;
   const m = card.measures;
   const failedGates = card.checks.filter((c) => c.hard_gate && c.verdict === "fail");

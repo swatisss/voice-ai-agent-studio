@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0021 Test suites
 description: Editable test scenarios per agent with personas, expected tools and results and stand-in memory; runs of k repeats against the published version, the draft or an earlier version, scored with the call scorer and reported as pass^k; Run tests in the builder, report only.
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [evaluation, testing, simulation, ui]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
@@ -60,7 +60,7 @@ If your goal has been fully answered, or the assistant has transferred you to a 
 
 # Tasks
 
-1. Spec edits (done in this CP, except the simulator prompt: apply the text above with task 4).
+1. Spec edits (done in this CP; the simulator prompt text above was applied with task 4).
 2. Data: new columns with defaults, added to existing databases on start; `test_on_publish` — covers DM-01, DM-08.
 3. Scenarios: CRUD with validation, seeded expectations and the two new scenarios — covers TEST-10, UC-04.
 4. Runner: `run_test_suite` (targets, draft resolution without a version, repeats, personas, scenario memory in the session, scoring with the run's config and judge on, expectation checks, summary, events); proposal runs pass the `calm` style; SC-01 rewording — covers TEST-01…TEST-07, TEST-09, SC-01, RT-07.

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Test suites
 description: Offline evaluation - per-agent scenarios with expectations, each run k times by a simulated caller against the published version, the draft or an earlier version, scored with the call scorer and reported as pass rate and pass^k.
-status: draft
+status: stable
 tags: [architecture, evaluation, simulation, testing]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
@@ -79,7 +79,8 @@ Each failure is recorded as a short reason (`"Expected escalated, got resolved"`
 
 ```json
 { "scenarios": 6, "repeats": 3, "pass_all": 4, "pass_any": 5, "pass_rate": 0.83, "hard_fails": 0,
-  "check_pass_rates": {"knowledge.grounded": 0.94}, "by_scenario": {"<id>": {"passed": 2, "of": 3}},
+  "check_pass_rates": {"knowledge.grounded": 0.94}, "check_texts": {"knowledge.grounded": "Is every factual claim supported…?"},
+  "by_scenario": {"<id>": {"passed": 2, "of": 3}},
   "duration_s": 212, "pipeline": "cascade", "fidelity": "faithful" }
 ```
 

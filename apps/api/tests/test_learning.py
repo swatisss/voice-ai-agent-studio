@@ -127,14 +127,14 @@ async def test_eval_then_approve(client, seeded, fake_llm):
     assert run["status"] == "done", run
     cluster_cases = run["summary"]["cluster_cases"]
     assert sum(1 for r in run["results"] if r["case_type"] == "cluster") == 2 * cluster_cases
-    assert sum(1 for r in run["results"] if r["case_type"] == "regression") == 6
+    assert sum(1 for r in run["results"] if r["case_type"] == "regression") == 8  # the enabled test scenarios (UC-04)
     progress = []
     while not sub.queue.empty():
         ev = sub.queue.get_nowait()
         if ev["type"] == "eval.progress":
             progress.append(ev)
     bus.unsubscribe(sub)
-    assert len(progress) == 2 * cluster_cases + 6
+    assert len(progress) == 2 * cluster_cases + 8
     async with sessionmaker()() as s:  # EV-02: nothing changed before approval
         assert await s.scalar(select(func.count()).select_from(AgentVersion).where(AgentVersion.agent_id == agent_id)) == versions_before
         assert (await s.get(KnowledgeDoc, p["draft_doc_id"])).status == "draft"

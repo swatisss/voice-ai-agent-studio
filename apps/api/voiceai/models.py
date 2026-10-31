@@ -326,8 +326,14 @@ class EvalRun(Base):
     id: Mapped[str] = _id()
     tenant_id: Mapped[str] = _tenant()
     agent_id: Mapped[str] = mapped_column(String(32), index=True)
-    proposal_id: Mapped[str] = mapped_column(String(32), index=True)
-    baseline_version_id: Mapped[str] = mapped_column(String(32))
+    kind: Mapped[str] = mapped_column(String(16), default="proposal")  # proposal | suite (/architecture/test-suites.md)
+    proposal_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    baseline_version_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target: Mapped[str | None] = mapped_column(String(16), nullable=True)  # published | draft | version
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    repeats: Mapped[int] = mapped_column(Integer, default=1)
+    trigger: Mapped[str] = mapped_column(String(16), default="proposal")  # manual | builder | publish | proposal
+    scenario_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(16), default="running")
     summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -343,9 +349,13 @@ class EvalResult(Base):
     case_key: Mapped[str] = mapped_column(String(120))
     case_type: Mapped[str] = mapped_column(String(16))
     arm: Mapped[str] = mapped_column(String(16))
+    scenario_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    repeat: Mapped[int] = mapped_column(Integer, default=1)
+    scenario: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     call_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     expected: Mapped[str] = mapped_column(String(16))
     passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    failures: Mapped[list[str]] = mapped_column(JSON, default=list)
     judge: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = _created()
 
@@ -358,8 +368,15 @@ class EvalScenario(Base):
     name: Mapped[str] = mapped_column(String(200))
     caller_goal: Mapped[str] = mapped_column(Text)
     caller_profile: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    persona: Mapped[str] = mapped_column(String(16), default="calm")  # calm | confused | impatient | adversarial
     expected: Mapped[str] = mapped_column(String(16), default="resolved")
+    required_tools: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    forbidden_tools: Mapped[list[str]] = mapped_column(JSON, default=list)
+    expected_results: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    memory: Mapped[list[str]] = mapped_column(JSON, default=list)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
 class UseCase(Base):

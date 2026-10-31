@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent memory
 description: What an agent remembers about a verified member across calls (episodes and facts), how it maintains that memory by itself after each call, how memory reaches the prompt, expiry, erasure and what the Studio shows.
-status: draft
+status: stable
 tags: [architecture, memory, runtime]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-28T00:00:00Z" }
 ---

@@ -69,7 +69,7 @@ export function useEvents(topics: string[], handler: (e: BusEvent) => void, tena
       es.onopen = () => { delay = 1000; };
       es.onmessage = () => undefined;
       const types = ["call.event", "call.escalated", "call.ended", "escalation.created", "escalation.updated", "analysis.created",
-        "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published", "scorecard.updated"];
+        "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published", "scorecard.updated", "test_run.progress", "test_run.finished"];
       for (const t of types) es.addEventListener(t, (ev) => { try { ref.current(JSON.parse((ev as MessageEvent).data)); } catch { /* ignore */ } });
       es.onerror = () => {
         es?.close();
@@ -122,6 +122,29 @@ export type Scorecard = {
   id: string; call_id: string; agent_version_id: string; measures: Record<string, any>; checks: ScoreCheck[]; hard_fail: boolean;
   score: number | null; judged: boolean; judge_model: string | null; source: "llm" | "seed"; updated_at: string;
   reviews: Record<string, CheckReview>;
+};
+
+// Spec: /architecture/test-suites.md (Scenario, Test run)
+export type Persona = "calm" | "confused" | "impatient" | "adversarial";
+export type Scenario = {
+  id: string; name: string; caller_goal: string; caller_profile: Record<string, string>; persona: Persona;
+  expected: "resolved" | "escalated"; required_tools: { name: string; args: Record<string, string> }[]; forbidden_tools: string[];
+  expected_results: { tool: string; field: string; equals: string }[]; memory: string[]; enabled: boolean;
+  last?: { eval_run_id: string; passed: number; of: number } | null;
+};
+export type TestRunSummary = {
+  scenarios: number; repeats: number; pass_all: number; pass_any: number; pass_rate: number | null; hard_fails: number;
+  check_pass_rates: Record<string, number | null>; by_scenario: Record<string, { passed: number; of: number }>;
+  duration_s: number; pipeline: string; fidelity: "faithful" | "text_approximation";
+};
+export type TestRun = {
+  id: string; target: "published" | "draft" | "version"; version: number | null; version_id: string | null;
+  trigger: "manual" | "builder" | "publish"; status: "running" | "done" | "failed"; repeats: number;
+  summary: Partial<TestRunSummary>; error: string | null; created_at: string; finished_at: string | null;
+};
+export type TestResult = {
+  scenario_id: string | null; scenario: Scenario | null; repeat: number; passed: boolean; failures: string[]; call_id: string | null;
+  scorecard: { score: number | null; hard_fail: boolean; failed_checks: string[] } | null;
 };
 
 /** GET a JSON resource and save it as a file in the browser. */

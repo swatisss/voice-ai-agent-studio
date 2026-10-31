@@ -248,13 +248,14 @@ def parse_verdicts(raw: dict[str, Any], keys: list[str]) -> dict[str, dict[str, 
     return out
 
 
-async def run_judge(goal: str, events: list[CallEvent], config: dict[str, Any], checks: list[Check]) -> dict[str, dict[str, Any]]:
+async def run_judge(goal: str, events: list[CallEvent], config: dict[str, Any], checks: list[Check],
+                    expected: str = "not given") -> tuple[dict[str, dict[str, Any]], JudgeOut]:
     prompt = prompts.render(
-        "eval-judge", caller_goal=goal or "(not known)", expected="not given", transcript=judge_transcript(events) or "(empty)",
+        "eval-judge", caller_goal=goal or "(not known)", expected=expected, transcript=judge_transcript(events) or "(empty)",
         policy=policy_text(config.get("policy") or {}), checks="\n".join(f"{c.key}: {c.text}" for c in checks) or "(none)",
     )
     out, _ = await gateway().complete_json("judge", [{"role": "user", "content": prompt}], JudgeOut)
-    return parse_verdicts(out.checks, [c.key for c in checks])
+    return parse_verdicts(out.checks, [c.key for c in checks]), out
 
 
 def sampled(call_id: str, pct: int) -> bool:
@@ -293,10 +294,13 @@ async def save(s: AsyncSession, call: Call, m: dict[str, Any], rows: list[dict[s
     return card
 
 
-async def score(s: AsyncSession, call: Call) -> CallScorecard | None:
-    """SC-01…SC-08, SC-11: measures, code checks, sampled judge checks, stored and announced."""
-    version = await s.get(AgentVersion, call.agent_version_id)
-    config = (version.config if version else None) or {}
+async def score(s: AsyncSession, call: Call, *, config: dict[str, Any] | None = None, always_judge: bool = False,
+                goal: str | None = None, expected: str = "not given") -> CallScorecard | None:
+    """SC-01…SC-08, SC-11: measures, code checks, sampled judge checks, stored and announced. A test-suite run passes
+    its own config (maybe an unpublished draft), turns the judge always on and gives the scenario's goal (TEST-03)."""
+    if config is None:
+        version = await s.get(AgentVersion, call.agent_version_id)
+        config = (version.config if version else None) or {}
     events = list((await s.scalars(select(CallEvent).where(CallEvent.call_id == call.id).order_by(CallEvent.seq))).all())
     feedback = await s.scalar(select(CallFeedback).where(CallFeedback.call_id == call.id))
     esc = await s.scalar(select(Escalation).where(Escalation.call_id == call.id))
@@ -308,10 +312,13 @@ async def score(s: AsyncSession, call: Call) -> CallScorecard | None:
     escalated = esc is not None or call.outcome == "escalated"
     judge_checks = [c for c in checks if c.method == "judge"]
     judged, judge_model = False, None
-    if escalated or (feedback is not None and feedback.rating == "down") or code_hard_fail \
+    judge_out: JudgeOut | None = None
+    if always_judge or escalated or (feedback is not None and feedback.rating == "down") or code_hard_fail \
             or sampled(call.id, evaluation_settings(config).judge_sample_pct):
         try:
-            verdicts.update(await run_judge(analysis.caller_goal if analysis else "", events, config, judge_checks))
+            judge_goal = goal if goal is not None else (analysis.caller_goal if analysis else "")
+            parsed, judge_out = await run_judge(judge_goal, events, config, judge_checks, expected)
+            verdicts.update(parsed)
             judged, judge_model = True, gateway().role_model("judge")
         except Exception as exc:  # noqa: BLE001 - code checks still count; the judge's checks stay unknown
             log.warning("judge failed for call %s: %s", call.id, exc)
@@ -320,6 +327,7 @@ async def score(s: AsyncSession, call: Call) -> CallScorecard | None:
         verdicts["memory.used_correctly"] = _verdict("n/a", "No memory was loaded.")
     rows, hard_fail, score_ = assemble(checks, verdicts)
     card = await save(s, call, m, rows, hard_fail, score_, judged, judge_model, "llm")
+    card.judge_outcome = judge_out.outcome if judge_out else None  # not stored: read by the test-suite runner
     bus.publish(call.tenant_id, "evaluation", "scorecard.updated",
                 {"call_id": call.id, "agent_id": call.agent_id, "agent_version_id": call.agent_version_id,
                  "hard_fail": hard_fail, "score": score_, "judged": judged})

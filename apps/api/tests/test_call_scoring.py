@@ -304,7 +304,7 @@ async def test_evaluation_config_validation(client, seeded):
         assert r.status_code == 422, ev
     draft.pop("evaluation", None)
     saved = (await client.put(f"/api/agents/{agent_id}", headers=H, json={"draft_config": draft})).json()["draft_config"]
-    assert saved["evaluation"] == {"judge_sample_pct": 100, "latency_p95_ms": 2000, "custom_checks": []}
+    assert saved["evaluation"] == {"judge_sample_pct": 100, "latency_p95_ms": 2000, "test_on_publish": True, "custom_checks": []}
 
 
 async def test_summary_and_draft_checks(client, seeded, fake_llm):

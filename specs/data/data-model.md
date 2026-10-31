@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: draft
+status: stable
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

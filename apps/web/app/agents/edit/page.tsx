@@ -1,4 +1,4 @@
-// Spec: /ui/agent-builder.md (Voice tab, Memory tab), /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md, /architecture/agent-memory.md, /architecture/caller-verification.md
+// Spec: /ui/agent-builder.md (Voice tab, Memory tab, Evaluation tab), /architecture/call-scoring.md, /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md, /architecture/agent-memory.md, /architecture/caller-verification.md
 "use client";
 
 import { Eye, Pencil, Plus, Trash2, Upload } from "lucide-react";
@@ -11,8 +11,9 @@ import { api, ApiError, useApi } from "@/lib/api";
 import { when } from "@/lib/format";
 import { DEFAULT_TURN, VOICES, voiceLabel } from "@/lib/voices";
 import { TurnDetectionEditor } from "@/components/voice-settings";
+import { GROUPS, SOURCE } from "@/components/scorecard";
 
-type Tab = "overview" | "persona" | "policy" | "voice" | "memory" | "knowledge" | "tools" | "skills" | "versions";
+type Tab = "overview" | "persona" | "policy" | "voice" | "memory" | "knowledge" | "tools" | "skills" | "evaluation" | "versions";
 
 export default function Page() {
   return <Suspense fallback={<Spinner />}><Builder /></Suspense>;
@@ -97,7 +98,7 @@ function Builder() {
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[
         { id: "overview", label: "Overview" }, { id: "persona", label: "Persona" }, { id: "policy", label: "Policy" }, { id: "voice", label: "Voice" }, { id: "memory", label: "Memory" },
         { id: "knowledge", label: `Knowledge (${draft.knowledge_doc_ids.length})` }, { id: "tools", label: `Tools (${draft.tool_ids.length})` },
-        { id: "skills", label: `Skills (${draft.skill_ids.length})` }, { id: "versions", label: "Versions" },
+        { id: "skills", label: `Skills (${draft.skill_ids.length})` }, { id: "evaluation", label: "Evaluation" }, { id: "versions", label: "Versions" },
       ]} />
       {tab === "overview" && <Overview draft={draft} meta={meta} setMeta={setMeta} update={update} />}
       {tab === "persona" && <Persona draft={draft} update={update} />}
@@ -107,6 +108,7 @@ function Builder() {
       {tab === "knowledge" && <KnowledgeTab draft={draft} update={update} />}
       {tab === "tools" && <ToolsTab draft={draft} update={update} />}
       {tab === "skills" && <SkillsTab draft={draft} update={update} />}
+      {tab === "evaluation" && <EvaluationTab id={id} draft={draft} update={update} savedAt={agent.updated_at} />}
       {tab === "versions" && <Versions id={id} />}
       {dirty && (
         <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-panel px-4 py-2 shadow-lg">
@@ -298,6 +300,76 @@ function MemoryTab({ draft, update }: TabProps) {  // UI-42
           Trust verified caller ID (demo only)
         </label>
         <p className="mt-1 max-w-3xl text-sm text-muted">Skips the date of birth only for read-only lookups on US calls whose number the carrier fully attested. Anything that changes data still needs the date of birth.</p>
+      </Card>
+    </div>
+  );
+}
+
+/** Defaults for drafts saved before evaluation settings existed (/data/agent-config.md, Evaluation settings). */
+const EVAL_DEFAULTS = { judge_sample_pct: 100, latency_p95_ms: 2000, custom_checks: [] as { question: string; group: string; hard_gate: boolean }[] };
+
+function EvaluationTab({ id, draft, update, savedAt }: TabProps & { id: string; savedAt: string }) {  // UI-49
+  const { tenant } = useTenant();
+  const { data } = useApi<{ items: { key: string; group: string; method: string; hard_gate: boolean; text: string; source: "built_in" | "config" | "custom" }[] }>(
+    `/api/agents/${id}/checks`, [tenant, savedAt]);  // the saved draft: refreshed after Save draft
+  const ev: typeof EVAL_DEFAULTS = { ...EVAL_DEFAULTS, ...(draft.evaluation ?? {}) };
+  const setEval = (patch: Partial<typeof EVAL_DEFAULTS>) => update(["evaluation"], { ...ev, ...patch });
+  const setCheck = (i: number, patch: Partial<(typeof ev.custom_checks)[number]>) =>
+    setEval({ custom_checks: ev.custom_checks.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
+  return (
+    <div className="space-y-4">
+      <Card title="Checks this agent is scored on" actions={<Link className="text-sm font-medium text-accent" href={`/evaluation/?agent=${id}`}>See scores</Link>}>
+        <p className="mb-3 max-w-3xl text-sm text-muted">Every call is scored on these checks after it ends. Rules you write on the Policy tab become checks automatically; hard gates fail the whole call. Save the draft to refresh this list.</p>
+        {!data ? <Spinner /> : (
+          <div className="space-y-3">
+            {GROUPS.map((g) => {
+              const rows = data.items.filter((c) => c.group === g.id);
+              if (!rows.length) return null;
+              return (
+                <div key={g.id}>
+                  <div className="text-xs font-medium text-muted">{g.label}</div>
+                  <ul className="mt-1 space-y-1">
+                    {rows.map((c) => (
+                      <li key={c.key} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-sm">
+                        <span className="min-w-0 flex-1">{c.text}</span>
+                        <Badge tone={c.source === "config" ? "accent" : c.source === "custom" ? "info" : "neutral"}>{SOURCE[c.source]}</Badge>
+                        {c.hard_gate && <Badge tone="warn">Hard gate</Badge>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+      <Card title="Custom checks">
+        <p className="mb-3 max-w-3xl text-sm text-muted">Yes/no questions the judge answers about every scored call. Phrase them so that <em>yes</em> is a pass. Up to ten.</p>
+        <div className="space-y-2">
+          {ev.custom_checks.map((c, i) => (
+            <div key={i} className="grid gap-2 rounded-lg border border-line p-2 md:grid-cols-[1fr_10rem_auto_auto] md:items-end">
+              <Field label="Question"><Input value={c.question} maxLength={300} onChange={(e) => setCheck(i, { question: e.target.value })} /></Field>
+              <Field label="Group">
+                <Select value={c.group} onChange={(e) => setCheck(i, { group: e.target.value })}>
+                  {GROUPS.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+                </Select>
+              </Field>
+              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-[var(--accent)]" checked={c.hard_gate} onChange={(e) => setCheck(i, { hard_gate: e.target.checked })} />Hard gate</label>
+              <Button variant="ghost" aria-label="Remove check" onClick={() => setEval({ custom_checks: ev.custom_checks.filter((_, j) => j !== i) })}><Trash2 size={14} /></Button>
+            </div>
+          ))}
+          <Button variant="ghost" onClick={() => setEval({ custom_checks: [...ev.custom_checks, { question: "", group: "outcome", hard_gate: false }] })}><Plus size={14} />Add check</Button>
+        </div>
+      </Card>
+      <Card title="Scoring settings">
+        <div className="grid max-w-xl gap-4 md:grid-cols-2">
+          <Field label="Judge share of calls (%)" hint="Escalated, thumbs-down and hard-failed calls are always judged">
+            <Input type="number" min={0} max={100} value={ev.judge_sample_pct} onChange={(e) => setEval({ judge_sample_pct: Number(e.target.value) })} />
+          </Field>
+          <Field label="Slow-response limit (p95, ms)" hint="300–10,000">
+            <Input type="number" min={300} max={10000} step={100} value={ev.latency_p95_ms} onChange={(e) => setEval({ latency_p95_ms: Number(e.target.value) })} />
+          </Field>
+        </div>
       </Card>
     </div>
   );

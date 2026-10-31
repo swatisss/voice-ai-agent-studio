@@ -96,7 +96,8 @@ async def judge(goal: str, expected: str, transcript: str, policy: dict[str, Any
         [*(f"- Rule: {r}" for r in policy.get("rules", [])), *(f"- Never: {n}" for n in policy.get("never", [])),
          *(f"- Escalate when: {e}" for e in policy.get("escalate_when", []))]
     ) or "- (none)"
-    prompt = prompts.render("eval-judge", caller_goal=goal, expected=expected, transcript=transcript, policy=policy_text)
+    prompt = prompts.render("eval-judge", caller_goal=goal, expected=expected, transcript=transcript, policy=policy_text,
+                            checks="(none)")  # eval runs do not use per-check verdicts yet (ADR-0011)
     out, _ = await gateway().complete_json("judge", [{"role": "user", "content": prompt}], JudgeOut)
     return out
 

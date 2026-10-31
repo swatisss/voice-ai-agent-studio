@@ -2,7 +2,7 @@
 type: Component Spec
 title: Evaluation
 description: Proving a fix before shipping it - simulated callers replay cluster cases and regression scenarios against baseline and candidate configs, graded by an LLM judge.
-status: draft
+status: stable
 tags: [architecture, evaluation, simulation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

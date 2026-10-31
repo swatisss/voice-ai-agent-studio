@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import numpy as np
@@ -18,16 +18,17 @@ from voiceai.db import sessionmaker, utcnow
 from voiceai.knowledge import okf
 from voiceai.knowledge.embeddings import embed
 from voiceai.knowledge.ingest import import_okf
+from voiceai.learning import scoring
 from voiceai.learning.analyze import refresh_stats
 from voiceai.call_settings import persona_dict
 from voiceai.mock import data as mock_data
 from voiceai.models import (
-    Agent, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, MemberMemory, MemoryEvent, Persona, Skill, Tenant,
+    Agent, AgentVersion, Call, CallAnalysis, CallEvent, Cluster, Escalation, EvalScenario, MemberMemory, MemoryEvent, Persona, Skill, Tenant,
     TenantSettings, Tool, UseCase,
 )
 from voiceai.schemas import FIXABLE
 from voiceai.seed import catalog
-from voiceai.seed.history import CLUSTERS, generate
+from voiceai.seed.history import CLUSTERS, SeedCall, generate
 
 log = logging.getLogger("voiceai.seed")
 
@@ -120,8 +121,11 @@ async def _seed_memories(s, tenant_id: str, agents: dict[str, Agent]) -> int:  #
 
 
 async def _seed_history(s, agent: Agent) -> int:  # noqa: ANN001
-    calls = generate()
+    today = datetime.now(timezone.utc).date()
+    calls = generate(today)
     version_id = agent.published_version_id
+    config = (await s.get(AgentVersion, version_id)).config
+    ungrounded = _ungrounded(calls, today)
     analyses_by_key: dict[str, list[CallAnalysis]] = defaultdict(list)
     for sc in calls:
         turns = sum(1 for k, _, _ in sc.events if k == "user")
@@ -135,18 +139,26 @@ async def _seed_history(s, agent: Agent) -> int:  # noqa: ANN001
         )
         s.add(call)
         await s.flush()
+        events, heard = [], False
         for i, (kind, text, data) in enumerate(sc.events, 1):
-            s.add(CallEvent(tenant_id=agent.tenant_id, call_id=call.id, seq=i, kind=kind, text=text, data=data,
-                            at=sc.started_at + timedelta(seconds=6 * i)))
+            heard = heard or kind == "user"
+            if kind == "assistant" and heard:  # replies to the caller carry a response time like real calls (650-1,400 ms)
+                data = {**data, "latency_ms": min(max(sc.latency_ms + (i * 37) % 200 - 100, 650), 1400)}
+            events.append(CallEvent(tenant_id=agent.tenant_id, call_id=call.id, seq=i, kind=kind, text=text, data=data,
+                                    at=sc.started_at + timedelta(seconds=6 * i)))
+        s.add_all(events)
+        esc_row = None
         if sc.escalation:
             e = sc.escalation
             created = sc.started_at + timedelta(seconds=6 * len(sc.events))
-            s.add(Escalation(
+            esc_row = Escalation(
                 tenant_id=agent.tenant_id, call_id=call.id, agent_id=agent.id, status="resolved", reason_category=e["category"],
                 reason_detail=e["detail"], packet=e["packet"], packet_status="ready", assignee=e["assignee"],
                 disposition=e["disposition"], resolution_note=e["note"], created_at=created,
                 accepted_at=created + timedelta(minutes=2), resolved_at=created + timedelta(minutes=9),
-            ))
+            )
+            s.add(esc_row)
+        await _seed_scorecard(s, call, events, esc_row, config, sc, any(sc is u for u in ungrounded))
         a = sc.analysis
         analysis = CallAnalysis(tenant_id=agent.tenant_id, call_id=call.id, agent_id=agent.id, fixable=a["root_cause"] in FIXABLE, source="seed", **a)
         s.add(analysis)
@@ -171,3 +183,43 @@ async def _seed_history(s, agent: Agent) -> int:  # noqa: ANN001
         await s.flush()
         await refresh_stats(s, cluster)
     return len(calls)
+
+
+def _ungrounded(calls: list[SeedCall], today) -> list[SeedCall]:  # noqa: ANN001
+    """The 5 resolved coverage calls the seeded judge marks not grounded: one in each of weeks 2 and 3, three in week 4."""
+    start = today - timedelta(days=28)
+    picked: list[SeedCall] = []
+    for week, n in ((1, 1), (2, 1), (3, 3)):
+        pool = [c for c in calls if c.intent == "coverage_question" and c.outcome == "resolved"
+                and (c.started_at.date() - start).days // 7 == week]
+        picked += pool[-n:]  # the latest of the week, so week 4's fall inside the last 7 days
+    return picked
+
+
+async def _seed_scorecard(s, call: Call, events: list[CallEvent], esc: Escalation | None, config: dict[str, Any],  # noqa: ANN001
+                          sc: SeedCall, ungrounded: bool) -> None:
+    """A `source: seed` scorecard: measures and code checks as for a real call, judge verdicts set without a model."""
+    m = scoring.measures(call, events, None, esc)
+    verdicts = scoring.code_verdicts(call, events, config, m)
+    tools_ran = any(e.kind == "tool_call" for e in events)
+    no_answer = m["no_answer_searches"] > 0
+    for check in scoring.catalogue(config):
+        if check.method != "judge":
+            continue
+        verdict, reason = "pass", "Seeded verdict."
+        if check.key == "outcome.goal_met" and sc.outcome == "abandoned":
+            verdict, reason = "fail", "The caller hung up before stating a request."
+        elif check.key == "knowledge.grounded":
+            if sc.outcome != "resolved":
+                verdict, reason = "n/a", "The agent made no factual claims of its own."
+            elif ungrounded:
+                verdict, reason = "fail", "Stated a coverage detail that no tool or knowledge result supports"
+        elif check.key == "knowledge.admits_unknown" and not no_answer:
+            verdict = "n/a"
+        elif check.key == "tools.right_use" and not tools_ran:
+            verdict = "n/a"
+        elif check.key == "memory.used_correctly" or check.key.startswith("escalate_when."):
+            verdict = "n/a"
+        verdicts[check.key] = {"verdict": verdict, "reason": reason, "evidence": {"seqs": [], "chunk_ids": []}}
+    rows, hard_fail, score = scoring.assemble(scoring.catalogue(config), verdicts)
+    await scoring.save(s, call, m, rows, hard_fail, score, judged=True, judge_model=None, source="seed")

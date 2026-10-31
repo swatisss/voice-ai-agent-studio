@@ -1,7 +1,7 @@
 // Spec: /ui/app-shell.md, /ui/design-system.md (Layout)
 "use client";
 
-import { AudioWaveform, Bot, Headphones, LayoutDashboard, Lightbulb, Menu, Phone, PhoneCall, Settings, UserRound, X } from "lucide-react";
+import { AudioWaveform, Bot, Gauge, Headphones, LayoutDashboard, Lightbulb, Menu, Phone, PhoneCall, Settings, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
@@ -20,6 +20,7 @@ const NAV = [
   { href: "/calls/", label: "Calls", icon: Phone },
   { href: "/console/", label: "Agent console", icon: Headphones, badge: "console" as const },
   { href: "/insights/", label: "Insights", icon: Lightbulb, badge: "insights" as const },
+  { href: "/evaluation/", label: "Evaluation", icon: Gauge },
   { href: "/settings/", label: "Settings", icon: Settings },
 ];
 

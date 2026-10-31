@@ -1,6 +1,6 @@
-"""ORM models - the 25 tables of the data model.
+"""ORM models - the 27 tables of the data model.
 
-Spec: /data/data-model.md
+Spec: /data/data-model.md, /architecture/call-scoring.md
 """
 from __future__ import annotations
 
@@ -258,6 +258,45 @@ class Cluster(Base):
     first_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="open")
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class CallScorecard(Base):
+    """Measures and check verdicts of one scored real call (/architecture/call-scoring.md)."""
+
+    __tablename__ = "call_scorecards"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    call_id: Mapped[str] = mapped_column(String(32), ForeignKey("calls.id", ondelete="CASCADE"), unique=True)
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    agent_version_id: Mapped[str] = mapped_column(String(32), index=True)
+    measures: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    checks: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    hard_fail: Mapped[bool] = mapped_column(Boolean, default=False)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    judged: Mapped[bool] = mapped_column(Boolean, default=False)
+    judge_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source: Mapped[str] = mapped_column(String(8), default="llm")  # llm | seed
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class CheckReview(Base):
+    """A reviewer's own verdict on one judge check of a scorecard (/architecture/call-scoring.md)."""
+
+    __tablename__ = "check_reviews"
+    __table_args__ = (UniqueConstraint("scorecard_id", "check_key"),)
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    scorecard_id: Mapped[str] = mapped_column(String(32), ForeignKey("call_scorecards.id", ondelete="CASCADE"), index=True)
+    call_id: Mapped[str] = mapped_column(String(32), index=True)
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    check_key: Mapped[str] = mapped_column(String(80))
+    judge_verdict: Mapped[str] = mapped_column(String(16))
+    verdict: Mapped[str] = mapped_column(String(8))  # pass | fail | n/a
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewer: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 

@@ -18,7 +18,8 @@ async def test_all_tables_exist(database):
     """Covers: DM-01"""
     async with engine().connect() as conn:
         names = await conn.run_sync(lambda c: inspect(c).get_table_names())
-    assert len(names) == 25 and {"call_feedback", "phone_numbers", "tenant_settings", "tenant_credentials", "member_memories", "memory_events"} <= set(names)
+    assert len(names) == 27 and {"call_feedback", "phone_numbers", "tenant_settings", "tenant_credentials", "member_memories", "memory_events",
+                                    "call_scorecards", "check_reviews"} <= set(names)
 
 
 async def test_versions_and_snapshots(client, seeded):

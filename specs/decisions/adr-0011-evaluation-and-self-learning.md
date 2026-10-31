@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0011 Evaluation and self-learning for declarative agents
 description: One scorer shared by online scoring of every call, offline test suites and a nightly self-learning loop; checks come from the agent's own config; improvements are typed config changes that only a human publishes. Records the research behind the plan and its three change proposals.
-status: draft
+status: stable
 tags: [decision, evaluation, learning, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---

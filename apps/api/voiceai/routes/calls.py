@@ -1,7 +1,7 @@
 """Calls: create, text messages, end, explorer, detail, and the voice WebSocket.
 
 Spec: /api/rest-api.md (Calls), /api/voice-protocol.md, /architecture/agent-runtime.md, /architecture/realtime-voice.md,
-/architecture/tenant-settings.md, /architecture/call-admission.md
+/architecture/tenant-settings.md, /architecture/call-admission.md, /architecture/call-scoring.md
 """
 from __future__ import annotations
 
@@ -18,7 +18,8 @@ from voiceai import call_settings
 from voiceai.call_settings import effective_settings, persona_dict
 from voiceai import jobs
 from voiceai.db import utcnow
-from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Escalation, Persona
+from voiceai.learning import score_report, scoring
+from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, CallScorecard, CheckReview, Escalation, Persona
 from voiceai.schemas import E164_RE, TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
 from voiceai.runtime.session import AgentSession, create_call
@@ -243,7 +244,31 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
         "telephony": (call.meta or {}).get("telephony"),
         "identification": _identification_out((call.meta or {}).get("identification")),
         "memory": await memory.for_call(s, call, list(events)),
+        "scorecard": await _scorecard(s, call_id),
     }
+
+
+async def _scorecard(s: AsyncSession, call_id: str) -> dict[str, Any] | None:
+    card = await s.scalar(select(CallScorecard).where(CallScorecard.call_id == call_id))
+    if card is None:
+        return None
+    reviews = list((await s.scalars(select(CheckReview).where(CheckReview.scorecard_id == card.id))).all())
+    return score_report.scorecard_out(card, reviews)
+
+
+@router.post("/calls/{call_id}/rescore")
+async def rescore(call_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    """Queue `score_call` again (/architecture/call-scoring.md, API-08)."""
+    call = await s.scalar(select(Call).where(Call.id == call_id, Call.tenant_id == tenant_id))
+    if not call:
+        raise ApiError(404, "call_not_found", "Call not found")
+    if not scoring.scorable(call):
+        raise ApiError(409, "not_scorable", "Simulated calls are not scored")
+    if not call.ended_at:
+        raise ApiError(409, "call_active", "A call is scored once it has ended")
+    job = await scoring.enqueue_rescore(s, call)
+    await s.commit()
+    return {"job_id": job.id}
 
 
 def _identification_out(ident: dict[str, Any] | None) -> dict[str, Any] | None:

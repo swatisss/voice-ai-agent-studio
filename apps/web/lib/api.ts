@@ -69,7 +69,7 @@ export function useEvents(topics: string[], handler: (e: BusEvent) => void, tena
       es.onopen = () => { delay = 1000; };
       es.onmessage = () => undefined;
       const types = ["call.event", "call.escalated", "call.ended", "escalation.created", "escalation.updated", "analysis.created",
-        "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published"];
+        "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published", "scorecard.updated"];
       for (const t of types) es.addEventListener(t, (ev) => { try { ref.current(JSON.parse((ev as MessageEvent).data)); } catch { /* ignore */ } });
       es.onerror = () => {
         es?.close();
@@ -108,6 +108,20 @@ export type MemoryEvent = {
 export type MemberMemory = {
   member_ref: string; first_name: string | null; agents: { id: string; name: string }[];
   facts: MemoryItem[]; episodes: MemoryItem[]; retired: MemoryItem[]; events: MemoryEvent[];
+};
+
+// Spec: /architecture/call-scoring.md (Scorecard)
+export type Verdict = "pass" | "fail" | "n/a" | "unknown" | "not_judged";
+export type CheckGroup = "outcome" | "responsiveness" | "knowledge" | "tools" | "memory" | "safety";
+export type ScoreCheck = {
+  key: string; group: CheckGroup; method: "code" | "judge"; hard_gate: boolean; text: string; source: "built_in" | "config" | "custom";
+  verdict: Verdict; reason: string; evidence: { seqs: number[]; chunk_ids: string[] };
+};
+export type CheckReview = { check_key: string; verdict: "pass" | "fail" | "n/a"; judge_verdict: Verdict; note: string; reviewer: string; at: string };
+export type Scorecard = {
+  id: string; call_id: string; agent_version_id: string; measures: Record<string, any>; checks: ScoreCheck[]; hard_fail: boolean;
+  score: number | null; judged: boolean; judge_model: string | null; source: "llm" | "seed"; updated_at: string;
+  reviews: Record<string, CheckReview>;
 };
 
 /** GET a JSON resource and save it as a file in the browser. */

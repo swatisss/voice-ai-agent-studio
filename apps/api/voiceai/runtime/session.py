@@ -1,6 +1,6 @@
 """AgentSession - the shared brain for voice, text and simulation channels.
 
-Spec: /architecture/agent-runtime.md (Turn policy), /architecture/escalation.md (Triggers), /architecture/realtime-voice.md,
+Spec: /architecture/agent-runtime.md (Turn policy), /architecture/escalation.md (Triggers), /architecture/realtime-voice.md, /architecture/knowledge.md (KN-07),
 /architecture/caller-verification.md, /architecture/agent-memory.md
 """
 from __future__ import annotations
@@ -21,6 +21,7 @@ from voiceai import caller_id, jobs, memory
 from voiceai.db import new_id, sessionmaker, utcnow
 from voiceai.errors import ApiError
 from voiceai.events import bus
+from voiceai.knowledge.search import retrieval as kb_retrieval
 from voiceai.llm.gateway import LLMError, Usage, gateway
 from voiceai import call_settings
 from voiceai.call_settings import CallSettings
@@ -541,7 +542,10 @@ class AgentSession:
         was_verified = self.state.verified
         result, ok = await self.tools.run(name, arguments)
         duration = int((time.perf_counter() - started) * 1000)
-        await self._event("tool_result", None, {"tool_call_id": call_id, "name": name, "ok": ok and "error" not in result, "result": result, "duration_ms": duration})
+        data = {"tool_call_id": call_id, "name": name, "ok": ok and "error" not in result, "result": result, "duration_ms": duration}
+        if name == "search_knowledge":  # KN-07: the exact chunks, for call scoring and the call detail
+            data["retrieval"] = kb_retrieval(str((args or {}).get("query", "")) if isinstance(args, dict) else "", result)
+        await self._event("tool_result", None, data)
         if self.state.verified and not was_verified:
             await self._on_verified()
         return truncate(result)

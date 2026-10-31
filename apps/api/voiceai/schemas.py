@@ -180,6 +180,31 @@ class VerificationConfig(BaseModel):
     trust_attested_caller_id: bool = False  # demo only (/architecture/caller-verification.md, IDV-05)
 
 
+CHECK_GROUPS = ("outcome", "responsiveness", "knowledge", "tools", "memory", "safety")
+
+
+class CustomCheck(BaseModel):
+    question: str = Field(min_length=10, max_length=300)
+    group: Literal["outcome", "responsiveness", "knowledge", "tools", "memory", "safety"] = "outcome"
+    hard_gate: bool = False
+
+
+class EvaluationConfig(BaseModel):
+    """How calls of this agent are scored (/architecture/call-scoring.md, DM-08)."""
+
+    judge_sample_pct: int = Field(default=100, ge=0, le=100)
+    latency_p95_ms: int = Field(default=2000, ge=300, le=10000)
+    custom_checks: list[CustomCheck] = Field(default_factory=list, max_length=10)
+
+    @field_validator("custom_checks")
+    @classmethod
+    def _unique_questions(cls, v: list[CustomCheck]) -> list[CustomCheck]:
+        seen = [c.question.strip().lower() for c in v]
+        if len(seen) != len(set(seen)):
+            raise ValueError("custom check questions must be unique")
+        return v
+
+
 class AgentConfig(BaseModel):
     mode: Literal["inbound", "outbound", "internal"] = "inbound"
     outbound: OutboundConfig = Field(default_factory=OutboundConfig)
@@ -194,6 +219,7 @@ class AgentConfig(BaseModel):
     models: ModelChoice = Field(default_factory=ModelChoice)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     verification: VerificationConfig = Field(default_factory=VerificationConfig)
+    evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
 
     @model_validator(mode="after")
     def _outbound_needs_targets(self) -> AgentConfig:
@@ -304,6 +330,7 @@ class JudgeOut(BaseModel):
     grounded: bool = True
     policy_violations: list[str] = Field(default_factory=list)
     notes: str = ""
+    checks: dict[str, Any] = Field(default_factory=dict)  # per-check verdicts, parsed leniently by call scoring
 
 
 # ------------------------------------------------------------------ member memory (LLM outputs)

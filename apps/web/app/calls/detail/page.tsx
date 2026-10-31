@@ -1,4 +1,4 @@
-// Spec: /ui/calls.md (Detail)
+// Spec: /ui/calls.md (Detail), /architecture/call-scoring.md
 "use client";
 
 import Link from "next/link";
@@ -6,10 +6,11 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { FeedbackBadge } from "@/components/feedback";
 import { PacketCard } from "@/components/packet";
+import { ScorecardCard } from "@/components/scorecard";
 import { useTenant } from "@/components/shell";
 import { Transcript } from "@/components/transcript";
 import { Badge, Card, Spinner } from "@/components/ui";
-import { type MemoryEvent, type MemoryItem, useApi } from "@/lib/api";
+import { api, type MemoryEvent, type MemoryItem, useApi, useEvents } from "@/lib/api";
 import { label, maskRef, MODE_LABEL, MODE_TONE, money, outcomeTone, ROOT_CAUSE, secs, when } from "@/lib/format";
 
 export default function Page() {
@@ -19,8 +20,13 @@ export default function Page() {
 function CallDetail() {
   const id = useSearchParams().get("id") ?? "";
   const { tenant } = useTenant();
-  const { data: c, error } = useApi<any>(id ? `/api/calls/${id}` : null, [tenant]);
+  const { data: c, error, reload } = useApi<any>(id ? `/api/calls/${id}` : null, [tenant]);
   const [seq, setSeq] = useState<number | null>(null);
+  useEvents(["evaluation"], (e) => { if (e.type === "scorecard.updated" && e.data?.call_id === id) reload(); }, tenant);  // UI-48
+  const showTurn = (n: number) => {  // UI-48: evidence links scroll to and highlight the cited line
+    setSeq(n);
+    requestAnimationFrame(() => document.getElementById(`seq-${n}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+  };
   useEffect(() => {  // UI-44: "#seq-<n>" opens the transcript at that turn
     if (!c) return;
     const m = /^#seq-(\d+)$/.exec(window.location.hash);
@@ -77,6 +83,10 @@ function CallDetail() {
               <div className="text-sm">{c.feedback.comment ? <p className="rounded-lg bg-neutral-soft p-2">{c.feedback.comment}</p> : <span className="text-muted">No comment.</span>}</div>
               <div className="mt-2 text-xs text-muted">{when(c.feedback.at)}</div>
             </Card>
+          )}
+          {c.channel !== "simulation" && (
+            <ScorecardCard card={c.scorecard} events={c.events} onEvidence={showTurn} onChange={reload}
+              onRescore={async () => { await api(`/api/calls/${id}/rescore`, { method: "POST" }); }} />
           )}
           {a && (
             <Card title="Analysis">

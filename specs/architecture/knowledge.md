@@ -2,7 +2,7 @@
 type: Component Spec
 title: Knowledge
 description: Knowledge ingestion from text, files, URLs and OKF bundles; heading-aware chunking; local embeddings; cosine search with a no-answer threshold.
-status: draft
+status: stable
 tags: [architecture, knowledge, rag, okf]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

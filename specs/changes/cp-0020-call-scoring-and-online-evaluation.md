@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0020 Call scoring and online evaluation
 description: Every real call gets a scorecard of checks derived from its agent version (code first, judge second, hard gates for safety); per-version rollups, drift, human reviews and judge calibration; a new Evaluation page and an Evaluation tab in the builder.
-status: draft
-cp_state: proposed
+status: stable
+cp_state: implemented
 tags: [evaluation, scoring, learning, ui, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
@@ -47,7 +47,7 @@ New: SC-01…SC-12 (call scoring), KN-07, DM-08, API-08, API-09, UI-47…UI-50. 
 
 # Tasks
 
-1. Spec edits (done in this CP, except the eval judge prompt: apply the text above with task 4).
+1. Spec edits (done in this CP; the eval judge prompt text above was applied with task 4).
 2. Data and config: `call_scorecards`, `check_reviews`, `evaluation` defaults and validation — covers DM-01, DM-08.
 3. Retrieval record: `chunk_id` in search results, `data.retrieval` on the tool-result event — covers KN-07.
 4. Scorer: check catalogue from a version snapshot (stable hashed keys), measures, code checks, sampling, judge call with the extended prompt, `score_call` job queued from `analyze_call`, `scorecard.updated` — covers SC-01…SC-08, SC-11.

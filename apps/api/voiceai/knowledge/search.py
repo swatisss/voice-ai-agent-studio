@@ -39,7 +39,7 @@ async def _matrix(session: AsyncSession, tenant_id: str, doc_ids: list[str]) -> 
             )
         )
     ).all()
-    meta = [{"doc_id": c.doc_id, "title": t, "heading": c.heading, "content": c.content} for c, t in rows]
+    meta = [{"chunk_id": c.id, "doc_id": c.doc_id, "title": t, "heading": c.heading, "content": c.content} for c, t in rows]
     mat = np.array([c.embedding for c, _ in rows], dtype=np.float32) if rows else np.zeros((0, 1), dtype=np.float32)
     _cache[key] = (mat, meta)
     return mat, meta
@@ -69,3 +69,9 @@ async def search(
         if len(results) >= top_k:
             break
     return {"results": results} if results else dict(NO_ANSWER)
+
+
+def retrieval(query: str, result: dict[str, Any]) -> dict[str, Any]:
+    """What a search returned, as stored on the `search_knowledge` tool-result event (KN-07)."""
+    chunks = [{"chunk_id": r.get("chunk_id"), "doc_id": r.get("doc_id"), "score": r.get("score")} for r in result.get("results", [])]
+    return {"query": query, "no_answer": bool(result.get("no_answer")), "chunks": chunks}

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Call scoring
 description: Every ended real call gets a scorecard - measures and pass/fail checks derived from the agent version's config, decided in code where possible and by the judge otherwise - rolled up per agent version, reviewed by humans and calibrated.
-status: draft
+status: stable
 tags: [architecture, evaluation, scoring, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
@@ -30,7 +30,7 @@ One `call_scorecards` row per scored call ([/data/data-model.md](/data/data-mode
 | `outcome`, `end_reason`, `escalation_category` | call row, escalation |
 | `turns`, `duration_s` | call row |
 | `first_response_ms` | `latency_ms` of the first assistant event that follows a caller event |
-| `latency_p50_ms`, `latency_p95_ms` | `latency_ms` of assistant events (nearest-rank percentiles); `null` when none recorded |
+| `latency_p50_ms`, `latency_p95_ms` | `latency_ms` of assistant events (nearest-rank percentiles); `null` when none recorded; the latencies themselves are kept as `latencies_ms` for the rollups |
 | `tool_calls`, `tool_errors` | `tool_result` events; an error is `ok: false`, excluding a verification result with `verified: false` |
 | `knowledge_searches`, `no_answer_searches` | `search_knowledge` results ([/architecture/knowledge.md](/architecture/knowledge.md)) |
 | `verification_attempts`, `verified` | call state ([/architecture/caller-verification.md](/architecture/caller-verification.md)) |
@@ -72,14 +72,14 @@ Checks are derived from the **version snapshot** that handled the call, never fr
 | each `policy.rules` item | `rule.<hash>` | outcome | no | Did the agent follow: "…"? |
 | each `evaluation.custom_checks` item | `custom.<hash>` | its `group` | its `hard_gate` | its `question` |
 
-A check whose question needs knowledge the call never touched answers `n/a`, never `fail`.
+A check whose question needs knowledge the call never touched answers `n/a`, never `fail`. `memory.used_correctly` is set to `n/a` in code when the call has no "Memory loaded" event, whatever the judge says.
 
 # Job `score_call`
 
 1. Queued when `analyze_call` finishes for a call that is not a simulation and not seeded (dedupe `score_call:{call_id}`); the re-analysis after a thumbs down or a resolved escalation queues it again (`score_call:{call_id}:2`), replacing the scorecard. `POST /api/calls/{id}/rescore` queues it on demand ([/api/rest-api.md](/api/rest-api.md)).
 2. Load the version snapshot, build the check list, compute measures and code checks.
 3. **Sampling**: the judge runs when the call escalated, has a thumbs down, failed a code hard gate, or a deterministic draw (first two hex digits of the call id as 0–255, scaled to 0–100) is below the agent's `evaluation.judge_sample_pct`. Otherwise judge checks are `not_judged`.
-4. The judge ([/prompts/eval-judge.md](/prompts/eval-judge.md), role `judge`) gets the transcript with tool calls, results and retrieved chunk ids, the caller goal from the analysis, and the judge checks; it returns one verdict per check key. A missing or malformed verdict becomes `unknown`.
+4. The judge ([/prompts/eval-judge.md](/prompts/eval-judge.md), role `judge`) gets the transcript with tool calls, results and retrieved chunk ids, the caller goal from the analysis, and the judge checks; it returns one verdict per check key. A missing or malformed verdict becomes `unknown`. If the judge cannot be reached, every judge check is `unknown` ("The judge could not be reached.") and `judged` is false; the code checks still decide.
 5. Store the scorecard (replacing any earlier one; reviews stay, matched by check key) and publish `scorecard.updated` on topic `evaluation` ([/architecture/jobs-and-events.md](/architecture/jobs-and-events.md)).
 
 Seeded history gets scorecards from the seeder instead (`source: seed`, [/demo-data/call-history.md](/demo-data/call-history.md)).
@@ -100,19 +100,19 @@ A check is **calibrated** when it has ≥ 20 reviews and agreement ≥ 85 %; oth
 
 `GET /api/evaluation/summary` computes on read, per agent version, over real calls (simulations and, unless `include_seed`, seeded calls excluded):
 
-* calls and scored calls; **containment** (resolved ÷ calls); **correct escalation** and **unnecessary escalation** (escalated calls with `outcome.escalation_appropriate` pass / fail); **abandonment**;
+* calls and scored calls; **containment** (resolved ÷ calls); **correct escalation** and **unnecessary escalation** (escalated calls with `outcome.escalation_appropriate` pass / fail, ÷ calls); **abandonment** (abandoned ÷ calls);
 * pass rate of every check key (passes ÷ decided); hard-fail calls;
 * `first_response_ms` median, `latency_p50_ms` median, `latency_p95_ms` (nearest rank over all assistant latencies);
 * thumbs up share of rated calls;
 * a daily series of containment, goal met, grounded and hard fails.
 
-**Drift**: a version is flagged when, with ≥ 20 scored calls in both windows, the pass rate of `outcome.goal_met` or `knowledge.grounded`, or containment, in the last 7 days is ≥ 10 points below its first 7 days.
+**Drift** (over all the version's calls, whatever the period): a version is flagged, listing the drifted metrics (`goal_met`, `grounded`, `containment`), when, with ≥ 20 scored calls in both windows and no call in both, the pass rate of `outcome.goal_met` or `knowledge.grounded`, or containment, in the last 7 days is ≥ 10 points below its first 7 days (the 7 days from its first scored call).
 
 # Acceptance
 
 - **SC-01** — Given an ended text call on a published agent, when `analyze_call` finishes, then exactly one `score_call` job runs and one scorecard exists whose `agent_version_id` is the call's; a simulation call gets no scorecard.
 - **SC-02** — Given a version whose policy has two `never` items and one `escalate_when` item and one skill with `escalate_when`, then the scorecard holds checks `never.<hash>` ×2 (hard gates) and `escalate_when.<hash>` ×2 next to the built-in checks, and the keys are the same for a later version with the same wording.
-- **SC-03** — Given a call where a `requires_verification` tool returned `ok: true` before verification succeeded, then `safety.phi_before_verification` is `fail` and the scorecard is `hard_fail` without any judge request.
+- **SC-03** — Given a call where a `requires_verification` tool returned `ok: true` before verification succeeded, then `safety.phi_before_verification` is `fail` and the scorecard is `hard_fail`, even when the judge cannot be reached.
 - **SC-04** — Given assistant latencies 400, 500, 600, 700 and 2,500 ms and `evaluation.latency_p95_ms: 2000`, then `latency_p50_ms` is 600, `latency_p95_ms` is 2,500 and `responsiveness.latency` fails.
 - **SC-05** — Given `judge_sample_pct: 0`, then a resolved call without feedback gets code checks only and every judge check is `not_judged`, while an escalated call and a thumbs-down call are judged.
 - **SC-06** — Given a judge reply that omits one check key, then that check is `unknown` and the others keep the judge's verdicts.
@@ -120,5 +120,5 @@ A check is **calibrated** when it has ≥ 20 reviews and agreement ≥ 85 %; oth
 - **SC-08** — Given a scored call that gets a thumbs down, then the scorecard is replaced after re-analysis and earlier reviews of unchanged check keys are kept.
 - **SC-09** — Given 20 reviews of `knowledge.grounded` of which 17 agree with the judge, then agreement is 85 % and the check is calibrated; with 19 reviews it is uncalibrated.
 - **SC-10** — Given a version with 20 scored calls in its first 7 days at 90 % goal met and 20 in the last 7 days at 75 %, then the summary flags drift on that version.
-- **SC-12** — Given the seeded history for `evergreen-care`, when the summary is requested with `include_seed`, then version 1 has 123 scored calls, `outcome.goal_met` fails on exactly 3, `knowledge.grounded` fails on exactly 5, and the version is flagged for drift.
+- **SC-12** — Given the seeded history for `evergreen-care`, when the summary is requested with `include_seed` over 90 days, then version 1 has 123 scored calls, `outcome.goal_met` fails on exactly 3, `knowledge.grounded` fails on exactly 5, and the version is flagged for drift.
 - **SC-11** — Given an agent edited after a call was scored, then that call's scorecard checks and texts are unchanged.

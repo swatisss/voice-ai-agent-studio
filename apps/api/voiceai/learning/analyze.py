@@ -1,6 +1,7 @@
 """Post-call analysis and gap clustering.
 
-Spec: /architecture/fleet-learning.md (1. Call analysis, 2. Clustering), /prompts/call-analysis.md, /prompts/cluster-naming.md
+Spec: /architecture/fleet-learning.md (1. Call analysis, 2. Clustering), /prompts/call-analysis.md, /prompts/cluster-naming.md,
+/architecture/call-scoring.md (score_call is queued after each analysis)
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from voiceai.config import get_settings
 from voiceai.db import sessionmaker, utcnow
 from voiceai.events import bus
 from voiceai.knowledge.embeddings import embed_one
+from voiceai.learning import scoring
 from voiceai.llm.gateway import gateway
 from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Cluster, Escalation
 from voiceai.runtime.escalation import transcript_lines
@@ -96,6 +98,7 @@ async def analyze_call(tenant_id: str, payload: dict[str, Any]) -> None:
             out.root_cause = "none"
         apply_feedback(out, fb)  # after the resolved rule: a disliked resolved call keeps a cause
         await save_analysis(s, call, out, source="llm")
+        await scoring.enqueue_after_analysis(s, call)  # SC-01: the scorer judges against this analysis' caller goal
         await s.commit()
 
 

@@ -1,10 +1,10 @@
 """Agents, versions, scenarios, tools and skills.
 
-Spec: /api/rest-api.md (Agents; Tools, skills), /data/agent-config.md, /architecture/tenant-settings.md
+Spec: /api/rest-api.md (Agents; Tools, skills), /data/agent-config.md, /architecture/tenant-settings.md, /architecture/call-scoring.md
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from voiceai.agents import agent_out, default_config, publish, skill_dict, tool_dict, validate_config
 from voiceai.db import get_session
 from voiceai.errors import ApiError
+from voiceai.learning import scoring
 from voiceai.models import Agent, AgentVersion, EvalScenario, Skill, Tool
 from voiceai.schemas import SkillDef, ToolDef
 from voiceai.tenancy import current_tenant
@@ -105,6 +106,23 @@ async def versions(agent_id: str, tenant_id: str = Depends(current_tenant), s: A
     rows = (await s.scalars(select(AgentVersion).where(AgentVersion.agent_id == agent_id).order_by(AgentVersion.version.desc()))).all()
     return {"items": [{"id": v.id, "version": v.version, "change_note": v.change_note, "source_proposal_id": v.source_proposal_id,
                        "created_at": v.created_at.isoformat()} for v in rows]}
+
+
+@router.get("/agents/{agent_id}/checks")
+async def checks(agent_id: str, source: Literal["draft", "published"] = "draft", tenant_id: str = Depends(current_tenant),
+                 s: AsyncSession = Depends(get_session)) -> dict:
+    """The checks call scoring would apply to the draft or the published version (API-09)."""
+    agent = await _agent(s, tenant_id, agent_id)
+    if source == "published":
+        version = await _version(s, agent)
+        if version is None:
+            raise ApiError(409, "not_published", "The agent has no published version")
+        config = version.config
+    else:
+        draft = agent.draft_config or {}
+        skills = (await s.scalars(select(Skill).where(Skill.tenant_id == tenant_id, Skill.id.in_(draft.get("skill_ids") or [])))).all()
+        config = {**draft, "skills": [skill_dict(k) for k in skills]}
+    return {"items": [c.head() for c in scoring.catalogue(config)]}
 
 
 @router.get("/agents/{agent_id}/scenarios")

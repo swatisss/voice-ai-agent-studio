@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: draft
+status: stable
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -128,7 +128,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Evaluation
 | Method | Path | Body / query → Result |
 |---|---|---|
-| GET | `/api/evaluation/summary` | query `agent_id` (required), `days` (7\|28\|90, default 28), `include_seed=true` → `{versions: [{version_id, version, published_at, calls, scored, containment_rate, correct_escalation_rate, unnecessary_escalation_rate, abandonment_rate, hard_fail_calls, thumbs_up_rate, first_response_ms, latency_p50_ms, latency_p95_ms, drift, check_pass_rates: {key: rate}}], checks: [{key, group, method, hard_gate, text, pass_rate, decided, reviews, agreement, catch_rate, baseline, calibrated}], daily: [{date, calls, containment_rate, goal_met_rate, grounded_rate, hard_fails}]}`; rates are 0–1 or `null` without data ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
+| GET | `/api/evaluation/summary` | query `agent_id` (required), `days` (7\|28\|90, default 28), `include_seed=true` → `{versions: [{version_id, version, published_at, calls, scored, containment_rate, correct_escalation_rate, unnecessary_escalation_rate, abandonment_rate, hard_fail_calls, thumbs_up_rate, first_response_ms, latency_p50_ms, latency_p95_ms, drift: ["goal_met"\|"grounded"\|"containment"], check_pass_rates: {key: rate}}], checks: [{key, group, method, hard_gate, text, pass_rate, decided, reviews, agreement, catch_rate, baseline, calibrated}], daily: [{date, calls, containment_rate, goal_met_rate, grounded_rate, hard_fails}]}`; rates are 0–1 or `null` without data; another `days` → 422 `invalid_days` ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
 | GET | `/api/evaluation/scorecards` | query `agent_id` (required), `version_id?`, `check?` (key), `verdict?`, `hard_fail?`, `reviewed?`, `days`, `include_seed=true` → `{items: [{call_id, started_at, version, outcome, feedback, score, hard_fail, judged, failed_checks: [key], review_count}]}`, newest first, at most 200 |
 | PUT | `/api/scorecards/{id}/reviews/{check_key}` | `{verdict: "pass"\|"fail"\|"n/a", note?, reviewer}` → review; replaces the earlier review of that check; 404 unknown key; 409 `code_check` for a check decided in code |
 

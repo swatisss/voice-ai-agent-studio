@@ -2,7 +2,7 @@
 type: UI Spec
 title: App shell
 description: Left sidebar navigation, the Echo Mind Voice Agent Studio brand, business-unit switcher, routing scheme for the static export, and the shared API/SSE client.
-status: draft
+status: stable
 tags: [ui, shell, routing]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

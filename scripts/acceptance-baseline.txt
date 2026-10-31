@@ -76,3 +76,13 @@ UI-43
 UI-44
 UI-45
 UI-46
+# CP-0020 Evaluation page, call detail Scorecard card, builder Evaluation tab: no browser harness; the API behind each is
+# covered by tests/test_call_scoring.py, and the web build and type check pass. Clicked through 2026-10-31 on a fresh seeded
+# database: UI-47 (tiles, Grounded drift badge, Grounded row lists the 5 calls); UI-48 in part (a Disagree review shows next
+# to the judge's verdict after reload; the evidence scroll and the Hard fail banner need a call that fails a hard gate);
+# UI-49 in part (checks from the policy listed; adding a Never rule and an eleventh custom check not tried); UI-50 not tried.
+# These lines need the reviewer's approval (asked for with CP-0020).
+UI-47
+UI-48
+UI-49
+UI-50

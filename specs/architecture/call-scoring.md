@@ -2,7 +2,7 @@
 type: Component Spec
 title: Call scoring
 description: Every ended real call gets a scorecard - measures and pass/fail checks derived from the agent version's config, decided in code where possible and by the judge otherwise - rolled up per agent version, reviewed by humans and calibrated.
-status: stable
+status: draft
 tags: [architecture, evaluation, scoring, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
@@ -84,6 +84,8 @@ A check whose question needs knowledge the call never touched answers `n/a`, nev
 
 Seeded history gets scorecards from the seeder instead (`source: seed`, [/demo-data/call-history.md](/demo-data/call-history.md)).
 
+**Simulated calls** are never scored by `score_call`. A [test-suite run](/architecture/test-suites.md) scores its own simulated calls with the same steps 2–5, except that the checks come from the run's config (which may be an unpublished draft), the judge always runs, and the judge is given the scenario's goal and expected outcome. Their scorecards never count in the rollups below.
+
 # Reviews and calibration
 
 A reviewer may give a verdict of their own on any judge check of a scorecard (`check_reviews`: `pass`, `fail` or `n/a`, a note, who and when; one per scorecard and key, replaced on change). Reviews never change the stored judge verdict.
@@ -110,7 +112,7 @@ A check is **calibrated** when it has ≥ 20 reviews and agreement ≥ 85 %; oth
 
 # Acceptance
 
-- **SC-01** — Given an ended text call on a published agent, when `analyze_call` finishes, then exactly one `score_call` job runs and one scorecard exists whose `agent_version_id` is the call's; a simulation call gets no scorecard.
+- **SC-01** — Given an ended text call on a published agent, when `analyze_call` finishes, then exactly one `score_call` job runs and one scorecard exists whose `agent_version_id` is the call's; the `score_call` job never scores a simulation call (test-suite runs score their own, TEST-03).
 - **SC-02** — Given a version whose policy has two `never` items and one `escalate_when` item and one skill with `escalate_when`, then the scorecard holds checks `never.<hash>` ×2 (hard gates) and `escalate_when.<hash>` ×2 next to the built-in checks, and the keys are the same for a later version with the same wording.
 - **SC-03** — Given a call where a `requires_verification` tool returned `ok: true` before verification succeeded, then `safety.phi_before_verification` is `fail` and the scorecard is `hard_fail`, even when the judge cannot be reached.
 - **SC-04** — Given assistant latencies 400, 500, 600, 700 and 2,500 ms and `evaluation.latency_p95_ms: 2000`, then `latency_p50_ms` is 600, `latency_p95_ms` is 2,500 and `responsiveness.latency` fails.

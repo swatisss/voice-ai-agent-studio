@@ -2,7 +2,7 @@
 type: Config Schema
 title: Agent configuration schemas
 description: JSON shapes of the agent draft config, persona, policy, tool and skill definitions, and the immutable version snapshot.
-status: stable
+status: draft
 tags: [data, config, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -107,7 +107,7 @@ The snapshot carries `persona` (resolved, with `id` when from the library), `voi
 # Evaluation settings
 
 ```json
-"evaluation": { "judge_sample_pct": 100, "latency_p95_ms": 2000,
+"evaluation": { "judge_sample_pct": 100, "latency_p95_ms": 2000, "test_on_publish": true,
                 "custom_checks": [ { "question": "Did the agent offer the member portal for documents it could not send?", "group": "outcome", "hard_gate": false } ] }
 ```
 
@@ -115,6 +115,7 @@ The snapshot carries `persona` (resolved, with `id` when from the library), `voi
 |---|---|
 | `evaluation.judge_sample_pct` | integer 0–100, default 100: share of ordinary calls the judge scores ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
 | `evaluation.latency_p95_ms` | integer 300–10000, default 2000 |
+| `evaluation.test_on_publish` | boolean, default `true`: publishing starts a test-suite run on the new version ([/architecture/test-suites.md](/architecture/test-suites.md)) |
 | `evaluation.custom_checks` | ≤ 10 items; `question` 10–300 chars, phrased so *yes* is a pass; `group` one of `outcome`, `responsiveness`, `knowledge`, `tools`, `memory`, `safety`; `hard_gate` boolean (default `false`); duplicate questions → 422 |
 
 A config without `evaluation` gets the defaults on save. The block is versioned like the rest; scoring always uses the snapshot of the version that handled the call.
@@ -172,5 +173,5 @@ Later edits to a tool or skill never change existing versions. Knowledge docs ar
 - **DM-04** — Given a draft config with `max_turns: 2`, when saved, then the API returns 422. (Turn-detection bounds: TD-08.)
 - **DM-06** — Given a draft config with `telephony.transfer_to: "0123"`, or `voice.realtime.voice` not in the `speech` role's list, or `models.speech` set to a chat model, when saved, then the API returns 422; `+15557654321` and `sip:claims@example.com` are accepted. (`voice.pipeline` values: RV-01.)
 - **DM-07** — Given a draft config with `memory.episode_days: 3` or `memory.remember` longer than 600 characters, when saved, then the API returns 422; a config without `memory` is saved with the defaults and published with them in the snapshot.
-- **DM-08** — Given a draft config with `evaluation.judge_sample_pct: 120`, or eleven custom checks, or a custom check with group `style`, when saved, then the API returns 422; a config without `evaluation` is saved with `judge_sample_pct: 100`, `latency_p95_ms: 2000` and no custom checks.
+- **DM-08** — Given a draft config with `evaluation.judge_sample_pct: 120`, or eleven custom checks, or a custom check with group `style`, when saved, then the API returns 422; a config without `evaluation` is saved with `judge_sample_pct: 100`, `latency_p95_ms: 2000`, `test_on_publish: true` and no custom checks.
 - **DM-05** — Given a published version, when the underlying tool is edited, then the version's snapshot still holds the old definition.

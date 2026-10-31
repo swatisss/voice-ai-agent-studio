@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent memory
 description: What an agent remembers about a verified member across calls (episodes and facts), how it maintains that memory by itself after each call, how memory reaches the prompt, expiry, erasure and what the Studio shows.
-status: stable
+status: draft
 tags: [architecture, memory, runtime]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-28T00:00:00Z" }
 ---
@@ -22,7 +22,7 @@ Procedural memory is not a new store: it is the skills and policy rules that fle
 
 * Episodic and semantic memory belong to one **scope**: tenant + agent + verified member (`member_ref`). Another agent of the same tenant never reads them, and no tenant ever reads another tenant's memory ([/architecture/multi-tenancy.md](/architecture/multi-tenancy.md)).
 * Memory is read and written only for a **verified** member ([/architecture/caller-verification.md](/architecture/caller-verification.md)). An identified but unverified caller gets no memory.
-* Every real channel behaves the same: text, cascade voice, realtime voice, inbound, outbound and phone. Simulated and evaluation calls never read or write member memory.
+* Every real channel behaves the same: text, cascade voice, realtime voice, inbound, outbound and phone. Simulated and evaluation calls never read or write member memory; a test scenario may give the session stand-in facts instead, which are never stored ([/architecture/test-suites.md](/architecture/test-suites.md), Scenario memory).
 * Facts a business API owns (claims, balances, policy details, documents) are **never** stored: the agent fetches them live. Memory holds only what was learned in conversation.
 
 # Builder settings (`config.memory`)

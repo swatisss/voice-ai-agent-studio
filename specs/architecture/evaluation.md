@@ -2,14 +2,14 @@
 type: Component Spec
 title: Evaluation
 description: Proving a fix before shipping it - simulated callers replay cluster cases and regression scenarios against baseline and candidate configs, graded by an LLM judge.
-status: stable
+status: draft
 tags: [architecture, evaluation, simulation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
 
 # Eval run (`run_eval` job)
 
-Created by `POST /api/proposals/{id}/evaluate`. Proposal → `evaluating`.
+An eval run is either a **proposal** run (`kind: proposal`, this page) or a **suite** run of the agent's test scenarios (`kind: suite`, [/architecture/test-suites.md](/architecture/test-suites.md)); both use the simulation loop below. A proposal run is created by `POST /api/proposals/{id}/evaluate`. Proposal → `evaluating`.
 
 ## Cases
 
@@ -28,7 +28,7 @@ Cluster cases run on both arms; regression scenarios run on the candidate only (
 For each (case, arm): a `simulation` call is created (`is_eval: true`, excluded from dashboard, clustering and [call scoring](/architecture/call-scoring.md)) and driven by:
 
 1. `AgentSession.start()` (greeting).
-2. Simulator ([/prompts/caller-simulator.md](/prompts/caller-simulator.md), role `simulator`) produces the caller's next line given goal, profile and transcript; it outputs `[HANGUP]` when done or stuck.
+2. Simulator ([/prompts/caller-simulator.md](/prompts/caller-simulator.md), role `simulator`) produces the caller's next line given goal, profile, caller style (`calm` for proposal runs; a scenario's persona in suite runs) and transcript; it outputs `[HANGUP]` when done or stuck.
 3. `AgentSession.respond()`.
 4. Stop when the simulator hangs up, the agent ends or escalates (one extra caller line allowed after escalation is not needed — stop), or after 8 caller turns.
 

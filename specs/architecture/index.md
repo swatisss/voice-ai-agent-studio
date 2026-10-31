@@ -16,6 +16,7 @@
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios
+* [Test suites](test-suites.md) - Offline evaluation: per-agent scenarios with expectations run k times by a simulated caller against the published version, the draft or an earlier version, scored and reported as pass rate and pass^k
 * [Call scoring](call-scoring.md) - Online evaluation: a scorecard per real call with checks derived from the version config, rollups per version, drift, reviews and judge calibration
 * [Jobs and events](jobs-and-events.md) - Background job queue and server-sent event bus
 * [Multi-tenancy](multi-tenancy.md) - Tenant resolution and isolation rules

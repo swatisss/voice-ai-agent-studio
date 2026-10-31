@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -39,7 +39,12 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | PUT | `/api/agents/{id}` | `{name?, description?, draft_config?}` → agent (validated per [/data/agent-config.md](/data/agent-config.md); 422 `pipeline_not_allowed`) |
 | POST | `/api/agents/{id}/publish` | `{change_note?}` → `{id, version, created_at}`; 422 on validation failure, including `pipeline_not_allowed` |
 | GET | `/api/agents/{id}/versions` | `{items: [{id, version, change_note, source_proposal_id, created_at}]}` |
-| GET | `/api/agents/{id}/scenarios` | `{items: [eval_scenario]}` |
+| GET | `/api/agents/{id}/scenarios` | `{items: [scenario + last: {eval_run_id, passed, of} \| null]}`, the scenarios of the agent's test suite ([/architecture/test-suites.md](/architecture/test-suites.md)) and each one's result in the latest finished suite run |
+| POST | `/api/agents/{id}/scenarios` | `{name, caller_goal, caller_profile?, persona?, expected?, required_tools?, forbidden_tools?, expected_results?, memory?, enabled?}` → scenario; 422 invalid or `unknown_tool`, 409 `name_taken` |
+| PUT | `/api/scenarios/{id}` | same body, any subset → scenario |
+| DELETE | `/api/scenarios/{id}` | → 204; finished runs keep their copy |
+| POST | `/api/agents/{id}/test-runs` | `{target?: "published"\|"draft"\|"version", version_id?, repeats?: 1–5, scenario_ids?}` → `{eval_run_id}`; 409 `run_in_progress`, 409 `not_published`, 422 `no_scenarios`, 422 when the draft would not publish |
+| GET | `/api/agents/{id}/test-runs` | → `{items: [{id, target, version, trigger, status, repeats, summary, created_at, finished_at}]}`, newest first, at most 50 |
 | GET | `/api/agents/{id}/checks` | query `source=draft\|published` (default `draft`) → `{items: [{key, group, method, hard_gate, text, source: "built_in"\|"config"\|"custom"}]}`, the checks [call scoring](/architecture/call-scoring.md) would apply; 409 `not_published` for `published` on an unpublished agent |
 
 ## Personas
@@ -128,6 +133,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Evaluation
 | Method | Path | Body / query → Result |
 |---|---|---|
+| GET | `/api/test-runs/{id}` | → run + `results: [{scenario_id, scenario, repeat, passed, failures, call_id, scorecard: {score, hard_fail, failed_checks}}]` |
 | GET | `/api/evaluation/summary` | query `agent_id` (required), `days` (7\|28\|90, default 28), `include_seed=true` → `{versions: [{version_id, version, published_at, calls, scored, containment_rate, correct_escalation_rate, unnecessary_escalation_rate, abandonment_rate, hard_fail_calls, thumbs_up_rate, first_response_ms, latency_p50_ms, latency_p95_ms, drift: ["goal_met"\|"grounded"\|"containment"], check_pass_rates: {key: rate}}], checks: [{key, group, method, hard_gate, text, pass_rate, decided, reviews, agreement, catch_rate, baseline, calibrated}], daily: [{date, calls, containment_rate, goal_met_rate, grounded_rate, hard_fails}]}`; rates are 0–1 or `null` without data; another `days` → 422 `invalid_days` ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
 | GET | `/api/evaluation/scorecards` | query `agent_id` (required), `version_id?`, `check?` (key), `verdict?`, `hard_fail?`, `reviewed?`, `days`, `include_seed=true` → `{items: [{call_id, started_at, version, outcome, feedback, score, hard_fail, judged, failed_checks: [key], review_count}]}`, newest first, at most 200 |
 | PUT | `/api/scorecards/{id}/reviews/{check_key}` | `{verdict: "pass"\|"fail"\|"n/a", note?, reviewer}` → review; replaces the earlier review of that check; 404 unknown key; 409 `code_check` for a check decided in code |

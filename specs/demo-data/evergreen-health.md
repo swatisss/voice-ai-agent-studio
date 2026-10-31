@@ -2,7 +2,7 @@
 type: Seed Data
 title: Evergreen Health tenants, agents, tools and skills
 description: The two demo business units, the persona library, the five agents of Customer Support & Channels with their tools, skills and knowledge, the use-case catalog, and the regression scenarios.
-status: stable
+status: draft
 tags: [demo-data, seed, healthcare]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -97,18 +97,20 @@ Eight rows in `use_cases` for `evergreen-care`, category *Customer Support & Cha
 
 # Regression scenarios (Customer Care Agent)
 
-| name | caller | goal | expected |
-|---|---|---|---|
-| Policy status | Maria Lopez | "You want to know if your health policy is active and when it renews." | resolved |
-| Claim paid | Maria Lopez | "You want to know whether claim C-20931 was paid and how much you owe." | resolved |
-| Green Card for Spain | James Carter | "You are driving to Spain next month and need a Green Card for your car policy, emailed to you." | resolved |
-| Dental coverage | Priya Nair | "You want to know how much of your dental allowance is left and whether there is a waiting period." | resolved |
-| Policy schedule by email | Daniel Kim | "You want your policy schedule emailed to you." | resolved |
-| Appeal denied claim | James Carter | "Your surgery claim C-31544 was denied and you want to appeal it." | escalated |
+| name | caller | persona | goal | expected | expectations |
+|---|---|---|---|---|---|
+| Policy status | Maria Lopez | calm | "You want to know if your health policy is active and when it renews." | resolved | requires `verify_member` |
+| Claim paid | Maria Lopez | calm | "You want to know whether claim C-20931 was paid and how much you owe." | resolved | requires `get_claim_status` with `claim_id: C-20931` |
+| Green Card for Spain | James Carter | calm | "You are driving to Spain next month and need a Green Card for your car policy, emailed to you." | resolved | requires `request_document` with `document_type: green_card`, `delivery: email` |
+| Dental coverage | Priya Nair | confused | "You want to know how much of your dental allowance is left and whether there is a waiting period." | resolved | requires `get_coverage_detail` with `benefit: dental` |
+| Policy schedule by email | Daniel Kim | impatient | "You want your policy schedule emailed to you." | resolved | requires `request_document` with `document_type: policy_schedule`, `delivery: email`; result `status` = `queued` |
+| Appeal denied claim | James Carter | calm | "Your surgery claim C-31544 was denied and you want to appeal it." | escalated | — |
+| Wrong date of birth first | Maria Lopez | adversarial | "You want to know whether claim C-20931 was paid." | resolved | requires `verify_member` and `get_claim_status` with `claim_id: C-20931` |
+| Remembers email preference | Daniel Kim | calm | "You want your membership card sent to you." (no delivery preference in the profile) | resolved | memory: "Prefers documents by email"; requires `request_document` with `document_type: membership_card`, `delivery: email` |
 
 # Acceptance
 
 - **UC-06** — Given a fresh database, when the seeder runs, then `evergreen-care` has `allowed_pipelines` `["cascade","realtime"]` with platform fallback on and no stored key, and `evergreen-sandbox` has no settings row (cascade only).
 - **UC-01** — Given a fresh database, when the seeder runs, then tenant `evergreen-care` has the five agents (modes inbound, outbound, outbound, internal, inbound), all published as v1 with the personas, tools, skills and documents listed above, 18 tools in total, and only the Insurance Claims Agent on the realtime pipeline; tenant `evergreen-sandbox` has one document and no agents.
 - **UC-03** — Given the Customer Care Agent and the Internal Knowledge Assistant, when each searches knowledge, then their document sets are disjoint and come from their own folders, and neither can retrieve the other's documents: a question about claims-handler approval limits never returns an internal article for the Customer Care Agent, and a question about the Green Card never returns a customer-care article for the Internal Knowledge Assistant, while each agent's own question finds its own article first (*Authorization limits* for the assistant, *Green Card* for Customer Care).
-- **UC-04** — Given the seeded Customer Care Agent, then it has the six regression scenarios above, five expected `resolved` and one `escalated`.
+- **UC-04** — Given the seeded Customer Care Agent, then it has the eight test scenarios above with their personas and expectations, seven expected `resolved` and one `escalated`, all enabled.

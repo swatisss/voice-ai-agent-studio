@@ -2,7 +2,7 @@
 type: UI Spec
 title: Agent builder
 description: Agents list and the builder tabs - overview, persona, policy, knowledge, tools, skills, versions - with save, publish and test actions.
-status: stable
+status: draft
 tags: [ui, builder]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -13,7 +13,7 @@ Cards: name, description, **mode badge** (Inbound / Outbound / Internal), publis
 
 # Builder (`/agents/edit/?id=…`)
 
-Header: agent name, version badge (`v3` / "Draft changes" when draft differs from published), buttons **Save draft**, **Publish** (modal with change note; shows validation errors from the API), **Test call** (opens `/test-call/?agent=…`).
+Header: agent name, version badge (`v3` / "Draft changes" when draft differs from published), buttons **Save draft**, **Publish** (modal with change note; shows validation errors from the API), **Run tests** (saves the draft if it has unsaved changes, then starts a test-suite run on the draft, [/architecture/test-suites.md](/architecture/test-suites.md); shows progress "Testing 7 of 18" and then "5 of 6 scenarios passed every run" linking to the run; never blocks Publish; disabled with a note when the agent has no scenarios), **Test call** (opens `/test-call/?agent=…`).
 
 Tabs:
 
@@ -27,7 +27,7 @@ Tabs:
 | Tools | Tenant tools with checkboxes; create/edit form: name, description, method, URL, parameters (JSON editor with validation), requires verification, is verification, timeout |
 | Skills | Tenant skills with checkboxes; create/edit form: name, description, instructions (textarea), required tools (multi-select), escalate when |
 | Memory | **Remember callers between calls** toggle (on by default); **Remember things like…** and **Never remember…** text boxes, pre-filled with the defaults and a note "Health details, payment details and ID numbers are never remembered, whatever you write here"; **Forget call summaries after** (days) and **Forget facts after** (days); **Trust verified caller ID (demo only)** toggle with a note that it skips the date of birth only for read-only lookups on US calls with full carrier attestation ([/architecture/agent-memory.md](/architecture/agent-memory.md), [/architecture/caller-verification.md](/architecture/caller-verification.md)) |
-| Evaluation | **Checks this agent is scored on** (`GET /api/agents/{id}/checks` for the draft): grouped list with *Built-in*, *From your policy* or *Custom* tags and a *Hard gate* badge, refreshed after Save draft, so a new Never rule visibly becomes a check; **Custom checks** editor (question, group, hard gate; up to ten); **Judge share of calls** (0–100 %, note: "Escalated, thumbs-down and hard-failed calls are always judged"); **Slow-response limit** (p95, ms); link **See scores** to `/evaluation/?agent=…` ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
+| Evaluation | **Checks this agent is scored on** (`GET /api/agents/{id}/checks` for the draft): grouped list with *Built-in*, *From your policy* or *Custom* tags and a *Hard gate* badge, refreshed after Save draft, so a new Never rule visibly becomes a check; **Custom checks** editor (question, group, hard gate; up to ten); **Judge share of calls** (0–100 %, note: "Escalated, thumbs-down and hard-failed calls are always judged"); **Slow-response limit** (p95, ms); **Run tests when publishing** switch (`evaluation.test_on_publish`); links **Test scenarios** (`/evaluation/?agent=…&view=tests`) and **See scores** to `/evaluation/?agent=…` ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
 | Versions | Table of versions (number, change note, source proposal link, date) |
 
 Unsaved changes show a sticky bar "Unsaved changes — Save draft". Navigating away with unsaved changes asks for confirmation.
@@ -36,6 +36,7 @@ Unsaved changes show a sticky bar "Unsaved changes — Save draft". Navigating a
 
 - **UI-42** — Given the Memory tab of a draft agent, when memory is switched off, the retention is set to 30 and 180 days and Publish is clicked, then the new version's snapshot holds those values; a retention outside the allowed range shows the API's validation error; a new agent shows the toggle on and the default texts.
 - **UI-49** — Given the Evaluation tab of a draft agent, when a Never item is added on the Policy tab and the draft is saved, then the Evaluation tab lists a new hard-gate check *From your policy* with that text; adding a custom check and publishing puts it in the new version's snapshot; an eleventh custom check shows the API's validation error.
+- **UI-53** — Given a draft with unsaved changes, when **Run tests** is clicked, then the draft is saved, a run on the draft starts, the header shows its progress and then the pass^k result linking to the run, and **Publish** stays enabled throughout.
 - **UI-05** — Given an agent with a skill requiring a tool that is not attached, when Publish is clicked, then the modal shows the API error naming the missing tool and no version is created.
 - **UI-06** — Given the Knowledge tab, when a `.zip` OKF bundle is uploaded, then each imported doc appears in the list with source "OKF".
 - **UI-26** — Given the Agents list and an agent's Overview tab, then each agent shows its mode, and changing the mode and targets URL saves with the draft and is part of the published version.

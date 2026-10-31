@@ -22,6 +22,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | **Check** | One yes/no question a call is scored on, decided in code or by the judge; built in, derived from the agent's policy, or custom. Verdicts: pass, fail, n/a, unknown, not judged. |
 | **Hard gate** | A safety or compliance check whose failure fails the whole call (or, later, a run), whatever the other scores. |
 | **Calibrated check** | A judge check with at least 20 human reviews agreeing with the judge at least 85 % of the time. |
+| **Test scenario** | A situation an agent must handle: a simulated caller's goal, profile and persona, the expected outcome and the tools and results expected ([/architecture/test-suites.md](/architecture/test-suites.md)). |
+| **Test run** | Every enabled scenario of an agent played k times against one config (published, draft or an earlier version), each simulated call scored. |
+| **pass^k** | A scenario passes only if all k of its repeats pass; reported next to the pass rate because a single run hides flaky behaviour. |
 | **Drift** | A version's recent scores falling well below its own first week. |
 | **Turn** | One caller utterance plus the agent's response. |
 | **Containment** | A call resolved without a human. |

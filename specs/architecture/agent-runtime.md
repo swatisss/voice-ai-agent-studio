@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent runtime
 description: The shared brain used by voice calls, text chat and simulations - turn loop, prompt assembly, built-in tools, call state, safety screen and escalation triggers.
-status: stable
+status: draft
 tags: [architecture, runtime]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -110,7 +110,7 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 - **RT-04** — Given the model keeps requesting tools, when 4 rounds are reached in one turn, then the runtime stops calling tools and returns the model's text (or an apology) for that turn.
 - **RT-05** — Given the model calls `end_call`, when the reply finishes, then the call is ended with reason `end_call` and an `analyze_call` job is queued.
 - **RT-06** — Given the realtime LLM raises after fallback, when a turn runs, then the caller hears the apology line and the call is escalated with category `other`.
-- **RT-07** — Given the same agent version and the same scripted LLM responses, when run via text and via simulation, then the stored event sequences are identical apart from channel, timestamps and the "Memory loaded" event that only real calls record ([/architecture/agent-memory.md](/architecture/agent-memory.md): simulations never read member memory).
+- **RT-07** — Given the same agent version and the same scripted LLM responses, when run via text and via simulation, then the stored event sequences are identical apart from channel, timestamps and the "Memory loaded" event that only real calls (and test scenarios with memory) record ([/architecture/agent-memory.md](/architecture/agent-memory.md): simulations never read member memory).
 - **RT-08** — Given a session, when `end()` is called twice, then only one `analyze_call` job exists for the call.
 - **~~RT-10~~** — Retired by CP-0016: `run_tool` and `record_turn` are no longer the session's interface; parity between the text loop and an externally driven channel is RT-15. Was: given the same scripted tool results, when a tool is run through `run_tool` and through the text turn loop, then the stored `tool_call`/`tool_result` events, the verification outcome and the escalation behavior are identical; and `record_turn` stores a `user` and an `assistant` event, increments `turns` and adds the reported usage to the call totals.
 - **RT-11** — Given a session, when a caller turn event arrives while the call is escalated, is a farewell phrase, or contains a safety phrase, then the decision is to say the holding message, the closing line then end `farewell`, or the safety message then escalate `safety` and end `handoff`, respectively, and no model request is made; any other text returns *let the model answer*.

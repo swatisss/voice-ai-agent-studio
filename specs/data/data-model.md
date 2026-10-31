@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: stable
+status: draft
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -51,11 +51,11 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **fix_proposals** — `id`, `tenant_id`, `agent_id`, `cluster_id`, `kind` (`knowledge_article`|`skill`|`policy_rule`), `title`, `rationale`, `payload` JSON, `draft_doc_id` (nullable), `status` (`draft`|`evaluating`|`ready`|`approved`|`rejected`), `latest_eval_run_id` (nullable), `resulting_version_id` (nullable), `decided_by`, `decision_note`, `created_at`, `decided_at`
 
-**eval_runs** — `id`, `tenant_id`, `agent_id`, `proposal_id`, `baseline_version_id`, `status` (`running`|`done`|`failed`), `summary` JSON, `error`, `created_at`, `finished_at`
+**eval_runs** — `id`, `tenant_id`, `agent_id`, `kind` (`proposal`|`suite`, default `proposal`), `proposal_id` (nullable; set for proposal runs), `baseline_version_id` (nullable for a suite run on a draft of an unpublished agent; for suite runs the version the target is based on), `target` (`published`|`draft`|`version`, suite runs), `config` JSON (suite runs: the resolved config simulated), `repeats` int (default 1), `trigger` (`manual`|`builder`|`publish`|`proposal`), `scenario_ids` JSON list, `status` (`running`|`done`|`failed`), `summary` JSON, `error`, `created_at`, `finished_at` ([/architecture/test-suites.md](/architecture/test-suites.md))
 
-**eval_results** — `id`, `tenant_id`, `eval_run_id`, `case_key`, `case_type` (`cluster`|`regression`), `arm` (`baseline`|`candidate`), `call_id`, `expected`, `passed` bool, `judge` JSON, `created_at`
+**eval_results** — `id`, `tenant_id`, `eval_run_id`, `case_key`, `case_type` (`cluster`|`regression`|`suite`), `arm` (`baseline`|`candidate`|`target`), `scenario_id` (nullable), `repeat` int (1..k, default 1), `scenario` JSON (suite runs: the scenario as it ran), `call_id`, `expected`, `passed` bool, `failures` JSON list of strings, `judge` JSON, `created_at`
 
-**eval_scenarios** — `id`, `tenant_id`, `agent_id`, `name`, `caller_goal`, `caller_profile` JSON, `expected` (`resolved`|`escalated`), `created_at`
+**eval_scenarios** — `id`, `tenant_id`, `agent_id`, `name`, `caller_goal`, `caller_profile` JSON, `persona` (`calm`|`confused`|`impatient`|`adversarial`, default `calm`), `expected` (`resolved`|`escalated`), `required_tools` JSON, `forbidden_tools` JSON, `expected_results` JSON, `memory` JSON list, `enabled` bool, `created_at`, `updated_at`; existing rows get the defaults on start (empty lists, `enabled: true`)
 
 **call_scorecards** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `agent_version_id`, `measures` JSON, `checks` JSON list (`{key, group, method, hard_gate, text, verdict, reason, evidence}`), `hard_fail` bool, `score` float (nullable), `judged` bool, `judge_model` (nullable), `source` (`llm`|`seed`), `created_at`, `updated_at` ([/architecture/call-scoring.md](/architecture/call-scoring.md))
 
@@ -85,6 +85,6 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 27 tables exist; given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards` or `check_reviews`, when the app starts, then those tables are created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 27 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards` or `check_reviews`, when the app starts, then those tables are created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.

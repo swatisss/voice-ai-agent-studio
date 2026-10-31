@@ -18,6 +18,11 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | **Skill** | A plain-English procedure for one kind of request: when it applies, steps, which tools it uses, when to escalate. |
 | **Knowledge article / doc** | A document the agent can search. Split into chunks and embedded. |
 | **Call** | One conversation (channel `voice`, `text` or `simulation`). |
+| **Scorecard** | The measures and check verdicts of one scored call, tied to the agent version that handled it ([/architecture/call-scoring.md](/architecture/call-scoring.md)). |
+| **Check** | One yes/no question a call is scored on, decided in code or by the judge; built in, derived from the agent's policy, or custom. Verdicts: pass, fail, n/a, unknown, not judged. |
+| **Hard gate** | A safety or compliance check whose failure fails the whole call (or, later, a run), whatever the other scores. |
+| **Calibrated check** | A judge check with at least 20 human reviews agreeing with the judge at least 85 % of the time. |
+| **Drift** | A version's recent scores falling well below its own first week. |
 | **Turn** | One caller utterance plus the agent's response. |
 | **Containment** | A call resolved without a human. |
 | **Escalation** | Handing a call to a human, with a reason category. |

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Knowledge
 description: Knowledge ingestion from text, files, URLs and OKF bundles; heading-aware chunking; local embeddings; cosine search with a no-answer threshold.
-status: stable
+status: draft
 tags: [architecture, knowledge, rag, okf]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -38,7 +38,9 @@ Docs belong to a tenant. An agent uses the docs listed in its config `knowledge_
 1. Embed the query; cosine similarity against all chunks of `doc_ids` (NumPy, in memory, cached per doc set and invalidated on doc changes).
 2. Keep results with score ≥ `KN_MIN_SCORE` (default **0.60** for fastembed, 0.15 for hash).
 3. If none remain → `{"no_answer": true, "message": "No approved information found for this question."}`.
-4. Else → `{"results": [{"doc_id", "title", "heading", "content", "score"}]}`, best first, at most `top_k`, content trimmed to 700 chars.
+4. Else → `{"results": [{"chunk_id", "doc_id", "title", "heading", "content", "score"}]}`, best first, at most `top_k`, content trimmed to 700 chars.
+
+The runtime stores each search in the `search_knowledge` tool-result event as `data.retrieval`: `{query, no_answer, chunks: [{chunk_id, doc_id, score}]}`, so [call scoring](/architecture/call-scoring.md) and the call detail can cite the exact chunks.
 
 The runtime treats `no_answer` as a signal for the no-answer streak ([/architecture/escalation.md](/architecture/escalation.md)) and the analysis treats it as evidence of `missing_knowledge`.
 
@@ -49,4 +51,5 @@ The runtime treats `no_answer` as a signal for the no-answer streak ([/architect
 - **KN-03** — Given an OKF zip containing `index.md`, `log.md` and two concept files, when imported, then exactly two docs are created and frontmatter is stripped from their content.
 - **KN-04** — Given a query unrelated to any doc, when searched, then the result is `no_answer`.
 - **KN-05** — Given docs not listed in the agent's `knowledge_doc_ids`, when the agent searches, then those docs are never returned.
+- **KN-07** — Given a call in which the agent searched knowledge, then the `search_knowledge` tool-result event's `data.retrieval` holds the query and the returned chunk ids and scores (or `no_answer: true` and no chunks).
 - **KN-06** — Given a doc with status `draft`, when a published version searches, then it is excluded unless the version config lists it explicitly (evaluation candidates only).

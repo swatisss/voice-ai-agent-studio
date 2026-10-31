@@ -2,6 +2,7 @@
 
 * [CP-0001 Initial platform build](cp-0001-initial-platform.md) - Build the v1 platform: builder, voice and text test calls, escalation with groundwork packets, fleet learning with eval-gated fixes
 * [CP-0002 Spec enforcement in CI and contributor onboarding](cp-0002-spec-enforcement-and-onboarding.md) - CI gate, PR-level spec-first/log/lifecycle rules, acceptance ratchet, setup script, README
+* [CP-0020 Call scoring and online evaluation](cp-0020-call-scoring-and-online-evaluation.md) - Every real call gets a scorecard of checks derived from its agent version (code first, judge second, hard gates for safety); per-version rollups, drift, human reviews and judge calibration; a new Evaluation page
 * [CP-0019 Agent memory and caller verification](cp-0019-agent-memory-and-caller-verification.md) - Agents remember verified members across calls and maintain that memory themselves; registered phone numbers identify callers, the date of birth verifies them
 * [CP-0018 The text loop drives the turn policy](cp-0018-text-loop-drives-turn-policy.md) - respond() drives the same turn-policy events as the realtime bridge; text calls store the same event data as realtime calls
 * [CP-0017 Effective call settings](cp-0017-effective-call-settings.md) - One resolution of persona, turn detection and pipeline for a call; live changes go through the session and the pipeline subscribes

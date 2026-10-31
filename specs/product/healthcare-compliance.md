@@ -27,3 +27,4 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * PHI redaction before transcripts reach analytics, clustering or LLM drafting.
 * Audit logging and access controls (roles: who may erase or export member memory); retention and deletion policies beyond member memory.
 * Recording consent handling per jurisdiction.
+* Call scoring sends production transcripts to the judge model and shows them to reviewers ([/architecture/call-scoring.md](/architecture/call-scoring.md)); in production the judge provider needs the same BAA coverage as the call, and review access needs roles and audit logging.

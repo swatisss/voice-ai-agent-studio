@@ -16,6 +16,7 @@
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios
+* [Call scoring](call-scoring.md) - Online evaluation: a scorecard per real call with checks derived from the version config, rollups per version, drift, reviews and judge calibration
 * [Jobs and events](jobs-and-events.md) - Background job queue and server-sent event bus
 * [Multi-tenancy](multi-tenancy.md) - Tenant resolution and isolation rules
 * [Call admission](call-admission.md) - One decision for every way a voice call starts: pipeline allowed, credential available, the call plan

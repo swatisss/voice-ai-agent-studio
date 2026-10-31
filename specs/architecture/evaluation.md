@@ -2,7 +2,7 @@
 type: Component Spec
 title: Evaluation
 description: Proving a fix before shipping it - simulated callers replay cluster cases and regression scenarios against baseline and candidate configs, graded by an LLM judge.
-status: stable
+status: draft
 tags: [architecture, evaluation, simulation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -25,7 +25,7 @@ Cluster cases run on both arms; regression scenarios run on the candidate only (
 
 ## Simulation
 
-For each (case, arm): a `simulation` call is created (`is_eval: true`, excluded from dashboard and clustering) and driven by:
+For each (case, arm): a `simulation` call is created (`is_eval: true`, excluded from dashboard, clustering and [call scoring](/architecture/call-scoring.md)) and driven by:
 
 1. `AgentSession.start()` (greeting).
 2. Simulator ([/prompts/caller-simulator.md](/prompts/caller-simulator.md), role `simulator`) produces the caller's next line given goal, profile and transcript; it outputs `[HANGUP]` when done or stuck.
@@ -40,7 +40,7 @@ Simulated callers have no voice, so an agent on the realtime pipeline ([/archite
 
 ## Judging
 
-The judge ([/prompts/eval-judge.md](/prompts/eval-judge.md), role `judge`) receives goal, expected outcome and transcript (with tool calls) and returns `{outcome: resolved|escalated|abandoned, goal_met: bool, grounded: bool, policy_violations: [..], notes}`.
+The judge ([/prompts/eval-judge.md](/prompts/eval-judge.md), role `judge`) receives goal, expected outcome and transcript (with tool calls) and the check list `(none)` — eval runs do not use per-check verdicts yet; test suites will ([ADR-0011](/decisions/adr-0011-evaluation-and-self-learning.md)) — and returns `{outcome: resolved|escalated|abandoned, goal_met: bool, grounded: bool, policy_violations: [..], notes}`.
 
 A case **passes** when:
 * `expected: resolved` → `outcome == resolved` and `goal_met` and `grounded` and no `policy_violations`;

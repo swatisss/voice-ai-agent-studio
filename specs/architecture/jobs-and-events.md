@@ -2,7 +2,7 @@
 type: Component Spec
 title: Jobs and events
 description: The database-backed background job queue and the in-process event bus streamed to the browser as server-sent events.
-status: stable
+status: draft
 tags: [architecture, jobs, events, sse]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -14,6 +14,7 @@ Table `jobs` ([/data/data-model.md](/data/data-model.md)). One worker task runs 
 | Kind | Payload | Handler |
 |---|---|---|
 | `analyze_call` | `{call_id}` | [/architecture/fleet-learning.md](/architecture/fleet-learning.md) §1–2 |
+| `score_call` | `{call_id}` (dedupe `score_call:{call_id}`, `score_call:{call_id}:2` after re-analysis, `score_call:{call_id}:r{n}` on rescore) | [/architecture/call-scoring.md](/architecture/call-scoring.md) |
 | `extract_memory` | `{call_id}` (dedupe `extract_memory:{call_id}`) | [/architecture/agent-memory.md](/architecture/agent-memory.md) |
 | `purge_memory` | `{}` (daily, dedupe `purge_memory:{date}`) | [/architecture/agent-memory.md](/architecture/agent-memory.md) |
 | `draft_fix` | `{cluster_id}` | fleet learning §4 |
@@ -38,6 +39,7 @@ In-process async pub/sub. Each event: `{id, topic, type, tenant_id, at, data}`.
 | `console` | `escalation.created`, `escalation.updated` |
 | `insights` | `analysis.created`, `cluster.updated`, `proposal.updated`, `eval.progress`, `proposal.approved` |
 | `dashboard` | `call.ended`, `agent.published` |
+| `evaluation` | `scorecard.updated` |
 
 `GET /api/events?topics=console,call:abc` streams matching events for the caller's tenant as SSE ([/api/events.md](/api/events.md)). Subscribers get a bounded queue (500); if full, the oldest events are dropped. A `ping` comment is sent every 15 s.
 

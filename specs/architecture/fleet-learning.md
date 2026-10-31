@@ -2,7 +2,7 @@
 type: Component Spec
 title: Fleet learning
 description: Post-call analysis, gap clustering, impact estimation, fix drafting from human resolutions, and approval into a new agent version.
-status: stable
+status: draft
 tags: [architecture, learning, clustering]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -24,7 +24,7 @@ Output stored in `call_analyses`:
 | `resolution_summary` | What resolved it (agent answer or human note), may be empty |
 | `sentiment_start`, `sentiment_end` | as in the packet |
 
-The call's `outcome` column is set from the analysis. If the escalation is resolved **after** analysis ran, analysis re-runs once (`analyze_call` re-queued by the resolve endpoint) to capture the human note. Likewise a **thumbs down** re-queues `analyze_call` once (dedupe key `analyze_call:{call_id}:feedback`) so the analysis sees the feedback; a thumbs up queues nothing. The `outcome` is unchanged by feedback: a resolved call the caller disliked stays `resolved` (containment is not affected) but becomes a learning candidate.
+When the job finishes for a real call it queues `score_call` ([/architecture/call-scoring.md](/architecture/call-scoring.md)), which uses `caller_goal` as the goal it judges against. The call's `outcome` column is set from the analysis. If the escalation is resolved **after** analysis ran, analysis re-runs once (`analyze_call` re-queued by the resolve endpoint) to capture the human note. Likewise a **thumbs down** re-queues `analyze_call` once (dedupe key `analyze_call:{call_id}:feedback`) so the analysis sees the feedback; a thumbs up queues nothing. The `outcome` is unchanged by feedback: a resolved call the caller disliked stays `resolved` (containment is not affected) but becomes a learning candidate.
 
 # 2. Clustering
 

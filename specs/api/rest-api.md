@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -40,6 +40,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/agents/{id}/publish` | `{change_note?}` → `{id, version, created_at}`; 422 on validation failure, including `pipeline_not_allowed` |
 | GET | `/api/agents/{id}/versions` | `{items: [{id, version, change_note, source_proposal_id, created_at}]}` |
 | GET | `/api/agents/{id}/scenarios` | `{items: [eval_scenario]}` |
+| GET | `/api/agents/{id}/checks` | query `source=draft\|published` (default `draft`) → `{items: [{key, group, method, hard_gate, text, source: "built_in"\|"config"\|"custom"}]}`, the checks [call scoring](/architecture/call-scoring.md) would apply; 409 `not_published` for `published` on an unpublished agent |
 
 ## Personas
 | Method | Path | Body → Result |
@@ -75,7 +76,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |
 | PATCH | `/api/calls/{id}/live` | `{persona_id?, turn_detection?}` → `{settings}`; changes persona and/or turn detection of a running call (404 unknown, 409 ended, 422 invalid). 409 `realtime_pipeline` for a call on the realtime pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md), RV-15). See [/architecture/personas.md](/architecture/personas.md), [/architecture/turn-detection.md](/architecture/turn-detection.md). |
 | GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `direction?`, `feedback?` (`up`\|`down`\|`none`), `include_seed=true` → `{items: [call summary]}` (eval calls excluded); each summary carries `feedback` (`"up"`, `"down"` or `null`) and `transport` (`"phone"` for a call that came in through Twilio, else `"browser"`) |
-| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `telephony` (`{provider, call_sid, from_last4, to}` for a phone call, else `null`) + `identification` (`{first_name, method, attestation}` or `null`) + `memory` (`{used: [memory], updated: [memory event]}`) |
+| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `telephony` (`{provider, call_sid, from_last4, to}` for a phone call, else `null`) + `identification` (`{first_name, method, attestation}` or `null`) + `memory` (`{used: [memory], updated: [memory event]}`) + `scorecard` (the call's scorecard with `reviews: {check_key: review}`, or `null`) |
+| POST | `/api/calls/{id}/rescore` | → `{job_id}`; queues `score_call` again; 409 `call_active`, 409 `not_scorable` for a simulation call |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
 
 ## Member memory
@@ -123,6 +125,13 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/proposals/{id}/approve` | `{decided_by, note?, force?}` → `{proposal, version}`; 409 per [/architecture/fleet-learning.md](/architecture/fleet-learning.md) |
 | POST | `/api/proposals/{id}/reject` | `{decided_by, note}` → proposal |
 
+## Evaluation
+| Method | Path | Body / query → Result |
+|---|---|---|
+| GET | `/api/evaluation/summary` | query `agent_id` (required), `days` (7\|28\|90, default 28), `include_seed=true` → `{versions: [{version_id, version, published_at, calls, scored, containment_rate, correct_escalation_rate, unnecessary_escalation_rate, abandonment_rate, hard_fail_calls, thumbs_up_rate, first_response_ms, latency_p50_ms, latency_p95_ms, drift, check_pass_rates: {key: rate}}], checks: [{key, group, method, hard_gate, text, pass_rate, decided, reviews, agreement, catch_rate, baseline, calibrated}], daily: [{date, calls, containment_rate, goal_met_rate, grounded_rate, hard_fails}]}`; rates are 0–1 or `null` without data ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
+| GET | `/api/evaluation/scorecards` | query `agent_id` (required), `version_id?`, `check?` (key), `verdict?`, `hard_fail?`, `reviewed?`, `days`, `include_seed=true` → `{items: [{call_id, started_at, version, outcome, feedback, score, hard_fail, judged, failed_checks: [key], review_count}]}`, newest first, at most 200 |
+| PUT | `/api/scorecards/{id}/reviews/{check_key}` | `{verdict: "pass"\|"fail"\|"n/a", note?, reviewer}` → review; replaces the earlier review of that check; 404 unknown key; 409 `code_check` for a check decided in code |
+
 ## Dashboard
 | Method | Path | Result |
 |---|---|---|
@@ -141,4 +150,6 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 - **API-05** — Given `POST /api/calls` with `caller_number` set to a registered number, then `GET /api/calls/{id}` shows `identification.first_name` and never the number; a value that is not E.164 returns 422.
 - **API-06** — Given a verified call that loaded memory and a finished `extract_memory` job, then `GET /api/calls/{id}` lists the loaded items under `memory.used` and the job's changes under `memory.updated`.
 - **API-07** — Given a member erased with `POST …/memory/erase`, then `GET …/memory` returns no facts, episodes or retired items and only the content-free erasure event, and so does the export; for a member the tenant never held anything about, `GET …/memory` returns 404.
+- **API-08** — Given a scored call, when `PUT /api/scorecards/{id}/reviews/knowledge.grounded` is sent twice with different verdicts, then one review exists with the second verdict and the stored judge verdict is unchanged; the same request for `tools.succeeded` returns 409 `code_check`.
+- **API-09** — Given an agent with scored real calls and simulation calls, then `GET /api/evaluation/summary` counts only the real calls, and `GET /api/agents/{id}/checks` for a draft with a new `never` item lists its `never.<hash>` check with `source: "config"` before it is published.
 - **API-04** — Given `GET /api/calls`, then simulation calls created by evaluations never appear.

@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: stable
+status: draft
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -57,6 +57,10 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **eval_scenarios** — `id`, `tenant_id`, `agent_id`, `name`, `caller_goal`, `caller_profile` JSON, `expected` (`resolved`|`escalated`), `created_at`
 
+**call_scorecards** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `agent_version_id`, `measures` JSON, `checks` JSON list (`{key, group, method, hard_gate, text, verdict, reason, evidence}`), `hard_fail` bool, `score` float (nullable), `judged` bool, `judge_model` (nullable), `source` (`llm`|`seed`), `created_at`, `updated_at` ([/architecture/call-scoring.md](/architecture/call-scoring.md))
+
+**check_reviews** — `id`, `tenant_id`, `scorecard_id`, `call_id`, `agent_id`, `check_key` (unique with `scorecard_id`), `judge_verdict` (copied when reviewed), `verdict` (`pass`|`fail`|`n/a`), `note` (nullable, ≤ 300 chars), `reviewer`, `created_at`, `updated_at`
+
 **use_cases** — `id`, `tenant_id`, `agent_id`, `category`, `title`, `summary`, `channels` JSON list, `sample_utterances` JSON list, `demo_callers` JSON list, `sort` int, `created_at` ([/product/use-cases.md](/product/use-cases.md))
 
 **phone_numbers** — `id`, `tenant_id`, `e164` (unique across all tenants), `agent_id`, `label` (nullable), `created_at`; routes an inbound phone number to the agent's published version ([/architecture/telephony.md](/architecture/telephony.md))
@@ -72,6 +76,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ```
 tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
         │         │                         ├─ escalation
+        │         │                         ├─ call_scorecard ── check_review
         │         │                         └─ call_analysis ── cluster ── fix_proposal ── eval_run ── eval_result
         │         └─ eval_scenario
         ├─ tool, skill, knowledge_doc ── knowledge_chunk
@@ -80,6 +85,6 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 25 tables exist; given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories` or `memory_events`, when the app starts, then those tables are created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 27 tables exist; given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards` or `check_reviews`, when the app starts, then those tables are created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.

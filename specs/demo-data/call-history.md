@@ -2,7 +2,7 @@
 type: Seed Data
 title: Synthetic call history
 description: Design of the ~120 historical calls seeded for the Customer Care Agent - volumes, intents, outcomes, clusters, analyses and human resolution notes.
-status: stable
+status: draft
 tags: [demo-data, seed, learning]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -12,6 +12,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Four weeks: the 28 days ending the day before seeding (for a seed on 2026-10-05 that is 2026-09-07 → 2026-10-04), business hours, deterministic RNG seed `42`. Dates are relative so a reseed before any demo keeps clusters inside the 28-day impact window.
 * Channel `voice`, agent version v1, `is_seed: true`, analyses with `source: seed` (no LLM needed to seed).
 * Each call gets a short transcript (4–10 events) from templates, consistent with [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md); costs ≈ $0.004–0.012; latency 650–1,400 ms.
+* Each call gets a scorecard with `source: seed` ([/architecture/call-scoring.md](/architecture/call-scoring.md)): measures and code checks computed from its events as for a real call; judge checks set without a model: `outcome.goal_met` fails for the 3 abandoned calls and passes otherwise, `outcome.escalation_appropriate` passes, `knowledge.grounded` fails for 5 `coverage_question` calls (reason "Quoted a copay amount that is not in the retrieved article"; one in each of weeks 2 and 3, three in week 4) and passes for the other resolved calls; every other check passes or is `n/a`. No reviews are seeded.
 
 # Mix (123 calls)
 

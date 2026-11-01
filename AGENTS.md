@@ -36,7 +36,8 @@ python scripts/spec_check.py --ci --base origin/main   # exactly what CI enforce
 python scripts/spec_check.py                 # quick spec lint (repo root)
 cd apps/api && uv sync && uv run pytest      # backend tests
 python scripts/dev.py                        # whole stack: web :3000 + API :8000, prefixed logs, Ctrl+C stops all
-python scripts/demo_walkthrough.py           # against a running stack: build, call, score and test the demo agent; report in apps/api/data/demo-runs/ (--learning adds self-learning)
+python scripts/demo_walkthrough.py --learning  # the demo end to end on a scripted fake LLM: no keys, no cost, ~30 s; report in apps/api/data/demo-runs/
+python scripts/demo_walkthrough.py --live      # the same against the running stack with REAL (paid) LLM calls: ask the owner first
 cd apps/api && uv run voiceai serve          # API only (+ built web) on :8000
 cd apps/api && uv run voiceai seed --reset   # reseed demo data
 cd apps/web && npm install && npm run dev    # web dev server on :3000

@@ -3,10 +3,14 @@
 
 Spec: /product/demo-walkthrough.md
 
-    python scripts/dev.py                          # in another terminal: the stack on :8000
-    python scripts/demo_walkthrough.py             # build, publish, call, score, test the demo agent
-    python scripts/demo_walkthrough.py --learning  # also draft and evaluate the newborn fix (about 6 minutes)
-    python scripts/demo_walkthrough.py --serve-site  # only host the demo website, for the manual walkthrough
+    python scripts/demo_walkthrough.py --learning          # default: fake mode, no API keys, no cost, about 30 s
+    python scripts/dev.py                                  # in another terminal, for a live run against the stack on :8000
+    python scripts/demo_walkthrough.py --live              # REAL LLM calls on your keys (costs money): build, call, score, test
+    python scripts/demo_walkthrough.py --live --learning   # also replays 72 simulated calls for the newborn fix (about 6 min)
+    python scripts/demo_walkthrough.py --serve-site        # only host the demo website, for the manual walkthrough
+
+Fake mode starts its own throwaway API with a scripted stand-in for every LLM role (scripts/demo/fake_llm.py) and the
+local embedding model, on a fresh seeded database, and stops it afterwards.
 
 Every step drives the same REST API the web app uses (/api/rest-api.md), so the run shows
 exactly what a builder sees. The demo agent lives in the sandbox business unit and is
@@ -21,8 +25,12 @@ import argparse
 import functools
 import http.server
 import json
+import os
 import re
+import signal
+import socket
 import socketserver
+import subprocess
 import sys
 import threading
 import time
@@ -37,6 +45,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEMO_DIR = ROOT / "scripts" / "demo"
 SITE_DIR = DEMO_DIR / "safetrip-site"
 REPORT_DIR = ROOT / "apps" / "api" / "data" / "demo-runs"
+API_DIR = ROOT / "apps" / "api"
 
 AGENT_NAME = "Travel Cover Helpdesk"
 AGENT_DESCRIPTION = ("Answers travellers' questions about what their travel insurance covers, "
@@ -123,7 +132,9 @@ class Report:
 
     def markdown(self, started: datetime, args: argparse.Namespace) -> str:
         lines = [f"# Demo walkthrough run {started:%Y-%m-%d %H:%M}", "",
-                 f"API `{args.api}`, business unit `{args.tenant}`" + (", with self-learning" if args.learning else ""), ""]
+                 f"API `{args.api}`, business unit `{args.tenant}`" + (", with self-learning" if args.learning else ""),
+                 "" if not args.fake else "\n**Fake mode**: scripted fake LLM, no API keys, no model calls. Checks show the flow works, not answer quality.",
+                 ""]
         counts: dict[str, int] = {}
         for c in self.checks:
             counts[c.label] = counts.get(c.label, 0) + 1
@@ -582,7 +593,7 @@ def main() -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--api", default="http://localhost:8000", help="API base URL (default http://localhost:8000)")
+    ap.add_argument("--api", default="http://localhost:8000", help="API base URL for --live (default http://localhost:8000)")
     ap.add_argument("--tenant", default="evergreen-sandbox", help="business unit for the demo agent")
     ap.add_argument("--learning", action="store_true", help="also draft and evaluate the newborn fix (about 6 minutes, uses LLM calls)")
     ap.add_argument("--learning-tenant", default="evergreen-care", help="business unit for the self-learning step")
@@ -591,7 +602,10 @@ def main() -> int:
     ap.add_argument("--report", help="report path (default apps/api/data/demo-runs/demo-<time>.md)")
     ap.add_argument("--no-open-agent", dest="open_agent", action="store_false", help="do not print the builder link")
     ap.add_argument("--serve-site", action="store_true", help="only serve the demo website (for the manual walkthrough) until Ctrl+C")
+    ap.add_argument("--live", action="store_true",
+                    help="run against --api with its real LLM keys (makes paid model calls); the default is fake mode")
     args = ap.parse_args()
+    args.fake = not args.live
     if args.serve_site:
         server, port = serve_site(args.site_port)
         print(f"Demo website: http://127.0.0.1:{port}/help/  (gadget page: http://127.0.0.1:{port}/help/gadgets.html)")
@@ -602,7 +616,69 @@ def main() -> int:
         except KeyboardInterrupt:
             server.shutdown()
         return 0
+    if args.fake:
+        return run_fake(args)
+    print(f"LIVE mode: real LLM calls on the keys of {args.api}.", flush=True)
     return Walkthrough(args).run()
+
+
+def free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def run_fake(args: argparse.Namespace) -> int:
+    """Start scripts/demo/fake_server.py on a free port with a fresh database, run the walkthrough, stop the server."""
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    port, db_file, log_file = free_port(), REPORT_DIR / f"fake-{stamp}.db", REPORT_DIR / f"fake-{stamp}-server.log"
+    print(f"Fake mode: scripted LLM, no API calls. Starting a throwaway API on :{port} (seeding takes a few seconds)…", flush=True)
+    with open(log_file, "w", encoding="utf-8") as log:
+        server = subprocess.Popen(["uv", "run", "python", str(DEMO_DIR / "fake_server.py"), "--port", str(port), "--db", str(db_file)],
+                                  cwd=API_DIR, stdout=log, stderr=subprocess.STDOUT, start_new_session=os.name != "nt")
+    try:
+        deadline = time.monotonic() + 180
+        while True:
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/tenants", timeout=2)
+                break
+            except OSError:
+                if server.poll() is not None or time.monotonic() > deadline:
+                    print(f"The fake API did not start; see {log_file}")
+                    return 1
+                time.sleep(1)
+        args.api, args.open_agent = f"http://127.0.0.1:{port}", False  # the server stops after the run: no link to open
+        code = Walkthrough(args).run()
+    finally:
+        stop_tree(server)
+    if code == 0:  # keep the database and the server log only when something failed
+        for _ in range(10):  # Windows releases the database files a moment after the server process ends
+            for f in REPORT_DIR.glob(f"fake-{stamp}*"):
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+            if not any(REPORT_DIR.glob(f"fake-{stamp}*")):
+                break
+            time.sleep(0.5)
+    else:
+        print(f"Kept for inspection: {db_file} and {log_file}")
+    return code
+
+
+def stop_tree(proc: subprocess.Popen) -> None:
+    """Stop `uv run` and the Python server it started: terminating uv alone leaves the server running on Windows."""
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+    else:
+        os.killpg(proc.pid, signal.SIGTERM)
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ The [hackathon demo script](/product/demo-script.md) starts from seeded agents. 
 | 4. Prove it with tests | 3 | Evaluation → Test suites |
 | 5. Learning from escalations | 6 | Insights (Customer Support & Channels) |
 
-**Run it unattended first.** `python scripts/demo_walkthrough.py` performs Acts 1–4 through the API and writes a report (see [Automated run](#automated-run)). Run it before every demo: if it passes, the live demo will too.
+**Run it unattended first.** `python scripts/demo_walkthrough.py --learning` performs Acts 1–5 in about 30 seconds with a scripted fake LLM: no API keys, no cost (see [Automated run](#automated-run)). Before a live demo, `--live` repeats it against your stack with the real models; that run makes paid model calls.
 
 # Setup
 
@@ -109,14 +109,18 @@ Today the gate usually **blocks** this fix: the article answers correctly, but t
 
 # Automated run
 
-`scripts/demo_walkthrough.py` (stdlib only) runs Acts 1–4, and Act 5 with `--learning`, against a running stack through the same [REST API](/api/rest-api.md) the web app uses:
+`scripts/demo_walkthrough.py` (stdlib only) runs Acts 1–4, and Act 5 with `--learning`, through the same [REST API](/api/rest-api.md) the web app uses. It has two modes.
+
+**Fake mode (the default): no API keys, no cost.** The runner starts its own throwaway API on a free port: a fresh database seeded with the demo data, the local embedding model (it runs on the CPU, no API), every provider key blanked, and a scripted stand-in for every LLM role (`scripts/demo/fake_llm.py`, started by `scripts/demo/fake_server.py`). The stand-in is not a model: the agent searches knowledge and answers with the best-matching sentences, calls `get_claim_documents` once it knows the claim type, refuses to promise payment, escalates on the agent's escalation rules and ends on a goodbye; the simulated caller states its goal, hangs up once answered and takes a specialist only when the agent could not answer; the judge fails `outcome.goal_met` when the answer does not cover the goal and passes the other checks; fix drafts are built from the specialists' notes. So the whole flow runs and a bad answer or a missing article still fails, but the run says nothing about real answer quality. The server is stopped afterwards; its database and log are kept only when a check failed.
+
+**Live mode (`--live`): real model calls, paid.** Runs against `--api` (default the stack on `:8000`) with that server's keys. A run of Acts 1–4 makes about 20 calls; `--learning` adds two arms of about 36 simulated calls each, plus judging. Ask before running it on someone else's keys.
 
 ```bash
-python scripts/dev.py                               # terminal 1: the stack
-python scripts/demo_walkthrough.py                  # terminal 2: Acts 1-4, about 2 minutes
-python scripts/demo_walkthrough.py --learning       # also Act 5, about 8-10 minutes
-python scripts/demo_walkthrough.py --repeats 3      # each test scenario 3 times
-python scripts/demo_walkthrough.py --api https://<host> --tenant evergreen-sandbox
+python scripts/demo_walkthrough.py --learning       # fake mode, Acts 1-5, about 30 seconds, no cost
+python scripts/demo_walkthrough.py --repeats 3      # fake mode, each test scenario 3 times
+python scripts/dev.py                               # for live mode: the stack, in another terminal
+python scripts/demo_walkthrough.py --live           # live mode, Acts 1-4, about 2 minutes, paid
+python scripts/demo_walkthrough.py --live --learning --api https://<host>   # live, with Act 5 (about 8-10 minutes)
 python scripts/demo_walkthrough.py --serve-site     # only host the demo website (manual demo)
 ```
 

@@ -40,7 +40,7 @@ def words(text: str) -> set[str]:
 
 def sentences(text: str) -> list[str]:
     plain = re.sub(r"^#+ .*$", "", text, flags=re.M)
-    return [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", plain) if len(s.strip()) > 15]
+    return [s.strip().lstrip("-* ") for s in re.split(r"(?<=[.!?])\s+|\n+", plain) if len(s.strip()) > 15]  # list items read as sentences
 
 
 def best_sentences(question: str, content: str, n: int = 2) -> str:
@@ -157,11 +157,15 @@ def json_reply(role: str, prompt: str, schema: str) -> dict[str, Any]:
         return {"outcome": "escalated" if escalated else "resolved", "goal_met": met, "grounded": True,
                 "policy_violations": [], "notes": "Scripted judge (demo fake mode).", "checks": checks}
     if schema == "AnalysisOut":
-        gap = "no approved information" in prompt.lower()
+        # a specialist answered what the agent could not: the answer was missing from the knowledge, and the gap is
+        # described by that answer, as a real analyst would summarise it (so paraphrased questions cluster together)
+        note = re.search(r"human resolution note: ([^.\n]+)", prompt)
+        gap = "no approved information" in prompt.lower() or bool(escalated and note)
         safety = bool(re.search(r"hospital|emergency|safety", prompt, re.I))
         root = ("missing_knowledge" if gap else "safety" if safety else "caller_requested") if escalated else "none"
+        summary = f"No approved answer; a specialist explained: {note.group(1).strip()}" if note else goal
         return {"outcome": "escalated" if escalated else "resolved", "intent": "coverage_question", "root_cause": root,
-                "gap_summary": goal if gap else "", "caller_goal": goal, "resolution_summary": "Scripted analysis (demo fake mode).",
+                "gap_summary": summary if gap else "", "caller_goal": goal, "resolution_summary": "Scripted analysis (demo fake mode).",
                 "sentiment_start": "neutral", "sentiment_end": "neutral"}
     if schema == "Packet":
         return {"summary": f"The caller said: {goal}", "intent": "coverage_question", "entities": {}, "already_tried": [],

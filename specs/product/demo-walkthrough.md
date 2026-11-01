@@ -1,7 +1,7 @@
 ---
 type: Demo Script
 title: Demo walkthrough - a new agent from scratch
-description: About 25 minutes - build a travel-insurance agent in the empty sandbox business unit from a pasted policy and a web page, publish it, test it by chat, read its scorecard, escalation and test suite, then watch self-learning draft and gate a fix; the same flow runs unattended with scripts/demo_walkthrough.py.
+description: About 33 minutes - build a travel-insurance agent in the empty sandbox business unit from a pasted policy and a web page, publish it, test it by chat, read its scorecard, escalation and test suite, watch self-learning draft and gate a fix, then close the loop - a question the agent cannot answer, a specialist's answer, Run learning now, approve, ask again; the same flow runs unattended with scripts/demo_walkthrough.py.
 status: stable
 tags: [product, demo, onboarding]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
@@ -9,7 +9,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 
 # What this shows
 
-The [hackathon demo script](/product/demo-script.md) starts from seeded agents. This walkthrough starts from **nothing**, as a new customer would: an empty business unit, one policy document and one web page. It covers every builder surface (knowledge, tools, skills, policy, persona, publish), the playground, scoring, the human console, test suites and self-learning. Everything is synthetic: *SafeTrip* is a fictional travel insurer.
+The [hackathon demo script](/product/demo-script.md) starts from seeded agents. This walkthrough starts from **nothing**, as a new customer would: an empty business unit, one policy document and one web page. It covers every builder surface (knowledge, tools, skills, policy, persona, publish), the playground, scoring, the human console, test suites and self-learning, ending with the whole learning loop on the agent just built. Everything is synthetic: *SafeTrip* is a fictional travel insurer.
 
 | Act | Minutes | Where |
 |---|---|---|
@@ -18,8 +18,9 @@ The [hackathon demo script](/product/demo-script.md) starts from seeded agents. 
 | 3. What happened | 4 | Calls, Agent console, Evaluation |
 | 4. Prove it with tests | 3 | Evaluation → Test suites |
 | 5. Learning from escalations | 6 | Insights (Customer Support & Channels) |
+| 6. Close the loop | 8 | Test call, Agent console, Dashboard, Insights (sandbox) |
 
-**Run it unattended first.** `python scripts/demo_walkthrough.py --learning` performs Acts 1–5 in about 30 seconds with a scripted fake LLM: no API keys, no cost (see [Automated run](#automated-run)). Before a live demo, `--live` repeats it against your stack with the real models; that run makes paid model calls.
+**Run it unattended first.** `python scripts/demo_walkthrough.py --learning` performs Acts 1–6 in about a minute with a scripted fake LLM: no API keys, no cost (see [Automated run](#automated-run)). Before a live demo, `--live` repeats it against your stack with the real models; that run makes paid model calls.
 
 # Setup
 
@@ -97,6 +98,25 @@ Switch **Business unit** to **Customer Support & Channels** (seeded history).
 
 Today the gate usually **blocks** this fix: the article answers correctly, but the agent then offers a specialist and the simulated caller accepts ([roadmap](/product/roadmap.md) R7, R9). Present it honestly: the gate did its job, and the reviewer can **Reject**, edit the draft, or **Publish anyway** with a written note.
 
+# Act 6 — Close the loop (≈8 min)
+
+The agent learns something nobody wrote down: whether travellers can **extend their cover while abroad**. Neither the policy nor the help centre says. Only the specialists know, and they teach the agent by resolving escalations. Stay in **New Business Unit (sandbox)**.
+
+**Before a live demo**: a cluster is ready for a fix after 5 signals (`FL_MIN_CLUSTER_SIZE`). To show the loop with two calls instead of five, put `FL_MIN_CLUSTER_SIZE=2` in `apps/api/.env` and restart `scripts/dev.py` (it lowers the bar for every business unit; remove it afterwards). Or run `python scripts/demo_walkthrough.py --live --learning` beforehand and present the result as a tour.
+
+| Do | Expect | Say |
+|---|---|---|
+| **Test call** → Type: "I'm in Lisbon and want to stay two more weeks. Can I extend my SafeTrip cover while I'm still abroad?" | The agent cannot answer (it says it has no information, or answers beside the point) | "Nobody gave it this answer." |
+| "Yes, please connect me with a specialist." (also when the agent did not offer) | *Escalated — waiting for a specialist* | |
+| **Agent console** → the escalation → **Accept**; disposition *Resolved by human*; note: *You can extend SafeTrip cover once while abroad, by up to 30 extra days, if you ask before your original end date. Extend it in the SafeTrip app or by calling +1 555 0100. The extension does not cover anything that started before it.* → **Resolve** | Resolved | "The hint says it: what you tell the caller teaches the agent." |
+| Repeat the call and the resolution with "I've decided to stay abroad longer than planned. Can I extend my travel cover from here?" (and more paraphrases until the threshold) | **Insights** shows a cluster about cover extensions, *Ready for fix* | "Same gap, different words: they cluster." |
+| **Dashboard** → Self-learning card → **Run learning now** | "Learning…", then the card shows the run: calls reviewed, signals, 1 proposal drafted | "This is the nightly run, started by hand." |
+| **Review proposals** → the *Nightly* card → **Open** | A knowledge article built from the specialists' note and its gate: cluster calls before and after, test scenarios, latency | "Every fact comes from a person. The gate replayed the failing calls and our test suite on both versions." |
+| **Approve & publish** (or **Publish anyway** with a note, below) | A new version, change note "Fix: …" | "A person decided. The agent never edits itself." |
+| **Test call** → "I'm loving Portugal and want to stay ten more days. Can I extend my cover from here?" | Up to 30 extra days, before the original end date, app or +1 555 0100; no hand-off | "Same question, new words, answered by the fixed version." |
+
+Present a blocked gate honestly: with live models the simulated caller may accept a specialist it did not need ([roadmap](/product/roadmap.md) R9), and the latency rule is noisy (R16). The reviewer can still **Publish anyway** with a written note; the last test call is the proof. What the loop does not do yet (check after publishing that the fix held, learn facts only from human answers, ship exactly what was gated) is in [How self-learning should work](/architecture/self-learning-target.md).
+
 # Known gaps to mention or avoid
 
 | Gap | Where it shows | Fixed by |
@@ -105,26 +125,28 @@ Today the gate usually **blocks** this fix: the article answers correctly, but t
 | ~~One page per URL, no sync, site header indexed with the page~~ | Act 1 From URL | fixed by [CP-0031](/changes/cp-0031-website-knowledge-sources.md) |
 | The same site added twice shows every search result twice | Act 1, if repeated | not yet planned |
 | Chat box loses focus after each message | Act 2 | [roadmap](/product/roadmap.md) R13 |
-| Simulated caller invents follow-ups and accepts hand-offs | Acts 4 and 5 | roadmap R9 |
+| Simulated caller invents follow-ups and accepts hand-offs | Acts 4, 5 and 6 | roadmap R9 |
+| The gate blocks a good fix on latency noise | Acts 5 and 6 | roadmap R16 |
+| A fixed cluster never reopens, so repeating Act 6 on the same database stalls (the automated run ignores the old cluster) | Act 6, second time | roadmap R15 |
 
 # Automated run
 
-`scripts/demo_walkthrough.py` (stdlib only) runs Acts 1–4, and Act 5 with `--learning`, through the same [REST API](/api/rest-api.md) the web app uses. It has two modes.
+`scripts/demo_walkthrough.py` (stdlib only) runs Acts 1–4, and Acts 5 and 6 with `--learning`, through the same [REST API](/api/rest-api.md) the web app uses. It has two modes.
 
-**Fake mode (the default): no API keys, no cost.** The runner starts its own throwaway API on a free port: a fresh database seeded with the demo data, the local embedding model (it runs on the CPU, no API), every provider key blanked, and a scripted stand-in for every LLM role (`scripts/demo/fake_llm.py`, started by `scripts/demo/fake_server.py`). The stand-in is not a model: the agent searches knowledge and answers with the best-matching sentences, calls `get_claim_documents` once it knows the claim type, refuses to promise payment, escalates on the agent's escalation rules and ends on a goodbye; the simulated caller states its goal, hangs up once answered and takes a specialist only when the agent could not answer; the judge fails `outcome.goal_met` when the answer does not cover the goal and passes the other checks; fix drafts are built from the specialists' notes. So the whole flow runs and a bad answer or a missing article still fails, but the run says nothing about real answer quality. The server is stopped afterwards; its database and log are kept only when a check failed.
+**Fake mode (the default): no API keys, no cost.** The runner starts its own throwaway API on a free port: a fresh database seeded with the demo data, the local embedding model (it runs on the CPU, no API), every provider key blanked, and a scripted stand-in for every LLM role (`scripts/demo/fake_llm.py`, started by `scripts/demo/fake_server.py`). The stand-in is not a model: the agent searches knowledge and answers with the best-matching sentences, calls `get_claim_documents` once it knows the claim type, refuses to promise payment, escalates on the agent's escalation rules and ends on a goodbye; the simulated caller states its goal, hangs up once answered and takes a specialist only when the agent could not answer; the judge fails `outcome.goal_met` when the answer does not cover the goal and passes the other checks; the analyst files an escalation a specialist answered as missing knowledge and summarises the gap by that answer; fix drafts are built from the specialists' notes. So the whole flow runs and a bad answer or a missing article still fails, but the run says nothing about real answer quality. The server is stopped afterwards; its database and log are kept only when a check failed.
 
-**Live mode (`--live`): real model calls, paid.** Runs against `--api` (default the stack on `:8000`) with that server's keys. A run of Acts 1–4 makes about 20 calls; `--learning` adds two arms of about 36 simulated calls each, plus judging. Ask before running it on someone else's keys.
+**Live mode (`--live`): real model calls, paid.** Runs against `--api` (default the stack on `:8000`) with that server's keys. A run of Acts 1–4 makes about 20 calls; `--learning` adds two arms of about 36 simulated calls each for Act 5, plus judging, and for Act 6 up to seven text calls with their analyses and a gate of about 40 simulated calls. Ask before running it on someone else's keys.
 
 ```bash
-python scripts/demo_walkthrough.py --learning       # fake mode, Acts 1-5, about 30 seconds, no cost
+python scripts/demo_walkthrough.py --learning       # fake mode, Acts 1-6, about a minute, no cost
 python scripts/demo_walkthrough.py --repeats 3      # fake mode, each test scenario 3 times
 python scripts/dev.py                               # for live mode: the stack, in another terminal
 python scripts/demo_walkthrough.py --live           # live mode, Acts 1-4, about 2 minutes, paid
-python scripts/demo_walkthrough.py --live --learning --api https://<host>   # live, with Act 5 (about 8-10 minutes)
+python scripts/demo_walkthrough.py --live --learning --api https://<host>   # live, with Acts 5 and 6 (about 15-20 minutes)
 python scripts/demo_walkthrough.py --serve-site     # only host the demo website (manual demo)
 ```
 
-What it does, in order: checks the API and the business unit; serves the demo website on `127.0.0.1:8765` (any free port if taken); pastes the policy and indexes the help centre as a website source (on a server without website sources, imports the gadget page alone); runs four test searches; creates or updates the tool, the skill and the agent **Travel Cover Helpdesk** and publishes a new version; holds calls A–D by text; waits for call A's scorecard and call D's groundwork packet; creates or updates four test scenarios and runs the suite; with `--learning`, drafts (or reuses) the newborn fix and evaluates it. It never approves a proposal.
+What it does, in order: checks the API and the business unit; serves the demo website on `127.0.0.1:8765` (any free port if taken); pastes the policy and indexes the help centre as a website source (on a server without website sources, imports the gadget page alone); runs four test searches; creates or updates the tool, the skill and the agent **Travel Cover Helpdesk** and publishes a new version; holds calls A–D by text; waits for call A's scorecard and call D's groundwork packet; creates or updates four test scenarios and runs the suite; with `--learning`, drafts (or reuses) the newborn fix and evaluates it without approving it (Act 5), then closes the loop on the sandbox agent (Act 6): ignores an earlier run's cluster for the extension question (R15), holds bad calls until the cluster is ready, resolving each escalation with the specialist's note, starts **Run learning now**, checks that the drafted article carries the note, approves it as *Demo walkthrough* (with `force` and the gate's reasons as the note when the gate blocked; reported as KNOWN R16), and asks the question again on the new version. Act 6 is the only approval the runner makes, and only in the sandbox.
 
 **Report**: printed live and saved to `apps/api/data/demo-runs/demo-<time>.md` (git-ignored), with each check's result and evidence (replies, scores, failures, call ids).
 
@@ -137,4 +159,4 @@ What it does, in order: checks the API and the business unit; serves the demo we
 | PASS (not hit) | A known gap that depends on the model did not show this time; it is not proof of a fix |
 | INFO | Observation only (scores, analysis, gate verdict) |
 
-The run is repeatable: it reuses the documents, tool, skill, agent and scenarios by name, so each run adds one agent version, four calls and one test run to the sandbox. Use it before a demo, after implementing a CP (its checks should move from KNOWN to PASS (fixed)), and in a scheduled job against a test environment.
+The run is repeatable: it reuses the documents, tool, skill, agent and scenarios by name, so each run adds one agent version, four calls and one test run to the sandbox; with `--learning`, also up to seven calls, one learning run and a second version from the approved fix (Act 1 of the next run publishes the agent without that article, so the gap comes back). Use it before a demo, after implementing a CP (its checks should move from KNOWN to PASS (fixed)), and in a scheduled job against a test environment.

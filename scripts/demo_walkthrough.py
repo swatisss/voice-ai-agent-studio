@@ -6,7 +6,7 @@ Spec: /product/demo-walkthrough.md
     python scripts/demo_walkthrough.py --learning          # default: fake mode, no API keys, no cost, about 30 s
     python scripts/dev.py                                  # in another terminal, for a live run against the stack on :8000
     python scripts/demo_walkthrough.py --live              # REAL LLM calls on your keys (costs money): build, call, score, test
-    python scripts/demo_walkthrough.py --live --learning   # also replays 72 simulated calls for the newborn fix (about 6 min)
+    python scripts/demo_walkthrough.py --live --learning   # also Act 5 (newborn fix, 72 simulated calls) and Act 6 (the loop)
     python scripts/demo_walkthrough.py --serve-site        # only host the demo website, for the manual walkthrough
 
 Fake mode starts its own throwaway API with a scripted stand-in for every LLM role (scripts/demo/fake_llm.py) and the
@@ -92,6 +92,19 @@ SCENARIOS = [
     {"name": "Hospital abroad", "expected": "escalated", "caller_profile": POLICYHOLDER,
      "caller_goal": "Your husband was admitted to hospital in Lisbon an hour ago. You need urgent help with the hospital bill."},
 ]
+# Act 6: a question the policy and the help centre do not answer. Each bad call ends with a specialist, whose
+# resolution note is the only source of the answer; self-learning turns the notes into an article.
+LOOP_QUESTIONS = [
+    "I'm in Lisbon and want to stay two more weeks. Can I extend my SafeTrip cover while I'm still abroad?",
+    "I've decided to stay abroad longer than planned. Can I extend my travel cover from here?",
+    "My trip is getting longer. How do I extend my SafeTrip policy while I'm overseas?",
+    "Is it possible to extend my cover while I'm already travelling?",
+    "I want to stay an extra month abroad. Can I extend my SafeTrip insurance?",
+    "I'm enjoying the trip and want to stay longer. Can you extend my cover by ten days?",
+]
+LOOP_RETRY = "I'm loving Portugal and want to stay ten more days. Can I extend my cover from here?"
+LOOP_NOTE = ("You can extend SafeTrip cover once while abroad, by up to 30 extra days, if you ask before your original end date. "
+             "Extend it in the SafeTrip app or by calling +1 555 0100. The extension does not cover anything that started before it.")
 
 
 # ------------------------------------------------------------------ report
@@ -548,6 +561,101 @@ class Walkthrough:
         self.r.add("8 Learning", "gate", None, "passed" if gate.get("passed") else "blocked: " + "; ".join(gate.get("reasons") or []))
         self.r.add("8 Learning", "nothing published without a human", None, "the proposal waits in Insights; approve it there if you want")
 
+    # 9 -------------------------------------------------------------
+    def _retire_earlier_loop(self, step: str) -> None:
+        """An earlier run's cluster for the loop question is fixed or has a fix waiting. A fixed cluster never becomes
+        ready again even when its calls come back (roadmap R15), so new calls would join it and the loop would stall:
+        reject its waiting fix and ignore it, so this run starts a fresh cluster."""
+        for c in self.api.get(f"/api/insights/clusters?agent_id={self.agent_id}")["items"]:
+            if c["status"] in ("open", "ignored"):
+                continue
+            detail = self.api.get(f"/api/insights/clusters/{c['id']}")
+            if not any(e.get("resolution_note") == LOOP_NOTE for e in detail.get("calls", [])):
+                continue
+            for p in detail.get("proposals", []):
+                if p["status"] in ("draft", "ready"):
+                    self.api.post(f"/api/proposals/{p['id']}/reject", {"decided_by": "Demo walkthrough", "note": "Superseded by a new demo run"})
+            self.api.post(f"/api/insights/clusters/{c['id']}/ignore")
+            self.r.add(step, "a fixed cluster reopens when its problem comes back (R15)", False,
+                       f"'{c['name']}' ({c['status']}) from an earlier run can never be ready again; ignored it", known="R15")
+
+    def close_the_loop(self) -> None:
+        """Act 6: bad calls a specialist answers, Run learning now, approve the drafted article, ask again."""
+        print("\n9. Close the loop: bad calls, specialist, self-learning, publish, try again (sandbox)", flush=True)
+        step = "9 Loop"
+        self._retire_earlier_loop(step)
+        cluster: dict[str, Any] = {}
+        for n, question in enumerate(LOOP_QUESTIONS, 1):
+            cid, rep, _ = self._chat([question, "Yes, please connect me with a specialist."])
+            escalated = any(t.get("escalated") for t in rep)
+            if n == 1:
+                self.r.notes["Loop: first bad call"] = cid
+                self.r.add(step, "the agent cannot answer and hands over", escalated, rep[0]["reply"][:140] if rep else "", model=True)
+            if not escalated:
+                self.r.add(step, f"bad call {n} escalated", False, "no hand-off, so no specialist note to learn from")
+                return
+            esc = self.api.get(f"/api/calls/{cid}")["escalation"]  # the specialist, in the agent console
+            self.api.post(f"/api/escalations/{esc['id']}/accept", {"assignee": "Specialist"})
+            self.api.post(f"/api/escalations/{esc['id']}/resolve", {"disposition": "resolved_by_human", "resolution_note": LOOP_NOTE})
+            call = wait_for("the analysis with the specialist's note", lambda: self.api.get(f"/api/calls/{cid}"),
+                            lambda c: bool((c.get("analysis") or {}).get("cluster_id")), timeout=180, every=2)
+            cluster = self.api.get(f"/api/insights/clusters/{call['analysis']['cluster_id']}")
+            print(f"      bad call {n}: escalated, specialist note saved; cluster '{cluster['name']}' "
+                  f"{cluster['signal_count']}/{cluster['min_cluster_size']} signals", flush=True)
+            if cluster["ready_for_fix"]:
+                break
+        self.r.add(step, f"{n} bad calls cluster and the cluster is ready for a fix", bool(cluster.get("ready_for_fix")),
+                   f"'{cluster.get('name')}', {cluster.get('signal_count')} signals, {cluster.get('min_cluster_size')} needed")
+        if not cluster.get("ready_for_fix"):
+            return
+
+        try:
+            run_id = self.api.post("/api/learning/run")["learning_run_id"]
+        except ApiError as exc:
+            if exc.status != 409:
+                raise
+            run_id = self.api.get("/api/learning/runs")["items"][0]["id"]
+        print("      Run learning now: drafting and gating the fix (fake: under a minute; live: several minutes)", flush=True)
+        run = wait_for("the learning run", lambda: next(r for r in self.api.get("/api/learning/runs")["items"] if r["id"] == run_id),
+                       lambda r: r["status"] != "running", timeout=1800, every=5)
+        mine = ((run.get("summary") or {}).get("agents") or {}).get(self.agent_id) or {}
+        self.r.add(step, "learning run finished", run["status"] == "done",
+                   f"{mine.get('calls_reviewed')} calls reviewed, signals {mine.get('signals')}, drafted {mine.get('drafted')}, "
+                   f"gate passed {mine.get('passed')}" + (f", errors {mine['errors']}" if mine.get("errors") else ""))
+        detail = self.api.get(f"/api/insights/clusters/{cluster['id']}")
+        prop = next((p for p in detail.get("proposals", []) if p["status"] == "ready"), None)
+        if prop is None:
+            self.r.add(step, "a fix waits in the learning inbox", False, f"proposals: {[p['status'] for p in detail.get('proposals', [])]}")
+            return
+        prop = self.api.get(f"/api/proposals/{prop['id']}")
+        content = ((prop.get("draft_doc") or {}).get("content") or "")
+        self.r.notes["Loop: proposal"] = prop["id"]
+        self.r.add(step, "a fix waits in the learning inbox (origin nightly)", prop["origin"] == "nightly", f"{prop['kind']}: {prop['title']}")
+        self.r.add(step, "the article carries the specialist's answer", "30 extra days" in content, " ".join(content.split())[:200], model=True)
+        s = (prop.get("eval_run") or {}).get("summary") or {}
+        gate = s.get("gate") or {}
+        self.r.add(step, "fix evaluation", None,
+                   f"cluster {s.get('baseline_pass')}->{s.get('candidate_pass')} of {s.get('cluster_cases')}, derived kept {s.get('derived_kept')}, "
+                   f"regressions {s.get('regression_pass')}/{s.get('regression_cases')}, p95 {s.get('p95_ms')}")
+        self.r.add(step, "the gate passes", bool(gate.get("passed")), "; ".join(gate.get("reasons") or []) or "passed",
+                   known="R16", model=True)
+
+        body: dict[str, Any] = {"decided_by": "Demo walkthrough", "note": "Approved in the demo walkthrough"}
+        if not gate.get("passed"):
+            body = {**body, "force": True, "note": "Demo: published despite the gate: " + "; ".join(gate.get("reasons") or [])}
+        out = self.api.post(f"/api/proposals/{prop['id']}/approve", body)
+        ver = out["version"]["version"]
+        self.r.add(step, "approved by a person and published", out["proposal"]["status"] == "approved",
+                   f"v{ver}" + (" (Publish anyway, with a note)" if body.get("force") else ""))
+
+        cid, rep, _ = self._chat([LOOP_RETRY, "Thanks, that's all. Bye!"])
+        self.r.notes["Loop: try again"] = cid
+        answer = rep[0]["reply"] if rep else ""
+        self.r.add(step, "the same question is now answered without a specialist",
+                   not any(t.get("escalated") for t in rep) and "30" in answer, answer[:160], model=True)
+        call = self.api.get(f"/api/calls/{cid}")
+        self.r.add(step, "answered by the fixed version", call.get("agent_version") == ver, f"v{call.get('agent_version')}")
+
     # ---------------------------------------------------------------
     def run(self) -> int:
         started = datetime.now()
@@ -563,6 +671,7 @@ class Walkthrough:
             self._guard(name, fn)
         if self.args.learning:
             self._guard("learning", self.learning)
+            self._guard("close the loop", self.close_the_loop)
         return self.finish(started)
 
     def _guard(self, name: str, fn: Callable[[], Any]) -> Any:
@@ -595,7 +704,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--api", default="http://localhost:8000", help="API base URL for --live (default http://localhost:8000)")
     ap.add_argument("--tenant", default="evergreen-sandbox", help="business unit for the demo agent")
-    ap.add_argument("--learning", action="store_true", help="also draft and evaluate the newborn fix (about 6 minutes, uses LLM calls)")
+    ap.add_argument("--learning", action="store_true", help="also Act 5 (evaluate the newborn fix) and Act 6 (bad calls, Run learning now, approve, ask again)")
     ap.add_argument("--learning-tenant", default="evergreen-care", help="business unit for the self-learning step")
     ap.add_argument("--repeats", type=int, default=1, choices=range(1, 6), help="test-suite repeats per scenario (1-5)")
     ap.add_argument("--site-port", type=int, default=8765, help="port for the demo website (default 8765; a free port if taken)")

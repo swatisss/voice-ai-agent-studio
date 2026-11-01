@@ -41,6 +41,20 @@ Priorities: **P0** blocks real customers or safety; **P1** clear value for the n
 | R12 | **Packet honesty**: the groundwork packet says "found, not used" when a search hit did not answer the question | The packet said "found" for a question the caller was told had no answer | P2 |
 | R13 | **Playground polish**: refocus the chat box after each reply; no demo-tenant callers or placeholders in other business units; agent names in "Recent versions" | Small frictions in every session | P2 |
 
+# From the self-learning review
+
+Details, evidence and the target loop: [How self-learning should work](/architecture/self-learning-target.md) (2026-11-01).
+
+| # | Feature | Why | Pri |
+|---|---|---|---|
+| R14 | **Ship what was proven**: approving a fix publishes the published config plus the fix; unpublished draft edits stay a draft on top | Approval starts from the builder's draft, so unreviewed edits ship under "Fix: …" and the live version was never gated | P0 |
+| R15 | **Verify a fix in production**: compare the cluster's signal rate for 14 days after the fix with the 28 days before; reopen a fixed cluster as *Fix did not hold* and offer a rollback | A fixed cluster absorbs new calls but can never be ready again, so a failed fix goes silent | P0 |
+| R16 | **A gate you can trust**: repeat cluster cases, lift as a pass rate, keep a held-out case in small clusters, compare latency only on comparable turns with a noise floor | The same fix passed one run and was blocked the next by simulation latency; one lucky replay is enough lift | P1 |
+| R17 | **Relevance-aware "no answer"**: a reranker or judge decides whether any result answers the question; the agent saying it has no answer is a signal too | The similarity floor let 9 of 10 unanswerable questions through with unrelated chunks; 0 no-answer signals in the demo run | P1 |
+| R18 | **Learn facts only from humans**: a knowledge fix needs specialist notes; without them the inbox asks a reviewer *Answer needed* first | With no note, the drafter is shown the AI's own summary as the "specialist" answer | P0 |
+| R19 | **Readiness per agent and severity**: per-agent threshold; hard-gate and safety failures ready at 1–2 | A low-volume agent never reaches 5 signals; a safety failure waits like a missing FAQ | P2 |
+| R20 | **Evaluation findings become inbox items**: drift, a check failing on many calls, a test scenario failing on the live version, "review 10 calls of this check" | Evaluation is shown, not acted on; judge checks rarely reach the 20 reviews calibration needs | P1 |
+
 # From the competitor survey
 
 | # | Feature | Seen at | Why it matters here | Pri |

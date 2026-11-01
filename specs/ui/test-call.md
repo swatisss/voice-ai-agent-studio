@@ -2,14 +2,14 @@
 type: UI Spec
 title: Test call
 description: Pick a published agent, then talk or type to it with a live transcript; the agent opens a voice call with its spoken welcome, and technical details are shown on demand.
-status: stable
+status: draft
 tags: [ui, voice, test-call]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
 
 # Layout (`/test-call/?agent=…`)
 
-* **Top row**: the **agent select** (published agents only), the version badge, the mode badge (Inbound / Outbound / Internal) and, at the right, the **Technical details** switch.
+* **Top row**: the **Single agent | Full flow** switch, then in Single agent the **agent select** (published agents only), the version badge and the mode badge (Inbound / Outbound / Internal), in Full flow the **Audience** select (*Members* / *Staff*); at the right, the **Technical details** switch.
 * **Handles line** under the top row: plain text "Handles: " followed by the titles of the use cases ([/product/use-cases.md](/product/use-cases.md)) served by the selected agent, separated by ` · `, from `GET /api/use-cases` matched on `agent_id`. There are no cards.
 * **Call card** (left, main): header with the **Talk | Type** switch on the left and the Start / End button on the right; below it the conversation transcript — caller bubbles right, agent bubbles left, system notices centered (e.g. "Identity verified", "Escalated: policy required", "Call ended") — and the input area (message box in Type mode, mic button in Talk mode).
 * **Right column**: **Live controls**, **Test script** and, only when Technical details is on, **Activity** and **Call**.
@@ -20,6 +20,18 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * **Test script** card (collapsible, open by default): for each use case of the selected agent, in catalog order, its title as a plain subheading and its **starting phrase** — the first of the use case's sample phrases from `GET /api/use-cases` (for example "Is my health policy still active, and when does it renew?"). Nothing else is shown: demo callers (names, member IDs, dates of birth) are not listed on screen; they are in [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md) and the [demo script](/product/demo-script.md). A phrase is a button that fills the message box only while a chat is running; in every other situation it is plain text to read aloud (no disabled buttons).
 * **Call from** (inbound agents, before a call): *No number*, each demo member with a registered number ("Maria Lopez — registered number"), or *An unknown number*. The choice is sent as `caller_number`, so the call is identified exactly like a phone call ([/architecture/caller-verification.md](/architecture/caller-verification.md)). The page never shows the number itself.
 * For an **outbound** agent the call card shows **Who should the agent call?** (a select of the agent's targets from `GET /api/outbound/targets`, each with its summary) and the start button reads **Place outbound call**. The agent speaks first with the persona's opening; the tester answers as the callee.
+
+# Full flow
+
+Full flow tests the tenant's front door exactly as the public API runs it ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)): **Start call** / **Start chat** creates a playground conversation (`POST /api/conversations` with the audience as scope; voice connects to `/v1/voice/{id}` with the returned token). The front desk greets; whatever the tester says first is routed; a clarifying question appears as a front-desk message.
+
+* The Handles line and the Test script cover every routable agent of the audience (grouped by agent), so the tester can pick a phrase for any of them.
+* The transcript labels each agent message with the agent's name; a routing or transfer shows a centred notice ("Routed to Insurance Claims Agent · 0.91", "Transferred to Customer Care: coverage question").
+* A **Routing** card in the right column, always shown in Full flow, lists every decision from `routing.decision` events (topic `conversation:{id}`): trigger, candidates with Stage A scores as bars, the routing mode, whether the decision model answered and with what confidence, fallbacks to the embedding ("Decision model timed out → embedding"), the clarifying question, the chosen agent and the method. Decisions appear live, newest at the top.
+* The Call card (Technical details) shows the conversation id and one line per segment with its call id linked to call detail.
+* Live controls are hidden in Full flow (the front desk sets persona and turn detection); Call from works as in Single agent.
+
+Single agent is the behaviour below, unchanged, and is the default. The switch is remembered in `localStorage` (`test-call-mode`) and in `?mode=full`; it is disabled while a call runs.
 
 # Talk | Type
 
@@ -81,3 +93,4 @@ For an agent on the realtime voice pipeline ([/architecture/realtime-voice.md](/
 - **UI-10** — Given an escalation, then the transcript shows a system notice with the reason and the hand-off message as the last agent message, the call ends, and the banner "Escalated — waiting for a specialist" replaces the input.
 - **UI-34** — Given a chat that ends (goodbye, farewell phrase or hand-off), then the input is replaced by the outcome banner and "Was this helpful?" with Yes and No appears; No offers an optional comment; sending stores the answer and shows "Thanks for your feedback."; and while the call is running no feedback prompt is shown.
 - **UI-35** — Given a Talk call that the server ends (goodbye, hand-off or silence), then without any action from the tester the microphone stops, the "Listening" state disappears, and the outcome banner and the feedback prompt appear.
+- **UI-60** — Given Full flow with audience Members, when a chat starts and the tester types "I need to report a new claim", then the front desk greeting comes first, a notice "Routed to Insurance Claims Agent" appears, the Routing card lists the decision with candidates and scores, and the claims agent's intro and answer follow; asking then about dental coverage shows a transfer notice and a second decision in the Routing card; switching back to Single agent restores the agent select.

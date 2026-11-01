@@ -97,3 +97,16 @@ UI-53
 # (asked for with CP-0022).
 UI-54
 UI-55
+# CP-0023 Settings API keys and Webhooks cards: no browser harness; the API behind them is covered by tests/test_public_api.py
+# and tests/test_webhooks.py, and the web build passes. These lines need the reviewer's approval (asked for with CP-0023).
+UI-56
+UI-57
+# CP-0024…CP-0026 builder Use cases tab, Settings Front desk card, Test call Full flow and routing trace, Calls segments and
+# Conversation card, Evaluation Routing view: no browser harness; the API behind each is covered by tests/test_capability_catalog.py,
+# tests/test_supervisor_routing.py and tests/test_agent_transfer.py, and the web build passes. These lines need the reviewer's
+# approval (asked for with CP-0024…CP-0026).
+UI-58
+UI-59
+UI-60
+UI-61
+UI-62

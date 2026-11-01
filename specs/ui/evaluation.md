@@ -2,14 +2,14 @@
 type: UI Spec
 title: Evaluation
 description: How each agent performs, measured - per-version scores and trends, every check with its pass rate and judge calibration, drift flags, and the scored calls behind each number.
-status: stable
+status: draft
 tags: [ui, evaluation, scoring]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
 
 # Page (`/evaluation/?agent=…`)
 
-Scores come from [call scoring](/architecture/call-scoring.md) via `GET /api/evaluation/summary` and `GET /api/evaluation/scorecards` ([/api/rest-api.md](/api/rest-api.md)). Two views as tabs, **Scorecards** (below, real calls) and **Test suites** (`/evaluation/?agent=…&view=tests`, [/architecture/test-suites.md](/architecture/test-suites.md)). Controls: agent select (default the `agent` query parameter, else the first agent), period (7 / 28 / 90 days, default 28), **Include seeded history** (default on). It refreshes on `scorecard.updated` events (topic `evaluation`), at most once every 5 s.
+Scores come from [call scoring](/architecture/call-scoring.md) via `GET /api/evaluation/summary` and `GET /api/evaluation/scorecards` ([/api/rest-api.md](/api/rest-api.md)). Three views as tabs, **Scorecards** (below, real calls), **Test suites** (`/evaluation/?agent=…&view=tests`, [/architecture/test-suites.md](/architecture/test-suites.md)) and **Routing** (`/evaluation/?view=routing`, tenant-wide, below). Controls: agent select (default the `agent` query parameter, else the first agent), period (7 / 28 / 90 days, default 28), **Include seeded history** (default on). It refreshes on `scorecard.updated` events (topic `evaluation`), at most once every 5 s.
 
 1. **Headline tiles** for the agent's published version: Goal met, Containment, Grounded, Hard fails (count, red when above zero), p95 response time, Helpful (thumbs up share). Each tile shows the change against the previous version when that version has scored calls in the period. A **Drift** badge with the explanation "Lower than in this version's first week" appears on any tile whose metric drifted.
 2. **Trend**: daily goal met, containment and grounded (lines) with hard fails (bars) for the period; version publish dates are marked on the axis.
@@ -28,6 +28,17 @@ Empty state (no scored calls): "No scored calls for this agent yet. Calls are sc
 
 Empty state (no scenarios): "No test scenarios yet. Add the situations this agent must handle." with **New scenario**.
 
+# Routing view
+
+For the whole business unit ([/architecture/capability-catalog.md](/architecture/capability-catalog.md), [/architecture/agent-transfer.md](/architecture/agent-transfer.md)); the agent select is hidden.
+
+1. **Routing summary** (`GET /api/routing/summary`, period 7 / 28 / 90 days): decisions, share per method, Stage B and fallback rates, clarification rate, misroute rate, transfers per conversation, decision time p50 / p95, and a per-agent table (routed to, transferred away early, in-scope failures).
+2. **Routing suite**: the latest run's accuracy with a *Pass* / *Below target* badge against the pass mark, the confusion matrix (expected agent × chosen agent, counts, off-diagonal cells in warning colour), the cases that failed with the chosen agent and method; **Run routing suite** with progress; earlier runs with trigger (*Catalog change*, *Target change*, *Manual*).
+3. **Compare modes** (a button next to **Run routing suite**): a comparison run; when it finishes, a table with the rows *Embedding* and *Decision model* ("Not configured" without a decision model) and columns Right first choice, Decided without asking, Right when decided, Vague requests asked about, p50 / p95; the mode in force is marked *Current*; **Use this mode** on the other row saves it in the front desk.
+4. **Cases**: utterance, expected agent, source (*Generated* / *Manual*), enabled; **New case**, **Edit**, **Delete**.
+
+Empty state (no routable agents): "No agents can be routed to yet. Publish an inbound or internal agent with a description and use cases."
+
 The agent builder's Evaluation tab links here ([/ui/agent-builder.md](/ui/agent-builder.md)); from Insights, a cluster's evidence call opens its call detail, where the scorecard sits next to the analysis.
 
 # Acceptance
@@ -36,3 +47,5 @@ The agent builder's Evaluation tab links here ([/ui/agent-builder.md](/ui/agent-
 - **UI-51** — Given the Test suites view of the seeded Customer Care Agent, then its eight scenarios are listed with persona and expectations; adding a scenario with a required tool and its argument saves it and lists it; a scenario naming an unknown tool shows the API's error.
 - **UI-52** — Given a suite run started from the view, then the button shows progress as results arrive, the run appears in Runs when finished with its pass^k and pass rate, and its detail grid links each cell to a simulated call whose detail shows the call's scorecard.
 - **UI-50** — Given a judge check with 20 reviews at 85 % agreement and another with 3 reviews, then the first shows **Calibrated** and the second **Uncalibrated**; given an agent with no scored calls, then the empty state and the Test call link are shown and no tile shows a number.
+- **UI-62** — Given the seeded business unit after indexing, when Evaluation → Routing opens, then the latest routing run shows accuracy, the pass badge and a confusion matrix over the routable agents; adding a manual case and running the suite lists the case's result; the summary shows decisions by method for the period.
+- **UI-63** — Given the Routing view, when **Compare modes** finishes, then the two rows show accuracy, decided-alone and latency figures (the decision-model row "Not configured" without one), the current mode is marked, and **Use this mode** changes the front desk's mode (shown after a reload).

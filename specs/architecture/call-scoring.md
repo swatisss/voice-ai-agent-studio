@@ -50,6 +50,13 @@ Checks are derived from the **version snapshot** that handled the call, never fr
 | `tools.succeeded` | tools | no | any tool error (`n/a` without tool calls) |
 | `responsiveness.latency` | responsiveness | no | `latency_p95_ms` > the agent's `evaluation.latency_p95_ms` (`n/a` without latency data) |
 
+Routed conversation segments ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)) add group `routing`; both checks are `n/a` on calls outside a conversation and on segments with `routed_by: explicit`:
+
+| Key | Group | Hard gate | Fails when |
+|---|---|---|---|
+| `routing.early_transfer` | routing | no | the segment ended with reason `transfer` within 2 caller turns of starting |
+| `routing.in_scope` (judge) | routing | no | the judge answers no to "Did the caller's request fit what this agent is set up to handle (its description and use cases)?" |
+
 ## Built-in, decided by the judge
 
 | Key | Group | Hard gate | Question |
@@ -124,3 +131,4 @@ A check is **calibrated** when it has ≥ 20 reviews and agreement ≥ 85 %; oth
 - **SC-10** — Given a version with 20 scored calls in its first 7 days at 90 % goal met and 20 in the last 7 days at 75 %, then the summary flags drift on that version.
 - **SC-12** — Given the seeded history for `evergreen-care`, when the summary is requested with `include_seed` over 90 days, then version 1 has 123 scored calls, `outcome.goal_met` fails on exactly 3, `knowledge.grounded` fails on exactly 5, and the version is flagged for drift.
 - **SC-11** — Given an agent edited after a call was scored, then that call's scorecard checks and texts are unchanged.
+- **SC-13** — Given a routed segment that transferred after one caller turn, then its scorecard has `routing.early_transfer: fail` and a `routing.in_scope` verdict from the judge; given a call outside a conversation, both are `n/a` and its score is unchanged by them.

@@ -188,7 +188,7 @@ async def approve(proposal_id: str, body: Decision, tenant_id: str = Depends(cur
     p = await propose.get_proposal(s, tenant_id, proposal_id)
     version = await propose.approve(s, p, body.decided_by, body.note, body.force)
     agent = await s.get(Agent, p.agent_id)
-    if agent and await test_suites.start_on_publish(s, agent, version):  # TEST-08
+    if agent and p.kind != "routing_update" and await test_suites.start_on_publish(s, agent, version):  # TEST-08 (a routing update makes no version)
         await s.commit()
     return {"proposal": await _proposal_out(s, p), "version": {"id": version.id, "version": version.version}}
 

@@ -85,6 +85,10 @@ Common rules: identity is verified (member ID + date of birth) before any policy
 * **Demo callers**: Maria Lopez (status of C-20931 and C-20977), Aisha Okafor (new urgent care claim), James Carter (documents for a collision; denial of C-31544 → escalation).
 * **Sample utterances**: "I want to check on a claim.", "I need to report a new claim.", "What documents do I need for a dental claim?"
 
+# Editing use cases
+
+The eight above are seeded. Builders add, edit and delete use cases per agent in the agent builder's **Use cases** tab ([/ui/agent-builder.md](/ui/agent-builder.md)) and through `/api/use-cases` ([/api/rest-api.md](/api/rest-api.md)). Use cases describe what an agent handles; the [capability catalog](/architecture/capability-catalog.md) indexes them for routing, so a change reaches the supervisor after the re-index. They are not versioned with the agent.
+
 # Planted learning gaps (Act 3 of the demo)
 
 The Customer Care agent deliberately lacks (a) knowledge on **adding a newborn to a policy** and (b) a **prior-authorization status lookup**. Seeded history shows these as recurring escalation clusters; fixing them demonstrates fleet learning ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)).
@@ -92,3 +96,4 @@ The Customer Care agent deliberately lacks (a) knowledge on **adding a newborn t
 # Acceptance
 
 - **UC-02** — Given the seeded business unit, when `GET /api/use-cases` is called, then it returns the eight use cases in the order above, all with category "Customer Support & Channels", each linked to an existing published agent, and each with at least two sample utterances.
+- **UC-07** — Given a builder who adds a use case "Lost ID card" with two sample utterances to the Customer Care agent, then `GET /api/use-cases` lists it under that agent, Test call's Handles line and Test script show it, and deleting it removes it from all three.

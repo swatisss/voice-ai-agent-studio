@@ -33,6 +33,13 @@ from voiceai.seed.history import CLUSTERS, SeedCall, generate
 log = logging.getLogger("voiceai.seed")
 
 
+
+HANDOFF_INTROS = {
+    "care": "You're now with our member care team.",
+    "claims": "You're now with our claims team.",
+    "internal": "You're now with the internal knowledge assistant.",
+}
+
 async def seed(reset: bool = False) -> dict[str, Any]:
     if reset:
         from voiceai.db import init_db
@@ -72,6 +79,8 @@ async def seed(reset: bool = False) -> dict[str, Any]:
                 "tool_ids": [tools[n].id for n in ad["tools"]], "skill_ids": [k.id for k in skills],
                 "knowledge_doc_ids": [d.id for d in docs], "models": {"realtime": None, "speech": None},
             }
+            if ad["key"] in HANDOFF_INTROS:  # CP-0024: what each agent says when the supervisor routes a caller to it
+                cfg["handoff_intro"] = HANDOFF_INTROS[ad["key"]]
             if ad["mode"] == "outbound":
                 cfg["outbound"] = {"targets_url": ad["targets_url"]}
             agent = Agent(tenant_id=care, name=ad["name"], description=ad["description"], draft_config=cfg)

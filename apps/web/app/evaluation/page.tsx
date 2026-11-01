@@ -1,4 +1,4 @@
-// Spec: /ui/evaluation.md, /architecture/test-suites.md
+// Spec: /ui/evaluation.md, /architecture/test-suites.md, /architecture/capability-catalog.md
 "use client";
 
 import Link from "next/link";
@@ -8,6 +8,7 @@ import { Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, Respons
 import { FeedbackBadge } from "@/components/feedback";
 import { GROUPS, SOURCE, VERDICT } from "@/components/scorecard";
 import { useTenant } from "@/components/shell";
+import { RoutingView } from "@/components/routing-view";
 import { TestSuitesView } from "@/components/test-suites";
 import { Badge, Button, Card, EmptyState, Select, Spinner, Stat, Tabs } from "@/components/ui";
 import { useApi, useEvents, type Verdict } from "@/lib/api";
@@ -50,7 +51,7 @@ function Evaluation() {
   const { data: agents } = useApi<{ items: { id: string; name: string; published_version: { id: string; version: number } | null }[] }>("/api/agents", [tenant]);
   const agentId = params.get("agent") || agents?.items[0]?.id || "";
   const agent = agents?.items.find((a) => a.id === agentId);
-  const view: "scores" | "tests" = params.get("view") === "tests" ? "tests" : "scores";
+  const view: "scores" | "tests" | "routing" = params.get("view") === "tests" ? "tests" : params.get("view") === "routing" ? "routing" : "scores";
   const { data: versionList } = useApi<{ items: { id: string; version: number }[] }>(agentId ? `/api/agents/${agentId}/versions` : null, [tenant]);
   const [days, setDays] = useState(28);
   const [includeSeed, setIncludeSeed] = useState(true);
@@ -79,15 +80,20 @@ function Evaluation() {
     <>
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="mr-auto text-xl font-semibold">Evaluation</h1>
-        <Select className="w-56" aria-label="Agent" value={agentId}
-          onChange={(e) => { setFilters({}); setCompare([]); router.replace(`/evaluation/?agent=${e.target.value}${view === "tests" ? "&view=tests" : ""}`); }}>
-          {agents.items.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </Select>
+        {view !== "routing" && (
+          <Select className="w-56" aria-label="Agent" value={agentId}
+            onChange={(e) => { setFilters({}); setCompare([]); router.replace(`/evaluation/?agent=${e.target.value}${view === "tests" ? "&view=tests" : ""}`); }}>
+            {agents.items.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </Select>
+        )}
       </div>
-      <Tabs<"scores" | "tests"> value={view} onChange={(v) => router.replace(`/evaluation/?agent=${agentId}${v === "tests" ? "&view=tests" : ""}`)}
-        tabs={[{ id: "scores", label: "Scorecards" }, { id: "tests", label: "Test suites" }]} />
+      <Tabs<"scores" | "tests" | "routing"> value={view} onChange={(v) => router.replace(`/evaluation/?agent=${agentId}${v === "scores" ? "" : `&view=${v}`}`)}
+        tabs={[{ id: "scores", label: "Scorecards" }, { id: "tests", label: "Test suites" }, { id: "routing", label: "Routing" }]} />
     </>
   );
+  if (view === "routing") {
+    return <div className="space-y-4">{header}<RoutingView tenant={tenant} /></div>;
+  }
   if (view === "tests") {
     return (
       <div className="space-y-4">

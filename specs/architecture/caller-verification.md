@@ -40,6 +40,10 @@ A phone number alone never verifies a caller: caller ID can be spoofed and is cr
 
 There is no Twilio voice simulator. Flow A is tested with a phone or Twilio Dev Phone whose number is registered on a synthetic member, or by placing a call through the Calls API from a second Twilio number; see [/build/runbook-phone.md](/build/runbook-phone.md).
 
+# Transfers
+
+Verification belongs to the conversation: a transfer carries `verified`, `verified_member_ref`, `verification_level`, the identification and the attempt count to the next segment, which starts verified and does not ask again. A conversation never becomes verified by routing or by an API `context` entry ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)).
+
 # Acceptance
 
 - **IDV-01** — Given a signed Twilio webhook with `From` equal to Maria Lopez's registered number, when the call is created, then `meta.identification` holds `EVG-482913`, `Maria`, method `caller_id` and the `StirVerstat` value, the call is not verified, and no full caller number is stored anywhere.
@@ -49,3 +53,4 @@ There is no Twilio voice simulator. Flow A is tested with a phone or Twilio Dev 
 - **IDV-05** — Given an identified call with attestation `TN-Validation-Passed-A` on an agent with `trust_attested_caller_id: true`, then a `GET` tool marked `requires_verification` runs and a `POST` one returns `identity_not_verified` until the date of birth is confirmed; with the setting off, both are blocked until verification.
 - **IDV-06** — Given a browser text call started with `caller_number` set to a registered number, then the call is identified exactly as a phone call would be; with an unknown number or none, it is not.
 - **IDV-07** — Given an identified call, then before verification the prompt contains the caller's first name but no member profile, memory, member ID or date of birth.
+- **IDV-08** — Given a conversation verified on its first segment, when it is transferred, then the second segment starts verified with the same member reference and level, a `requires_verification` tool runs without asking again, and the failed-attempt count continues across segments.

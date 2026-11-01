@@ -56,3 +56,4 @@ v1 includes all of an agent's skills in every prompt (no on-demand loading).
 - **TS-07** — Given a skill whose `required_tools` includes a tool not on the agent, when publishing, then publish fails with a message naming the missing tool.
 - **TS-09** — Given an identified call, when the verification tool runs, then the request carries `X-Identified-Ref`; given a failed verification, the model receives the uniform `say` text and not the API's reason.
 - **TS-08** — Given a verified call, when any agent tool executes, then the request carries `X-Member-Ref` with the verified member reference; given an unverified call, the header is absent.
+- **TS-10** — Given a tenant tool named `transfer_to_agent`, when created, then the API rejects it with 422 like the other built-in names.

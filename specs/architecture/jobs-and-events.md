@@ -21,6 +21,9 @@ Table `jobs` ([/data/data-model.md](/data/data-model.md)). One worker task runs 
 | `run_eval` | `{proposal_id, eval_run_id}` | [/architecture/evaluation.md](/architecture/evaluation.md) |
 | `nightly_learning` | `{learning_run_id}` (daily per tenant after `LEARNING_NIGHTLY_HOUR_UTC`, dedupe `nightly_learning:{tenant}:{date}`; or manual) | [/architecture/self-learning.md](/architecture/self-learning.md) |
 | `run_test_suite` | `{eval_run_id}` | [/architecture/test-suites.md](/architecture/test-suites.md) |
+| `index_capabilities` | `{agent_id}` (no dedupe key; the handler skips unchanged inputs) | [/architecture/capability-catalog.md](/architecture/capability-catalog.md) |
+| `run_routing_suite` | `{eval_run_id}` (at most one queued per tenant) | [/architecture/capability-catalog.md](/architecture/capability-catalog.md) |
+| `deliver_webhook` | `{delivery_id}`; its own retry schedule (7 attempts over about 9 h, [/architecture/webhooks.md](/architecture/webhooks.md)) instead of rule 3 | [/architecture/webhooks.md](/architecture/webhooks.md) |
 
 Rules:
 
@@ -41,7 +44,8 @@ In-process async pub/sub. Each event: `{id, topic, type, tenant_id, at, data}`.
 | `console` | `escalation.created`, `escalation.updated` |
 | `insights` | `analysis.created`, `cluster.updated`, `proposal.updated`, `eval.progress`, `proposal.approved`, `learning.run.finished` |
 | `dashboard` | `call.ended`, `agent.published` |
-| `evaluation` | `scorecard.updated`, `test_run.progress`, `test_run.finished` |
+| `evaluation` | `scorecard.updated`, `test_run.progress`, `test_run.finished`, `catalog.updated`, `routing_run.finished` |
+| `conversation:{id}` | `routing.decision`, `conversation.transferred`, `conversation.segment` (a new segment's call id), `conversation.ended` ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)) |
 
 `GET /api/events?topics=console,call:abc` streams matching events for the caller's tenant as SSE ([/api/events.md](/api/events.md)). Subscribers get a bounded queue (500); if full, the oldest events are dropped. A `ping` comment is sent every 15 s.
 

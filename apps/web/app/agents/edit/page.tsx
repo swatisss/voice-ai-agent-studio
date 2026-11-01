@@ -1,4 +1,4 @@
-// Spec: /ui/agent-builder.md (Header, Voice tab, Memory tab, Evaluation tab), /architecture/call-scoring.md, /architecture/test-suites.md, /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md, /architecture/agent-memory.md, /architecture/caller-verification.md
+// Spec: /ui/agent-builder.md (Header, Overview, Use cases, Voice tab, Memory tab, Evaluation tab), /architecture/capability-catalog.md, /architecture/call-scoring.md, /architecture/test-suites.md, /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md, /architecture/agent-memory.md, /architecture/caller-verification.md
 "use client";
 
 import { Eye, Pencil, Plus, Trash2, Upload } from "lucide-react";
@@ -12,8 +12,9 @@ import { when } from "@/lib/format";
 import { DEFAULT_TURN, VOICES, voiceLabel } from "@/lib/voices";
 import { TurnDetectionEditor } from "@/components/voice-settings";
 import { GROUPS, SOURCE } from "@/components/scorecard";
+import { UseCasesTab } from "@/components/use-cases";
 
-type Tab = "overview" | "persona" | "policy" | "voice" | "memory" | "knowledge" | "tools" | "skills" | "evaluation" | "versions";
+type Tab = "overview" | "usecases" | "persona" | "policy" | "voice" | "memory" | "knowledge" | "tools" | "skills" | "evaluation" | "versions";
 
 export default function Page() {
   return <Suspense fallback={<Spinner />}><Builder /></Suspense>;
@@ -125,11 +126,12 @@ function Builder() {
         </div>
       )}
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[
-        { id: "overview", label: "Overview" }, { id: "persona", label: "Persona" }, { id: "policy", label: "Policy" }, { id: "voice", label: "Voice" }, { id: "memory", label: "Memory" },
+        { id: "overview", label: "Overview" }, { id: "usecases", label: "Use cases" }, { id: "persona", label: "Persona" }, { id: "policy", label: "Policy" }, { id: "voice", label: "Voice" }, { id: "memory", label: "Memory" },
         { id: "knowledge", label: `Knowledge (${draft.knowledge_doc_ids.length})` }, { id: "tools", label: `Tools (${draft.tool_ids.length})` },
         { id: "skills", label: `Skills (${draft.skill_ids.length})` }, { id: "evaluation", label: "Evaluation" }, { id: "versions", label: "Versions" },
       ]} />
       {tab === "overview" && <Overview draft={draft} meta={meta} setMeta={setMeta} update={update} />}
+      {tab === "usecases" && <UseCasesTab agentId={id} tenant={tenant} published={!!agent.published_version} />}
       {tab === "persona" && <Persona draft={draft} update={update} />}
       {tab === "policy" && <PolicyTab draft={draft} update={update} />}
       {tab === "voice" && <VoiceTab draft={draft} update={update} />}
@@ -178,7 +180,20 @@ function Overview({ draft, meta, setMeta, update }: TabProps & { meta: { name: s
             <Input value={draft.outbound?.targets_url ?? ""} placeholder="/mock/insurance/outreach/renewals" onChange={(e) => update(["outbound", "targets_url"], e.target.value)} />
           </Field>
         )}
-        <div className="md:col-span-2"><Field label="Description"><Textarea value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} /></Field></div>
+        <div className="md:col-span-2"><Field label="Description" hint="Used to route callers to this agent; published with the agent."><Textarea value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} /></Field></div>
+        {draft.mode !== "outbound" && (
+          <>
+            <label className="flex items-center gap-3 text-sm font-medium md:col-span-2">
+              <input type="checkbox" role="switch" className="h-4 w-4 accent-[var(--accent)]" checked={draft.routable ?? true} onChange={(e) => update(["routable"], e.target.checked)} />
+              Route callers to this agent
+            </label>
+            <div className="md:col-span-2">
+              <Field label="Introduction when a caller is routed here" hint="{agent_name} is replaced with the agent's name.">
+                <Input maxLength={200} value={draft.handoff_intro ?? ""} onChange={(e) => update(["handoff_intro"], e.target.value)} />
+              </Field>
+            </div>
+          </>
+        )}
       </div>
       <div className="mt-4 flex gap-4 text-sm text-muted">
         <span>{draft.knowledge_doc_ids.length} docs</span><span>{draft.tool_ids.length} tools</span><span>{draft.skill_ids.length} skills</span>

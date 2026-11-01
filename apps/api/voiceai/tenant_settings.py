@@ -80,6 +80,9 @@ async def update(s: AsyncSession, tenant_id: str, allowed: list[str] | None, pla
         current = await allowed_pipelines(s, tenant_id)
         for dropped in (p for p in current if p not in allowed):
             in_use = await agents_using(s, tenant_id, dropped)
+            row_now = await _row(s, tenant_id)
+            if row_now is not None and (row_now.front_desk or {}).get("pipeline") == dropped:  # MT-16
+                in_use.append("Front desk")
             if in_use:
                 raise ApiError(409, "pipeline_in_use", ", ".join(in_use))
     row = await _ensure_row(s, tenant_id)

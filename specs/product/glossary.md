@@ -2,7 +2,7 @@
 type: Glossary
 title: Glossary
 description: Shared vocabulary used across specs, code and UI labels.
-status: stable
+status: draft
 tags: [product, glossary]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -58,3 +58,14 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | **Member memory** | What one agent remembers about one verified member across calls: **episodes** (call summaries) and **facts** (preferences, relationships, commitments) ([/architecture/agent-memory.md](/architecture/agent-memory.md)). |
 | **Supersede** | The agent replacing a remembered fact with a newer one; the old fact is retired, not deleted. |
 | **Erase member** | Removing everything every agent remembers about a member; only a content-free record that it happened remains. |
+| **API key** | A tenant's machine credential for the `/v1` public API, with a scope (`member` or `staff`) and limits; shown once, stored hashed ([/api/public-api.md](/api/public-api.md)). |
+| **Conversation** | One caller connection that may pass through several agents; each agent's part is a **segment** (a call) ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)). |
+| **Front desk** | What opens a routed conversation: a persona's greeting and disclosure, clarifying questions, the connecting message. |
+| **Supervisor** | Picks the agent for a conversation at the start and on transfer; never takes part in an agent's turns. |
+| **Capability profile** | What the supervisor knows about one agent: description, use cases, tools, knowledge titles, generated example requests ([/architecture/capability-catalog.md](/architecture/capability-catalog.md)). |
+| **Decision model** | An optional Jev-compatible model the supervisor asks to pick the agent when the routing mode is `decision_model`; the embedding decides when it is not configured or unsure. |
+| **PHI mode** | A switch that keeps caller text away from a hosted decision model without a BAA. |
+| **Routing mode** | `embedding` (default) or `decision_model`: what picks the agent in the supervisor ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)). |
+| **Agent transfer** | An agent handing a conversation to another agent through `transfer_to_agent` (not the phone **Transfer** to a person) ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)). |
+| **Routing suite** | The tenant's test of the router: utterances with the agent that should get them, run after every catalog change. |
+| **Webhook** | A signed POST to a tenant's URL when an API conversation starts, transfers, escalates, ends or is scored ([/architecture/webhooks.md](/architecture/webhooks.md)). |

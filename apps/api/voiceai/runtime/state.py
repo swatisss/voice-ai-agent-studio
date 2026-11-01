@@ -30,3 +30,5 @@ class CallState:
     tokens_out: int = 0
     cost_usd: float = 0.0
     latencies_ms: list[int] = field(default_factory=list)
+    transfer_requested: dict[str, Any] | None = None  # transfer_to_agent called this turn (/architecture/agent-transfer.md)
+    transfer_pending: dict[str, Any] | None = None    # a clarifying question was asked; the next caller turn transfers

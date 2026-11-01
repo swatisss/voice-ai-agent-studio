@@ -11,11 +11,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, error: str, detail: str = "") -> None:
+    def __init__(self, status: int, error: str, detail: str = "", headers: dict[str, str] | None = None) -> None:
         super().__init__(detail or error)
         self.status = status
         self.error = error
         self.detail = detail or error
+        self.headers = headers  # e.g. Retry-After on 429, WWW-Authenticate on 401 (/api/public-api.md)
 
 
 def not_found(what: str) -> ApiError:
@@ -25,7 +26,7 @@ def not_found(what: str) -> ApiError:
 def install_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, exc: ApiError) -> JSONResponse:
-        return JSONResponse({"error": exc.error, "detail": exc.detail}, status_code=exc.status)
+        return JSONResponse({"error": exc.error, "detail": exc.detail}, status_code=exc.status, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:

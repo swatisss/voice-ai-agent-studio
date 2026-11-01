@@ -14,6 +14,7 @@ import argparse
 import base64
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -45,6 +46,8 @@ def ensure_env(root: Path = ROOT) -> str:
     text = example.read_text(encoding="utf-8")
     # /architecture/tenant-settings.md: a fresh .env gets its own key for tenants' stored provider keys
     text = re.sub(r"(?m)^TENANT_SECRETS_KEY=.*$", f"TENANT_SECRETS_KEY={new_secrets_key()}", text)
+    # /api/public-api.md (Voice connect): connect tokens are signed with PUBLIC_API_SECRET (SDD-10)
+    text = re.sub(r"(?m)^PUBLIC_API_SECRET=.*$", f"PUBLIC_API_SECRET={secrets.token_urlsafe(32)}", text)
     env.write_text(text, encoding="utf-8")
     return "created"
 

@@ -18,6 +18,7 @@ export default function CallsPage() {
   const [direction, setDirection] = useState("");
   const [feedback, setFeedback] = useState("");
   const [seed, setSeed] = useState(true);
+  const [routedOnly, setRoutedOnly] = useState(false);
   const qs = new URLSearchParams({ include_seed: String(seed), ...(agent && { agent_id: agent }), ...(outcome && { outcome }), ...(channel && { channel }), ...(direction && { direction }), ...(feedback && { feedback }) });
   const { data: agents } = useApi<{ items: any[] }>("/api/agents", [tenant]);
   const { data } = useApi<{ items: any[] }>(`/api/calls?${qs}`, [tenant]);
@@ -31,6 +32,7 @@ export default function CallsPage() {
         <Select className="w-40" value={outcome} onChange={(e) => setOutcome(e.target.value)}><option value="">All outcomes</option><option value="resolved">Resolved</option><option value="escalated">Escalated</option><option value="abandoned">Abandoned</option></Select>
         <Select className="w-36" value={channel} onChange={(e) => setChannel(e.target.value)}><option value="">All channels</option><option value="voice">Voice</option><option value="text">Text</option></Select>
         <Select className="w-36" value={direction} onChange={(e) => setDirection(e.target.value)}><option value="">All directions</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option><option value="internal">Internal</option></Select>
+        <Select className="w-44" aria-label="Conversation" value={routedOnly ? "routed" : ""} onChange={(e) => setRoutedOnly(e.target.value === "routed")}><option value="">Any conversation</option><option value="routed">Routed only</option></Select>
         <Select className="w-44" aria-label="Feedback" value={feedback} onChange={(e) => setFeedback(e.target.value)}><option value="">Any feedback</option><option value="down">Not helpful</option><option value="up">Helpful</option><option value="none">No answer</option></Select>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={seed} onChange={(e) => setSeed(e.target.checked)} />Include seeded history</label>
       </div>
@@ -40,10 +42,10 @@ export default function CallsPage() {
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted"><tr><th className="pb-2">Started</th><th>Channel</th><th>Direction</th><th>Version</th><th>Caller</th><th>Intent</th><th>Outcome</th><th>Feedback</th><th>Root cause</th><th>Turns</th><th>LLM cost</th></tr></thead>
               <tbody>
-                {data.items.map((c) => (
+                {data.items.filter((c) => !routedOnly || (c.conversation_id && c.routed_by && c.routed_by !== "explicit")).map((c) => (
                   <tr key={c.id} className="cursor-pointer border-t border-line hover:bg-neutral-soft" onClick={() => router.push(`/calls/detail/?id=${c.id}`)}>
                     <td className="py-2 whitespace-nowrap">{when(c.started_at)}</td>
-                    <td>{label(c.channel)}{c.transport === "phone" && <Badge tone="info" className="ml-1">Phone</Badge>}{c.is_seed && <span className="ml-1 text-xs text-muted">(seed)</span>}</td>
+                    <td>{label(c.channel)}{c.transport === "phone" && <Badge tone="info" className="ml-1">Phone</Badge>}{c.conversation_id && c.routed_by && c.routed_by !== "explicit" && <Badge tone={c.routed_by === "transfer" ? "warn" : "accent"} className="ml-1">{c.routed_by === "transfer" ? "Transferred" : "Routed"} · {c.segment}</Badge>}{c.is_seed && <span className="ml-1 text-xs text-muted">(seed)</span>}</td>
                     <td><Badge tone={MODE_TONE[c.direction] ?? "neutral"}>{MODE_LABEL[c.direction] ?? "Inbound"}</Badge></td>
                     <td>{versionOf(c)}</td>
                     <td className="mono text-xs">{maskRef(c.caller_ref)}</td>

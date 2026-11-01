@@ -1,4 +1,4 @@
-// Spec: /ui/test-call.md
+// Spec: /ui/test-call.md (Single agent, Full flow)
 "use client";
 
 import { ChevronDown, ChevronRight, Mic, PhoneOff, PhoneOutgoing, Send } from "lucide-react";
@@ -12,12 +12,14 @@ import { api, ApiError, type CallEvent, useApi, useEvents } from "@/lib/api";
 import { MODE_LABEL, MODE_TONE, money, secs } from "@/lib/format";
 import { VoiceClient } from "@/lib/voice";
 import { FeedbackPrompt } from "@/components/feedback";
+import { FullFlow } from "@/components/full-flow";
 import { LiveControlsCard } from "@/components/live-controls";
 import { DEFAULT_TURN, type TurnDetection } from "@/lib/voices";
 
 type Mode = "talk" | "type";
 
 const TECH_KEY = "test-call-technical";  // UI-32: remembered per browser, off by default
+const MODE_KEY = "test-call-mode";  // UI-60: Single agent | Full flow, remembered per browser
 
 /** UI-43: who the playground call comes from; sent as caller_number, never shown on screen. */
 const CALL_FROM: { id: string; label: string; number?: string }[] = [
@@ -29,10 +31,60 @@ const CALL_FROM: { id: string; label: string; number?: string }[] = [
 ];
 
 export default function Page() {
-  return <Suspense fallback={<Spinner />}><TestCall /></Suspense>;
+  return <Suspense fallback={<Spinner />}><TestCallPage /></Suspense>;
 }
 
-function TestCall() {
+function FlowSwitch({ full, onChange, disabled }: { full: boolean; onChange: (full: boolean) => void; disabled?: boolean }) {
+  return (
+    <div className="flex gap-1 rounded-full border border-line p-0.5" role="group" aria-label="What to test">
+      {[false, true].map((f) => (
+        <button key={String(f)} aria-pressed={full === f} disabled={disabled} onClick={() => onChange(f)}
+          className={cx("rounded-full px-3 py-1 text-sm font-semibold", full === f ? "bg-accent text-on-accent" : "text-muted hover:bg-accent-soft")}>
+          {f ? "Full flow" : "Single agent"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TestCallPage() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const { tenant } = useTenant();
+  const [full, setFull] = useState(params.get("mode") === "full");
+  const [technical, setTechnicalState] = useState(false);
+  useEffect(() => {
+    try {
+      if (!params.get("mode") && localStorage.getItem(MODE_KEY) === "full") setFull(true);
+      setTechnicalState(localStorage.getItem(TECH_KEY) === "1");
+    } catch { /* storage unavailable */ }
+  }, [params]);
+  const choose = (f: boolean) => {
+    setFull(f);
+    try { localStorage.setItem(MODE_KEY, f ? "full" : "single"); } catch { /* storage unavailable */ }
+    router.replace(f ? "/test-call/?mode=full" : "/test-call/");
+  };
+  if (!full) return <TestCall flowSwitch={<FlowSwitch full={false} onChange={choose} />} />;
+  const setTechnical = (on: boolean) => {
+    setTechnicalState(on);
+    try { localStorage.setItem(TECH_KEY, on ? "1" : "0"); } catch { /* storage unavailable */ }
+  };
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold">Test call</h1>
+        <FlowSwitch full onChange={choose} />
+        <label className="ml-auto flex cursor-pointer items-center gap-2 text-sm text-muted">
+          <input type="checkbox" role="switch" aria-label="Technical details" className="h-4 w-4 accent-[var(--accent)]" checked={technical} onChange={(e) => setTechnical(e.target.checked)} />
+          Technical details
+        </label>
+      </div>
+      <FullFlow tenant={tenant} technical={technical} />
+    </div>
+  );
+}
+
+function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
   const { tenant } = useTenant();
   const params = useSearchParams();
   const router = useRouter();
@@ -178,6 +230,7 @@ function TestCall() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">Test call</h1>
+        {flowSwitch}
         <Select className="max-w-xs" value={agentId} onChange={(e) => { reset(); router.replace(`/test-call/?agent=${e.target.value}`); }}>
           {published.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </Select>

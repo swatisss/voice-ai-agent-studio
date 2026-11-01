@@ -37,6 +37,7 @@ References: https://docs.vapi.ai/documentation/assistants/conversation-behavior/
 | `max_duration` | the maximum call length was reached (voice, CE-05) |
 | `hangup` | the caller or the page ended the call |
 | `error` | an unrecoverable failure |
+| `transfer` | the conversation moved to another agent ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)); only the segment ends, with outcome `transferred`; the voice socket stays open and no `end` message is sent |
 
 The earlier reason `timeout` is replaced by `idle` and `max_duration`. Whatever the reason, `AgentSession.end(reason)` runs once ([/architecture/agent-runtime.md](/architecture/agent-runtime.md), RT-08), sets `status: ended`, queues `analyze_call` and publishes `call.ended`.
 
@@ -57,6 +58,7 @@ After a call has ended, the Test call page asks **"Was this helpful?"** with two
 * **Storage**: one row per call in `call_feedback` ([/data/data-model.md](/data/data-model.md)) — `rating` `up` or `down`, optional `comment`. Submitting again replaces the earlier answer.
 * **API**: `POST /api/calls/{id}/feedback` ([/api/rest-api.md](/api/rest-api.md)); the call summary and detail carry the rating; `GET /api/calls?feedback=` filters.
 * **Learning signal**: a thumbs **down** makes the call a candidate for fleet learning even when it was `resolved` ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)). The call is re-analysed once with the feedback; the analysis must then name what the caller was probably unhappy about; that call joins a cluster like an escalation would, counts toward "ready for a fix", and appears in the cluster's evidence with the comment. A thumbs **up** is stored and shown but does not create work.
+* In a conversation, feedback is asked once at the end of the conversation and stored on its last segment.
 * Feedback is never required to end the call, never shown for simulation calls, and never changes `outcome`.
 
 # Configuration (agent `policy`, [/data/agent-config.md](/data/agent-config.md))

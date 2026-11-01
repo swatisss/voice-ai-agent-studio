@@ -167,7 +167,7 @@ async def test_sampling(client, seeded, fake_llm):
         s.add(CallFeedback(tenant_id="evergreen-care", call_id=disliked, agent_id=seeded["care"]["agent_id"], rating="down"))
         await s.commit()
     card = await _score(plain)
-    assert not card.judged and all(c["verdict"] == "not_judged" for c in card.checks if c["method"] == "judge" and c["key"] != "memory.used_correctly")
+    assert not card.judged and all(c["verdict"] == "not_judged" for c in card.checks if c["method"] == "judge" and c["key"] not in ("memory.used_correctly", "routing.in_scope"))
     assert all(c["verdict"] != "not_judged" for c in card.checks if c["method"] == "code")
     assert (await _score(escalated)).judged and (await _score(disliked)).judged
     assert scoring.sampled("ff" + "0" * 30, 100) and not scoring.sampled("00" + "0" * 30, 0)

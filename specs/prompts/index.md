@@ -16,3 +16,6 @@ The code loads each prompt directly from the fenced `text` block under the `# Pr
 * [Realtime addendum](realtime-addendum.md) - Spoken-style, read-back and exact-text rules appended to the system prompt for agents on the realtime speech-to-speech pipeline
 * [Memory extraction](memory-extract.md) - After a verified call: one episode summary and a few candidate member facts, within the remember and never-remember rules
 * [Memory update decision](memory-update.md) - Add a candidate fact, let it supersede or confirm a remembered one, or do nothing
+* [Router decision](router-decision.md) - Deprecated (CP-0028): the former LLM decision target
+* [Router clarifying question](router-clarify.md) - The front desk's one short question when the supervisor cannot tell which agent fits
+* [Capability utterances](capability-utterances.md) - Example caller requests for one agent: indexed examples, or held-out paraphrases for the routing suite

@@ -69,7 +69,8 @@ export function useEvents(topics: string[], handler: (e: BusEvent) => void, tena
       es.onopen = () => { delay = 1000; };
       es.onmessage = () => undefined;
       const types = ["call.event", "call.escalated", "call.ended", "escalation.created", "escalation.updated", "analysis.created",
-        "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published", "scorecard.updated", "test_run.progress", "test_run.finished", "learning.run.finished"];
+        "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published", "scorecard.updated", "test_run.progress", "test_run.finished", "learning.run.finished",
+        "catalog.updated", "routing_run.finished", "routing.decision", "conversation.transferred", "conversation.segment", "conversation.ended"];
       for (const t of types) es.addEventListener(t, (ev) => { try { ref.current(JSON.parse((ev as MessageEvent).data)); } catch { /* ignore */ } });
       es.onerror = () => {
         es?.close();
@@ -112,7 +113,7 @@ export type MemberMemory = {
 
 // Spec: /architecture/call-scoring.md (Scorecard)
 export type Verdict = "pass" | "fail" | "n/a" | "unknown" | "not_judged";
-export type CheckGroup = "outcome" | "responsiveness" | "knowledge" | "tools" | "memory" | "safety";
+export type CheckGroup = "outcome" | "responsiveness" | "knowledge" | "tools" | "memory" | "safety" | "routing";
 export type ScoreCheck = {
   key: string; group: CheckGroup; method: "code" | "judge"; hard_gate: boolean; text: string; source: "built_in" | "config" | "custom";
   verdict: Verdict; reason: string; evidence: { seqs: number[]; chunk_ids: string[] };

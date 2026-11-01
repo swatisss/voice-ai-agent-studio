@@ -1,7 +1,7 @@
 """Twilio voice webhook and Media Stream WebSocket.
 
 Spec: /architecture/telephony.md, /api/rest-api.md (Phone numbers and telephony), /architecture/multi-tenancy.md,
-/architecture/tenant-settings.md, /architecture/call-admission.md
+/architecture/tenant-settings.md, /architecture/call-admission.md, /architecture/supervisor-routing.md (Phone numbers)
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from voiceai.config import get_settings
 from voiceai.db import sessionmaker
 from voiceai.errors import ApiError
 from voiceai import admission, caller_id, voice_calls
-from voiceai.models import Agent, AgentVersion, Call, PhoneNumber
+from voiceai.models import Agent, AgentVersion, Call, Conversation, PhoneNumber
 from voiceai.runtime.session import create_call
 
 log = logging.getLogger("voiceai.telephony")
@@ -49,6 +49,14 @@ async def voice_webhook(request: Request) -> Response:
 
     async with sessionmaker()() as db:
         number = await db.scalar(select(PhoneNumber).where(PhoneNumber.e164 == dialled))
+        if number is not None and number.target == "front_desk":  # TEL-12: the supervisor picks the agent
+            context = telephony.ivr_context({**dict(request.query_params), **{k: v for k, v in params.items()}})
+            conv_id = await _front_desk_conversation(db, number.tenant_id, request, call_sid, caller, dialled, context,
+                                                     caller_id.identification(match, attestation) if match else None)
+            if conv_id is None:
+                return _xml(telephony.twiml_not_in_service())
+            token = telephony.mint_token(s.twilio_auth_token, conv_id)
+            return _xml(telephony.twiml_stream(telephony.stream_url(conv_id, token, kind="conversation"), conv_id))
         agent = await db.scalar(select(Agent).where(Agent.id == number.agent_id, Agent.tenant_id == number.tenant_id)) if number else None
         version = await db.get(AgentVersion, agent.published_version_id) if agent and agent.published_version_id else None
         if not version or version.config.get("mode") == "outbound":  # TEL-03: unmapped, unpublished or not an answering agent
@@ -98,3 +106,53 @@ async def stream(websocket: WebSocket, call_id: str) -> None:
     await voice_calls.serve(websocket, call.tenant_id, call, phone)
     if websocket.client_state != WebSocketState.DISCONNECTED and websocket.application_state != WebSocketState.DISCONNECTED:
         await websocket.close(code=1000)  # TEL-11: a call that ended closes its stream normally, so Twilio moves on to <Hangup/>
+
+
+async def _front_desk_conversation(db, tenant_id: str, request: Request, call_sid: str, caller: str, dialled: str,  # noqa: ANN001
+                                   context: dict, identification: dict | None) -> str | None:
+    """A phone conversation (scope member) answered by the front desk; None = not in service (TEL-12)."""
+    from voiceai import conversations
+    from voiceai.routing import supervisor
+
+    if not await supervisor.candidates(db, tenant_id, "member"):
+        return None
+    conv = Conversation(tenant_id=tenant_id, source="phone", channel="voice", transport="twilio", scope="member", settings={})
+    db.add(conv)
+    await db.flush()
+    telephony_meta = {"provider": "twilio", "call_sid": call_sid, "from_last4": re.sub(r"\D", "", caller)[-4:], "to": dialled}
+    await conversations.open_front_desk(db, conv, context=context, identification=identification, extra={"telephony": telephony_meta})
+    decided = await admission.admit(db, tenant_id, await conversations.front_desk_config(db, conv))
+    if isinstance(decided, admission.Refusal):
+        await db.rollback()
+        return None
+    conv.settings = {**conv.settings, "admission": decided.to_meta()}
+    await db.commit()
+    return conv.id
+
+
+@router.websocket("/conversation/{conversation_id}")
+async def conversation_stream(websocket: WebSocket, conversation_id: str) -> None:
+    """TEL-12: the Media Stream of a call to a front-desk number."""
+    from voiceai.voice.phone import PhoneStream, read_start
+
+    await websocket.accept()
+    s = get_settings()
+    if not (s.twilio_auth_token and telephony.consume_token(s.twilio_auth_token, conversation_id, websocket.query_params.get("token"))):
+        await websocket.close(code=4401, reason="bad token")
+        return
+    async with sessionmaker()() as db:
+        conv = await db.get(Conversation, conversation_id)
+    if conv is None or conv.status == "ended":
+        await websocket.close(code=4404, reason="unknown or ended conversation")
+        return
+    start = await read_start(websocket)
+    if not start:
+        await websocket.close(code=1000)
+        return
+    from voiceai import conversations
+
+    await conversations.connected(conv.tenant_id, conv.id)
+    phone = PhoneStream(call_sid=str(start.get("callSid") or ""), stream_sid=str(start.get("streamSid") or ""), parameters=dict(start.get("customParameters") or {}))
+    await voice_calls.serve_conversation(websocket, conv, phone)
+    if websocket.client_state != WebSocketState.DISCONNECTED and websocket.application_state != WebSocketState.DISCONNECTED:
+        await websocket.close(code=1000)

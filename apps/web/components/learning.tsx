@@ -40,7 +40,7 @@ function useLearning(tenant: string) {
     }
   }
   const last = runs.data?.items.find((r) => r.status !== "running");
-  return { runs: runs.data, inbox: inbox.data, running: running || starting, runNow, last };
+  return { runs: runs.data, inbox: inbox.data, inboxReload: inbox.reload, running: running || starting, runNow, last };
 }
 
 function Counts({ run }: { run: Run }) {
@@ -79,7 +79,7 @@ export function LearningCard({ tenant }: { tenant: string }) {
 
 /** UI-54: Last night strip and the learning inbox at the top of Insights. */
 export function LearningInbox({ tenant }: { tenant: string }) {
-  const { inbox, running, runNow, last } = useLearning(tenant);
+  const { inbox, inboxReload, running, runNow, last } = useLearning(tenant);
   return (
     <div id="inbox" className="space-y-3 scroll-mt-4">
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-sm">
@@ -102,10 +102,11 @@ export function LearningInbox({ tenant }: { tenant: string }) {
                     <Badge tone="info">{label(p.kind)}</Badge>
                     <span className="font-medium">{p.title}</span>
                     {s?.gate ? <Badge tone={s.gate.passed ? "ok" : "bad"}>{s.gate.passed ? "Passed" : "Failed"}</Badge> : <Badge>Not checked</Badge>}
-                    <Link className="ml-auto text-sm font-medium text-accent" href={`/insights/cluster/?id=${p.cluster_id}`}>Open</Link>
+                    {p.kind !== "routing_update" && <Link className="ml-auto text-sm font-medium text-accent" href={`/insights/cluster/?id=${p.cluster_id}`}>Open</Link>}
                   </div>
-                  <div className="mt-1 text-sm text-muted">{p.cluster_name} · {p.rationale}</div>
-                  {s && (
+                  <div className="mt-1 text-sm text-muted">{p.cluster_name ? `${p.cluster_name} · ` : ""}{p.rationale}</div>
+                  {p.kind === "routing_update" && <RoutingProposal p={p as any} onDone={() => inboxReload()} />}
+                  {s && p.kind !== "routing_update" && (
                     <div className="mt-1 text-xs text-muted">
                       Lift {(s.lift_pct ?? 0) >= 0 ? "+" : ""}{s.lift_pct ?? 0} pts{s.held_out_cases ? ` · held out ${s.held_out_candidate_pass}/${s.held_out_cases}` : ""} · {regressed ? `${regressed} regressed` : "no regressions"}
                       {s.gate && !s.gate.passed && <span className="text-bad"> · {s.gate.reasons.join("; ")}</span>}
@@ -117,6 +118,35 @@ export function LearningInbox({ tenant }: { tenant: string }) {
           </ul>
         )}
       </Card>
+    </div>
+  );
+}
+
+
+/** A nightly routing proposal (/architecture/self-learning.md, Routing proposals): reviewed inline, there is no cluster. */
+function RoutingProposal({ p, onDone }: { p: { id: string; payload: any; eval_summary: any }; onDone: () => void }) {
+  const toast = useToast();
+  const [note, setNote] = useState("");
+  const gate = p.eval_summary?.gate;
+  async function decide(kind: "approve" | "reject") {
+    try {
+      await api(`/api/proposals/${p.id}/${kind}`, { method: "POST", json: { decided_by: "Reviewer", ...(kind === "reject" || !gate?.passed ? { note, force: kind === "approve" } : {}) } });
+      toast(kind === "approve" ? "Approved: routing updates once the agent is re-indexed" : "Rejected", "ok");
+      onDone();
+    } catch (e) {
+      toast((e as ApiError).detail, "bad");
+    }
+  }
+  return (
+    <div className="mt-2 space-y-2 text-sm">
+      <div>Add to the use case <b>{p.payload.use_case_title}</b>:</div>
+      <ul className="list-disc pl-5">{(p.payload.add_utterances ?? []).map((u: string) => <li key={u}>&ldquo;{u}&rdquo;</li>)}</ul>
+      {gate && <div className={gate.passed ? "text-ok" : "text-bad"}>Routing gate: {gate.passed ? "passed" : gate.reasons.join("; ")} · suite {gate.suite_before} → {gate.suite_after} of {gate.cases}</div>}
+      <div className="flex flex-wrap items-center gap-2">
+        <input className="min-w-56 flex-1 rounded-lg border border-line bg-panel px-3 py-1.5" placeholder="Note (required to reject or to override a failed gate)" value={note} onChange={(e) => setNote(e.target.value)} />
+        <Button variant="primary" disabled={!gate?.passed && !note.trim()} onClick={() => decide("approve")}>Approve</Button>
+        <Button variant="ghost" disabled={!note.trim()} onClick={() => decide("reject")}>Reject</Button>
+      </div>
     </div>
   );
 }

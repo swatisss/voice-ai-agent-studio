@@ -1,10 +1,10 @@
-"""Phone-number to agent mapping.
+"""Phone-number to agent (or front desk) mapping.
 
-Spec: /architecture/telephony.md (Phone numbers), /api/rest-api.md (Phone numbers and telephony)
+Spec: /architecture/telephony.md (Phone numbers), /api/rest-api.md (Phone numbers and telephony), /architecture/supervisor-routing.md
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field, field_validator
@@ -22,7 +22,8 @@ router = APIRouter(prefix="/api")
 
 class PhoneNumberIn(BaseModel):
     e164: str
-    agent_id: str
+    target: Literal["agent", "front_desk"] = "agent"
+    agent_id: str | None = None
     label: str | None = Field(default=None, max_length=120)
 
     @field_validator("e164")
@@ -35,7 +36,7 @@ class PhoneNumberIn(BaseModel):
 
 
 def out(n: PhoneNumber, agent_name: str | None) -> dict[str, Any]:
-    return {"id": n.id, "e164": n.e164, "agent_id": n.agent_id, "agent_name": agent_name, "label": n.label, "created_at": n.created_at.isoformat()}
+    return {"id": n.id, "e164": n.e164, "target": n.target or "agent", "agent_id": n.agent_id, "agent_name": agent_name, "label": n.label, "created_at": n.created_at.isoformat()}
 
 
 @router.get("/phone-numbers")
@@ -49,15 +50,20 @@ async def list_numbers(tenant_id: str = Depends(current_tenant), s: AsyncSession
 
 @router.post("/phone-numbers")
 async def add_number(body: PhoneNumberIn, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    agent = await s.scalar(select(Agent).where(Agent.id == body.agent_id, Agent.tenant_id == tenant_id))
-    if agent is None:
-        raise ApiError(422, "invalid_agent", "agent_id is not an agent of this business unit")
+    agent = None
+    if body.target == "front_desk":  # TEL-12: the supervisor picks the agent
+        if body.agent_id:
+            raise ApiError(422, "invalid_agent", "A front-desk number has no agent")
+    else:
+        agent = await s.scalar(select(Agent).where(Agent.id == body.agent_id, Agent.tenant_id == tenant_id)) if body.agent_id else None
+        if agent is None:
+            raise ApiError(422, "invalid_agent", "agent_id is not an agent of this business unit")
     if await s.scalar(select(PhoneNumber.id).where(PhoneNumber.e164 == body.e164)):
         raise ApiError(409, "number_in_use", "That number is already routed to an agent")
-    row = PhoneNumber(tenant_id=tenant_id, e164=body.e164, agent_id=agent.id, label=body.label)
+    row = PhoneNumber(tenant_id=tenant_id, e164=body.e164, target=body.target, agent_id=agent.id if agent else None, label=body.label)
     s.add(row)
     await s.commit()
-    return out(row, agent.name)
+    return out(row, agent.name if agent else None)
 
 
 @router.delete("/phone-numbers/{number_id}", status_code=204)

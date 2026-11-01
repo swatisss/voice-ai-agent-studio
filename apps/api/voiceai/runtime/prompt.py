@@ -45,9 +45,30 @@ def verification_instruction(identified_first_name: str | None) -> str:
     return "Ask for member ID and date of birth, then call the verification tool."
 
 
+TRANSFER_INSTRUCTIONS = (
+    "# Other teams\n"
+    "Other assistants handle other kinds of requests. If the caller needs something that is outside your skills, tools and "
+    "knowledge, and it is not something your policy says a human must handle, call transfer_to_agent with a short reason and a "
+    "summary of what the caller wants (no member numbers or dates of birth). Do not guess which team; do not tell the caller "
+    "you are an AI handing over to another AI; just say you will connect them."
+)
+
+
+def handoff_block(handoff: dict[str, Any] | None) -> str:
+    """CP-0026: how a routed or transferred caller reached this agent; empty for a call that started here."""
+    if not handoff:
+        return ""
+    reason = (handoff.get("reason") or "").strip()
+    line = f"The previous assistant passed the caller on because: {reason}" if reason else "The front desk routed the caller to you."
+    return ("# How this caller reached you\n" + line + "\n"
+            f"Summary from the previous assistant: {(handoff.get('summary') or '(none)').strip()}\n"
+            "Do not greet the caller again and do not ask again for anything already verified. Answer their last request.")
+
+
 def system_prompt(
     config: dict[str, Any], tenant_name: str, verified_ref: str | None, now: datetime, context: dict[str, Any] | None = None,
     identified_first_name: str | None = None, member_profile: str = NOT_VERIFIED, member_memory: str = NOTHING,
+    transfer: bool = False, handoff: dict[str, Any] | None = None,
 ) -> str:
     persona = config.get("persona", {})
     policy = config.get("policy", {})
@@ -67,4 +88,6 @@ def system_prompt(
         verification_instruction=verification_instruction(None if verified_ref else identified_first_name),
         member_profile=member_profile,
         member_memory=member_memory,
+        transfer_instructions=TRANSFER_INSTRUCTIONS if transfer else "",
+        handoff=handoff_block(handoff),
     )

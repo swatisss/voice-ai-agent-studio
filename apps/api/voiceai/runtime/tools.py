@@ -66,6 +66,23 @@ BUILTIN_SCHEMAS: list[dict[str, Any]] = [
 ]
 
 
+TRANSFER_SCHEMA: dict[str, Any] = {  # offered only inside conversations with another routable agent (XFR-03)
+    "type": "function",
+    "function": {
+        "name": "transfer_to_agent",
+        "description": "Hand the caller to another team when the request is outside your skills, tools and knowledge. The system picks the team.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "reason": {"type": "string", "description": "What the caller needs that you do not handle (max 200 characters)"},
+                "summary": {"type": "string", "description": "What happened so far and what the caller wants; no member numbers or dates of birth (max 500 characters)"},
+            },
+            "required": ["reason", "summary"],
+        },
+    },
+}
+
+
 def tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
     return {
         "type": "function",
@@ -73,8 +90,8 @@ def tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def all_schemas(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return BUILTIN_SCHEMAS + [tool_schema(t) for t in tools]
+def all_schemas(tools: list[dict[str, Any]], transfer: bool = False) -> list[dict[str, Any]]:
+    return BUILTIN_SCHEMAS + ([TRANSFER_SCHEMA] if transfer else []) + [tool_schema(t) for t in tools]
 
 
 def render_url(url: str, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -154,6 +171,9 @@ class ToolExecutor:
         if name == "end_call":
             self.state.end_requested = True
             return {"status": "ending"}, True
+        if name == "transfer_to_agent":  # RT-16: the turn ends after this; the supervisor picks the next agent
+            self.state.transfer_requested = {"reason": str(a.get("reason") or "")[:200], "summary": str(a.get("summary") or "")[:500]}
+            return {"status": "transferring"}, True
         result, ok = await self.execute(name, raw_args)
         if name in self.tools:
             self.state.tool_error_streak = 0 if ok else self.state.tool_error_streak + 1

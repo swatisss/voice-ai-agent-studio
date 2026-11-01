@@ -24,6 +24,10 @@ Changing `allowed_pipelines` to drop `realtime` while any agent of the tenant ha
 
 **Existing tenants.** At startup, a tenant without a settings row that already has an agent on the realtime pipeline (draft or published) gets a row with `allowed_pipelines: ["cascade","realtime"]`, so upgrading does not take a working realtime agent off the air. Tenants without such an agent keep the defaults.
 
+# Front desk
+
+`tenant_settings.front_desk` holds the front desk of routed conversations: persona, pipeline, default agent per scope, confidence threshold override, maximum clarifying questions, connecting message and the routing suite's pass mark. Rules and defaults: [/architecture/supervisor-routing.md](/architecture/supervisor-routing.md). The pipeline must be in `allowed_pipelines`; dropping `realtime` while the front desk uses it is refused with 409 `pipeline_in_use` naming "Front desk". Settings → Front desk edits it ([/ui/settings.md](/ui/settings.md)).
+
 # Enforcement points
 
 The call-start rows below are decided by [call admission](/architecture/call-admission.md); this table lists where the allowlist is felt.
@@ -69,3 +73,4 @@ There is no fallback from a stored tenant key that OpenAI rejects to the platfor
 - **MT-10** — Given `TENANT_SECRETS_KEY` unset, when a key is saved, then the response is 503 `secrets_unavailable`; given a key stored under a different `TENANT_SECRETS_KEY`, then it counts as not set.
 - **MT-11** — Given a realtime call, then the provider connection uses the tenant's key when one is stored (`openai_key_source: tenant`), else the platform key when `openai_platform_fallback` is true (`platform`), else the socket closes with 4500 `voice_unavailable`; tenant A's key is never used for tenant B's call.
 - **MT-12** — Given an existing database where tenant `evergreen-care` has a realtime agent and no settings row, when the app starts, then that tenant's `allowed_pipelines` is `["cascade","realtime"]` and a tenant without realtime agents still has the defaults.
+- **MT-16** — Given a tenant whose front desk uses `pipeline: realtime`, when `allowed_pipelines` is changed to drop `realtime`, then the response is 409 `pipeline_in_use` naming the front desk; given a front desk default agent that is later unpublished, then routing treats the scope as having no default.

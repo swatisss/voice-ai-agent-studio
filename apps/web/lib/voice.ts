@@ -1,4 +1,4 @@
-// Spec: /api/voice-protocol.md, /ui/test-call.md (Talk mode)
+// Spec: /api/voice-protocol.md, /ui/test-call.md (Talk mode, Full flow), /api/public-api.md (Voice connect)
 "use client";
 
 import { API_BASE } from "./api";
@@ -27,7 +27,16 @@ export class VoiceClient {
 
   constructor(private h: VoiceHandlers) {}
 
+  /** A conversation's voice socket (/api/public-api.md, Voice connect): the URL and single-use token from the create call. */
+  async startConnect(url: string, token: string): Promise<void> {
+    return this.open(() => new WebSocket(url, ["vai.voice.v1", `vai-token.${token}`]));
+  }
+
   async start(callId: string, tenant: string): Promise<void> {
+    return this.open(() => new WebSocket(wsUrl(`/api/voice/${callId}?tenant=${encodeURIComponent(tenant)}`)));
+  }
+
+  private async open(connect: () => WebSocket): Promise<void> {
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
     });
@@ -40,7 +49,7 @@ export class VoiceClient {
     mute.gain.value = 0;
     source.connect(node).connect(mute).connect(this.ctxIn.destination);
 
-    this.ws = new WebSocket(wsUrl(`/api/voice/${callId}?tenant=${encodeURIComponent(tenant)}`));
+    this.ws = connect();
     this.ws.binaryType = "arraybuffer";
     node.port.onmessage = (e: MessageEvent<{ pcm: ArrayBuffer; level: number }>) => {
       this.h.onLevel?.(e.data.level);

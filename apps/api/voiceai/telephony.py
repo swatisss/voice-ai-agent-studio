@@ -119,10 +119,33 @@ def twiml_stream(stream_url: str, call_id: str) -> str:
     )
 
 
-def stream_url(call_id: str, token: str) -> str:
+def stream_url(call_id: str, token: str, kind: str = "stream") -> str:
+    """kind creates and manages local Kubernetes clusters using Docker container 'nodes'
+
+Usage:
+  kind [command]
+
+Available Commands:
+  build       Build one of [node-image]
+  completion  Output shell completion code for the specified shell (bash, zsh or fish)
+  create      Creates one of [cluster]
+  delete      Deletes one of [cluster]
+  export      Exports one of [kubeconfig, logs]
+  get         Gets one of [clusters, nodes, kubeconfig]
+  help        Help about any command
+  load        Loads images into nodes
+  version     Prints the kind CLI version
+
+Flags:
+  -h, --help              help for kind
+  -q, --quiet             silence all stderr output
+  -v, --verbosity int32   info log verbosity, higher value produces more output
+      --version           version for kind
+
+Use "kind [command] --help" for more information about a command. stream: a call's stream; conversation: a front-desk conversation's stream (TEL-12)."""
     base = (get_settings().public_base_url or "").rstrip("/")
     ws_base = "wss://" + base.split("://", 1)[-1] if base.startswith("https://") else "ws://" + base.split("://", 1)[-1]
-    return f"{ws_base}/api/telephony/twilio/stream/{call_id}?token={token}"
+    return f"{ws_base}/api/telephony/twilio/{kind}/{call_id}?token={token}"
 
 
 def twiml_dial(destination: str) -> str:

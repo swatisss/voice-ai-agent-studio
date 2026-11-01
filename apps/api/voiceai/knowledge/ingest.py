@@ -57,6 +57,9 @@ async def rechunk(session: AsyncSession, doc: KnowledgeDoc) -> int:
             embedding=[round(float(x), 6) for x in v],
         ))
     invalidate()
+    from voiceai.routing import catalog
+
+    await catalog.enqueue_for_doc(session, doc.tenant_id, doc.id)  # CAT-03: profiles list the agent's knowledge
     return len(chunks)
 
 
@@ -138,3 +141,6 @@ async def archive_doc(session: AsyncSession, tenant_id: str, doc_id: str) -> Non
         raise ApiError(404, "doc_not_found", "Document not found")
     doc.status = "archived"
     invalidate()
+    from voiceai.routing import catalog
+
+    await catalog.enqueue_for_doc(session, tenant_id, doc_id)  # CAT-03

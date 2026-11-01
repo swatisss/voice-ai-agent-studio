@@ -22,7 +22,7 @@ from voiceai.config import get_settings
 log = logging.getLogger("voiceai.llm")
 T = TypeVar("T", bound=BaseModel)
 
-ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn", "speech")
+ROLES = ("realtime", "analysis", "drafting", "simulator", "judge", "turn", "router", "speech")
 CHAT_ROLES = tuple(r for r in ROLES if r != "speech")
 FIRST_TOKEN_TIMEOUT_S = 8.0
 JSON_TIMEOUT_S = 60.0

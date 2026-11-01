@@ -71,6 +71,7 @@ class Decision:
     output: str | None = None     # a tool call's JSON result
     refresh: bool = False         # the prompt changed (verification): rebuild the model's instructions
     rule: _Rule | None = None     # a caller-turn rule whose line commit() still has to record
+    transfer_to: Any = None       # the next segment's AgentSession: the channel continues there (XFR-01)
 
 
 def _trim_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -123,6 +124,7 @@ class AgentSession:
         self.context: dict[str, Any] = dict(context or {})  # outbound call context (OB-01)
         self.tenant_id = call.tenant_id
         self.agent_id = call.agent_id
+        self.conversation_id: str | None = getattr(call, "conversation_id", None)
         self.channel = call.channel
         self.is_eval = call.is_eval
         self.started_at = call.started_at or utcnow()
@@ -141,6 +143,11 @@ class AgentSession:
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[SettingsChange], Awaitable[None]]] = []  # the running voice pipeline (TD-09)
         self._tool_rounds = 0  # tool calls in the current caller turn of an externally driven channel (RT-12)
+        self.intro_pending: str | None = None  # a routed segment's first line, said after the routed utterance (RTE-07)
+        self.transfer_available = False  # transfer_to_agent is offered (XFR-03)
+        self.transferred_to: AgentSession | None = None  # set when this segment handed the conversation on
+        self.carried_caller_line: str | None = None  # a transferred segment answers the caller's last line first
+        self.handoff: dict[str, Any] = dict((getattr(call, "meta", None) or {}).get("handoff") or {})
         self.member_profile = NOT_VERIFIED  # filled at verification for this call only (/architecture/agent-memory.md)
         self.member_memory = NOTHING
 
@@ -168,6 +175,10 @@ class AgentSession:
                     state.verification_level = "attested"  # IDV-05
             sess = cls(call=call, config=settings.config, tenant_name=tenant.name if tenant else tenant_id, app=app,
                        history=list(meta.get("history", [])), state=state, seq=seq, context=meta.get("context"), settings=settings)
+        if sess.conversation_id and not sess.state.ended:
+            from voiceai import conversations
+
+            sess.transfer_available = await conversations.transfer_available(sess.tenant_id, sess.conversation_id, sess.agent_id)
         if not sess.state.ended:
             REGISTRY[call_id] = sess
         return sess
@@ -275,6 +286,8 @@ class AgentSession:
             call.status = "ended"
             if self.state.escalated:
                 call.outcome = "escalated"
+            elif reason == "transfer":  # XFR-01: only the segment ends
+                call.outcome = "transferred"
             if not self.is_eval:
                 await jobs.enqueue(s, self.tenant_id, "analyze_call", {"call_id": self.call_id}, dedupe_key=f"analyze_call:{self.call_id}")
             await memory.enqueue_extraction(s, call, self.config)  # MEM-01
@@ -283,6 +296,10 @@ class AgentSession:
         bus.publish(self.tenant_id, f"call:{self.call_id}", "call.ended", data)
         if not self.is_eval:
             bus.publish(self.tenant_id, "dashboard", "call.ended", data)
+        if self.conversation_id:  # /architecture/supervisor-routing.md (Conversations)
+            from voiceai import conversations
+
+            await conversations.segment_ended(self.tenant_id, self.call_id)
 
     async def escalate(self, category: str, detail: str) -> None:
         if self.state.escalated:  # ES-08
@@ -293,6 +310,10 @@ class AgentSession:
             list(self.state.tools_used), self.state.verified_member_ref, is_eval=self.is_eval,
         )
         await self._event("system", f"Escalated: {category.replace('_', ' ')}", {"escalation_id": self.state.escalation_id, "category": category, "detail": detail})
+        if self.conversation_id:
+            from voiceai import conversations
+
+            await conversations.segment_escalated(self.tenant_id, self.call_id, self.state.escalation_id, category)
 
     async def _say(self, text: str, data: dict[str, Any] | None = None) -> str:
         self.history.append({"role": "assistant", "content": text})
@@ -320,8 +341,16 @@ class AgentSession:
         self._tool_rounds = 0
         await self._record_user(text)
         rule = self._caller_rule(text)
+        if rule is None and self.state.transfer_pending:  # the caller answered the transfer's clarifying question
+            pending, self.state.transfer_pending = self.state.transfer_pending, None
+            return await self._transfer(pending, extra_text=text, allow_clarify=False)
         if rule is None:
+            if self.intro_pending:  # RTE-07: the routed agent introduces itself, then its model answers
+                intro, self.intro_pending = self.intro_pending, None
+                await self._event("assistant", intro, {"intro": True})
+                return Decision(say=intro, model_turn=True, refresh=True)
             return Decision(model_turn=True)
+        self.intro_pending = None
         return Decision(say=rule.text, end=rule.end_reason, rule=rule)
 
     async def commit(self, decision: Decision) -> Decision:
@@ -359,11 +388,34 @@ class AgentSession:
 
     async def tools_finished(self, spoke: bool) -> Decision:
         """The tool calls of a model reply have all returned (RV-09): hand off, close, or let the model continue."""
+        if self.state.transfer_requested and not self.state.escalated:  # RT-16, XFR-01
+            requested, self.state.transfer_requested = self.state.transfer_requested, None
+            return await self._transfer(requested)
         if self.state.escalated:  # the model called escalate_to_human: the hand-off message, then the call ends
             return Decision(say=await self.announce(self._handoff_line(), {"handoff": True}), end="handoff")
         if self.state.end_requested:
             return await self._end_call_decision(spoke)
         return Decision(model_turn=True)
+
+    async def _transfer(self, requested: dict[str, Any], extra_text: str | None = None, allow_clarify: bool = True) -> Decision:
+        """Ask the supervisor for the next agent (/architecture/agent-transfer.md, Flow)."""
+        from voiceai import conversations
+
+        await self.note(f"Transferred: {requested.get('reason') or 'another team'}", {"transfer": requested})  # RT-16
+        out = await conversations.transfer(self, requested, extra_text=extra_text, allow_clarify=allow_clarify)
+        if out["kind"] == "routed":
+            await self.end("transfer")
+            self.transferred_to = out["session"]
+            return Decision(transfer_to=out["session"])
+        if out["kind"] == "clarify":
+            self.state.transfer_pending = requested
+            await self._persist()
+            return Decision(say=await self.announce(out["line"], {"transfer_question": True}))
+        await self.escalate("transfer_failed", out.get("detail") or "No other agent can take this request")  # XFR-04, ES-10
+        return Decision(say=await self.announce(self._handoff_line(), {"handoff": True}), end="handoff")
+
+    def tool_schemas(self) -> list[dict[str, Any]]:
+        return all_schemas(self.config.get("tools", []), self.transfer_available)
 
     # -- the rules, shared by the policy and _turn()
     def _handoff_line(self) -> str:
@@ -446,6 +498,10 @@ class AgentSession:
         if not text or self.state.ended:
             return
         decision = await self.caller_turn(text)  # RT-02 holding, CE-02 farewell, ES-01 safety: no model needed
+        if decision.transfer_to is not None:
+            return
+        if decision.model_turn and decision.say:  # a routed segment's intro (already recorded) comes before the answer
+            yield decision.say
         if not decision.model_turn:
             async for line in self._carry_out(decision):
                 yield line
@@ -453,7 +509,7 @@ class AgentSession:
 
         policy = self.config.get("policy", {})
         override = (self.config.get("models") or {}).get("realtime")
-        schemas = all_schemas(self.config.get("tools", []))
+        schemas = self.tool_schemas()
         spoken = ""
         rounds = 0  # RT-04 counts model rounds (several tool calls each), unlike RT-12's per-call limit
         filler_done = False
@@ -506,6 +562,13 @@ class AgentSession:
             outputs = await asyncio.gather(*(self._run_tool(tc.id, tc.name, tc.arguments) for tc in result.tool_calls))
             for tc, output in zip(result.tool_calls, outputs):
                 self.history.append({"role": "tool", "tool_call_id": tc.id, "content": output})
+            if self.state.transfer_requested and not self.state.escalated:  # transfer_to_agent: the next segment answers
+                await self.reply_finished(spoken, first_chunk_ms, decide=False)
+                decision = await self.tools_finished(bool(spoken.strip()))
+                if decision.transfer_to is None:
+                    async for line in self._carry_out(decision):
+                        yield line
+                return
             if self.state.escalated:  # the model called escalate_to_human: what it said, then the hand-off (RV-09)
                 await self.reply_finished(spoken, first_chunk_ms, decide=False)
                 async for line in self._carry_out(await self.tools_finished(bool(spoken.strip()))):
@@ -573,4 +636,4 @@ class AgentSession:
         """The system prompt for the next model request (all channels)."""
         return system_prompt(self.config, self.tenant_name, self.state.verified_member_ref, self.started_at, self.context,
                              identified_first_name=self.state.identified_first_name, member_profile=self.member_profile,
-                             member_memory=self.member_memory)
+                             member_memory=self.member_memory, transfer=self.transfer_available, handoff=self.handoff)

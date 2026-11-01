@@ -47,6 +47,8 @@ The job worker starts `nightly_learning` once a day per tenant when `LEARNING_NI
 
 Every payload may add `scenarios` (the derived scenarios). On approval they join the agent's test suite, enabled.
 
+**Routing proposals.** Once per run and tenant, after the agents: segments that failed `routing.early_transfer`, or a *calibrated* `routing.in_scope`, are grouped by the agent that finally handled the request without transferring. For each such agent with ≥ 3 misrouted requests since the last run (cap: one proposal per agent per night), a `routing_update` proposal is drafted: payload `{use_case_id, add_utterances: [...]}` for the agent's first use case, with up to 5 caller requests (the first caller line of the segment that received each misrouted caller, long digit runs removed) or `{summary}` (a sharper use-case summary). Its gate scores Stage A ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)) with the change applied in memory: it passes when every added request ranks the agent first and the routing suite's Stage A accuracy does not drop. On approval the use case is updated and the agent re-indexed ([/architecture/capability-catalog.md](/architecture/capability-catalog.md)); no agent version is created.
+
 # Gate
 
 A proposal evaluation ([evaluation](/architecture/evaluation.md)) runs every case on **both arms** (baseline = published version, candidate = baseline with the proposal applied in memory), scores every simulated call ([call scoring](/architecture/call-scoring.md), judge on), and decides:
@@ -97,3 +99,4 @@ The summary keeps each part with its numbers and a `gate: {passed, reasons}`; th
 - **SL-10** — Given a candidate on which a test scenario passing 3/3 on the baseline passes 1/3, then the gate fails with a reason naming the scenario, and approval without `force` and a note returns 409 `evaluation_gate`.
 - **SL-11** — Given a nightly run, then no agent version is created, no agent draft changes and no proposal is approved, whatever the gate results.
 - **SL-12** — Given a finished nightly run, then `learning.run.finished` is published and `GET /api/learning/runs` returns its per-agent summary with signals by kind and proposals drafted and passed.
+- **SL-13** — Given three segments of the claims agent that transferred early to Customer Care for dental coverage questions, when the nightly run finishes, then one `routing_update` proposal for a Customer Care use case waits in the inbox with its routing gate; nothing changes in the catalog until a human approves it.

@@ -22,13 +22,15 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Mock healthcare and insurance business API served by the platform itself.
 * **Inbound phone calls** through Twilio Media Streams to a published agent (one number per agent, IVR context, optional redirect of the live call to a person on hand-off), verifiable locally through a tunnel or a no-account simulator ([/architecture/telephony.md](/architecture/telephony.md)).
 * An **optional realtime speech-to-speech voice pipeline** (OpenAI Realtime) chosen per agent; the Insurance Claims Agent uses it, all other agents keep the Deepgram cascade ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)).
+* A **public, key-authenticated API** per tenant (`/v1`) for tenant backends: text, voice over WebSocket, a Twilio-format media stream for any carrier, and WebRTC; per-key rate limits; signed webhooks ([/api/public-api.md](/api/public-api.md)).
+* **Supervisor routing**: a front desk and a supervisor pick the agent from an automatically synced capability catalog; agents transfer conversations to each other ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)).
 * Local dev with zero infrastructure (SQLite); GCP Cloud Run deployment.
 * Spec-driven development tooling (`spec_check.py`, git hooks, agent instructions).
 
 # Out of scope (v1) — roadmap
 
-* Telephony beyond inbound Twilio calls: SIP trunks, IVR/CCaaS connectors (Genesys, Amazon Connect), buying or managing phone numbers from the app, warm transfer of live audio to a human (a redirect of the live call is in scope), DTMF input, call recording.
-* Authentication, SSO, RBAC (a tenant switcher stands in).
+* Telephony beyond inbound Twilio calls and Twilio-format media streams: SIP trunks and SIP URIs (planned after ADR-0012), IVR/CCaaS connectors (Genesys, Amazon Connect), buying or managing phone numbers from the app, warm transfer of live audio to a human (a redirect of the live call is in scope), DTMF input, call recording.
+* Studio authentication, SSO, RBAC (a tenant switcher stands in); API keys authenticate only the `/v1` API. OAuth, per-user tokens and browser-held keys.
 * Audio recording storage and playback.
 * PHI redaction pipeline, BAAs, audit log export, data retention policies.
 * Languages other than English.

@@ -235,6 +235,16 @@ async def approve(s: AsyncSession, p: FixProposal, decided_by: str, note: str | 
         raise ApiError(409, "evaluation_gate", f"Approval blocked: {reason}. Use force with a note to override.")
     agent = await s.get(Agent, p.agent_id)
     assert agent is not None
+    if p.kind == "routing_update":  # SL-13: the use case changes and the agent is re-indexed; no new version
+        from voiceai.routing import learning as routing_learning
+
+        await routing_learning.approve(s, p)
+        p.status, p.decided_by, p.decision_note, p.decided_at = "approved", decided_by, note, utcnow()
+        version = await s.get(AgentVersion, agent.published_version_id)
+        await s.commit()
+        bus.publish(p.tenant_id, "insights", "proposal.updated", proposal_summary(p))
+        assert version is not None
+        return version
     draft = copy.deepcopy(agent.draft_config or {})
     if p.kind in ("knowledge_article", "knowledge_edit") and p.draft_doc_id:
         doc = await s.get(KnowledgeDoc, p.draft_doc_id)

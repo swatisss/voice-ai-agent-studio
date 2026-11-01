@@ -190,6 +190,9 @@ async def nightly_learning(tenant_id: str, payload: dict[str, Any]) -> None:
     try:
         for agent in agents:
             report["agents"][agent.id] = await _agent_pass(tenant_id, agent, since)
+        from voiceai.routing import learning as routing_learning
+
+        report["routing"] = await routing_learning.draft_proposals(tenant_id, since)  # SL-13: misroutes, proposals only
         totals = Counter()
         for a in report["agents"].values():
             for k in ("calls_reviewed", "reanalysed", "ready_clusters", "drafted", "passed"):

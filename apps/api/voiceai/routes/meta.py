@@ -59,7 +59,22 @@ async def healthz(s: AsyncSession = Depends(get_session)) -> dict:
             "deepgram": bool(settings.deepgram_api_key),
             "twilio": bool(settings.twilio_auth_token),
         },
+        "public_api": bool(settings.public_api_secret),  # DEP-05: connect tokens can be minted
+        "router": _router_health(),  # RTE-11: configured, no network call
+        "webrtc": _webrtc_health(),  # WRTC-03
     }
+
+
+def _webrtc_health() -> bool:
+    from voiceai.public import webrtc
+
+    return webrtc.available()
+
+
+def _router_health() -> dict:
+    from voiceai.routing import decision
+
+    return {"decision_model": decision.health()}
 
 
 @router.get("/api/events")

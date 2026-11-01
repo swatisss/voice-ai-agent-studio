@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     public_base_url: str | None = None
     # Fernet key that encrypts tenants' own provider keys (/architecture/tenant-settings.md)
     tenant_secrets_key: str | None = None
+    # HMAC secret of public-API connect tokens (/api/public-api.md, Voice connect); unset = no voice over /v1
+    public_api_secret: str | None = None
+    # WebRTC transport (/architecture/webrtc-transport.md)
+    webrtc_stun_urls: str = "stun:stun.l.google.com:19302"
+    webrtc_turn_urls: str | None = None
+    webrtc_turn_username: str | None = None
+    webrtc_turn_credential: str | None = None
     llm_fake: bool = False
     # per-role model overrides (/architecture/llm-gateway.md, LG-06/LG-07); a real env var of the same name wins in the gateway
     llm_role_realtime: str | None = None
@@ -48,6 +55,16 @@ class Settings(BaseSettings):
     llm_role_judge: str | None = None
     llm_role_turn: str | None = None
     llm_role_speech: str | None = None
+    llm_role_router: str | None = None
+    # supervisor routing (/architecture/supervisor-routing.md, Decision model): optional, Jev-compatible, no vendor names
+    decision_model_url: str | None = None          # unset = not configured: the embedding routes
+    decision_model_api_key: str | None = None
+    decision_model_name: str | None = None
+    decision_model_threshold: float = 0.55
+    decision_model_hosted: str | None = None       # 1 (default) | 0: a hosted model is blocked in PHI mode
+    decision_model_timeout_voice_ms: str | None = None  # 100-5000 ms; unset or not a number = 350 (CP-0029)
+    decision_model_timeout_text_ms: str | None = None   # 100-5000 ms; unset or not a number = 1500
+    phi_mode: str | None = None                    # 1 | 0; unset = on when running on Cloud Run (K_SERVICE set)
 
     embeddings_provider: str = "fastembed"  # fastembed | hash
     fastembed_cache: Path = API_DIR / ".cache" / "fastembed"

@@ -88,3 +88,27 @@ Seeding with fastembed takes ~45 s on a laptop CPU (first run also downloads ~70
 * Whether Twilio also signs the stream handshake (the call-bound token is the control the spec relies on), and how the IVR's SIP headers or URL parameters reach the webhook.
 * A trial-number call from a real phone, the transfer redirect, and Cloud Run with `PUBLIC_BASE_URL`.
 
+# S5 — Laya on Cloud Run (planned, CP-0025)
+
+* **Goal:** decide whether self-hosted Laya can be the voice decision target ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)).
+* **Setup:** `laya[serve]` with `laya:multilingual` baked into an image, Cloud Run 2 vCPU / 4 GiB, min instances 1, internal ingress; the seeded tenant's profiles; 200 routing-suite decisions.
+* **Measure:** decision latency p50 / p95 from the API service; routing-suite accuracy against `jev` (synthetic data, `PHI_MODE=0`) and `llm`; memory use; cold start.
+* **Pass:** p95 ≤ 350 ms and accuracy within 3 points of the best target. Otherwise voice uses `ROUTER_VOICE_TARGET=llm` and the result is recorded here.
+* **Local run (2026-11-01, not yet on Cloud Run):** `laya==0.4.20` in `infra/laya/Dockerfile` (CPU torch, checkpoint `english`) on the developer's Windows machine under Docker Desktop. Raw calls with three short option descriptions: p50 1,045 ms, p95 1,096 ms over 20 calls; 6 of 8 clear requests right and both vague ones `none` (the two misses, a deductible and a lost card, came back `none`). Through `supervisor.route()` with the seeded profile summaries (≤ 600 chars each): 1.8–1.9 s per decision, and `none` with Jev-scale confidence 0.32–0.54 on all four requests Stage A left open. Laya's own `confidence` is entropy-based (0.05–0.61 here) and is not comparable with Jev's; its `x_jev_confidence` is, and is now used. **Verdict so far: fails the latency bar on this CPU and adds nothing on these requests with long summaries; voice should use `ROUTER_VOICE_TARGET=llm`.** Still to try: the `typed-decisions` checkpoint, `LAYA_THREADS`, Cloud Run 2 vCPU, a GPU.
+* **Strategy comparison (2026-11-01, same machine):** 25 held-out member requests written for the test (22 answerable over Customer Care and Claims, 3 vague), seeded profiles, `bge-small-en-v1.5`: embedding top-1 right on 22 of 22 but a clear win (0.80 / 0.10) on only 6; Laya (profile summaries or use-case titles as options) confident on 0 of 22, p50 1.6–2.0 s; both combined orders decide the same 6 with p50 about 1.9 s. Recorded in [CP-0028](/changes/cp-0028-routing-strategies-and-local-laya.md).
+* **Decision (2026-11-01):** local Laya is dropped (too slow on CPU, never confident here); its Dockerfile, container and settings are removed. Hosted Jev was not measured (no key; access is waitlisted). The embedding is the default; a Jev-compatible decision model can be switched on by configuration (CP-0028).
+* **Hosted Jev comparison (2026-11-01, developer machine):** `typesafe-ai/jev` through Vercel AI Gateway's TypeSafe-compatible API (`DECISION_MODEL_URL=https://ai-gateway.vercel.sh/typesafe`, `DECISION_MODEL_NAME=typesafe-ai/jev`, threshold 0.55, `PHI_MODE=0`, freshly seeded synthetic tenant), one comparison run (`POST /api/routing/runs {compare: true}`, text timeout 1.5 s) over 41 member and staff cases: 16 generated, 25 manual (22 answerable over Customer Care and Claims, 3 vague; claim-status requests left out because both agents list them). Stage A at the default clear win 0.80 / margin 0.10.
+
+  | | Embedding | Jev |
+  |---|---|---|
+  | Right first choice (38 answerable) | 32 | 34 |
+  | Decided without asking | 14 | 37 |
+  | Right when decided | 14 of 14 | 34 of 37 |
+  | Vague cases asked about (3) | 3 | 3 |
+  | Latency p50 / p95 | 5 / 9 ms | 551 / 671 ms |
+
+  On the 22 manual answerable cases the embedding was right first on 21 but decided only 7; Jev decided all 22 and was right on all 22, and answered `none` or below the threshold on the 3 vague ones. Jev's three wrong decisions are generated claim-status cases labelled Customer Care that it (and the embedding's top choice) sent to Claims: both agents list claim status, so the label is ambiguous rather than the model wrong. One generated case (a deductible question) was below the threshold and fell back. **Verdict:** Jev decides far more requests than the embedding at equal or better accuracy, and fits the text budget (1.5 s) but not the voice budget (350 ms) from this machine; voice would fall back to the embedding on most decisions.
+
+# S6 — WebRTC through TURN on Cloud Run (planned, CP-0027)
+
+* **Goal:** confirm Pipecat's small WebRTC transport works from Cloud Run through a managed TURN relay over TLS 443, and measure the added latency against the WebSocket transport ([/architecture/webrtc-transport.md](/architecture/webrtc-transport.md)).

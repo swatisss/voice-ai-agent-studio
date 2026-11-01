@@ -2,7 +2,7 @@
 type: Component Spec
 title: Deployment
 description: Local zero-infrastructure development and the GCP Cloud Run deployment topology, configuration and constraints.
-status: stable
+status: draft
 tags: [architecture, deployment, gcp]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -30,7 +30,8 @@ One container image (multi-stage `infra/Dockerfile`): stage 1 builds the web exp
 | `--session-affinity` | on | sticky WebSockets |
 | CPU / memory | 2 vCPU / 2 GiB | VAD + embeddings |
 | Secrets | Secret Manager → env `GROQ_API_KEY`, `DEEPGRAM_API_KEY`; optional `OPENROUTER_API_KEY`, `OPENAI_API_KEY` (needed by realtime agents), `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID`, `TENANT_SECRETS_KEY` (encrypts tenants' own OpenAI keys, [/architecture/tenant-settings.md](/architecture/tenant-settings.md)) (all attached only when the secret exists) | |
-| Env | `AUTO_SEED=1`, `JOBS_ENABLED=1`, `CORS_ORIGINS=`, and for phone calls `PUBLIC_BASE_URL=<service URL>` | |
+| Env | `AUTO_SEED=1`, `JOBS_ENABLED=1`, `CORS_ORIGINS=`, and for phone calls and public-API voice `PUBLIC_BASE_URL=<service URL>` | |
+| Public API and routing | Secrets `PUBLIC_API_SECRET` (connect tokens), optional `DECISION_MODEL_API_KEY`, `WEBRTC_TURN_CREDENTIAL`; env `DECISION_MODEL_URL`, `DECISION_MODEL_NAME`, `DECISION_MODEL_THRESHOLD`, `DECISION_MODEL_HOSTED`, `DECISION_MODEL_TIMEOUT_VOICE_MS`, `DECISION_MODEL_TIMEOUT_TEXT_MS`, `PHI_MODE` (default `1` on Cloud Run), `WEBRTC_STUN_URLS`, `WEBRTC_TURN_URLS`, `WEBRTC_TURN_USERNAME` ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md), [/architecture/webrtc-transport.md](/architecture/webrtc-transport.md)) | |
 
 Phone calls ([/architecture/telephony.md](/architecture/telephony.md)) need nothing beyond the table above: Twilio calls the public HTTPS service (`--allow-unauthenticated`; the webhook is protected by its signature, not by IAM), and each call is one long WebSocket held by the single instance. The 3600 s timeout bounds a call, `--no-cpu-throttling` keeps audio flowing between requests, and min instance 1 avoids a cold start on the first ring. How many concurrent calls a 2 vCPU instance holds, for each pipeline, is measured in spike S4 and recorded here when known.
 
@@ -43,7 +44,7 @@ Deploy script: `infra/deploy-cloudrun.sh` ([/build/runbook-gcp.md](/build/runboo
 
 # Health
 
-`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"groq":bool,"openrouter":bool,"openai":bool,"deepgram":bool,"twilio":bool}}` (provider booleans = key configured, no network call).
+`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"groq":bool,"openrouter":bool,"openai":bool,"deepgram":bool,"twilio":bool},"public_api":bool,"router":{"decision_model":{"configured":bool,"hosted":bool,"blocked":bool}},"webrtc":bool}` (booleans = configured, no network call; `public_api` = `PUBLIC_API_SECRET` set).
 
 # Acceptance
 
@@ -51,3 +52,4 @@ Deploy script: `infra/deploy-cloudrun.sh` ([/build/runbook-gcp.md](/build/runboo
 - **DEP-02** — Given `WEB_DIST_DIR` with an exported build, when `/` and `/agents/` are requested, then the static pages are served and unknown `/api/*` paths still return JSON 404.
 - **DEP-04** — Given `TWILIO_AUTH_TOKEN` set only as a line in `apps/api/.env`, when `/healthz` is requested, then `providers.twilio` is `true` (false when absent); and given `infra/deploy-cloudrun.sh` run with `PUBLIC_BASE_URL` set and Secret Manager secrets `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID` and `OPENAI_API_KEY`, then the service is deployed with env `PUBLIC_BASE_URL` and those secrets attached, and a missing optional secret is skipped with a message and does not fail the deploy (script check by hand).
 - **DEP-03** — Given the Dockerfile, when built, then the image contains the web export and the fastembed model so first requests need no downloads.
+- **DEP-05** — Given `PUBLIC_API_SECRET`, `DECISION_MODEL_URL` and `PHI_MODE` set only as lines in `apps/api/.env`, then `/healthz` reports `public_api: true` and the router block from them; given `K_SERVICE` set, no `PHI_MODE` and a hosted decision model, `router.decision_model.blocked` is `true`; and `infra/deploy-cloudrun.sh` attaches the new secrets when they exist and skips them otherwise (script check by hand).

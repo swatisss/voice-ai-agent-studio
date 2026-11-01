@@ -19,6 +19,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `tool_failure` | Business API errors prevent progress | Tool-error streak |
 | `frustration` | Caller is upset and not progressing | LLM |
 | `verification_failed` | Three failed identity-verification attempts in one call ([/architecture/caller-verification.md](/architecture/caller-verification.md)) | Runtime |
+| `transfer_failed` | An agent asked for a transfer but no other agent fits, or the conversation reached 3 transfers ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)) | Runtime |
 | `other` | Anything else, incl. max turns and LLM outage | Runtime |
 
 # Triggers
@@ -83,3 +84,4 @@ The `resolution_note` is required (min 10 characters) — it is the evidence fle
 - **ES-07** — Given resolve with a note shorter than 10 characters, then the API returns 422.
 - **ES-09** — Given three verification results with `verified: false` in one call, then exactly one escalation with category `verification_failed` exists and the call ends `handoff`.
 - **ES-08** — Given the model calls `escalate_to_human` twice, then only one escalation row exists.
+- **ES-10** — Given a conversation with 3 transfers, when the agent calls `transfer_to_agent` again, then exactly one escalation with category `transfer_failed` is created, the hand-off message is delivered and the segment ends `handoff`.

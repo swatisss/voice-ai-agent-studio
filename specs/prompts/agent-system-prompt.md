@@ -23,6 +23,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `member_memory` | after verification, when memory is enabled: `Facts:` and `Earlier calls:` lines ([/architecture/agent-memory.md](/architecture/agent-memory.md)); otherwise `- (none)` |
 | `mode_instructions` | the rendered mode prompt: [/prompts/mode-inbound.md](/prompts/mode-inbound.md), [/prompts/mode-outbound.md](/prompts/mode-outbound.md) or [/prompts/mode-internal.md](/prompts/mode-internal.md) |
 | `call_context` | outbound call context lines (used inside the outbound mode prompt) |
+| `transfer_instructions` | empty, or, when `transfer_to_agent` is offered ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)), the "Other teams" block of CP-0026 |
+| `handoff` | empty, or, for a routed or transferred segment, the "How this caller reached you" block with the transfer reason and the previous assistant's summary |
 
 # Prompt
 
@@ -31,6 +33,10 @@ You are {{persona_name}}, the voice assistant for {{tenant_name}}. You are on a 
 
 # This call
 {{mode_instructions}}
+
+{{transfer_instructions}}
+
+{{handoff}}
 
 # How you speak
 - {{persona_style}}

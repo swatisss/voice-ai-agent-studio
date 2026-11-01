@@ -1,6 +1,6 @@
-"""ORM models - the 28 tables of the data model.
+"""ORM models - the tables of the data model.
 
-Spec: /data/data-model.md, /architecture/call-scoring.md, /architecture/self-learning.md
+Spec: /data/data-model.md, /architecture/call-scoring.md, /architecture/self-learning.md, /api/public-api.md, /architecture/webhooks.md
 """
 from __future__ import annotations
 
@@ -40,6 +40,7 @@ class TenantSettings(Base):
     tenant_id: Mapped[str] = mapped_column(String(64), ForeignKey("tenants.id"), primary_key=True)
     allowed_pipelines: Mapped[list[str]] = mapped_column(JSON, default=lambda: ["cascade"])
     openai_platform_fallback: Mapped[bool] = mapped_column(Boolean, default=True)
+    front_desk: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)  # /architecture/supervisor-routing.md
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
@@ -175,6 +176,9 @@ class Call(Base):
     latency_p50_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_seed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_eval: Mapped[bool] = mapped_column(Boolean, default=False)
+    conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)  # a conversation's segment
+    segment: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    routed_by: Mapped[str | None] = mapped_column(String(16), nullable=True)
     meta: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
@@ -328,7 +332,7 @@ class EvalRun(Base):
     __tablename__ = "eval_runs"
     id: Mapped[str] = _id()
     tenant_id: Mapped[str] = _tenant()
-    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    agent_id: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)  # null for routing runs
     kind: Mapped[str] = mapped_column(String(16), default="proposal")  # proposal | suite (/architecture/test-suites.md)
     proposal_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     baseline_version_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -395,6 +399,7 @@ class UseCase(Base):
     demo_callers: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     sort: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow, nullable=True)
 
 
 class PhoneNumber(Base):
@@ -404,7 +409,8 @@ class PhoneNumber(Base):
     id: Mapped[str] = _id()
     tenant_id: Mapped[str] = _tenant()
     e164: Mapped[str] = mapped_column(String(20), unique=True, index=True)  # unique across all tenants
-    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    target: Mapped[str] = mapped_column(String(16), default="agent")  # agent | front_desk (TEL-12)
+    agent_id: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
     label: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = _created()
 
@@ -477,5 +483,132 @@ class Job(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     run_after: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class ApiKey(Base):
+    """A tenant's machine credential for /v1; only its SHA-256 hash is stored (/api/public-api.md)."""
+
+    __tablename__ = "api_keys"
+    __table_args__ = (UniqueConstraint("tenant_id", "name"),)
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    name: Mapped[str] = mapped_column(String(60))
+    prefix: Mapped[str] = mapped_column(String(12))
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    scope: Mapped[str] = mapped_column(String(16))  # member | staff
+    rate_limit_per_min: Mapped[int] = mapped_column(Integer, default=120)
+    max_concurrent_voice: Mapped[int] = mapped_column(Integer, default=10)
+    created_at: Mapped[datetime] = _created()
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class Conversation(Base):
+    """One caller connection that may pass through several agents; each agent's part is a call (segment)."""
+
+    __tablename__ = "conversations"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    source: Mapped[str] = mapped_column(String(16))  # api | playground | phone
+    api_key_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    channel: Mapped[str] = mapped_column(String(8))  # text | voice
+    transport: Mapped[str] = mapped_column(String(16))  # text | websocket | media-stream | webrtc | twilio | browser
+    scope: Mapped[str] = mapped_column(String(16))  # member | staff
+    status: Mapped[str] = mapped_column(String(16), default="active", index=True)  # active | escalated | ended
+    outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    end_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
+    current_call_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    transfer_count: Mapped[int] = mapped_column(Integer, default=0)
+    clarifications: Mapped[int] = mapped_column(Integer, default=0)
+    routing: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class WebhookEndpoint(Base):
+    """A tenant's webhook URL; the secret is encrypted because signing needs it (/architecture/webhooks.md)."""
+
+    __tablename__ = "webhook_endpoints"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    url: Mapped[str] = mapped_column(String(500))
+    events: Mapped[list[str]] = mapped_column(JSON, default=list)
+    include_transcript: Mapped[bool] = mapped_column(Boolean, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    secret_ciphertext: Mapped[str] = mapped_column(Text)
+    previous_secret_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    secret_rotated_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class WebhookDelivery(Base):
+    """One event for one endpoint, with its attempts (/architecture/webhooks.md, Delivery)."""
+
+    __tablename__ = "webhook_deliveries"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    endpoint_id: Mapped[str] = mapped_column(String(32), index=True)
+    event_id: Mapped[str] = mapped_column(String(40), index=True)
+    type: Mapped[str] = mapped_column(String(40))
+    conversation_id: Mapped[str] = mapped_column(String(32), index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | delivered | failed
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = _created()
+    delivered_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class CapabilityProfile(Base):
+    """What the supervisor knows about one routable agent (/architecture/capability-catalog.md)."""
+
+    __tablename__ = "capability_profiles"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    agent_id: Mapped[str] = mapped_column(String(32), unique=True)
+    agent_version_id: Mapped[str] = mapped_column(String(32))
+    scope: Mapped[str] = mapped_column(String(16))
+    card: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    input_hash: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(16), default="ready")  # ready | indexing | failed
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    built_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class CapabilityEntry(Base):
+    """One embedded, searchable text of a capability profile."""
+
+    __tablename__ = "capability_entries"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    profile_id: Mapped[str] = mapped_column(String(32), ForeignKey("capability_profiles.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # description | use_case | utterance | generated | tool
+    ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    text: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float]] = mapped_column(JSON)
+
+
+class RoutingCase(Base):
+    """A routing-suite case: an utterance and the agent that should get it."""
+
+    __tablename__ = "routing_cases"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    utterance: Mapped[str] = mapped_column(String(300))
+    expected_agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    scope: Mapped[str] = mapped_column(String(16))
+    source: Mapped[str] = mapped_column(String(16))  # generated | manual
+    use_case_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)

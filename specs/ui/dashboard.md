@@ -10,7 +10,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 # Content (from `GET /api/dashboard/summary`)
 
 1. **Stat row** (four tiles, in this order):
-   * **Calls** - `totals.calls`.
+   * **Calls** - `totals.calls`. A routed conversation counts once, with its last segment's outcome; earlier segments ended by transfer are not counted ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)).
    * **Containment rate** - `totals.containment_rate`, hint "resolved ÷ (resolved + escalated)".
    * **Escalated to human** - `totals.escalated`, hint "handed to a human reviewer".
    * **Response time** - median of `totals.latency_p50_ms` in seconds (`1.2 s`), hint "median time to first reply"; an empty placeholder when there is no data.

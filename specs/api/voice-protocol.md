@@ -11,6 +11,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 `wss://<host>/api/voice/{call_id}?tenant=<tenant_id>` (or `ws://localhost:8000/...` locally). The call must have been created with `channel: "voice"`.
 
+Conversations (public API and the playground's full flow) use `wss://<host>/v1/voice/{conversation_id}` with the frames below. The connect token is sent as `Authorization: Bearer <token>` or as the subprotocol `vai-token.<token>` next to `vai.voice.v1`; never in the query string ([/api/public-api.md](/api/public-api.md)). One socket carries every segment of the conversation: a transfer changes the agent, not the socket ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)). WebRTC carries the same JSON messages on a `control` data channel ([/architecture/webrtc-transport.md](/architecture/webrtc-transport.md)).
+
 # Frames
 
 | Direction | Frame type | Content |
@@ -32,6 +34,7 @@ Transcripts, tool calls and status are **not** sent on this socket; the page sub
 |---|---|
 | 1000 | normal (hangup or end) |
 | 4400 | wrong channel (text call id) |
+| 4401 | missing, wrong, expired or used connect token (`/v1/voice`) |
 | 4404 | unknown or ended call |
 | 4500 | voice unavailable (e.g. `DEEPGRAM_API_KEY` missing for a cascade agent, `OPENAI_API_KEY` missing for a realtime agent) |
 

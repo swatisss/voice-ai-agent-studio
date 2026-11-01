@@ -131,6 +131,9 @@ async def save_analysis(s: AsyncSession, call: Call, out: AnalysisOut, source: s
     analysis.source = source
     analysis.signals = list(signals or [])
     call.outcome = out.outcome
+    from voiceai import conversations
+
+    await conversations.outcome_changed(s, call)  # the conversation's outcome follows its last segment
     await s.flush()
     disliked = await s.scalar(select(CallFeedback.rating).where(CallFeedback.call_id == call.id)) == "down"
     if (out.outcome == "escalated" or disliked or analysis.signals) and out.gap_summary.strip():  # FB-04, SL-02: candidates like escalations

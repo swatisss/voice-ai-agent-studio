@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -11,6 +11,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 * JSON in/out; `snake_case` fields; timestamps ISO 8601 UTC.
 * Tenant header `X-Tenant-Id` on every request except `GET /api/tenants` ([/architecture/multi-tenancy.md](/architecture/multi-tenancy.md)).
+* The key-authenticated `/v1` API for tenant backends is a separate contract: [/api/public-api.md](/api/public-api.md).
 * Errors: `{"error": "<code>", "detail": "<human text>"}` with 400/404/409/422/500.
 * Lists return `{"items": [...]}`; no pagination in v1 (lists capped at 500, newest first).
 
@@ -29,6 +30,23 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | PUT | `/api/tenant-settings` | `{allowed_pipelines?, openai_platform_fallback?}` → settings; 422 if `allowed_pipelines` is empty, lacks `cascade` or has an unknown value; 409 `pipeline_in_use` (`detail` names the agents) when dropping a pipeline an agent still uses |
 | PUT | `/api/tenant-settings/openai-key` | `{api_key}` → `{key_set: true, key_last4, key_updated_at}`; 422 `invalid_key`; 503 `secrets_unavailable`. The key is never returned |
 | DELETE | `/api/tenant-settings/openai-key` | → 204 |
+| GET | `/api/tenant-settings/front-desk` | → `{persona_id, pipeline, default_agents: {member, staff}, min_confidence, max_clarifications, connecting_message, min_routing_accuracy, routing_mode, clear_win, clear_margin}` with defaults filled in ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)) |
+| PUT | `/api/tenant-settings/front-desk` | any subset → front desk; 422 for an unknown persona, a pipeline the tenant does not allow, or a default agent that is not routable in that scope |
+
+## API keys and webhooks
+| Method | Path | Body → Result |
+|---|---|---|
+| GET | `/api/api-keys` | → `{items: [{id, name, prefix, scope, rate_limit_per_min, max_concurrent_voice, created_at, last_used_at, revoked_at}]}` ([/api/public-api.md](/api/public-api.md)) |
+| POST | `/api/api-keys` | `{name, scope, rate_limit_per_min?, max_concurrent_voice?}` → the key row plus `key` (the full key, **only in this response**); 409 `name_taken`, 409 `too_many_keys` (20 active), 422 invalid |
+| PUT | `/api/api-keys/{id}` | `{name?, rate_limit_per_min?, max_concurrent_voice?}` → key row (scope cannot change) |
+| DELETE | `/api/api-keys/{id}` | revoke → 204 |
+| GET | `/api/webhooks` | → `{items: [{id, url, events, include_transcript, enabled, created_at, secret_rotated_at}]}` ([/architecture/webhooks.md](/architecture/webhooks.md)) |
+| POST | `/api/webhooks` | `{url, events, include_transcript?, enabled?}` → endpoint plus `secret` (only here and on rotate); 409 `too_many_endpoints` (5); 422 invalid URL or event; 503 `secrets_unavailable` |
+| PUT | `/api/webhooks/{id}` | `{url?, events?, include_transcript?, enabled?}` → endpoint |
+| POST | `/api/webhooks/{id}/rotate` | → `{secret}` |
+| DELETE | `/api/webhooks/{id}` | → 204 |
+| GET | `/api/webhooks/{id}/deliveries` | query `status?` → `{items: [{id, event_id, type, conversation_id, status, attempts, last_status_code, last_error, created_at, delivered_at}]}`, newest first, at most 200 |
+| POST | `/api/webhooks/deliveries/{id}/resend` | → delivery (queued) |
 
 ## Agents
 | Method | Path | Body → Result |
@@ -85,6 +103,19 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/calls/{id}/rescore` | → `{job_id}`; queues `score_call` again; 409 `call_active`, 409 `not_scorable` for a simulation call |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
 
+`GET /api/calls` also accepts `conversation_id`; call summaries and `GET /api/calls/{id}` carry `conversation_id`, `segment` and `routed_by` (`null` for calls outside a conversation).
+
+## Conversations (Studio)
+The playground's full-flow mode and the Studio's views of conversations. Same behaviour and shapes as the public API's conversation endpoints ([/api/public-api.md](/api/public-api.md)), with the tenant from `X-Tenant-Id`, `source: playground`, and the scope in the body.
+
+| Method | Path | Body → Result |
+|---|---|---|
+| POST | `/api/conversations` | `{scope: "member"\|"staff", channel, message?, agent_id?, transport?, caller?, context?}` → as the public create; voice returns `connect` for `/v1/voice/{id}` |
+| POST | `/api/conversations/{id}/messages` | `{text}` → turn result (JSON or SSE) |
+| POST | `/api/conversations/{id}/end` | → `{status, outcome}` |
+| GET | `/api/conversations` | query `source?`, `status?` → `{items: [conversation summary]}`, newest first, at most 200 |
+| GET | `/api/conversations/{id}` | → conversation view with `routing` and `transcript` |
+
 ## Member memory
 
 | Method | Path | Body / query → result |
@@ -97,8 +128,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Phone numbers and telephony
 | Method | Path | Body → Result |
 |---|---|---|
-| GET | `/api/phone-numbers` | → `{items: [{id, e164, agent_id, agent_name, label, created_at}]}` for the tenant |
-| POST | `/api/phone-numbers` | `{e164, agent_id, label?}` → the number; 409 `number_in_use`, 422 for a bad number or an agent that is not the tenant's |
+| GET | `/api/phone-numbers` | → `{items: [{id, e164, target, agent_id, agent_name, label, created_at}]}` for the tenant (`target`: `agent` or `front_desk`; `agent_id` is `null` for the front desk) |
+| POST | `/api/phone-numbers` | `{e164, target?: "agent"\|"front_desk", agent_id?, label?}` → the number (`target` defaults to `agent`, which requires `agent_id`); 409 `number_in_use`, 422 for a bad number, an agent that is not the tenant's, or `agent_id` with `front_desk` |
 | DELETE | `/api/phone-numbers/{id}` | → 204; 404 for another tenant's number |
 | POST | `/api/telephony/twilio/voice` | Twilio voice webhook (form fields, signed); **no tenant header**: returns TwiML ([/architecture/telephony.md](/architecture/telephony.md)); 403 on a bad signature |
 | WS | `/api/telephony/twilio/stream/{call_id}?token=` | Twilio Media Stream; **no tenant parameter**; token minted by the webhook |
@@ -106,7 +137,11 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ## Use cases and outbound
 | Method | Path | Result |
 |---|---|---|
-| GET | `/api/use-cases` | `{items: [{id, category, title, summary, channels, mode, agent_id, agent_name, published, sample_utterances, demo_callers}]}` in catalog order ([/product/use-cases.md](/product/use-cases.md)) |
+| GET | `/api/use-cases` | query `agent_id?` → `{items: [{id, category, title, summary, channels, mode, agent_id, agent_name, published, sample_utterances, demo_callers, sort, updated_at}]}` in catalog order ([/product/use-cases.md](/product/use-cases.md)) |
+| POST | `/api/use-cases` | `{agent_id, title, summary?, category?, channels?, sample_utterances, demo_callers?, sort?}` → use case; validation per [/architecture/capability-catalog.md](/architecture/capability-catalog.md) (422; 404 for another tenant's agent; 409 `title_taken`); queues `index_capabilities` for a published agent |
+| PUT | `/api/use-cases/{id}` | any subset → use case; re-index as above |
+| DELETE | `/api/use-cases/{id}` | → 204; re-index as above |
+| GET | `/api/agents/{id}/capability` | → `{status, built_at, error, summary, skills, tools, knowledge, generated_examples}` or 404 `not_routable` |
 | GET | `/api/outbound/targets` | query `agent_id` → `{items: [{member_ref, first_name, summary, context}]}` from the agent's `outbound.targets_url`; 409 `not_outbound` for other agents ([/architecture/call-modes.md](/architecture/call-modes.md)) |
 
 ## Escalations (console)
@@ -139,6 +174,13 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | GET | `/api/test-runs/{id}` | → run + `results: [{scenario_id, scenario, repeat, passed, failures, call_id, scorecard: {score, hard_fail, failed_checks}}]` |
 | GET | `/api/evaluation/summary` | query `agent_id` (required), `days` (7\|28\|90, default 28), `include_seed=true` → `{versions: [{version_id, version, published_at, calls, scored, containment_rate, correct_escalation_rate, unnecessary_escalation_rate, abandonment_rate, hard_fail_calls, thumbs_up_rate, first_response_ms, latency_p50_ms, latency_p95_ms, drift: ["goal_met"\|"grounded"\|"containment"], check_pass_rates: {key: rate}}], checks: [{key, group, method, hard_gate, text, pass_rate, decided, reviews, agreement, catch_rate, baseline, calibrated}], daily: [{date, calls, containment_rate, goal_met_rate, grounded_rate, hard_fails}]}`; rates are 0–1 or `null` without data; another `days` → 422 `invalid_days` ([/architecture/call-scoring.md](/architecture/call-scoring.md)) |
 | GET | `/api/evaluation/scorecards` | query `agent_id` (required), `version_id?`, `check?` (key), `verdict?`, `hard_fail?`, `reviewed?`, `days`, `include_seed=true` → `{items: [{call_id, started_at, version, outcome, feedback, score, hard_fail, judged, failed_checks: [key], review_count}]}`, newest first, at most 200 |
+| GET | `/api/routing/cases` | query `scope?` → `{items: [{id, utterance, expected_agent_id, expected_agent_name, scope, source, enabled}]}` ([/architecture/capability-catalog.md](/architecture/capability-catalog.md)) |
+| POST | `/api/routing/cases` | `{utterance, expected_agent_id, enabled?}` → case (`source: manual`, scope from the agent); 422 when the agent is not routable; 409 `too_many_cases` (500) |
+| PUT / DELETE | `/api/routing/cases/{id}` | any subset → case / 204 |
+| POST | `/api/routing/runs` | `{compare?: bool}` → `{eval_run_id}`; with `compare` the run scores both routing modes ([/architecture/capability-catalog.md](/architecture/capability-catalog.md), CAT-09); 409 `run_in_progress` |
+| GET | `/api/routing/runs` | → `{items: [{id, trigger, status, summary, created_at, finished_at}]}`, newest first, at most 50 |
+| GET | `/api/routing/runs/{id}` | → run + `results: [{case_id, utterance, expected_agent_id, chosen_agent_id, method, confidence, passed, latency_ms}]` |
+| GET | `/api/routing/summary` | query `days` (7\|28\|90) → `{decisions, by_method, stage_b_rate, fallback_rate, clarification_rate, misroute_rate, transfers_per_conversation, decision_ms: {p50, p95}, by_agent: [...]}` ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)) |
 | PUT | `/api/scorecards/{id}/reviews/{check_key}` | `{verdict: "pass"\|"fail"\|"n/a", note?, reviewer}` → review; replaces the earlier review of that check; 404 unknown key; 409 `code_check` for a check decided in code |
 
 ## Dashboard
@@ -162,3 +204,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 - **API-08** — Given a scored call, when `PUT /api/scorecards/{id}/reviews/knowledge.grounded` is sent twice with different verdicts, then one review exists with the second verdict and the stored judge verdict is unchanged; the same request for `tools.succeeded` returns 409 `code_check`.
 - **API-09** — Given an agent with scored real calls and simulation calls, then `GET /api/evaluation/summary` counts only the real calls, and `GET /api/agents/{id}/checks` for a draft with a new `never` item lists its `never.<hash>` check with `source: "config"` before it is published.
 - **API-04** — Given `GET /api/calls`, then simulation calls created by evaluations never appear.
+- **API-10** — Given `POST /api/api-keys`, then only that response contains the key; `PUT` cannot change the scope (422); `DELETE` revokes it and the key then gets 401 on `/v1`; a 21st active key is 409 `too_many_keys`.
+- **API-11** — Given the use-case endpoints, when a use case is created, edited and deleted for a published agent, then each change is listed by `GET /api/use-cases?agent_id=` and queues one `index_capabilities` job for that agent.
+- **API-12** — Given a playground conversation created with `POST /api/conversations`, then it appears in `GET /api/conversations` with `source: playground`, its segments appear in `GET /api/calls?conversation_id=` with `segment` and `routed_by`, and it never produces webhooks.
+- **API-13** — Given `PUT /api/tenant-settings/front-desk` with a default member agent that is internal, a pipeline the tenant does not allow, or `max_clarifications: 3`, then the response is 422 and nothing changes; `GET` on a tenant without settings returns the defaults.

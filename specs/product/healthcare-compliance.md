@@ -2,7 +2,7 @@
 type: Compliance Note
 title: Healthcare compliance rules
 description: Safety, privacy, verification and disclosure rules every healthcare agent on the platform must follow, and the production gaps v1 leaves open.
-status: stable
+status: draft
 tags: [product, healthcare, compliance, safety]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -21,6 +21,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 9. **Caller ID identifies, it never verifies.** A call from a registered number is addressed by first name only; member data, the profile and memory need the date of birth (or member ID and date of birth). Three failed attempts go to a human; changes to contact or identity details always go to a human ([/architecture/caller-verification.md](/architecture/caller-verification.md)).
 10. **Memory without health details.** Member memory never holds clinical details, payment details or identifiers, is read only after verification, expires automatically and can be erased per member at any time ([/architecture/agent-memory.md](/architecture/agent-memory.md)).
 
+11. **No PHI to processors without a BAA in routing.** With `PHI_MODE` on (the default on Cloud Run) the supervisor never sends caller text to a hosted decision model; the embedding, which runs inside the platform, decides instead ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)). Webhooks carry IDs only unless a tenant asks for transcripts, and never carry member identifiers or phone numbers ([/architecture/webhooks.md](/architecture/webhooks.md)).
+
 # Production gaps (not in v1)
 
 * Business Associate Agreements with every processor (LLM, STT, TTS, cloud).
@@ -28,3 +30,4 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Audit logging and access controls (roles: who may erase or export member memory); retention and deletion policies beyond member memory.
 * Recording consent handling per jurisdiction.
 * Call scoring sends production transcripts to the judge model and shows them to reviewers ([/architecture/call-scoring.md](/architecture/call-scoring.md)); in production the judge provider needs the same BAA coverage as the call, and review access needs roles and audit logging.
+* Webhook URLs are not checked against private networks (SSRF), and API keys are managed by anyone with Studio access; both need roles and network controls in production. A TURN relay for WebRTC processes call audio and needs BAA coverage.

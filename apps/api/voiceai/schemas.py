@@ -9,10 +9,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-BUILTIN_TOOLS = {"search_knowledge", "escalate_to_human", "end_call"}
+BUILTIN_TOOLS = {"search_knowledge", "escalate_to_human", "end_call", "transfer_to_agent"}  # TS-06, TS-10
 ESCALATION_CATEGORIES = (
     "caller_requested", "policy_required", "safety", "knowledge_gap", "capability_gap", "tool_failure", "frustration",
-    "verification_failed", "other",
+    "verification_failed", "transfer_failed", "other",
 )
 ROOT_CAUSES = (
     "none", "missing_knowledge", "missing_skill", "tool_error", "policy_required", "safety",
@@ -180,7 +180,7 @@ class VerificationConfig(BaseModel):
     trust_attested_caller_id: bool = False  # demo only (/architecture/caller-verification.md, IDV-05)
 
 
-CHECK_GROUPS = ("outcome", "responsiveness", "knowledge", "tools", "memory", "safety")
+CHECK_GROUPS = ("outcome", "responsiveness", "knowledge", "tools", "memory", "safety", "routing")
 
 
 class CustomCheck(BaseModel):
@@ -251,6 +251,9 @@ class LearningConfig(BaseModel):
     snooze_days: int = Field(default=7, ge=1, le=90)
 
 
+DEFAULT_HANDOFF_INTRO = "You're now with our {agent_name} team."
+
+
 class AgentConfig(BaseModel):
     mode: Literal["inbound", "outbound", "internal"] = "inbound"
     outbound: OutboundConfig = Field(default_factory=OutboundConfig)
@@ -267,6 +270,8 @@ class AgentConfig(BaseModel):
     verification: VerificationConfig = Field(default_factory=VerificationConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     learning: LearningConfig = Field(default_factory=LearningConfig)
+    routable: bool = True  # /architecture/capability-catalog.md: in the supervisor's catalog when published
+    handoff_intro: str = Field(default=DEFAULT_HANDOFF_INTRO, max_length=200)  # DM-11
 
     @model_validator(mode="after")
     def _outbound_needs_targets(self) -> AgentConfig:

@@ -168,12 +168,20 @@ A config without `learning` gets the defaults on save. Nothing in this block let
 }
 ```
 
+# Routing settings
+
+| Field | Rules | Default |
+|---|---|---|
+| `routable` | boolean; `false` keeps a published inbound or internal agent out of the [capability catalog](/architecture/capability-catalog.md) (it stays reachable by explicit `agent_id`, phone number and Studio) | `true` |
+| `handoff_intro` | ≤ 200 chars; what the agent says when a routed or transferred conversation reaches it, before answering; `{agent_name}` is replaced | "You're now with our {agent_name} team." |
+
 # Version snapshot (`agent_versions.config`)
 
 The draft config **plus** resolved copies so the version is self-contained and immutable:
 
 ```json
 {
+  "description": "...", "routable": true, "handoff_intro": "...",
   "persona": {...}, "policy": {...}, "models": {...},
   "knowledge_doc_ids": ["..."],
   "tools":  [ { "id": "...", ...full tool definition... } ],
@@ -181,7 +189,7 @@ The draft config **plus** resolved copies so the version is self-contained and i
 }
 ```
 
-Later edits to a tool or skill never change existing versions. Knowledge docs are referenced by id; docs are never edited in place — editing creates a new doc and archives the old one.
+`description` is copied from `agents.description` at publish, so the catalog uses the published text. Later edits to a tool or skill never change existing versions. Knowledge docs are referenced by id; docs are never edited in place — editing creates a new doc and archives the old one.
 
 # Acceptance
 
@@ -191,3 +199,4 @@ Later edits to a tool or skill never change existing versions. Knowledge docs ar
 - **DM-08** — Given a draft config with `evaluation.judge_sample_pct: 120`, or eleven custom checks, or a custom check with group `style`, when saved, then the API returns 422; a config without `evaluation` is saved with `judge_sample_pct: 100`, `latency_p95_ms: 2000`, `test_on_publish: true` and no custom checks.
 - **DM-09** — Given a draft config with `learning.max_proposals_per_night: 11` or `learning.regression_repeats: 0`, when saved, then the API returns 422; a config without `learning` is saved with `nightly: true`, 3, 3 and 7.
 - **DM-05** — Given a published version, when the underlying tool is edited, then the version's snapshot still holds the old definition.
+- **DM-11** — Given a draft with `handoff_intro` longer than 200 characters, when saved, then the API returns 422; a config without routing fields is saved with `routable: true` and the default intro, and a publish copies the agent's current description into the snapshot.

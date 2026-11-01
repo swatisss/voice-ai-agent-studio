@@ -25,4 +25,9 @@
 * [Agent memory](agent-memory.md) - What an agent remembers about a verified member across calls, maintained by the agent itself after each call; expiry, erasure and what the Studio shows
 * [Caller verification](caller-verification.md) - Registered number identifies, date of birth verifies; member ID and date of birth otherwise; attempts, attestation and playground testing
 * [Tenant settings and credentials](tenant-settings.md) - Per-tenant voice pipeline allowlist and own OpenAI key for realtime calls
+* [Supervisor routing](supervisor-routing.md) - Front desk and supervisor: the embedding by default or a configured decision model with embedding fallback, PHI mode, clarification, default agents, front-desk phone numbers, routing trace
+* [Capability catalog](capability-catalog.md) - Per-agent capability profiles built and re-indexed automatically from description, use cases, tools and knowledge; editable use cases; the routing suite
+* [Agent transfer](agent-transfer.md) - The transfer_to_agent tool: segments, what carries over, transfer limit, misroute checks and learning
+* [Webhooks](webhooks.md) - Signed, retried webhooks for public-API conversations; IDs only by default
+* [WebRTC transport](webrtc-transport.md) - WebRTC voice for public-API and playground conversations, TURN on Cloud Run
 * [Deployment](deployment.md) - Local dev and GCP Cloud Run topology

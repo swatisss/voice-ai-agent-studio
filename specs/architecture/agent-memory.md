@@ -83,6 +83,10 @@ The prompt tells the agent to use memory naturally, never before verification, n
 * Member memory page: per agent, a timeline of active and retired items; each item shows *why the agent knows this* (a link to the transcript turn) and, if retired, what replaced it; Restore, Erase member and Export ([/ui/member-memory.md](/ui/member-memory.md)).
 * Agent builder: a **Memory** tab with the settings above ([/ui/agent-builder.md](/ui/agent-builder.md)).
 
+# Transfers
+
+Memory stays per agent. When a verified conversation is transferred, the receiving agent loads its own memory of the member at the start of its segment (as at verification) and never the transferring agent's; after the conversation, each segment extracts memory for its own agent ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)).
+
 # Acceptance
 
 - **MEM-01** — Given a verified text call on an agent with memory enabled, when it ends, then exactly one `extract_memory` job is queued; given an unverified call, a simulation or evaluation call, or an agent version with `memory.enabled: false`, no job is queued.

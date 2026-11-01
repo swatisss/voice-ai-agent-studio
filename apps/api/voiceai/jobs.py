@@ -9,7 +9,7 @@ import contextlib
 import logging
 import traceback
 from collections.abc import Awaitable, Callable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select, update
@@ -36,7 +36,8 @@ def register(kind: str) -> Callable[[Handler], Handler]:
 
 
 async def enqueue(
-    session: AsyncSession, tenant_id: str, kind: str, payload: dict[str, Any], dedupe_key: str | None = None
+    session: AsyncSession, tenant_id: str, kind: str, payload: dict[str, Any], dedupe_key: str | None = None,
+    run_after: datetime | None = None,
 ) -> Job:
     """Create a job unless a non-failed job with the same dedupe key exists (JB-04). Caller commits."""
     if dedupe_key:
@@ -45,7 +46,7 @@ async def enqueue(
         )
         if existing:
             return existing
-    job = Job(tenant_id=tenant_id, kind=kind, payload=payload, dedupe_key=dedupe_key)
+    job = Job(tenant_id=tenant_id, kind=kind, payload=payload, dedupe_key=dedupe_key, run_after=run_after or utcnow())
     session.add(job)
     await session.flush()
     return job
@@ -123,6 +124,7 @@ class Worker:
         self._running: set[asyncio.Task[None]] = set()
         self._last_day: date | None = None
         self._next_learning_check = 0.0
+        self._next_sweep = 0.0
         self._started_at = utcnow()  # the nightly schedule fires only for hours that pass while this worker runs
 
     async def start(self) -> None:
@@ -150,6 +152,7 @@ class Worker:
                     self._sem.release()
                     await self._daily()
                     await self._nightly_learning()
+                    await self._sweep()
                     await asyncio.sleep(POLL_SECONDS)
                     continue
                 task = asyncio.create_task(self._run(job))
@@ -168,9 +171,23 @@ class Worker:
         if self._last_day == today:
             return
         self._last_day = today
-        from voiceai import memory
+        from voiceai import memory, webhooks
 
         await memory.schedule_purges()
+        await webhooks.purge_old()  # /architecture/webhooks.md: deliveries older than 30 days
+
+    async def _sweep(self) -> None:
+        """At most once a minute while idle: end voice conversations whose client never connected (/api/public-api.md)."""
+        now = asyncio.get_running_loop().time()
+        if now < self._next_sweep:
+            return
+        self._next_sweep = now + 60
+        from voiceai import conversations
+
+        try:
+            await conversations.expire_unconnected()
+        except Exception:  # noqa: BLE001 - housekeeping must never stop the worker
+            log.exception("conversation sweep failed")
 
     async def _nightly_learning(self) -> None:
         """At most once a minute while idle: start each tenant's nightly self-learning run once its hour has passed

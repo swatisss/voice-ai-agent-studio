@@ -108,6 +108,10 @@ The service reports token usage per response, split into text and audio tokens. 
 * **Fleet learning works on real calls.** Realtime calls store the same events, so call analysis, clustering, impact and fix drafting need no change. Transcripts come from the service's transcription of the caller, which can differ slightly from the cascade's.
 * **Fixes still land in knowledge, skills and rules**, which both pipelines share, so one approved fix improves both.
 
+# Conversations and transfers
+
+In a routed conversation the front desk's pipeline serves every segment. On a realtime conversation a transfer sends one `session.update` with the receiving agent's instructions and tools; the voice set at the start stays, because the provider does not change voice once audio has played. The receiving agent's intro is spoken as exact text ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)).
+
 # Acceptance
 
 - **RV-01** — Given an agent config with `voice.pipeline: "realtime"` or `"cascade"` or no value, when saved, then it is accepted and absent means `cascade`; any other value returns 422; the value is part of the published version snapshot.

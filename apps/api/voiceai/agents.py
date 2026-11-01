@@ -96,6 +96,7 @@ async def publish(
     s: AsyncSession, agent: Agent, change_note: str = "", source_proposal_id: str | None = None,
 ) -> AgentVersion:
     snapshot = await build_snapshot(s, agent.tenant_id, agent.draft_config or {})
+    snapshot["description"] = agent.description or ""  # CAT-06: the catalog reads the published description
     current = await s.scalar(select(func.max(AgentVersion.version)).where(AgentVersion.agent_id == agent.id)) or 0
     version = AgentVersion(
         tenant_id=agent.tenant_id, agent_id=agent.id, version=current + 1, config=snapshot,
@@ -104,6 +105,9 @@ async def publish(
     s.add(version)
     await s.flush()
     agent.published_version_id = version.id
+    from voiceai.routing import catalog
+
+    await catalog.enqueue_index(s, agent.tenant_id, agent.id)  # CAT-01: the router follows every publish
     payload = {"agent_id": agent.id, "version_id": version.id, "version": version.version}
     bus.publish(agent.tenant_id, "dashboard", "agent.published", payload)
     bus.publish(agent.tenant_id, "insights", "agent.published", payload)

@@ -31,6 +31,7 @@ A phone number belongs to one tenant and routes to one agent (its **published** 
 
 * `e164` must match `^\+[1-9][0-9]{6,14}$`; a duplicate is 409 `number_in_use`; an unknown or other-tenant agent is 422.
 * The number you buy in Twilio is configured in Twilio, not here; this table only says which agent answers it.
+* **Front desk numbers.** A number with `target: front_desk` has no agent: a call starts a phone conversation (scope `member`) whose front desk answers and whose [supervisor](/architecture/supervisor-routing.md) picks the agent, which may transfer later ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)). Step 2 below then checks that the tenant has at least one routable member agent; the front desk's pipeline is the one admitted. CLI: `voiceai phone add <e164> --front-desk`.
 * This is the one place a request is routed to a tenant without a tenant header: the tenant is the row's `tenant_id` ([/architecture/multi-tenancy.md](/architecture/multi-tenancy.md)).
 
 # Voice webhook — `POST /api/telephony/twilio/voice`
@@ -121,3 +122,4 @@ Two ways, both in [/build/runbook-phone.md](/build/runbook-phone.md):
 - **TEL-09** — Given a running API with a mapped number and `scripts/fake_twilio.py`, when it plays a WAV file against the mapped number, then the webhook returns TwiML, the stream is accepted, the call appears as `active` and then `ended` in the Calls list, and the agent's reply audio is received (checked by hand against a running server with provider keys).
 - **TEL-10** — Given `TWILIO_VALIDATE_SIGNATURE=0`, when the process is on Cloud Run (`K_SERVICE` set), then the telephony routes refuse to start; when it is not, unsigned requests are accepted and a warning is logged; given no `TWILIO_AUTH_TOKEN`, the webhook answers the "not in service" TwiML and `/healthz` reports `providers.twilio: false`.
 - **TEL-11** — Given a phone call that ends for any reason in [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md), when the closing speech has finished, then the stream socket closes with 1000, `calls.end_reason` is that reason, and no feedback prompt is created for the call.
+- **TEL-12** — Given a number with target `front_desk`, when its signed webhook is called, then a phone conversation is created (no call row until an agent is chosen), the TwiML stream URL names the conversation, the front desk speaks first after `start`, and the routed segment carries `meta.telephony` and the IVR context; given a tenant with no routable member agent, the webhook answers "not in service".

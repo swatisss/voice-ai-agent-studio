@@ -2,6 +2,8 @@
 "use client";
 
 import { useState } from "react";
+import { FrontDeskCard } from "@/components/front-desk";
+import { ApiKeysCard, WebhooksCard } from "@/components/integrations";
 import { useTenant } from "@/components/shell";
 import { Button, Card, Field, Input, Spinner, useToast } from "@/components/ui";
 import { api, ApiError, useApi } from "@/lib/api";
@@ -95,6 +97,9 @@ export default function SettingsPage() {
           Use the platform key when this unit has none
         </label>
       </Card>
+      <FrontDeskCard tenant={tenant} allowRealtime={realtime} />
+      <ApiKeysCard tenant={tenant} />
+      <WebhooksCard tenant={tenant} />
     </div>
   );
 }

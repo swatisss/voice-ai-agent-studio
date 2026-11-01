@@ -39,3 +39,9 @@ A `: ping` comment every 15 s keeps proxies open. Topics and the bus semantics a
 | `test_run.finished` | `{eval_run_id, agent_id, status, summary}` |
 | `scorecard.updated` | `{call_id, agent_id, agent_version_id, hard_fail, score, judged}` |
 | `agent.published` | `{agent_id, version_id, version}` |
+| `catalog.updated` | `{agent_id, status, built_at}` |
+| `routing_run.finished` | `{eval_run_id, status, summary}` |
+| `routing.decision` | `{conversation_id, decision}`: one routing record ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)) |
+| `conversation.transferred` | `{conversation_id, from_call_id, to_call_id, from_agent_id, to_agent_id, reason, segment}` |
+| `conversation.segment` | `{conversation_id, call_id, agent_id, segment, routed_by}` |
+| `conversation.ended` | `{conversation_id, status, outcome, end_reason}` |

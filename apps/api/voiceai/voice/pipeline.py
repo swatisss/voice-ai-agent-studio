@@ -1,17 +1,19 @@
 """Builds and runs the Pipecat voice pipeline for one call.
 
-Spec: /architecture/voice-pipeline.md, /architecture/realtime-voice.md, /architecture/telephony.md, /api/voice-protocol.md
+Spec: /architecture/voice-pipeline.md, /architecture/realtime-voice.md, /architecture/telephony.md, /api/voice-protocol.md,
+/architecture/webrtc-transport.md
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from fastapi import WebSocket
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
-from pipecat.frames.frames import EndFrame, TTSUpdateSettingsFrame
+from pipecat.frames.frames import EndFrame, OutputTransportMessageUrgentFrame, TTSUpdateSettingsFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -24,7 +26,7 @@ from voiceai import telephony
 from voiceai.config import get_settings
 from voiceai.live import LiveControls
 from voiceai.runtime.session import AgentSession
-from voiceai.voice.phone import PhoneSerializer, PhoneStream
+from voiceai.voice.phone import PhoneSerializer, PhoneStream, serializer_for
 from voiceai.voice.processors import BrainProcessor, TurnAggregator
 from voiceai.voice.realtime import Connector, RealtimeBridge, RealtimeConnection, RATE as REALTIME_RATE
 from voiceai.voice.turn_detection import TurnEvaluator
@@ -33,9 +35,24 @@ from voiceai.voice.serializer import IN_RATE, OUT_RATE, RawPCMSerializer
 log = logging.getLogger("voiceai.voice")
 
 
-def make_transport(websocket: WebSocket, phone: PhoneStream | None, in_rate: int, out_rate: int) -> tuple[FastAPIWebsocketTransport, RawPCMSerializer | PhoneSerializer]:
-    """The transport profile: `browser` (raw PCM + JSON control messages) or `twilio` (mu-law 8 kHz Media Stream events)."""
-    serializer: RawPCMSerializer | PhoneSerializer = PhoneSerializer(phone.stream_sid, phone.call_sid) if phone else RawPCMSerializer()
+class WebRTCControl:
+    """Stands in for a serializer on a WebRTC call: the control messages go over the data channel (WRTC-04)."""
+
+    end_reason = "hangup"
+
+
+def make_transport(websocket: Any, phone: PhoneStream | None, in_rate: int, out_rate: int) -> tuple[Any, Any]:  # noqa: ANN401
+    """The transport profile: `browser` (raw PCM + JSON control messages), `twilio` (mu-law 8 kHz Media Stream events) or a
+    WebRTC peer connection (Opus; JSON control messages on the data channel)."""
+    from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
+
+    if isinstance(websocket, SmallWebRTCConnection):
+        from pipecat.transports.base_transport import TransportParams
+        from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+
+        params = TransportParams(audio_in_enabled=True, audio_in_sample_rate=in_rate, audio_out_enabled=True, audio_out_sample_rate=out_rate)
+        return SmallWebRTCTransport(webrtc_connection=websocket, params=params), WebRTCControl()
+    serializer: RawPCMSerializer | PhoneSerializer = serializer_for(phone) if phone else RawPCMSerializer()
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
         params=FastAPIWebsocketParams(
@@ -57,7 +74,9 @@ class CallEnder:
     async def __call__(self, reason: str) -> None:
         self.serializer.end_reason = reason
         await self.session.end(reason)
-        if self.phone:  # TEL-07: the transfer must happen before the stream closes
+        if isinstance(self.serializer, WebRTCControl) and self.task:  # WRTC-04: `end` before the connection closes
+            await self.task.queue_frame(OutputTransportMessageUrgentFrame(message={"type": "end", "reason": reason}))
+        if self.phone and self.phone.twilio:  # TEL-07: the transfer must happen before the stream closes
             await telephony.on_phone_end(self.session, reason, self.phone.call_sid)
         if self.task:
             await self.task.queue_frame(EndFrame())

@@ -75,3 +75,58 @@ async def serve(websocket: WebSocket, tenant_id: str, call: Call, phone: Any | N
             await pipeline.run(websocket, session, key, controls, phone)
     finally:
         unfollow()
+
+
+async def _close(link: Any, code: int, reason: str) -> None:  # noqa: ANN401
+    """Close a WebSocket with a code, or disconnect a WebRTC peer (no close codes there)."""
+    if hasattr(link, "close"):
+        await link.close(code=code, reason=reason)
+    elif hasattr(link, "disconnect"):
+        await link.disconnect()
+
+
+async def serve_conversation(websocket: Any, conv: Any, phone: Any | None = None) -> None:  # noqa: ANN401
+    """A routed conversation that has no agent yet: the front desk greets and routes, then the chosen agent speaks
+    on the same socket, voice and pipeline (/architecture/supervisor-routing.md, RTE-07)."""
+    from voiceai import conversations
+    from voiceai.routing.voice_session import ConversationSession
+
+    async with sessionmaker()() as s:
+        current = await s.get(Call, conv.current_call_id) if conv.current_call_id else None
+        if current is not None:  # an explicit agent (or a reconnect): its own plan
+            config, planned = (await call_settings.load(s, current)).config, (current.meta or {}).get('admission')
+        else:
+            config, planned = await conversations.front_desk_config(s, conv), (conv.settings or {}).get('admission')
+        decided = await admission.admit_socket(s, conv.tenant_id, config, planned)
+    if isinstance(decided, admission.Refusal):
+        await _close(websocket, 4500, decided.reason)
+        return
+    plan, key = decided
+    try:
+        from voiceai.voice import pipeline
+        from voiceai.voice import realtime as rt
+    except Exception as exc:  # noqa: BLE001
+        log.error('voice pipeline unavailable: %s', exc)
+        await _close(websocket, 4500, 'voice_unavailable')
+        return
+    from voiceai.runtime import app_ref
+
+    session = await ConversationSession.open(conv, getattr(websocket, 'app', None) or app_ref.APP)
+    controls = LiveControls(turn=session.turn_settings())
+    unfollow = follow(session, controls)
+    try:
+        if plan.pipeline == 'realtime':
+            ref = plan.model_ref or session.call_settings.speech_ref()
+
+            async def connector() -> rt.RealtimeConnection:
+                return await rt.connect_openai(key, ref)
+
+            try:
+                await pipeline.run_realtime(websocket, session, controls, connector, phone)  # type: ignore[arg-type]
+            except rt.ProviderUnavailable as exc:
+                log.warning('realtime provider unavailable: %s', exc)
+                await _close(websocket, 4500, 'voice_unavailable')
+        else:
+            await pipeline.run(websocket, session, key, controls, phone)  # type: ignore[arg-type]
+    finally:
+        unfollow()

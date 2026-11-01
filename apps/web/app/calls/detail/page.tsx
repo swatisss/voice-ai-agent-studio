@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { ConversationCard } from "@/components/conversation-card";
 import { FeedbackBadge } from "@/components/feedback";
 import { PacketCard } from "@/components/packet";
 import { ScorecardCard } from "@/components/scorecard";
@@ -78,6 +79,7 @@ function CallDetail() {
               )}
             </Card>
           )}
+          {c.conversation_id && <ConversationCard conversationId={c.conversation_id} callId={c.id} meta={{ routing: c.routing, handoff: c.handoff }} tenant={tenant} />}
           {c.memory && <MemoryCard memory={c.memory} memberHref={c.caller_ref ? `/members/memory/?ref=${encodeURIComponent(c.caller_ref)}&agent=${encodeURIComponent(c.agent_id)}` : null} />}
           {c.feedback && (  // UI-36
             <Card title="Caller feedback" actions={<FeedbackBadge rating={c.feedback.rating} />}>

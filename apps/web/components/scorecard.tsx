@@ -9,7 +9,7 @@ import { Badge, Button, Card, Field, Input, Select, Textarea, useToast } from ".
 
 export const GROUPS: { id: CheckGroup; label: string }[] = [
   { id: "outcome", label: "Outcome" }, { id: "responsiveness", label: "Responsiveness" }, { id: "knowledge", label: "Knowledge" },
-  { id: "tools", label: "Tools" }, { id: "memory", label: "Memory" }, { id: "safety", label: "Safety" },
+  { id: "tools", label: "Tools" }, { id: "memory", label: "Memory" }, { id: "safety", label: "Safety" }, { id: "routing", label: "Routing" },
 ];
 export const VERDICT: Record<Verdict, { label: string; tone: Tone }> = {
   pass: { label: "Pass", tone: "ok" }, fail: { label: "Fail", tone: "bad" }, "n/a": { label: "N/A", tone: "neutral" },

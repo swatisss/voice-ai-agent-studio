@@ -82,6 +82,7 @@ def call_summary(c: Call, analysis: CallAnalysis | None = None, version: int | N
         "turn_count": c.turn_count, "tokens_in": c.tokens_in, "tokens_out": c.tokens_out,
         "llm_cost_usd": c.llm_cost_usd, "latency_p50_ms": c.latency_p50_ms, "is_seed": c.is_seed,
         "intent": analysis.intent if analysis else None, "root_cause": analysis.root_cause if analysis else None,
+        "conversation_id": c.conversation_id, "segment": c.segment, "routed_by": c.routed_by,  # API-12
     }
 
 
@@ -194,7 +195,7 @@ async def give_feedback(call_id: str, body: FeedbackBody, tenant_id: str = Depen
 @router.get("/calls")
 async def list_calls(
     agent_id: str | None = None, outcome: str | None = None, channel: str | None = None, direction: str | None = None,
-    feedback: Literal["up", "down", "none"] | None = None,
+    feedback: Literal["up", "down", "none"] | None = None, conversation_id: str | None = None,
     include_seed: bool = True, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session),
 ) -> dict:
     q = (
@@ -208,6 +209,8 @@ async def list_calls(
     )
     if agent_id:
         q = q.where(Call.agent_id == agent_id)
+    if conversation_id:
+        q = q.where(Call.conversation_id == conversation_id)
     if outcome:
         q = q.where(Call.outcome == outcome)
     if channel:
@@ -245,6 +248,8 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
         "identification": _identification_out((call.meta or {}).get("identification")),
         "memory": await memory.for_call(s, call, list(events)),
         "scorecard": await _scorecard(s, call_id),
+        "routing": (call.meta or {}).get("routing"),  # UI-61: how this segment was routed
+        "handoff": {k: v for k, v in ((call.meta or {}).get("handoff") or {}).items() if k in ("reason", "summary")} or None,
     }
 
 

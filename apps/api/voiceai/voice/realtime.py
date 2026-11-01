@@ -126,10 +126,10 @@ def turn_detection(turn: TurnSettings, welcoming: bool = False, closing: bool = 
     }
 
 
-def realtime_tools(config: dict[str, Any]) -> list[dict[str, Any]]:
+def realtime_tools(config: dict[str, Any], transfer: bool = False) -> list[dict[str, Any]]:
     """RV-04: built-in tools plus the agent's tools, same names and schemas as the text channel, in the service's tool format."""
     out = []
-    for item in all_schemas(config.get("tools", [])):
+    for item in all_schemas(config.get("tools", []), transfer):
         fn = item["function"]
         out.append({"type": "function", "name": fn["name"], "description": fn.get("description", ""), "parameters": fn.get("parameters") or {"type": "object", "properties": {}}})
     return out
@@ -159,7 +159,7 @@ def session_update(session: AgentSession, turn: TurnSettings, *, welcoming: bool
         "session": {
             "type": "realtime", "output_modalities": ["audio"], "instructions": realtime_instructions(session),
             "audio": {"input": audio_in, "output": audio_out},
-            "tools": realtime_tools(session.config), "tool_choice": "auto",
+            "tools": realtime_tools(session.config, bool(getattr(session, "transfer_available", False))), "tool_choice": "auto",
         },
     }
 
@@ -465,6 +465,11 @@ class RealtimeBridge(FrameProcessor):
             await self._say_exact(decision.say)
         if decision.end:
             self.floor.finish_after_drain(decision.end)
+            return
+        if decision.refresh:  # a routed or transferred segment: its agent's instructions and tools (RTE-07, XFR-06)
+            await self._update_session()
+        if decision.model_turn:
+            await self._send({"type": "response.create"})
 
     # ------------------------------------------------------------ tool calls
     def _on_function_call(self, evt: dict[str, Any]) -> None:
@@ -489,7 +494,7 @@ class RealtimeBridge(FrameProcessor):
         if self.floor.closing or status == "cancelled":
             return
         decision = await self.session.tools_finished(spoke)
-        if decision.model_turn:
+        if decision.model_turn and decision.say is None:
             await self._send({"type": "response.create"})
             return
         if decision.end == "handoff":  # RV-09: the hand-off message replaces anything still playing

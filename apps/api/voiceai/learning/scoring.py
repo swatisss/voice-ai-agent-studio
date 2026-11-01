@@ -68,6 +68,26 @@ JUDGE_CHECKS = (
 )
 
 
+ROUTING_CHECKS = (  # routed conversation segments (/architecture/agent-transfer.md, Misroutes; SC-13)
+    Check("routing.early_transfer", "routing", "code", False, "The agent did not hand the caller on within two turns of receiving them.", "built_in"),
+    Check("routing.in_scope", "routing", "judge", False,
+          "Did the caller's request fit what this agent is set up to handle (its description and use cases)?", "built_in"),
+)
+
+
+def routed(call: Call) -> bool:
+    return bool(call.conversation_id) and call.routed_by not in (None, "explicit")
+
+
+def routing_verdict(call: Call, events: list[CallEvent]) -> dict[str, Any]:
+    if not routed(call):
+        return _verdict("n/a", "Not a routed segment.")
+    turns = sum(1 for e in events if e.kind == "user" and not (e.data or {}).get("front_desk"))
+    if call.end_reason == "transfer" and turns <= 2:
+        return _verdict("fail", f"Handed on after {turns} caller turn(s): probably routed to the wrong agent.")
+    return _verdict("pass", "The agent kept the caller." if call.end_reason != "transfer" else f"Handed on after {turns} caller turns.")
+
+
 def text_hash(text: str) -> str:
     """Stable key part for a config item: first 8 hex characters of SHA-256 of its text (SC-02)."""
     return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()[:8]
@@ -305,12 +325,15 @@ async def score(s: AsyncSession, call: Call, *, config: dict[str, Any] | None = 
     feedback = await s.scalar(select(CallFeedback).where(CallFeedback.call_id == call.id))
     esc = await s.scalar(select(Escalation).where(Escalation.call_id == call.id))
     analysis = await s.scalar(select(CallAnalysis).where(CallAnalysis.call_id == call.id))
-    checks = catalogue(config)
+    checks = [*catalogue(config), *ROUTING_CHECKS]
     m = measures(call, events, feedback, esc)
     verdicts = code_verdicts(call, events, config, m)
+    verdicts["routing.early_transfer"] = routing_verdict(call, events)  # SC-13
+    if not routed(call):
+        verdicts["routing.in_scope"] = _verdict("n/a", "Not a routed segment.")
     code_hard_fail = any(c.hard_gate and verdicts.get(c.key, {}).get("verdict") == "fail" for c in checks if c.method == "code")
     escalated = esc is not None or call.outcome == "escalated"
-    judge_checks = [c for c in checks if c.method == "judge"]
+    judge_checks = [c for c in checks if c.method == "judge" and not (c.key == "routing.in_scope" and not routed(call))]
     judged, judge_model = False, None
     judge_out: JudgeOut | None = None
     if always_judge or escalated or (feedback is not None and feedback.rating == "down") or code_hard_fail \
@@ -360,4 +383,7 @@ async def score_call(tenant_id: str, payload: dict[str, Any]) -> None:
         if call is None or not scorable(call) or call.ended_at is None:
             return
         await score(s, call)
+        from voiceai import conversations
+
+        await conversations.segment_scored(s, call)  # WH-01: conversation.analyzed
         await s.commit()

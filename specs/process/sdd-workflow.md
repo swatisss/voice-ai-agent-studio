@@ -2,7 +2,7 @@
 type: Process
 title: Spec-driven development workflow
 description: The loop every change follows in this repo - change proposal, spec edits, review, implementation, verification - with specs and code shipped together.
-status: stable
+status: draft
 tags: [process, sdd]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -82,7 +82,7 @@ Enforcement has three layers. Only the last one cannot be skipped from a develop
 
 # Onboarding
 
-`python scripts/setup.py [--install]` works on Windows, macOS and Linux: it points `core.hooksPath` at `.githooks`, creates `apps/api/.env` from `.env.example` (never overwriting), optionally runs `uv sync` and `npm ci`, and finishes with a spec check. The README is the contributor entry point.
+`python scripts/setup.py [--install]` works on Windows, macOS and Linux: it points `core.hooksPath` at `.githooks`, creates `apps/api/.env` from `.env.example` (never overwriting an existing one) with new random `TENANT_SECRETS_KEY` and `PUBLIC_API_SECRET` values, optionally runs `uv sync` and `npm ci`, and finishes with a spec check. The README is the contributor entry point.
 
 # Acceptance
 
@@ -95,3 +95,4 @@ Enforcement has three layers. Only the last one cannot be skipped from a develop
 - **SDD-02** — Given any `.md` file under `specs/` other than `index.md`/`log.md`, when it lacks frontmatter or a non-empty `type`, then `spec_check.py` exits non-zero and names the file.
 - **SDD-03** — Given two concepts declaring the same acceptance ID, when `spec_check.py` runs, then it fails and lists both locations.
 - **SDD-04** — Given a concept file not listed in its folder `index.md`, when `spec_check.py` runs, then it fails with the missing entry.
+- **SDD-10** — Given a fresh clone, when `scripts/setup.py` creates `apps/api/.env`, then its `PUBLIC_API_SECRET` holds a random value of at least 32 characters; given an existing `.env`, it is left untouched (SDD-09).

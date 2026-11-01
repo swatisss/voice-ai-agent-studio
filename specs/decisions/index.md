@@ -11,3 +11,4 @@
 * [ADR-0009 Agent memory](adr-0009-agent-memory.md) - Our own mem0-style memory maintenance after each call that retires instead of deleting; research on mem0, Zep, Memory Bank and SaaS builders
 * [ADR-0010 Caller verification](adr-0010-caller-verification.md) - A registered number identifies, the date of birth verifies; research on health-plan practice, caller-ID spoofing and Twilio testing
 * [ADR-0011 Evaluation and self-learning](adr-0011-evaluation-and-self-learning.md) - One scorer for online scoring, test suites and nightly self-learning; checks derived from the declarative config; only humans publish; research on voice-agent evaluation
+* [ADR-0012 Public API and supervisor routing](adr-0012-public-api-and-supervisor-routing.md) - Key-authenticated /v1 API per tenant, supervisor routing from an auto-synced capability catalog (embeddings, then Jev, Laya or an LLM), agent transfer, webhooks; research on voice-session APIs and routing models

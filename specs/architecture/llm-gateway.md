@@ -2,7 +2,7 @@
 type: Component Spec
 title: LLM gateway
 description: Maps LLM roles to Groq, OpenRouter or OpenAI models through one OpenAI-compatible client, with streaming, tool calls, JSON outputs, fallback and cost accounting.
-status: stable
+status: draft
 tags: [architecture, llm, groq, openrouter, openai]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -17,6 +17,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `simulator` | Simulated callers | cheap, fast | `groq:openai/gpt-oss-20b` |
 | `judge` | Eval grading | JSON output | `groq:openai/gpt-oss-120b` |
 | `turn` | Semantic turn detection (LLM evaluator) | tiny JSON verdict in under a second | `groq:openai/gpt-oss-20b` |
+| `router` | Supervisor routing: the front desk's clarifying questions ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)) | small JSON in well under a second | `groq:openai/gpt-oss-20b` |
 | `speech` | Realtime speech-to-speech voice pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) | streaming audio in and out, function calling | `openai:gpt-realtime-2.1` (Pipecat 1.12's default Realtime model; confirm the ID in the OpenAI console) |
 
 The `speech` role is **not** a chat role: it is never passed to `stream_chat` or `complete_json`, has no fallback chain, and its models are excluded from the chat model lists. Only the realtime pipeline reads it, for the model reference, the voices it offers, session parameters and prices.
@@ -43,6 +44,7 @@ roles:
   simulator: { model: "groq:openai/gpt-oss-20b",  params: { reasoning_effort: low, temperature: 0.7 }, fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-nano"] }
   judge:     { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0 }, fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
   turn:      { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }, fallback: ["openrouter:openai/gpt-oss-20b", "openai:gpt-4.1-nano"] }
+  router:    { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 300 }, fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-nano"] }
   speech:    { model: "openai:gpt-realtime-2.1", voices: [marin, cedar, coral, alloy, ash, ballad, echo, sage, shimmer, verse], params: { transcription_model: "gpt-realtime-whisper" }, fallback: [] }
 ```
 
@@ -98,3 +100,4 @@ A `fake` provider (in-memory, scripted responses) implements the same interface 
 - **LG-12** — Given the default configuration, when the `speech` role is resolved, then it returns an `openai:` model entry of `kind: speech` with text and audio prices and a non-empty voice list; `LLM_ROLE_SPEECH=openai:<other speech model>` replaces the model (same precedence as LG-06 and LG-07); a chat model ref in the `speech` role, or a speech model ref in a chat role or in `models.realtime`, is rejected at load with a clear error.
 - **LG-13** — Given usage of 1,000,000 text input, 1,000,000 text output, 1,000,000 audio input and 1,000,000 audio output tokens on the default speech model, then `usage_cost` returns the sum of the four prices of its entry; and `GET /api/models` does not list speech models in `selectable` (it lists them under `speech`).
 - **LG-11** — Given the default configuration, then every `openai:` ref used by a role or fallback has a price entry, and `GET /api/models` lists the OpenAI refs in `selectable`.
+- **LG-14** — Given the default configuration, then the `router` role resolves to a chat model whose fallback chain ends with an `openai:` model and `LLM_ROLE_ROUTER` overrides it like any role; `models.yaml` has no decision-model section (the decision model is configured by `DECISION_MODEL_*`, [/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)).

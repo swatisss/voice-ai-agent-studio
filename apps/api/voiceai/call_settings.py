@@ -118,6 +118,12 @@ async def load(s: AsyncSession, call: Call, config: dict[str, Any] | None = None
         version = await s.get(AgentVersion, call.agent_version_id)
         config = version.config if version else {}
     meta = call.meta or {}
+    conv = meta.get("conversation") or {}  # a routed segment keeps its conversation's pipeline and voice (supervisor-routing)
+    if conv.get("pipeline"):
+        voice = {**(config.get("voice") or {}), "pipeline": conv["pipeline"]}
+        if conv.get("realtime_voice"):
+            voice["realtime"] = {**(voice.get("realtime") or {}), "voice": conv["realtime_voice"]}
+        config = {**config, "voice": voice}
     live = dict(meta.get("live") or {})
     override = await persona_override(s, call.tenant_id, live)
     settings = CallSettings(config={**config, "persona": override} if override else config,

@@ -30,7 +30,7 @@ async def summary(agent_id: str | None = None, tenant_id: str = Depends(current_
     if agent_id:
         q = q.where(Call.agent_id == agent_id)
     rows = (await s.execute(q)).all()
-    calls = [c for c, _ in rows]
+    calls = [c for c, _ in rows if c.end_reason != "transfer"]  # XFR-08: a conversation counts once, with its last segment
     resolved = sum(1 for c in calls if c.outcome == "resolved")
     escalated = sum(1 for c in calls if c.outcome == "escalated")
     abandoned = sum(1 for c in calls if c.outcome == "abandoned")

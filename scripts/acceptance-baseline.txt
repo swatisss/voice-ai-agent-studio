@@ -70,7 +70,8 @@ TEL-09
 DEV-11
 # CP-0019 builder Memory tab, Test call "Call from", call detail Memory card, member memory page: no browser harness; the API
 # behind each is covered by tests/test_member_memory.py and tests/test_caller_verification.py, the web build and type check
-# pass. Click-through in the browser still to be done; these lines need the reviewer's approval (asked for with CP-0019).
+# pass. Click-through in the browser still to be done. Approved by the reviewer
+# (swati.verma) on 2026-11-01.
 UI-42
 UI-43
 UI-44
@@ -81,20 +82,19 @@ UI-46
 # database: UI-47 (tiles, Grounded drift badge, Grounded row lists the 5 calls); UI-48 in part (a Disagree review shows next
 # to the judge's verdict after reload; the evidence scroll and the Hard fail banner need a call that fails a hard gate);
 # UI-49 in part (checks from the policy listed; adding a Never rule and an eleventh custom check not tried); UI-50 not tried.
-# These lines need the reviewer's approval (asked for with CP-0020).
+# Approved by the reviewer (swati.verma) on 2026-11-01.
 UI-47
 UI-48
 UI-49
 UI-50
 # CP-0021 Evaluation -> Test suites view and the builder's Run tests: no browser harness; the API behind each is covered by
-# tests/test_test_suites.py, and the web build and type check pass. Not yet clicked through in the browser; these lines
-# need the reviewer's approval (asked for with CP-0021).
+# tests/test_test_suites.py, and the web build and type check pass. Not yet clicked through in the browser. Approved by the reviewer (swati.verma) on 2026-11-01.
 UI-51
 UI-52
 UI-53
 # CP-0022 Insights learning inbox and the dashboard's Self-learning card: no browser harness; the API behind each is covered
-# by tests/test_self_learning.py, and the web build and type check pass. These lines need the reviewer's approval
-# (asked for with CP-0022).
+# by tests/test_self_learning.py, and the web build and type check pass. Approved by the
+# reviewer (swati.verma) on 2026-11-01.
 UI-54
 UI-55
 # CP-0023 Settings API keys and Webhooks cards: no browser harness; the API behind them is covered by tests/test_public_api.py

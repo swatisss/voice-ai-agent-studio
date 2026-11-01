@@ -2,7 +2,7 @@
 type: Prompt
 title: Eval judge prompt
 description: Grades a simulated or real call - outcome, whether the goal was met, grounding in tool or knowledge results, policy violations, and one pass/fail/n/a/unknown verdict with evidence per check it is given.
-status: stable
+status: draft
 tags: [prompt, judge, evaluation, scoring]
 llm_role: judge
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
@@ -14,7 +14,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 
 # Output
 
-`{"outcome":"resolved|escalated|abandoned","goal_met":true,"grounded":true,"policy_violations":[],"notes":"...","checks":{"<key>":{"verdict":"pass|fail|n/a|unknown","reason":"...","seqs":[4],"chunk_ids":[]}}}`
+`{"outcome":"resolved|escalated|abandoned","goal_met":true,"grounded":true,"policy_violations":[],"notes":"...","checks":{"<key>":{"verdict":"pass|fail|n/a|unknown","reason":"...","seqs":[4],"chunk_ids":[],"quote":"..."}}}`
+
+`quote` is required with a `fail` on a check marked `[hard gate]` and is checked in code ([/architecture/call-scoring.md](/architecture/call-scoring.md), SC-15); it is ignored otherwise. Hard-gate checks are listed with the suffix ` [hard gate]` after the question.
 
 # Prompt
 
@@ -44,5 +46,6 @@ Return JSON:
   - reason: one sentence, at most 200 characters, naming what the assistant did.
   - seqs: the event numbers that show it (empty for "n/a").
   - chunk_ids: the knowledge chunk ids involved, if any.
+  - quote: for a "fail" on a check marked [hard gate], copy the assistant's exact words that break the rule. If you cannot quote such words, the answer is not "fail".
   Never fail a check because of something the transcript does not show.
 ```

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Jobs and events
 description: The database-backed background job queue and the in-process event bus streamed to the browser as server-sent events.
-status: stable
+status: draft
 tags: [architecture, jobs, events, sse]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -23,6 +23,7 @@ Table `jobs` ([/data/data-model.md](/data/data-model.md)). One worker task runs 
 | `run_test_suite` | `{eval_run_id}` | [/architecture/test-suites.md](/architecture/test-suites.md) |
 | `index_capabilities` | `{agent_id}` (no dedupe key; the handler skips unchanged inputs) | [/architecture/capability-catalog.md](/architecture/capability-catalog.md) |
 | `run_routing_suite` | `{eval_run_id}` (at most one queued per tenant) | [/architecture/capability-catalog.md](/architecture/capability-catalog.md) |
+| `sync_knowledge_source` | `{source_id}` (dedupe `sync_knowledge_source:{source_id}` while queued or running); the scheduler queues due `daily`/`weekly` sources once a minute | [/architecture/knowledge.md](/architecture/knowledge.md) (Website sources) |
 | `deliver_webhook` | `{delivery_id}`; its own retry schedule (7 attempts over about 9 h, [/architecture/webhooks.md](/architecture/webhooks.md)) instead of rule 3 | [/architecture/webhooks.md](/architecture/webhooks.md) |
 
 Rules:

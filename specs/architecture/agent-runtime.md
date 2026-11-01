@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent runtime
 description: The shared brain used by voice calls, text chat and simulations - turn loop, prompt assembly, built-in tools, call state, safety screen and escalation triggers.
-status: stable
+status: draft
 tags: [architecture, runtime]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -14,7 +14,7 @@ One implementation of "how the agent behaves", used by three channels:
 | Channel | Driver | Output |
 |---|---|---|
 | `voice` | [Voice pipeline](/architecture/voice-pipeline.md) | text chunks → TTS |
-| `text` | `POST /api/calls/{id}/messages` | full reply text |
+| `text` | `POST /api/calls/{id}/messages` | full reply text: the turn's spoken text exactly as recorded in its `assistant` events, the streamed pieces concatenated without added characters, and separate replies of one turn joined by one space (RT-17) |
 | `simulation` | [Evaluation](/architecture/evaluation.md) | full reply text |
 
 Behavior MUST NOT differ between channels except: voice may emit a short *filler* line before slow tool calls, and voice/text replies are kept short and speakable (no markdown, no lists).
@@ -120,4 +120,5 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 - **RT-14** — Given the model called `end_call`, when the reply-finished event carries no spoken text, then the decision is to say "Thank you for calling. Take care!" and end `end_call`; when it carries text, the decision is to end `end_call` with nothing more said.
 - **RT-15** — Given the same scripted caller turns, model replies and tool results, when driven through `respond()` and through the turn-policy events, then the stored event sequences (`user`, `assistant`, `tool_call`, `tool_result`, `system`) including each event's `data` (apart from timestamps and measured latencies), the call state and the escalation rows are identical; this holds for a turn that ends with a model hand-off and for one that ends with `end_call` and no spoken text.
 - **RT-09** — Given a turn that used the LLM, when it completes, then the call's token counts and `llm_cost_usd` increase by the gateway-reported usage.
+- **RT-17** — Given a text turn whose model streams the pieces "up to $", "1", ",", "500 total" and then, after a tool round, a second reply, when `reply()` returns, then the result is the first reply's text "up to $1,500 total" exactly as stored in its `assistant` event, followed by one space and the second reply's stored text; the public API's text turn, the CLI and simulated calls return the same text.
 - **RT-16** — Given a conversation segment whose model calls `transfer_to_agent` together with text, then no further model round runs in that turn, the transcript records a `system` event "Transferred: <reason>", and the session continues on the new segment chosen by the supervisor.

@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: stable
+status: draft
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -49,7 +49,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **knowledge_docs** — `id`, `tenant_id`, `title`, `source_type` (`text`|`file`|`url`|`okf`|`proposal`), `source_ref`, `content` text, `meta` JSON, `status` (`active`|`draft`|`archived`), `created_at`
 
-**knowledge_chunks** — `id`, `tenant_id`, `doc_id` (FK, cascade delete), `ordinal`, `heading`, `content`, `embedding` JSON (list of float)
+**knowledge_chunks** — `id`, `tenant_id`, `doc_id` (FK, cascade delete), `ordinal`, `heading`, `content`, `embedding` JSON (list of float), `content_hash` (SHA-256 of the doc content the chunk was cut from; nullable for chunks made before CP-0031)
+
+**knowledge_sources** — `id`, `tenant_id`, `kind` (`website`), `title`, `start_url`, `scope` (`page`|`section`), `max_pages`, `refresh` (`off`|`daily`|`weekly`), `status` (`indexing`|`ready`|`partial`|`failed`|`archived`), `page_count`, `found_count`, `last_synced_at`, `next_sync_at`, `last_run` JSON (added, changed, unchanged, archived, skipped `[{url, reason}]`), `error`, `created_at`, `updated_at` ([/architecture/knowledge.md](/architecture/knowledge.md), CP-0031). `knowledge_docs` gains a nullable `source_id` (FK) and `miss_count` (consecutive syncs that found the page gone).
 
 **calls** — `id`, `tenant_id`, `agent_id`, `agent_version_id`, `channel` (`voice`|`text`|`simulation`), `direction` (`inbound`|`outbound`|`internal`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable: `resolved`|`escalated`|`abandoned`|`transferred`), `caller_ref` (nullable), `started_at`, `ended_at`, `end_reason` (`end_call`|`farewell`|`handoff`|`idle`|`max_duration`|`hangup`|`error`|`transfer`), `turn_count`, `tokens_in`, `tokens_out`, `llm_cost_usd` float, `latency_p50_ms` (nullable), `is_seed` bool, `is_eval` bool, `conversation_id` (nullable, indexed), `segment` int (nullable; 1..n within a conversation), `routed_by` (nullable: `explicit`|`single`|`embedding`|`decision`|`llm`|`clarified`|`default`|`transfer`), `meta` JSON (`routing` for a routed segment, `handoff` `{reason, summary, from_call_id}` for a transferred one, `state`, `history`, the live overrides `live.persona_id` and `live.turn_detection`, `context` for outbound calls, `telephony` for phone calls: `{provider, call_sid, from_last4, to}`, and `identification` when the calling number is registered: `{member_ref, first_name, method, attestation}`)
 
@@ -104,7 +106,8 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 35 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards`, `check_reviews`, `learning_runs`, `api_keys`, `conversations`, `webhook_endpoints`, `webhook_deliveries`, `capability_profiles`, `capability_entries` or `routing_cases`, when the app starts, then those tables are created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 36 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards`, `check_reviews`, `learning_runs`, `api_keys`, `conversations`, `webhook_endpoints`, `webhook_deliveries`, `capability_profiles`, `capability_entries`, `routing_cases` or `knowledge_sources`, when the app starts, then those tables are created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.
+- **DM-12** — Given an existing database without `knowledge_docs.source_id`, `knowledge_docs.miss_count` and `knowledge_chunks.content_hash`, when the app starts, then the columns are added (null or 0), existing docs have no source, and search over them is unchanged.
 - **DM-10** — Given an existing database without the CP-0023…CP-0026 columns (`calls.conversation_id`, `segment`, `routed_by`; `phone_numbers.target`; `tenant_settings.front_desk`; `use_cases.updated_at`; nullable `eval_runs.agent_id` and `phone_numbers.agent_id`), when the app starts, then they are added with their defaults, existing calls have no conversation, existing numbers have target `agent`, and no row is lost.

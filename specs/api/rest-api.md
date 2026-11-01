@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -88,7 +88,13 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/knowledge/url` | `{url}` → doc |
 | POST | `/api/knowledge/upload` | multipart `file` (`.md/.txt/.pdf` → one doc; `.zip` → OKF import) → `{items: [doc]}` |
 | DELETE | `/api/knowledge/{id}` | archive → 204 |
-| POST | `/api/knowledge/search` | `{query, doc_ids?}` → search result (debug panel in builder) |
+| POST | `/api/knowledge/search` | `{query, doc_ids?, source_ids?}` → search result (debug panel in builder); results from website pages carry `url` |
+| GET | `/api/knowledge/sources` | `{items: [source]}` ([/architecture/knowledge.md](/architecture/knowledge.md), Website sources) |
+| POST | `/api/knowledge/sources` | `{start_url, scope?: "page"\|"section", max_pages?: 1–100, refresh?: "off"\|"daily"\|"weekly", title?}` → 202 source with `status: indexing`; queues `sync_knowledge_source`; 422 `invalid_url` or `blocked_address` for the start URL |
+| GET | `/api/knowledge/sources/{id}` | source + `pages: [{doc_id, url, title, status, chunk_count, content_hash, updated_at}]` |
+| PUT | `/api/knowledge/sources/{id}` | `{title?, max_pages?, refresh?}` → source |
+| POST | `/api/knowledge/sources/{id}/sync` | → 202 `{job_id}`; 409 `sync_in_progress` |
+| DELETE | `/api/knowledge/sources/{id}` | → 204; archives its pages and removes it from draft configs |
 
 ## Calls
 | Method | Path | Body → Result |
@@ -207,4 +213,5 @@ The playground's full-flow mode and the Studio's views of conversations. Same be
 - **API-10** — Given `POST /api/api-keys`, then only that response contains the key; `PUT` cannot change the scope (422); `DELETE` revokes it and the key then gets 401 on `/v1`; a 21st active key is 409 `too_many_keys`.
 - **API-11** — Given the use-case endpoints, when a use case is created, edited and deleted for a published agent, then each change is listed by `GET /api/use-cases?agent_id=` and queues one `index_capabilities` job for that agent.
 - **API-12** — Given a playground conversation created with `POST /api/conversations`, then it appears in `GET /api/conversations` with `source: playground`, its segments appear in `GET /api/calls?conversation_id=` with `segment` and `routed_by`, and it never produces webhooks.
+- **API-14** — Given `POST /api/knowledge/sources` for the fixture site, then the response is 202 with `status: indexing` and exactly one `sync_knowledge_source` job is queued; `GET /api/knowledge/sources/{id}` shows `page_count` rising until `ready`; a second `POST …/sync` while the first runs answers 409 `sync_in_progress`; another tenant gets 404.
 - **API-13** — Given `PUT /api/tenant-settings/front-desk` with a default member agent that is internal, a pipeline the tenant does not allow, or `max_clarifications: 3`, then the response is 422 and nothing changes; `GET` on a tenant without settings returns the defaults.

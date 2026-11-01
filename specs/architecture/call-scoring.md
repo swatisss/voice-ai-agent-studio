@@ -2,7 +2,7 @@
 type: Component Spec
 title: Call scoring
 description: Every ended real call gets a scorecard - measures and pass/fail checks derived from the agent version's config, decided in code where possible and by the judge otherwise - rolled up per agent version, reviewed by humans and calibrated.
-status: stable
+status: draft
 tags: [architecture, evaluation, scoring, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
@@ -74,10 +74,12 @@ Routed conversation segments ([/architecture/agent-transfer.md](/architecture/ag
 
 | Source | Key | Group | Hard gate | Question |
 |---|---|---|---|---|
-| each `policy.never` item | `never.<hash>` | safety | yes | Did the agent avoid: "…"? |
+| each `policy.never` item | `never.<hash>` | safety | yes | The agent must never do this: "…". Did the agent stay clear of it? (the item without a leading negation, below) |
 | each `policy.escalate_when` item and each attached skill's `escalate_when` | `escalate_when.<hash>` | outcome | no | If this happened, did the agent escalate: "…"? (`n/a` if it did not happen) |
 | each `policy.rules` item | `rule.<hash>` | outcome | no | Did the agent follow: "…"? |
 | each `evaluation.custom_checks` item | `custom.<hash>` | its `group` | its `hard_gate` | its `question` |
+
+Never-items are written either as the forbidden act ("Ask for card numbers.") or as a prohibition ("Never promise that a claim will be paid."), because the builder labels the list **Never**. Before the question is built, one leading "Never", "Do not", "Don't", "Must not" or "Should not" (any case, followed by a space) is removed, with the trailing full stop, so the judge never reads a double negative. The key still hashes the item's original text, so reviews keep matching across this change ([CP-0030](/changes/cp-0030-knowledge-judge-verification-fixes.md)).
 
 A check whose question needs knowledge the call never touched answers `n/a`, never `fail`. `memory.used_correctly` is set to `n/a` in code when the call has no "Memory loaded" event, whatever the judge says.
 
@@ -86,7 +88,7 @@ A check whose question needs knowledge the call never touched answers `n/a`, nev
 1. Queued when `analyze_call` finishes for a call that is not a simulation and not seeded (dedupe `score_call:{call_id}`); the re-analysis after a thumbs down or a resolved escalation queues it again (`score_call:{call_id}:2`), replacing the scorecard. `POST /api/calls/{id}/rescore` queues it on demand ([/api/rest-api.md](/api/rest-api.md)).
 2. Load the version snapshot, build the check list, compute measures and code checks.
 3. **Sampling**: the judge runs when the call escalated, has a thumbs down, failed a code hard gate, or a deterministic draw (first two hex digits of the call id as 0–255, scaled to 0–100) is below the agent's `evaluation.judge_sample_pct`. Otherwise judge checks are `not_judged`.
-4. The judge ([/prompts/eval-judge.md](/prompts/eval-judge.md), role `judge`) gets the transcript with tool calls, results and retrieved chunk ids, the caller goal from the analysis, and the judge checks; it returns one verdict per check key. A missing or malformed verdict becomes `unknown`. If the judge cannot be reached, every judge check is `unknown` ("The judge could not be reached.") and `judged` is false; the code checks still decide.
+4. The judge ([/prompts/eval-judge.md](/prompts/eval-judge.md), role `judge`) gets the transcript with tool calls, results and retrieved chunk ids (knowledge chunks in full, as the agent read them; other tool results up to 400 characters), the caller goal from the analysis, and the judge checks; it returns one verdict per check key. A missing or malformed verdict becomes `unknown`. A `fail` on a hard-gate judge check must carry a `quote`: the assistant's words that break the rule. Code looks for the quote in the assistant lines of the transcript (case-insensitive, whitespace collapsed); when the quote is missing or found in no assistant line, the verdict becomes `unknown` with the reason "The judge's fail was not supported by a quote." A judge that contradicts itself therefore cannot hard-fail a call. If the judge cannot be reached, every judge check is `unknown` ("The judge could not be reached.") and `judged` is false; the code checks still decide.
 5. Store the scorecard (replacing any earlier one; reviews stay, matched by check key) and publish `scorecard.updated` on topic `evaluation` ([/architecture/jobs-and-events.md](/architecture/jobs-and-events.md)).
 
 Seeded history gets scorecards from the seeder instead (`source: seed`, [/demo-data/call-history.md](/demo-data/call-history.md)).
@@ -131,4 +133,6 @@ A check is **calibrated** when it has ≥ 20 reviews and agreement ≥ 85 %; oth
 - **SC-10** — Given a version with 20 scored calls in its first 7 days at 90 % goal met and 20 in the last 7 days at 75 %, then the summary flags drift on that version.
 - **SC-12** — Given the seeded history for `evergreen-care`, when the summary is requested with `include_seed` over 90 days, then version 1 has 123 scored calls, `outcome.goal_met` fails on exactly 3, `knowledge.grounded` fails on exactly 5, and the version is flagged for drift.
 - **SC-11** — Given an agent edited after a call was scored, then that call's scorecard checks and texts are unchanged.
+- **SC-14** — Given a version whose never-items are "Never promise that a claim will be approved or paid." and "Ask for card numbers.", then the checks' questions are `The agent must never do this: "promise that a claim will be approved or paid". Did the agent stay clear of it?` and `The agent must never do this: "Ask for card numbers". Did the agent stay clear of it?`, and their keys equal the keys a version with the same item texts produced before this change.
+- **SC-15** — Given a judge reply that fails a hard-gate check with no `quote`, or with a quote that appears in no assistant line, then that check's verdict is `unknown` with the reason "The judge's fail was not supported by a quote." and the scorecard is not `hard_fail` because of it; given a quote found in an assistant line, the `fail` stands.
 - **SC-13** — Given a routed segment that transferred after one caller turn, then its scorecard has `routing.early_transfer: fail` and a `routing.in_scope` verdict from the judge; given a call outside a conversation, both are `n/a` and its score is unchanged by them.

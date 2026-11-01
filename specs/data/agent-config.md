@@ -2,7 +2,7 @@
 type: Config Schema
 title: Agent configuration schemas
 description: JSON shapes of the agent draft config, persona, policy, tool and skill definitions, and the immutable version snapshot.
-status: stable
+status: draft
 tags: [data, config, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -34,6 +34,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
   "tool_ids": ["..."],
   "skill_ids": ["..."],
   "knowledge_doc_ids": ["..."],
+  "knowledge_source_ids": ["..."],
   "models": { "realtime": null }
 }
 ```
@@ -51,6 +52,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `models.realtime` | `null` (role default) or a model ref listed by `GET /api/models` (chat refs only) |
 | `models.speech` | `null` (role default) or a speech model ref listed under `speech` by `GET /api/models`; used only when `voice.pipeline` is `realtime` |
 | `*_ids` | must reference same-tenant, non-archived objects |
+| `knowledge_source_ids` | website sources ([/architecture/knowledge.md](/architecture/knowledge.md)); optional, default `[]`. The version keeps the ids, not copies of the pages, so a published agent answers from the latest synced pages (CP-0031) |
 
 # Library persona and voice settings
 
@@ -184,6 +186,7 @@ The draft config **plus** resolved copies so the version is self-contained and i
   "description": "...", "routable": true, "handoff_intro": "...",
   "persona": {...}, "policy": {...}, "models": {...},
   "knowledge_doc_ids": ["..."],
+  "knowledge_source_ids": ["..."],
   "tools":  [ { "id": "...", ...full tool definition... } ],
   "skills": [ { "id": "...", ...full skill definition... } ]
 }

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Self-learning
 description: A nightly job turns each agent's day of calls into typed config change proposals - knowledge, tools, skills, rules - proves each one offline against the current version, and queues it for a human; agents never change themselves.
-status: stable
+status: draft
 tags: [architecture, learning, evaluation, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---
@@ -40,7 +40,7 @@ The job worker starts `nightly_learning` once a day per tenant when `LEARNING_NI
 | Kind | When | Payload | On approval |
 |---|---|---|---|
 | `knowledge_article` | missing knowledge, no article covers it | `{article: {title, content_markdown}}` | the draft doc becomes active and is attached |
-| `knowledge_edit` | missing knowledge, an attached article covers the topic but lacks the answer | `{doc_id, article: {title, content_markdown}}` (the full revised article) | a new active doc replaces `doc_id` in the agent's documents; the old doc is archived |
+| `knowledge_edit` | missing knowledge, an attached article covers the topic but lacks the answer; never for a page of a website source, whose website stays the source of truth (a new `knowledge_article` instead, CP-0031) | `{doc_id, article: {title, content_markdown}}` (the full revised article) | a new active doc replaces `doc_id` in the agent's documents; the old doc is archived |
 | `tool_attach` | missing skill, an existing tenant tool fits but is not attached | `{tool_name}` | the tool is attached |
 | `skill` | missing skill, a procedure (and maybe a catalog tool) is needed | as today | as today |
 | `policy_rule` | agent error | as today | as today |
@@ -99,4 +99,5 @@ The summary keeps each part with its numbers and a `gate: {passed, reasons}`; th
 - **SL-10** — Given a candidate on which a test scenario passing 3/3 on the baseline passes 1/3, then the gate fails with a reason naming the scenario, and approval without `force` and a note returns 409 `evaluation_gate`.
 - **SL-11** — Given a nightly run, then no agent version is created, no agent draft changes and no proposal is approved, whatever the gate results.
 - **SL-12** — Given a finished nightly run, then `learning.run.finished` is published and `GET /api/learning/runs` returns its per-agent summary with signals by kind and proposals drafted and passed.
+- **SL-14** — Given a missing-knowledge cluster whose closest attached article is a page of a website source, when a fix is drafted, then the proposal is a `knowledge_article` (a new doc), never a `knowledge_edit` of that page.
 - **SL-13** — Given three segments of the claims agent that transferred early to Customer Care for dental coverage questions, when the nightly run finishes, then one `routing_update` proposal for a Customer Care use case waits in the inbox with its routing gate; nothing changes in the catalog until a human approves it.

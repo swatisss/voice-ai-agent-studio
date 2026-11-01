@@ -2,7 +2,7 @@
 type: Prompt
 title: Fix draft prompt
 description: Drafts a knowledge article, a skill (with an existing or new tool), or a policy rule for a fixable cluster, grounded in human resolution notes.
-status: stable
+status: draft
 tags: [prompt, drafting, learning]
 llm_role: drafting
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
@@ -10,7 +10,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Variables
 
-`cluster_name`, `cluster_description`, `root_cause`, `evidence` (per call: caller goal, gap summary, human resolution note), `existing_tools` (name + description), `tool_catalog` (endpoints available in the business API that are not yet tools: method, path, description, parameters), `existing_doc_titles`, `attached_articles` (up to 3 attached articles closest to the gap: id, title, content), `unattached_tools` (tenant tools the agent lacks: name, description).
+`cluster_name`, `cluster_description`, `root_cause`, `evidence` (per call: caller goal, gap summary, the specialist's resolution note or `(no note)`; plus one line with the reviewer's answer when a reviewer answered the cluster, CP-0032), `existing_tools` (name + description), `tool_catalog` (endpoints available in the business API that are not yet tools: method, path, description, parameters), `existing_doc_titles`, `attached_articles` (up to 3 attached articles closest to the gap: id, title, content), `unattached_tools` (tenant tools the agent lacks: name, description).
 
 # Output
 
@@ -30,7 +30,7 @@ You improve an AI phone assistant for a health insurer. A cluster of calls went 
 Cluster: {{cluster_name}} — {{cluster_description}}
 Root cause: {{root_cause}}
 
-Evidence (caller goal, gap, what resolved it — usually a human specialist's note):
+Evidence (caller goal, gap, and what a person said resolved it: a specialist's note, or a reviewer's answer; "(no note)" means no person answered that call):
 {{evidence}}
 
 Attached knowledge articles closest to this gap:
@@ -44,7 +44,7 @@ Business API endpoints not yet available as tools:
 {{tool_catalog}}
 
 Rules:
-- Use only facts that appear consistently in the resolution notes. If notes disagree, use the most common answer and mention the uncertainty in the rationale.
+- Use only facts that appear consistently in the specialists' notes or the reviewer's answer; never invent facts for calls without a note. If notes disagree, use the most common answer and mention the uncertainty in the rationale.
 - Never include member-specific data (names, IDs, dates of birth, claim numbers) in the change.
 - Never add medical advice.
 - Write for a voice assistant: short sections, plain language, concrete steps, deadlines and documents.

@@ -17,6 +17,7 @@
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios
 * [Self-learning](self-learning.md) - The nightly run that turns each agent's calls into typed config proposals, proves them offline and leaves them for a human; signals, gate, inbox, guardrails
+* [Learning actions](learning-actions.md) - Findings of evaluation and learning as ranked actions with one next step each (fix did not hold, answer needed, check failing, drift, scenario failing), closing themselves when cleared; fix verification
 * [How self-learning should work](self-learning-target.md) - Review of the learning loop as built (verified end to end 2026-11-01), its gaps (roadmap R14-R20) and the target loop; draft, nothing built from it yet
 * [Test suites](test-suites.md) - Offline evaluation: per-agent scenarios with expectations run k times by a simulated caller against the published version, the draft or an earlier version, scored and reported as pass rate and pass^k
 * [Call scoring](call-scoring.md) - Online evaluation: a scorecard per real call with checks derived from the version config, rollups per version, drift, reviews and judge calibration

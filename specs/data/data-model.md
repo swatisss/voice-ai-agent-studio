@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: stable
+status: draft
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -63,7 +63,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **call_analyses** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `outcome`, `intent`, `root_cause`, `fixable` bool, `gap_summary`, `caller_goal`, `resolution_summary`, `sentiment_start`, `sentiment_end`, `signals` JSON list (quality signals of a re-analysis, [/architecture/self-learning.md](/architecture/self-learning.md)), `embedding` JSON (nullable), `cluster_id` (nullable), `source` (`llm`|`seed`), `created_at`
 
-**clusters** — `id`, `tenant_id`, `agent_id`, `name`, `description`, `root_cause`, `fixable` bool, `centroid` JSON, `call_count`, `escalation_count`, `first_seen_at`, `last_seen_at`, `status` (`open`|`fix_proposed`|`fixed`|`ignored`), `snoozed_until` (nullable), `created_at`, `updated_at`
+**clusters** — `id`, `tenant_id`, `agent_id`, `name`, `description`, `root_cause`, `fixable` bool, `centroid` JSON, `call_count`, `escalation_count`, `first_seen_at`, `last_seen_at`, `status` (`open`|`fix_proposed`|`fixed`|`ignored`), `snoozed_until` (nullable), `human_answer` (nullable text: a reviewer's answer to an `answer_needed` action), `human_answer_by` (nullable), `reopened_at` (nullable: when a run found the fix did not hold), `created_at`, `updated_at`
 
 **fix_proposals** — `id`, `tenant_id`, `agent_id`, `cluster_id`, `kind` (`knowledge_article`|`knowledge_edit`|`tool_attach`|`skill`|`policy_rule`|`routing_update`), `origin` (`manual`|`nightly`, default `manual`), `title`, `rationale`, `payload` JSON (may carry `scenarios`), `draft_doc_id` (nullable), `status` (`draft`|`evaluating`|`ready`|`approved`|`rejected`), `latest_eval_run_id` (nullable), `resulting_version_id` (nullable), `decided_by`, `decision_note`, `created_at`, `decided_at`
 
@@ -85,7 +85,9 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **memory_events** — `id`, `tenant_id`, `agent_id` (nullable for erasure), `member_ref`, `memory_id` (nullable), `action` (`added`|`superseded`|`confirmed`|`restored`|`expired`|`erased`), `actor` (`agent`|`studio`|`system`), `call_id` (nullable), `text_before`, `text_after`, `reason` (all nullable; emptied by expiry and erasure), `at`
 
-**learning_runs** — `id`, `tenant_id`, `trigger` (`nightly`|`manual`), `status` (`running`|`done`|`failed`), `since` (start of the reviewed window), `summary` JSON (per agent: calls reviewed, signals by kind, re-analysed, ready clusters, proposals drafted and passed), `error`, `started_at`, `finished_at` ([/architecture/self-learning.md](/architecture/self-learning.md))
+**learning_runs** — `id`, `tenant_id`, `trigger` (`nightly`|`manual`), `status` (`running`|`done`|`failed`), `since` (start of the reviewed window), `summary` JSON (per agent: calls reviewed, signals by kind, re-analysed, ready clusters, proposals drafted and passed, clusters reopened, actions opened, resolved and open), `error`, `started_at`, `finished_at` ([/architecture/self-learning.md](/architecture/self-learning.md))
+
+**learning_actions** — `id`, `tenant_id`, `agent_id`, `kind` (`fix_not_holding`|`answer_needed`|`check_failing`|`drift`|`scenario_failing`), `key` (the finding, e.g. `check_failing:{version}:{check}`), `severity` (`high`|`medium`), `status` (`open`|`done`|`dismissed`|`resolved`), `title`, `detail`, `evidence` JSON, `impact` (float), `closed_by`, `note`, `closed_at`, `suppressed_until` (nullable), `created_at`, `updated_at` ([/architecture/learning-actions.md](/architecture/learning-actions.md))
 
 **jobs** — `id`, `tenant_id`, `kind`, `payload` JSON, `dedupe_key` (nullable, indexed), `status` (`queued`|`running`|`done`|`failed`), `attempts`, `last_error`, `run_after`, `created_at`, `updated_at`
 
@@ -106,8 +108,9 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 36 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards`, `check_reviews`, `learning_runs`, `api_keys`, `conversations`, `webhook_endpoints`, `webhook_deliveries`, `capability_profiles`, `capability_entries`, `routing_cases` or `knowledge_sources`, when the app starts, then those tables are created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 37 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards`, `check_reviews`, `learning_runs`, `api_keys`, `conversations`, `webhook_endpoints`, `webhook_deliveries`, `capability_profiles`, `capability_entries`, `routing_cases`, `knowledge_sources` or `learning_actions`, when the app starts, then those tables are created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.
+- **DM-13** — Given an existing database without `clusters.human_answer`, `clusters.human_answer_by` and `clusters.reopened_at`, when the app starts, then the columns are added as null and existing clusters keep their status.
 - **DM-12** — Given an existing database without `knowledge_docs.source_id`, `knowledge_docs.miss_count`, `knowledge_docs.updated_at` and `knowledge_chunks.content_hash`, when the app starts, then the columns are added (null or 0), existing docs have no source, and search over them is unchanged.
 - **DM-10** — Given an existing database without the CP-0023…CP-0026 columns (`calls.conversation_id`, `segment`, `routed_by`; `phone_numbers.target`; `tenant_settings.front_desk`; `use_cases.updated_at`; nullable `eval_runs.agent_id` and `phone_numbers.agent_id`), when the app starts, then they are added with their defaults, existing calls have no conversation, existing numbers have target `agent`, and no row is lost.

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Fleet learning
 description: Post-call analysis, gap clustering, impact estimation, fix drafting from human resolutions, and approval into a new agent version.
-status: stable
+status: draft
 tags: [architecture, learning, clustering]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -50,7 +50,7 @@ Seeded history creates clusters directly from its `cluster_key` (deterministic d
 
 # 4. Fix drafting (`draft_fix` job, triggered by the Insights UI or the nightly run)
 
-Prompt [/prompts/fix-draft.md](/prompts/fix-draft.md), role `drafting`. Evidence: up to 10 member calls — gap summaries, caller goals, and **human resolution notes** (the ground truth of what a human told the caller); the cluster's other members are held out for the gate and never shown. The prompt also gets the attached articles closest to the gap (title and content, up to 3) and the tenant's tools that the agent does not have. A proposal records its `origin` (`manual` or `nightly`) and up to 2 derived scenarios. Output `kind` (the full table, with `knowledge_edit` and `tool_attach`, is in [/architecture/self-learning.md](/architecture/self-learning.md)):
+Prompt [/prompts/fix-draft.md](/prompts/fix-draft.md), role `drafting`. Evidence: up to 10 member calls — gap summaries, caller goals, and **human resolution notes** (the ground truth of what a human told the caller) — plus the reviewer's answer when one was given ([learning actions](/architecture/learning-actions.md)); a call without a note shows `(no note)`, never the analysis's own summary, so facts come only from people (CP-0032). The cluster's other members are held out for the gate and never shown (at least one in a cluster of 3 or more, [self-learning](/architecture/self-learning.md)). A `missing_knowledge` cluster with no note and no reviewer answer is not drafted: `draft-fix` answers 409 `answer_needed`. The prompt also gets the attached articles closest to the gap (title and content, up to 3) and the tenant's tools that the agent does not have. A proposal records its `origin` (`manual` or `nightly`) and up to 2 derived scenarios. Output `kind` (the full table, with `knowledge_edit` and `tool_attach`, is in [/architecture/self-learning.md](/architecture/self-learning.md)):
 
 | Kind | When | Payload |
 |---|---|---|
@@ -66,7 +66,7 @@ Proposal status: `draft` → `evaluating` → `ready` (eval done) → `approved`
 
 Allowed only in `ready` with an eval run whose **gate passed** ([/architecture/self-learning.md](/architecture/self-learning.md), Gate), unless `force: true` with a note.
 
-1. Apply the payload to the agent draft config: activate the draft doc and add it to `knowledge_doc_ids` (for `knowledge_edit`, in place of `doc_id`, which is archived); or attach the named tool; or create the skill (and tool) and attach; or append the policy rule. Add the proposal's derived scenarios to the agent's test suite.
+1. Apply the payload to the **published version's config** (what the gate evaluated), and the same change to the builder's draft config, which keeps any unpublished edits as a draft (CP-0033): activate the draft doc and add it to `knowledge_doc_ids` (for `knowledge_edit`, in place of `doc_id`, which is archived); or attach the named tool; or create the skill (and tool) and attach; or append the policy rule. Add the proposal's derived scenarios to the agent's test suite.
 2. Publish a new agent version with `change_note` = "Fix: {proposal title}" and `source_proposal_id`.
 3. Proposal → `approved` with `resulting_version_id`; cluster → `fixed`.
 4. Publish `proposal.approved` and `agent.published` events.
@@ -80,4 +80,5 @@ Allowed only in `ready` with an eval run whose **gate passed** ([/architecture/s
 - **FL-05** — Given a ready cluster with resolution notes, when `draft_fix` runs for `missing_knowledge`, then a proposal with kind `knowledge_article` and a `draft` doc are created.
 - **FL-06** — Given a proposal whose eval gate failed (for example a test scenario regressed), when approved without `force` and a note, then the API returns 409 `evaluation_gate` naming the reason.
 - **FL-07** — Given an approved knowledge proposal, then a new agent version exists whose config lists the (now active) doc, and the cluster status is `fixed`.
+- **FL-09** — Given a cluster whose escalated calls have no resolution notes but analyses with a resolution summary, when a fix is drafted for a `missing_skill` cluster, then the drafter's evidence shows `(no note)` for those calls and none of the summaries; for a `missing_knowledge` cluster `draft-fix` returns 409 `answer_needed` until a note or a reviewer answer exists.
 - **FL-08** — Given an escalation resolved after its call was analyzed, when resolved, then the call is re-analyzed once and the analysis includes the resolution summary.

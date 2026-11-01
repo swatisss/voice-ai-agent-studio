@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -162,8 +162,8 @@ The playground's full-flow mode and the Studio's views of conversations. Same be
 | Method | Path | Body → Result |
 |---|---|---|
 | GET | `/api/insights/clusters` | query `agent_id?` → `{items: [cluster + weekly_escalations, est_weekly_cost_usd, dislike_count, signal_count, ready_for_fix, label, snoozed_until]}`; `dislike_count` = member calls with a thumbs down in the last 28 days, `signal_count` = distinct member escalations plus thumbs-down calls in that window ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)) |
-| GET | `/api/insights/clusters/{id}` | cluster + member calls (analysis + resolution notes + `feedback`) + proposals |
-| POST | `/api/insights/clusters/{id}/draft-fix` | → `{job_id}` (proposal arrives via `proposal.updated` event); 409 if not ready |
+| GET | `/api/insights/clusters/{id}` | cluster + member calls (analysis + resolution notes + `feedback`) + proposals; every cluster (list and detail) also carries `human_answer`, `reopened_at`, `needs_answer` (a `missing_knowledge` cluster with no specialist note and no `human_answer`) and `fix` (`{proposal_id, version, decided_at, before_per_week, after_per_week, held}` or `null`, [/architecture/learning-actions.md](/architecture/learning-actions.md)) |
+| POST | `/api/insights/clusters/{id}/draft-fix` | → `{job_id}` (proposal arrives via `proposal.updated` event); 409 if not ready; 409 `answer_needed` when `needs_answer` |
 | POST | `/api/insights/clusters/{id}/ignore` | → cluster |
 | GET | `/api/proposals/{id}` | proposal (with `origin`) + draft doc + `original_doc` (the article a `knowledge_edit` revises, else `null`) + latest eval run (summary with its gate + results, each with `repeat`, `failures`, `call_id` and `scenario_name`) |
 | PUT | `/api/proposals/{id}` | `{title?, payload?}` → proposal (status back to `draft`) |
@@ -171,8 +171,12 @@ The playground's full-flow mode and the Studio's views of conversations. Same be
 | GET | `/api/insights/inbox` | query `agent_id?` → `{items: [proposal + cluster name + latest eval summary with its gate]}`: proposals in `ready` that nobody decided, newest first ([/architecture/self-learning.md](/architecture/self-learning.md), Review) |
 | GET | `/api/learning/runs` | → `{items: [{id, trigger, status, since, summary, started_at, finished_at}]}`, newest first, at most 30 |
 | POST | `/api/learning/run` | → `{learning_run_id}`; 409 `run_in_progress` |
-| POST | `/api/proposals/{id}/approve` | `{decided_by, note?, force?}` → `{proposal, version}`; 409 `evaluation_gate` when the gate failed and no `force` with a note ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)) |
+| POST | `/api/proposals/{id}/approve` | `{decided_by, note?, force?}` → `{proposal, version, draft_kept}` (the version is the published config plus the change; `draft_kept` is true when the builder's unpublished draft edits were kept as a draft, CP-0033); 409 `evaluation_gate` when the gate failed and no `force` with a note ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)) |
 | POST | `/api/proposals/{id}/reject` | `{decided_by, note}` → proposal |
+| GET | `/api/insights/actions` | query `agent_id?`, `status?` (default `open`; `all`) → `{items: [{id, agent_id, agent_name, kind, key, severity, status, title, detail, evidence, impact, closed_by, note, closed_at, created_at, updated_at}]}`, ranked ([/architecture/learning-actions.md](/architecture/learning-actions.md)) |
+| POST | `/api/actions/{id}/done` | `{by, note?}` → action; 409 `invalid_state` unless open |
+| POST | `/api/actions/{id}/dismiss` | `{by, note?}` → action; 409 `invalid_state` unless open |
+| POST | `/api/actions/{id}/answer` | `{answer, by}` → action (an open `answer_needed`; queues `draft_and_evaluate`); 422 `answer_too_short` under 20 characters; 409 `invalid_state` for another kind or a closed action |
 
 ## Evaluation
 | Method | Path | Body / query → Result |
@@ -213,5 +217,6 @@ The playground's full-flow mode and the Studio's views of conversations. Same be
 - **API-10** — Given `POST /api/api-keys`, then only that response contains the key; `PUT` cannot change the scope (422); `DELETE` revokes it and the key then gets 401 on `/v1`; a 21st active key is 409 `too_many_keys`.
 - **API-11** — Given the use-case endpoints, when a use case is created, edited and deleted for a published agent, then each change is listed by `GET /api/use-cases?agent_id=` and queues one `index_capabilities` job for that agent.
 - **API-12** — Given a playground conversation created with `POST /api/conversations`, then it appears in `GET /api/conversations` with `source: playground`, its segments appear in `GET /api/calls?conversation_id=` with `segment` and `routed_by`, and it never produces webhooks.
+- **API-15** — Given an open `check_failing` action, when `POST /api/actions/{id}/dismiss` is sent, then it is `dismissed` with `closed_by` and `closed_at`, a second dismiss returns 409 `invalid_state`, `GET /api/insights/actions` no longer lists it and `?status=all` does; `POST /api/actions/{id}/answer` on it returns 409; another tenant gets 404.
 - **API-14** — Given `POST /api/knowledge/sources` for the fixture site, then the response is 202 with `status: indexing` and exactly one `sync_knowledge_source` job is queued; `GET /api/knowledge/sources/{id}` shows `page_count` rising until `ready`; a second `POST …/sync` while the first runs answers 409 `sync_in_progress`; another tenant gets 404.
 - **API-13** — Given `PUT /api/tenant-settings/front-desk` with a default member agent that is internal, a pipeline the tenant does not allow, or `max_clarifications: 3`, then the response is 422 and nothing changes; `GET` on a tenant without settings returns the defaults.

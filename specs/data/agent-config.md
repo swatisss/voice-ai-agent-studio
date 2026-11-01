@@ -2,7 +2,7 @@
 type: Config Schema
 title: Agent configuration schemas
 description: JSON shapes of the agent draft config, persona, policy, tool and skill definitions, and the immutable version snapshot.
-status: stable
+status: draft
 tags: [data, config, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -125,7 +125,7 @@ A config without `evaluation` gets the defaults on save. The block is versioned 
 # Learning settings
 
 ```json
-"learning": { "nightly": true, "max_proposals_per_night": 3, "regression_repeats": 3, "snooze_days": 7 }
+"learning": { "nightly": true, "max_proposals_per_night": 3, "regression_repeats": 3, "case_repeats": 2, "snooze_days": 7 }
 ```
 
 | Field | Rules |
@@ -133,7 +133,8 @@ A config without `evaluation` gets the defaults on save. The block is versioned 
 | `learning.nightly` | boolean, default `true`: the nightly run reviews this agent's calls and may draft proposals ([/architecture/self-learning.md](/architecture/self-learning.md)) |
 | `learning.max_proposals_per_night` | integer 0–10, default 3 |
 | `learning.regression_repeats` | integer 1–5, default 3: repeats of each test scenario per arm in a proposal evaluation |
-| `learning.snooze_days` | integer 1–90, default 7: a rejected proposal's cluster is not drafted again for this long |
+| `learning.case_repeats` | integer 1–5, default 2: repeats of each cluster and held-out case per arm in a proposal evaluation (CP-0033) |
+| `learning.snooze_days` | integer 1–90, default 7: a rejected proposal's cluster is not drafted again for this long, and a learning action marked done or dismissed does not reopen for this long |
 
 A config without `learning` gets the defaults on save. Nothing in this block lets an agent change itself: proposals always wait for a human.
 

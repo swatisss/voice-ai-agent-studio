@@ -2,7 +2,7 @@
 type: Component Spec
 title: Evaluation
 description: Proving a fix before shipping it - simulated callers replay cluster cases and regression scenarios against baseline and candidate configs, graded by an LLM judge.
-status: stable
+status: draft
 tags: [architecture, evaluation, simulation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -23,7 +23,7 @@ An eval run is either a **proposal** run (`kind: proposal`, this page) or a **su
 * **baseline** — the agent's current published version config.
 * **candidate** — baseline config with the proposal payload applied in memory (draft doc included in `knowledge_doc_ids`, draft skill/tool added, or rule appended). Nothing is persisted to the agent.
 
-Every case runs on both arms. Regression scenarios run `learning.regression_repeats` times (default 3) on each arm, because a single stochastic run cannot show a regression; the other cases run once. Every simulated call gets a scorecard (judge on), as in [test suites](/architecture/test-suites.md).
+Every case runs on both arms. Regression scenarios run `learning.regression_repeats` times (default 3) on each arm, because a single stochastic run cannot show a regression; cluster and held-out cases run `learning.case_repeats` times (default 2), so lift is measured as a pass rate (CP-0033); derived cases run once. Every simulated call gets a scorecard (judge on), as in [test suites](/architecture/test-suites.md).
 
 ## Simulation
 
@@ -55,10 +55,10 @@ A case **passes** when (for regression scenarios, the test-suite rule of [/archi
   "held_out_candidate_pass": 2, "derived_kept": 2, "regression_cases": 8, "regression_repeats": 3,
   "regression": {"<scenario id>": {"name": "Claim paid", "baseline": 3, "candidate": 3}}, "regression_pass": 8,
   "hard_fails": {"baseline": 0, "candidate": 0}, "p95_ms": {"baseline": 1180, "candidate": 1210},
-  "lift_pct": 83, "gate": {"passed": true, "reasons": []}, "duration_s": 212 }
+  "case_repeats": 2, "lift_pct": 83, "gate": {"passed": true, "reasons": [], "warnings": []}, "duration_s": 212 }
 ```
 
-`regression_pass` counts scenarios that did not regress; the gate rules are in [/architecture/self-learning.md](/architecture/self-learning.md).
+`baseline_pass`, `candidate_pass` and the held-out counts are passing **runs** (cases × `case_repeats`); `regression_pass` counts scenarios that did not regress; the gate rules are in [/architecture/self-learning.md](/architecture/self-learning.md).
 
 Progress events `eval.progress` (`{done, total, last: {case, arm, passed}}`) stream on topic `insights`. On completion proposal → `ready`; on failure → back to `draft` with the error.
 

@@ -138,7 +138,8 @@ class AgentSession:
         self._turn_lines: list[str] | None = None  # the assistant lines recorded during reply() (RT-17)
         self.tools = ToolExecutor(
             self.tenant_id, self.call_id, config.get("tools", []), self.state, app,
-            knowledge_doc_ids=list(config.get("knowledge_doc_ids", [])), escalate=lambda category, detail: self.escalate(category, detail),
+            knowledge_doc_ids=list(config.get("knowledge_doc_ids", [])),
+            knowledge_source_ids=list(config.get("knowledge_source_ids") or []), escalate=lambda category, detail: self.escalate(category, detail),
             handoff_message=(config.get("policy") or {}).get("handoff_message", ""),
         )
         self._lock = asyncio.Lock()

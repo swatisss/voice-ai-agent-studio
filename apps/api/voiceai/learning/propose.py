@@ -69,8 +69,10 @@ DERIVED_SCENARIOS = 2
 
 
 async def _attached_articles(s: AsyncSession, tenant_id: str, cfg: dict[str, Any], cluster: Cluster, evidence: list[dict[str, Any]]) -> list[KnowledgeDoc]:
-    """Up to 3 attached articles closest to the cluster's gap (the candidates for a knowledge_edit)."""
-    doc_ids = list(cfg.get("knowledge_doc_ids", []))
+    """Up to 3 attached articles closest to the cluster's gap, website pages included (context; never edited, SL-14)."""
+    from voiceai.knowledge.sources import page_ids
+
+    doc_ids = [*cfg.get("knowledge_doc_ids", []), *await page_ids(s, tenant_id, list(cfg.get("knowledge_source_ids") or []))]
     if not doc_ids:
         return []
     found: list[str] = []
@@ -123,8 +125,8 @@ async def draft(s: AsyncSession, tenant_id: str, cluster: Cluster, origin: str =
     )
     out, _ = await gateway().complete_json("drafting", [{"role": "user", "content": prompt}], FixDraft)
     kind = out.kind
-    if kind == "knowledge_edit" and out.doc_id not in {d.id for d in attached}:
-        kind = "knowledge_article"  # an edit must target an article the drafter was shown
+    if kind == "knowledge_edit" and out.doc_id not in {d.id for d in attached if not d.source_id}:
+        kind = "knowledge_article"  # an edit must target an article the drafter was shown, never a website page (SL-14)
     tool = next((t for t in unattached if t.name == out.tool_name), None) if kind == "tool_attach" else None
     if kind == "tool_attach" and tool is None:
         raise ValueError(f"tool_attach names no unattached tool of the tenant: {out.tool_name!r}")

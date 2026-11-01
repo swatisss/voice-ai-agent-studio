@@ -2,7 +2,7 @@
 type: Config Schema
 title: Agent configuration schemas
 description: JSON shapes of the agent draft config, persona, policy, tool and skill definitions, and the immutable version snapshot.
-status: draft
+status: stable
 tags: [data, config, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

@@ -116,3 +116,12 @@ UI-62
 # tests/test_supervisor_routing.py and tests/test_capability_catalog.py. Approved by the reviewer (swati.verma) on 2026-11-01.
 UI-63
 UI-64
+# CP-0030 / CP-0031 builder (agent-builder.md): no browser harness. Clicked through on 2026-11-01 against a check server
+# (copy of the local database, new code on :8001). UI-65: the Overview warning appears for an attached tool that requires
+# verification with no verification tool attached, and disappears without a reload when one is ticked; Save draft stays
+# enabled. UI-66: From URL with "This site section" closes at once, the source row shows Indexing… then Ready · 4 pages and
+# is ticked, Test search shows the page link for a second-page fact, the expanded source lists its pages, and Sync now
+# updates "synced … ago". The API behind them is covered by tests/test_tools.py, tests/test_caller_verification.py and
+# tests/test_knowledge_sources.py. Approval requested from the reviewer with CP-0031.
+UI-65
+UI-66

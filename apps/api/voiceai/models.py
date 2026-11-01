@@ -131,6 +131,29 @@ class Skill(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
+class KnowledgeSource(Base):
+    """A website that turns into page docs and stays in sync (/architecture/knowledge.md, Website sources; CP-0031)."""
+
+    __tablename__ = "knowledge_sources"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    kind: Mapped[str] = mapped_column(String(16), default="website")
+    title: Mapped[str] = mapped_column(String(300), default="")
+    start_url: Mapped[str] = mapped_column(String(500))
+    scope: Mapped[str] = mapped_column(String(16), default="section")  # page | section
+    max_pages: Mapped[int] = mapped_column(Integer, default=25)
+    refresh: Mapped[str] = mapped_column(String(16), default="daily")  # off | daily | weekly
+    status: Mapped[str] = mapped_column(String(16), default="indexing")  # indexing | ready | partial | failed | archived
+    page_count: Mapped[int] = mapped_column(Integer, default=0)
+    found_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    next_sync_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    last_run: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
 class KnowledgeDoc(Base):
     __tablename__ = "knowledge_docs"
     id: Mapped[str] = _id()
@@ -142,6 +165,9 @@ class KnowledgeDoc(Base):
     meta: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(16), default="active")
     created_at: Mapped[datetime] = _created()
+    source_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("knowledge_sources.id"), nullable=True, index=True)  # DM-12
+    miss_count: Mapped[int] = mapped_column(Integer, default=0)  # consecutive syncs that found the page gone (KN-14)
+    updated_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow, nullable=True)
 
 
 class KnowledgeChunk(Base):
@@ -153,6 +179,7 @@ class KnowledgeChunk(Base):
     heading: Mapped[str] = mapped_column(String(500), default="")
     content: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float]] = mapped_column(JSON)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # SHA-256 of the doc content it was cut from (DM-12)
 
 
 class Call(Base):

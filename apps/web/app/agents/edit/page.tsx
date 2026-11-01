@@ -13,6 +13,7 @@ import { DEFAULT_TURN, VOICES, voiceLabel } from "@/lib/voices";
 import { TurnDetectionEditor } from "@/components/voice-settings";
 import { GROUPS, SOURCE } from "@/components/scorecard";
 import { UseCasesTab } from "@/components/use-cases";
+import { WebsiteSources } from "@/components/website-sources";
 
 type Tab = "overview" | "usecases" | "persona" | "policy" | "voice" | "memory" | "knowledge" | "tools" | "skills" | "evaluation" | "versions";
 
@@ -127,7 +128,7 @@ function Builder() {
       )}
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[
         { id: "overview", label: "Overview" }, { id: "usecases", label: "Use cases" }, { id: "persona", label: "Persona" }, { id: "policy", label: "Policy" }, { id: "voice", label: "Voice" }, { id: "memory", label: "Memory" },
-        { id: "knowledge", label: `Knowledge (${draft.knowledge_doc_ids.length})` }, { id: "tools", label: `Tools (${draft.tool_ids.length})` },
+        { id: "knowledge", label: `Knowledge (${draft.knowledge_doc_ids.length + (draft.knowledge_source_ids?.length ?? 0)})` }, { id: "tools", label: `Tools (${draft.tool_ids.length})` },
         { id: "skills", label: `Skills (${draft.skill_ids.length})` }, { id: "evaluation", label: "Evaluation" }, { id: "versions", label: "Versions" },
       ]} />
       {tab === "overview" && <Overview draft={draft} meta={meta} setMeta={setMeta} update={update} />}
@@ -498,8 +499,9 @@ function KnowledgeTab({ draft, update }: TabProps) {
   const { tenant } = useTenant();
   const toast = useToast();
   const { data, reload } = useApi<{ items: any[] }>("/api/knowledge", [tenant]);
-  const [mode, setMode] = useState<"text" | "url" | null>(null);
-  const [form, setForm] = useState({ title: "", content: "", url: "" });
+  const [mode, setMode] = useState<"text" | null>(null);
+  const [addingUrl, setAddingUrl] = useState(false);
+  const [form, setForm] = useState({ title: "", content: "" });
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<any>(null);
   const [query, setQuery] = useState("");
@@ -508,12 +510,10 @@ function KnowledgeTab({ draft, update }: TabProps) {
   async function add() {
     setBusy(true);
     try {
-      const doc = mode === "url"
-        ? await api("/api/knowledge/url", { method: "POST", json: { url: form.url } })
-        : await api("/api/knowledge/text", { method: "POST", json: { title: form.title, content: form.content } });
+      const doc = await api("/api/knowledge/text", { method: "POST", json: { title: form.title, content: form.content } });
       update(["knowledge_doc_ids"], [...draft.knowledge_doc_ids, doc.id]);
       setMode(null);
-      setForm({ title: "", content: "", url: "" });
+      setForm({ title: "", content: "" });
       reload();
     } catch (e) { toast((e as ApiError).detail, "bad"); } finally { setBusy(false); }
   }
@@ -531,7 +531,7 @@ function KnowledgeTab({ draft, update }: TabProps) {
   }
 
   async function test() {
-    setResult(await api("/api/knowledge/search", { method: "POST", json: { query, doc_ids: draft.knowledge_doc_ids } }));
+    setResult(await api("/api/knowledge/search", { method: "POST", json: { query, doc_ids: draft.knowledge_doc_ids, source_ids: draft.knowledge_source_ids ?? [] } }));
   }
 
   return (
@@ -541,11 +541,12 @@ function KnowledgeTab({ draft, update }: TabProps) {
         <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-1.5 text-sm font-medium hover:bg-neutral-soft">
           <Upload size={14} />Upload<input type="file" hidden accept=".md,.txt,.pdf,.zip" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
         </label>
-        <Button onClick={() => setMode("url")}>From URL</Button>
+        <Button onClick={() => setAddingUrl(true)}>From URL</Button>
       </>}>
         {busy && <Spinner label="Processing…" />}
+        <WebsiteSources draft={draft} update={update} adding={addingUrl} onAdded={() => setAddingUrl(false)} onClose={() => setAddingUrl(false)} />
         <ul className="divide-y divide-line">
-          {data?.items.map((d) => (
+          {data?.items.filter((d) => !d.source_id).map((d) => (
             <li key={d.id} className="flex items-center gap-3 py-2 text-sm">
               <input type="checkbox" checked={draft.knowledge_doc_ids.includes(d.id)} onChange={() => update(["knowledge_doc_ids"], toggle(draft.knowledge_doc_ids, d.id))} />
               <span className="flex-1">{d.title}</span>
@@ -562,15 +563,14 @@ function KnowledgeTab({ draft, update }: TabProps) {
         {result && (result.no_answer
           ? <div className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">No answer — the agent would offer a specialist</div>
           : <ul className="mt-3 space-y-2">{result.results.map((r: any, i: number) => (
-              <li key={i} className="rounded-lg border border-line p-2 text-xs"><div className="font-medium">{r.title} › {r.heading} <span className="text-muted">({r.score})</span></div><div className="mt-1 line-clamp-3 text-muted">{r.content}</div></li>
+              <li key={i} className="rounded-lg border border-line p-2 text-xs"><div className="font-medium">{r.title} › {r.heading} <span className="text-muted">({r.score})</span></div>
+                {r.url && <a className="text-accent underline" href={r.url} target="_blank" rel="noreferrer">{r.url}</a>}<div className="mt-1 line-clamp-3 text-muted">{r.content}</div></li>
             ))}</ul>)}
       </Card>
-      <Modal open={!!mode} title={mode === "url" ? "Add from URL" : "Paste text"} onClose={() => setMode(null)}
+      <Modal open={!!mode} title="Paste text" onClose={() => setMode(null)}
         footer={<><Button onClick={() => setMode(null)}>Cancel</Button><Button variant="primary" loading={busy} onClick={add}>Add</Button></>}>
-        {mode === "url" ? <Field label="URL"><Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://…" /></Field> : <>
-          <Field label="Title"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-          <Field label="Content (Markdown)"><Textarea className="min-h-48" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></Field>
-        </>}
+        <Field label="Title"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+        <Field label="Content (Markdown)"><Textarea className="min-h-48" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></Field>
       </Modal>
       <Modal open={!!preview} title={preview?.title ?? ""} onClose={() => setPreview(null)}>
         <div className="max-h-[60vh] space-y-2 overflow-auto">

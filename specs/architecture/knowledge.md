@@ -2,7 +2,7 @@
 type: Component Spec
 title: Knowledge
 description: Knowledge ingestion from text, files, URLs and OKF bundles; heading-aware chunking; local embeddings; cosine search with a no-answer threshold.
-status: draft
+status: stable
 tags: [architecture, knowledge, rag, okf]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -31,7 +31,7 @@ A **knowledge source** of kind `website` turns one URL into a set of page docs t
 
 ## Safe fetching
 
-Every fetch (single-page imports and sources) goes through one fetcher: scheme `http` or `https` only; user agent `VoiceAgentStudio/1.0 (+knowledge indexer)`; timeout 10 s; at most 2 MB; content types `text/html` and `text/plain`; at most 5 redirects. Before each request and each redirect hop the host is resolved and the request is refused with `blocked_address` when any resolved address is loopback, private, link-local, multicast, reserved, unspecified or the cloud metadata address `169.254.169.254`. The setting `KNOWLEDGE_ALLOW_PRIVATE_URLS` (default `false`) lifts the address rule for local development and the demo; `.env.example` sets it to `true` with a "local development only" comment and the deploy script never sets it. A single-page import that fails answers 422 (`invalid_url`, `blocked_address`, `fetch_failed`, `unsupported_content`); a source records skipped pages with the reason and continues.
+Every fetch (single-page imports and sources) goes through one fetcher: scheme `http` or `https` only; user agent `VoiceAgentStudio/1.0 (+knowledge indexer)`; timeout 10 s; at most 2 MB; content types `text/html` and `text/plain` (sitemaps also `application/xml` and `text/xml`); at most 5 redirects. Before each request and each redirect hop the host is resolved and the request is refused with `blocked_address` when any resolved address is loopback, private, link-local, multicast, reserved, unspecified or the cloud metadata address `169.254.169.254`. The setting `KNOWLEDGE_ALLOW_PRIVATE_URLS` (default `false`) lifts the address rule for local development and the demo; `.env.example` sets it to `true` with a "local development only" comment and the deploy script never sets it. A single-page import that fails answers 422 (`invalid_url`, `blocked_address`, `fetch_failed`, `unsupported_content`); a source records skipped pages with the reason and continues.
 
 ## HTML to Markdown
 
@@ -44,7 +44,7 @@ Indexing and every re-sync run as the job `sync_knowledge_source` ([/architectur
 * unchanged → nothing changes; changed → the doc's content is replaced and re-chunked (new chunk ids, new hash); new in scope and under the limit → a new doc;
 * a page answering 404 or 410 on two consecutive syncs → its doc is archived; other errors keep the last good copy and are listed in `last_run`.
 
-`refresh: daily` or `weekly` sets `next_sync_at` 24 h or 7 days after the last sync; the scheduler queues due sources once a minute. **Sync now** queues a sync at once (409 `sync_in_progress` while one runs). Because agent versions hold `knowledge_source_ids` rather than page copies, a published agent answers from the latest synced pages without a new version; retrieval events keep chunk ids and each chunk its `content_hash`, so an old answer stays traceable. Deleting a source archives its pages and removes it from every draft config.
+`refresh: daily` or `weekly` sets `next_sync_at` 24 h or 7 days after the last sync; the scheduler queues due sources once a minute. **Sync now** queues a sync at once (409 `sync_in_progress` while one runs). Because agent versions hold `knowledge_source_ids` rather than page copies, a published agent answers from the latest synced pages without a new version; pages indexed earlier but no longer discovered are fetched again, so a removed page is noticed; retrieval events keep chunk ids and each chunk its `content_hash`, so an old answer stays traceable. Deleting a source archives its pages and removes it from every draft config.
 
 # Chunking
 

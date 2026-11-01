@@ -18,7 +18,7 @@ async def test_all_tables_exist(database):
     """Covers: DM-01"""
     async with engine().connect() as conn:
         names = await conn.run_sync(lambda c: inspect(c).get_table_names())
-    assert len(names) == 35 and {"capability_profiles", "capability_entries", "routing_cases", "api_keys", "conversations", "webhook_endpoints", "webhook_deliveries", "call_feedback", "phone_numbers", "tenant_settings", "tenant_credentials", "member_memories", "memory_events",
+    assert len(names) == 36 and {"knowledge_sources", "capability_profiles", "capability_entries", "routing_cases", "api_keys", "conversations", "webhook_endpoints", "webhook_deliveries", "call_feedback", "phone_numbers", "tenant_settings", "tenant_credentials", "member_memories", "memory_events",
                                     "call_scorecards", "check_reviews", "learning_runs"} <= set(names)
 
 

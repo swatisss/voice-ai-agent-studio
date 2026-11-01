@@ -14,7 +14,7 @@ from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.llm.gateway import gateway
 from voiceai.call_settings import persona_dict
-from voiceai.models import Agent, AgentVersion, KnowledgeDoc, Persona, Skill, Tool
+from voiceai.models import Agent, AgentVersion, KnowledgeDoc, KnowledgeSource, Persona, Skill, Tool
 from voiceai.schemas import AgentConfig
 
 
@@ -64,10 +64,14 @@ async def build_snapshot(s: AsyncSession, tenant_id: str, draft: dict[str, Any])
     docs = list((await s.scalars(select(KnowledgeDoc.id).where(
         KnowledgeDoc.tenant_id == tenant_id, KnowledgeDoc.id.in_(cfg["knowledge_doc_ids"]), KnowledgeDoc.status != "archived",
     ))).all())
+    sources = list((await s.scalars(select(KnowledgeSource.id).where(
+        KnowledgeSource.tenant_id == tenant_id, KnowledgeSource.id.in_(cfg["knowledge_source_ids"]), KnowledgeSource.status != "archived",
+    ))).all())
     missing = (
         set(cfg["tool_ids"]) - {t.id for t in tools}
         | set(cfg["skill_ids"]) - {k.id for k in skills}
         | set(cfg["knowledge_doc_ids"]) - set(docs)
+        | set(cfg["knowledge_source_ids"]) - set(sources)
     )
     if missing:
         raise ApiError(422, "invalid_reference", f"Config references unknown or archived objects: {', '.join(sorted(missing))}")

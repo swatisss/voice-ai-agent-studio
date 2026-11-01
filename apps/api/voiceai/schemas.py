@@ -265,6 +265,7 @@ class AgentConfig(BaseModel):
     tool_ids: list[str] = Field(default_factory=list)
     skill_ids: list[str] = Field(default_factory=list)
     knowledge_doc_ids: list[str] = Field(default_factory=list)
+    knowledge_source_ids: list[str] = Field(default_factory=list)  # website sources, resolved to pages at search time (CP-0031)
     models: ModelChoice = Field(default_factory=ModelChoice)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     verification: VerificationConfig = Field(default_factory=VerificationConfig)

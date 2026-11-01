@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     embeddings_provider: str = "fastembed"  # fastembed | hash
     fastembed_cache: Path = API_DIR / ".cache" / "fastembed"
     kn_min_score: float | None = None  # default depends on embedder
+    knowledge_allow_private_urls: bool = False  # local development and the demo only (/architecture/knowledge.md, Safe fetching)
     fl_cluster_threshold: float | None = None  # default depends on embedder
     fl_min_cluster_size: int = 5
 

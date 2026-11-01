@@ -2,7 +2,7 @@
 type: Product Brief
 title: Roadmap
 description: Candidate features after v1, ranked P0-P2, from the 2026-11-01 end-user review and a competitor survey; each becomes a change proposal before it is built.
-status: draft
+status: stable
 tags: [product, roadmap]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---
@@ -16,12 +16,12 @@ These are **candidates**, not commitments. Nothing here changes behavior. Each i
 
 Priorities: **P0** blocks real customers or safety; **P1** clear value for the next release; **P2** differentiators.
 
-# Already proposed
+# Proposed and built
 
 | Item | Status |
 |---|---|
-| Full knowledge chunks, sound "never" checks, verification only where the agent can verify | [CP-0030](/changes/cp-0030-knowledge-judge-verification-fixes.md) |
-| Website knowledge sources: crawl a site from one URL, keep it in sync, answer with page citations | [CP-0031](/changes/cp-0031-website-knowledge-sources.md) |
+| Full knowledge chunks, sound "never" checks, verification only where the agent can verify | [CP-0030](/changes/cp-0030-knowledge-judge-verification-fixes.md), implemented |
+| Website knowledge sources: crawl a site from one URL, keep it in sync, answer with page citations | [CP-0031](/changes/cp-0031-website-knowledge-sources.md), implemented |
 
 # From the end-user review
 

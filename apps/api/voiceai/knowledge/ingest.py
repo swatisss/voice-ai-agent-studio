@@ -4,18 +4,17 @@ Spec: /architecture/knowledge.md
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import re
-from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
-import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.errors import ApiError
-from voiceai.knowledge import okf
+from voiceai.knowledge import fetch, html, okf
 from voiceai.knowledge.chunking import chunk_markdown
 from voiceai.knowledge.embeddings import embed
 from voiceai.knowledge.search import invalidate
@@ -33,12 +32,13 @@ async def create_doc(
     source_ref: str = "",
     meta: dict[str, Any] | None = None,
     status: str = "active",
+    source_id: str | None = None,
 ) -> KnowledgeDoc:
     if not content.strip():
         raise ApiError(422, "empty_document", "Document has no text content")
     doc = KnowledgeDoc(
         tenant_id=tenant_id, title=title.strip()[:300] or "Untitled", content=content,
-        source_type=source_type, source_ref=source_ref[:500], meta=meta or {}, status=status,
+        source_type=source_type, source_ref=source_ref[:500], meta=meta or {}, status=status, source_id=source_id,
     )
     session.add(doc)
     await session.flush()
@@ -46,15 +46,20 @@ async def create_doc(
     return doc
 
 
+def content_hash(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 async def rechunk(session: AsyncSession, doc: KnowledgeDoc) -> int:
     await session.execute(delete(KnowledgeChunk).where(KnowledgeChunk.doc_id == doc.id))
     chunks = chunk_markdown(doc.content)
+    digest = content_hash(doc.content)
     texts = [f"{doc.title} — {c.heading}\n{c.content}" if c.heading else f"{doc.title}\n{c.content}" for c in chunks]
     vectors = await embed(texts, "passage") if texts else []
     for i, (c, v) in enumerate(zip(chunks, vectors)):
         session.add(KnowledgeChunk(
             tenant_id=doc.tenant_id, doc_id=doc.id, ordinal=i, heading=c.heading, content=c.content,
-            embedding=[round(float(x), 6) for x in v],
+            embedding=[round(float(x), 6) for x in v], content_hash=digest,
         ))
     invalidate()
     from voiceai.routing import catalog
@@ -82,50 +87,14 @@ def text_from_file(filename: str, data: bytes) -> tuple[str, str]:
     raise ApiError(422, "unsupported_file", "Upload .md, .txt, .pdf or a .zip OKF bundle")
 
 
-class _TextExtractor(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.parts: list[str] = []
-        self.title = ""
-        self._skip = 0
-        self._in_title = False
-
-    def handle_starttag(self, tag: str, attrs) -> None:  # noqa: ANN001
-        if tag in ("script", "style", "noscript", "nav", "footer"):
-            self._skip += 1
-        if tag == "title":
-            self._in_title = True
-        if tag in ("p", "br", "li", "h1", "h2", "h3", "h4", "tr", "div", "section"):
-            self.parts.append("\n")
-        if tag in ("h1", "h2", "h3"):
-            self.parts.append("#" * int(tag[1]) + " ")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in ("script", "style", "noscript", "nav", "footer") and self._skip:
-            self._skip -= 1
-        if tag == "title":
-            self._in_title = False
-
-    def handle_data(self, data: str) -> None:
-        if self._in_title:
-            self.title += data
-        elif not self._skip:
-            self.parts.append(data)
-
-
 async def text_from_url(url: str) -> tuple[str, str]:
-    if not re.match(r"^https?://", url):
-        raise ApiError(422, "invalid_url", "URL must start with http:// or https://")
+    """One page through the safe fetcher, as Markdown (/architecture/knowledge.md, Sources `url`)."""
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "VoiceAgentStudio/0.1"})
-            resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise ApiError(422, "fetch_failed", f"Could not fetch URL: {exc}") from exc
-    parser = _TextExtractor()
-    parser.feed(resp.text)
-    text = re.sub(r"\n\s*\n+", "\n\n", "".join(parser.parts)).strip()
-    return (parser.title.strip() or url), text
+        page = await fetch.fetch(url)
+    except fetch.FetchError as exc:
+        raise ApiError(422, exc.code if exc.code != "too_large" else "unsupported_content", exc.detail) from exc
+    converted = html.to_markdown(page.text, page.url) if "html" in page.content_type else html.Page(url, page.text.strip())
+    return converted.title, converted.markdown
 
 
 async def import_okf(session: AsyncSession, tenant_id: str, concepts: list[okf.OkfConcept], source_ref: str) -> list[KnowledgeDoc]:

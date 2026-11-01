@@ -14,6 +14,7 @@ import httpx
 
 from voiceai.db import sessionmaker
 from voiceai.knowledge.search import search as kb_search
+from voiceai.knowledge.sources import page_ids
 from voiceai.runtime.state import CallState
 from voiceai.schemas import ESCALATION_CATEGORIES
 
@@ -142,7 +143,8 @@ class ToolExecutor:
 
     def __init__(
         self, tenant_id: str, call_id: str, tools: list[dict[str, Any]], state: CallState, app: Any | None = None,  # noqa: ANN401
-        *, knowledge_doc_ids: list[str] | None = None, escalate: Escalate | None = None, handoff_message: str = "",
+        *, knowledge_doc_ids: list[str] | None = None, knowledge_source_ids: list[str] | None = None,
+        escalate: Escalate | None = None, handoff_message: str = "",
     ) -> None:
         self.tenant_id = tenant_id
         self.call_id = call_id
@@ -150,6 +152,7 @@ class ToolExecutor:
         self.state = state
         self.app = app
         self.knowledge_doc_ids = list(knowledge_doc_ids or [])
+        self.knowledge_source_ids = list(knowledge_source_ids or [])  # resolved to their pages on every search (KN-15)
         self.escalate = escalate
         self.handoff_message = handoff_message
 
@@ -184,7 +187,8 @@ class ToolExecutor:
 
     async def _search_knowledge(self, query: str) -> dict[str, Any]:
         async with sessionmaker()() as s:
-            result = await kb_search(s, self.tenant_id, self.knowledge_doc_ids, query)
+            pages = await page_ids(s, self.tenant_id, self.knowledge_source_ids)
+            result = await kb_search(s, self.tenant_id, [*self.knowledge_doc_ids, *pages], query)
         if result.get("no_answer"):
             self.state.no_answer_streak += 1
             self.state.no_answer_queries.append(query)

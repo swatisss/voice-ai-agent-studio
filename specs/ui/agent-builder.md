@@ -2,7 +2,7 @@
 type: UI Spec
 title: Agent builder
 description: Agents list and the builder tabs - overview, persona, policy, knowledge, tools, skills, versions - with save, publish and test actions.
-status: draft
+status: stable
 tags: [ui, builder]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

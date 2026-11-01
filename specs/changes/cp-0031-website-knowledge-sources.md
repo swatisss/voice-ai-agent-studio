@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0031 Website knowledge sources
 description: A builder gives one URL; the platform indexes that page or the whole site section (sitemap or links, robots.txt respected), keeps headings, cites the page, re-syncs on a schedule so the agent answers from the live site, and refuses internal addresses.
-status: draft
-cp_state: proposed
+status: stable
+cp_state: implemented
 tags: [knowledge, rag, ui, api, security]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

@@ -177,17 +177,23 @@ class Worker:
         await webhooks.purge_old()  # /architecture/webhooks.md: deliveries older than 30 days
 
     async def _sweep(self) -> None:
-        """At most once a minute while idle: end voice conversations whose client never connected (/api/public-api.md)."""
+        """At most once a minute while idle: end voice conversations whose client never connected (/api/public-api.md)
+        and queue the website sources whose sync is due."""
         now = asyncio.get_running_loop().time()
         if now < self._next_sweep:
             return
         self._next_sweep = now + 60
         from voiceai import conversations
+        from voiceai.knowledge import sources
 
         try:
             await conversations.expire_unconnected()
         except Exception:  # noqa: BLE001 - housekeeping must never stop the worker
             log.exception("conversation sweep failed")
+        try:
+            await sources.schedule_due()  # daily and weekly website sources (/architecture/knowledge.md, Sync)
+        except Exception:  # noqa: BLE001
+            log.exception("knowledge source schedule failed")
 
     async def _nightly_learning(self) -> None:
         """At most once a minute while idle: start each tenant's nightly self-learning run once its hour has passed

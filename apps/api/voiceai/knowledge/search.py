@@ -30,7 +30,7 @@ async def _matrix(session: AsyncSession, tenant_id: str, doc_ids: list[str]) -> 
         return _cache[key]
     rows = (
         await session.execute(
-            select(KnowledgeChunk, KnowledgeDoc.title)
+            select(KnowledgeChunk, KnowledgeDoc.title, KnowledgeDoc.source_type, KnowledgeDoc.source_ref)
             .join(KnowledgeDoc, KnowledgeDoc.id == KnowledgeChunk.doc_id)
             .where(
                 KnowledgeChunk.tenant_id == tenant_id,
@@ -39,8 +39,9 @@ async def _matrix(session: AsyncSession, tenant_id: str, doc_ids: list[str]) -> 
             )
         )
     ).all()
-    meta = [{"chunk_id": c.id, "doc_id": c.doc_id, "title": t, "heading": c.heading, "content": c.content} for c, t in rows]
-    mat = np.array([c.embedding for c, _ in rows], dtype=np.float32) if rows else np.zeros((0, 1), dtype=np.float32)
+    meta = [{"chunk_id": c.id, "doc_id": c.doc_id, "title": t, "heading": c.heading, "content": c.content,
+             **({"url": ref} if kind == "url" and ref else {})} for c, t, kind, ref in rows]  # KN-15: web pages carry their URL
+    mat = np.array([row[0].embedding for row in rows], dtype=np.float32) if rows else np.zeros((0, 1), dtype=np.float32)
     _cache[key] = (mat, meta)
     return mat, meta
 

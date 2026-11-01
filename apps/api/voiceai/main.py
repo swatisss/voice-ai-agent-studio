@@ -23,6 +23,7 @@ import voiceai.learning.nightly  # noqa: F401
 import voiceai.learning.propose  # noqa: F401
 import voiceai.learning.scoring  # noqa: F401
 import voiceai.learning.test_suites  # noqa: F401
+import voiceai.knowledge.sources  # noqa: F401  (sync_knowledge_source)
 import voiceai.memory  # noqa: F401  (memory jobs)
 import voiceai.webhooks  # noqa: F401  (webhook deliveries)
 import voiceai.routing.catalog  # noqa: F401  (index_capabilities)

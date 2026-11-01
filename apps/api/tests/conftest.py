@@ -38,6 +38,7 @@ os.environ.update({
     "DECISION_MODEL_NAME": "",
     "DECISION_MODEL_HOSTED": "",
     "PHI_MODE": "",
+    "KNOWLEDGE_ALLOW_PRIVATE_URLS": "0",  # the address rule is on in tests; tests that need the fixture site turn it off
     "WEB_DIST_DIR": str(_TMP / "no-web"),
 })
 

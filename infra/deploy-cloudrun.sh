@@ -28,6 +28,7 @@ EOF
 gcloud builds submit --project "${PROJECT_ID}" --region "${REGION}" --config "${BUILD_CFG}" .
 
 ENV_VARS="AUTO_SEED=1,JOBS_ENABLED=1,CORS_ORIGINS="
+# KNOWLEDGE_ALLOW_PRIVATE_URLS is deliberately never set here: hosted knowledge fetches refuse internal addresses.
 if [[ -n "${PUBLIC_BASE_URL:-}" ]]; then
   ENV_VARS+=",PUBLIC_BASE_URL=${PUBLIC_BASE_URL%/}"
 fi

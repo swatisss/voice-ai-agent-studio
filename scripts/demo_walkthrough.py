@@ -327,7 +327,11 @@ class Walkthrough:
             src = self.api.post("/api/knowledge/sources", {"start_url": start, "scope": "section", "max_pages": 25, "refresh": "daily",
                                                            "title": "SafeTrip help centre"})
         else:
-            self.api.post(f"/api/knowledge/sources/{src['id']}/sync")
+            try:
+                self.api.post(f"/api/knowledge/sources/{src['id']}/sync")
+            except ApiError as exc:
+                if exc.status != 409:  # 409: a sync is already running; wait for it below
+                    raise
         done = wait_for("the website source", lambda: self.api.get(f"/api/knowledge/sources/{src['id']}"),
                         lambda s: s["status"] in ("ready", "partial", "failed"), timeout=180)
         pages = [p for p in done.get("pages", []) if p.get("status") != "archived"]

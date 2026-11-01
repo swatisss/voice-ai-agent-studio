@@ -24,7 +24,7 @@ The [hackathon demo script](/product/demo-script.md) starts from seeded agents. 
 # Setup
 
 1. Stack running: `python scripts/dev.py` (web on :3000, API on :8000), with LLM keys in `apps/api/.env` ([/build/runbook-local.md](/build/runbook-local.md)).
-2. Demo website: in a second terminal, `python scripts/demo_walkthrough.py --serve-site`. It serves the SafeTrip help centre on `http://127.0.0.1:8765/help/` (pages *Gadget cover*, *Rental car excess cover*, *Medical help abroad*, plus `sitemap.xml` and a `robots.txt` that hides `/help/private/`).
+2. Demo website: in a second terminal, `python scripts/demo_walkthrough.py --serve-site`. The platform refuses local addresses unless `KNOWLEDGE_ALLOW_PRIVATE_URLS=true` is in `apps/api/.env` (`.env.example` has it; never on a hosted deployment). It serves the SafeTrip help centre on `http://127.0.0.1:8765/help/` (pages *Gadget cover*, *Rental car excess cover*, *Medical help abroad*, plus `sitemap.xml` and a `robots.txt` that hides `/help/private/`).
 3. Open the app, switch **Business unit** (bottom left) to **New Business Unit (sandbox)**.
 4. Have `scripts/demo/safetrip-policy.md` open for copying.
 5. If an automated run already created **Travel Cover Helpdesk**, either open it and present Act 1 as a tour, or create **Travel Cover Helpdesk 2**. The tool `get_claim_documents` and the skill *Help a traveller start a claim* are then already in the business unit: tick them instead of creating them (tool names are unique per business unit).
@@ -35,9 +35,9 @@ The [hackathon demo script](/product/demo-script.md) starts from seeded agents. 
 |---|---|---|
 | **Agents → New agent**. Name `Travel Cover Helpdesk`; description *Answers travellers' questions about what their travel insurance covers, how to make a claim while abroad, and trip cancellation rules.* → **Create** | The builder opens on **Overview**, *Not published* | "Name and one sentence. The description also routes callers to this agent." |
 | **Knowledge → Paste text**. Title `SafeTrip travel policy - key benefits`, content from `safetrip-policy.md` → **Add** | A row *SafeTrip travel policy - key benefits*, `text`, ticked | "Ticked means this agent may use it." |
-| **From URL** → `http://127.0.0.1:8765/help/gadgets.html` | A row *Gadget cover*, `url`, 3 chunks, split by its headings | "Any page of their website." With [CP-0031](/changes/cp-0031-website-knowledge-sources.md): give `http://127.0.0.1:8765/help/` with *This site section* and the whole help centre is indexed and kept in sync. |
+| **From URL** → `http://127.0.0.1:8765/help/`, *This site section*, up to 25 pages, keep in sync *Daily* → **Add** | The dialog closes; a source row shows *Indexing…* and then *Ready · 4 pages*, ticked for the agent; expand it to see *Gadget cover*, *Rental car excess cover*, *Medical help abroad* and the help home (the robots.txt-protected `/help/private/` is never fetched) | "One address and the whole help centre is in. It re-syncs every day, so when the website changes the agent changes too, with no republish." ([CP-0031](/changes/cp-0031-website-knowledge-sources.md)) |
 | **Test search**: `lost baggage limit` | The policy, score about 0.72 | "We can check retrieval before any call." |
-| **Test search**: `how much do you pay for a stolen phone` | *Gadget cover*, its *What is covered* section | |
+| **Test search**: `how much do you pay for a stolen phone` | *Gadget cover › What is covered* with its page link | "Every answer can be traced to a page." |
 | **Policy**: Rules + `Always mention the $100 excess whenever you talk about a medical claim.`; Never + `Never promise that a claim will be approved or paid.`; Escalate when + `The caller or someone travelling with them is in hospital abroad right now.` | Three rows | "Plain-English guardrails. Each one becomes a check on every call." |
 | **Tools → New tool**: name `get_claim_documents`, GET, URL `/mock/insurance/claims/requirements`, parameters `{"type":"object","properties":{"claim_type":{"type":"string","enum":["outpatient","urgent_care","inpatient","dental"]}},"required":["claim_type"]}`; both verification boxes off → **Save** | Row ticked | "Tools are set up by the platform team today; customers connect their own systems later ([roadmap](/product/roadmap.md), north star)." |
 | **Skills → New skill**: name `Help a traveller start a claim`; use when *The caller wants to make a claim or asks what paperwork they need*; steps *1. Ask what happened and pick the claim type: outpatient (doctor visit), urgent_care, inpatient (hospital stay) or dental. 2. Look up the required documents with get_claim_documents and read them out. 3. Remind them to send everything within 30 days of returning home.*; required tool `get_claim_documents` → **Save** | Row ticked with the tool chip | "A skill is a procedure in plain English that uses tools." |
@@ -102,7 +102,8 @@ Today the gate usually **blocks** this fix: the article answers correctly, but t
 | Gap | Where it shows | Fixed by |
 |---|---|---|
 | ~~Last part of a long chunk never reaches the agent; never-rule false hard fail; agent asks for an ID it cannot verify; API replies with spaces inside words~~ | Calls B and C, Act 3, automated run | fixed by [CP-0030](/changes/cp-0030-knowledge-judge-verification-fixes.md) |
-| One page per URL, no sync, site header indexed with the page | Act 1 From URL | [CP-0031](/changes/cp-0031-website-knowledge-sources.md) |
+| ~~One page per URL, no sync, site header indexed with the page~~ | Act 1 From URL | fixed by [CP-0031](/changes/cp-0031-website-knowledge-sources.md) |
+| The same site added twice shows every search result twice | Act 1, if repeated | not yet planned |
 | Chat box loses focus after each message | Act 2 | [roadmap](/product/roadmap.md) R13 |
 | Simulated caller invents follow-ups and accepts hand-offs | Acts 4 and 5 | roadmap R9 |
 
@@ -119,7 +120,7 @@ python scripts/demo_walkthrough.py --api https://<host> --tenant evergreen-sandb
 python scripts/demo_walkthrough.py --serve-site     # only host the demo website (manual demo)
 ```
 
-What it does, in order: checks the API and the business unit; serves the demo website on `127.0.0.1:8765` (any free port if taken); pastes the policy and imports the gadget page (or, once `/api/knowledge/sources` exists, indexes the help centre as a website source); runs four test searches; creates or updates the tool, the skill and the agent **Travel Cover Helpdesk** and publishes a new version; holds calls A–D by text; waits for call A's scorecard and call D's groundwork packet; creates or updates four test scenarios and runs the suite; with `--learning`, drafts (or reuses) the newborn fix and evaluates it. It never approves a proposal.
+What it does, in order: checks the API and the business unit; serves the demo website on `127.0.0.1:8765` (any free port if taken); pastes the policy and indexes the help centre as a website source (on a server without website sources, imports the gadget page alone); runs four test searches; creates or updates the tool, the skill and the agent **Travel Cover Helpdesk** and publishes a new version; holds calls A–D by text; waits for call A's scorecard and call D's groundwork packet; creates or updates four test scenarios and runs the suite; with `--learning`, drafts (or reuses) the newborn fix and evaluates it. It never approves a proposal.
 
 **Report**: printed live and saved to `apps/api/data/demo-runs/demo-<time>.md` (git-ignored), with each check's result and evidence (replies, scores, failures, call ids).
 

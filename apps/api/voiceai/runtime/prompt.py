@@ -36,8 +36,23 @@ NOT_VERIFIED = "- (not verified yet)"
 NOTHING = "- (none)"
 
 
-def verification_instruction(identified_first_name: str | None) -> str:
-    """Flow A for a caller identified by a registered number, flow B otherwise (/architecture/caller-verification.md)."""
+CANNOT_VERIFY = (
+    "This line cannot verify callers. Never ask for a member ID, policy number or date of birth. Answer general questions "
+    "from knowledge; if the caller needs details of their own account, say you can't access accounts on this line and offer "
+    "to connect them with a specialist."
+)
+
+
+def can_verify(config: dict[str, Any]) -> bool:
+    """An agent can verify when one of its attached tools is a verification tool (/architecture/caller-verification.md)."""
+    return any(t.get("is_verification") for t in config.get("tools") or [])
+
+
+def verification_instruction(identified_first_name: str | None, verifiable: bool = True) -> str:
+    """Flow A for a caller identified by a registered number, flow B otherwise; no flow at all for an agent that
+    cannot verify (IDV-09, /architecture/caller-verification.md)."""
+    if not verifiable:
+        return CANNOT_VERIFY
     if identified_first_name:
         return (f"The calling number is on {identified_first_name}'s record: greet them by first name, ask only for their date of "
                 "birth and call the verification tool with it. If they say they are someone else, ask for member ID and date of "
@@ -85,7 +100,7 @@ def system_prompt(
         skills="\n\n".join(render_skill(s) for s in skills) or "(no skills configured)",
         today=f"{now:%A}, {now:%B} {now.day}, {now.year}",
         verified=f"yes (member {verified_ref})" if verified_ref else "no",
-        verification_instruction=verification_instruction(None if verified_ref else identified_first_name),
+        verification_instruction=verification_instruction(None if verified_ref else identified_first_name, can_verify(config)),
         member_profile=member_profile,
         member_memory=member_memory,
         transfer_instructions=TRANSFER_INSTRUCTIONS if transfer else "",

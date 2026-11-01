@@ -1,4 +1,4 @@
-"""Tool execution. Covers: TS-01, TS-02, TS-03, TS-04, TS-05, TS-06, TS-08"""
+"""Tool execution. Covers: TS-01, TS-02, TS-03, TS-04, TS-05, TS-06, TS-08, TS-11"""
 from __future__ import annotations
 
 import json
@@ -75,3 +75,16 @@ async def test_builtin_name_rejected(client, seeded, members_headers):
     """Covers: TS-06"""
     r = await client.post("/api/tools", headers=members_headers, json={"name": "search_knowledge", "url": "/x"})
     assert r.status_code == 422
+
+
+async def test_gate_without_a_verification_tool_offers_a_specialist():
+    """Covers: TS-11"""
+    from voiceai.runtime.tools import VERIFY_FIRST, VERIFY_UNAVAILABLE
+
+    lookup = {"name": "get_claim_documents", "url": "/benefits", "requires_verification": True}
+    result, ok = await _ex(CallState(), [lookup]).execute("get_claim_documents", "{}")
+    assert result == {"error": "identity_not_verified", "say": VERIFY_UNAVAILABLE} and ok and SEEN == []
+    assert VERIFY_UNAVAILABLE == "I can't access account details on this line. I can connect you with a specialist who can."
+    with_verifier = _ex(CallState(), [lookup, {"name": "verify_member", "method": "POST", "url": "/verify", "is_verification": True}])
+    result, _ = await with_verifier.execute("get_claim_documents", "{}")
+    assert result["say"] == VERIFY_FIRST and SEEN == []

@@ -2,7 +2,7 @@
 type: Prompt
 title: Agent system prompt
 description: System prompt for the realtime role - speaking style, grounding, identity verification, escalation, ending, and the agent's skills.
-status: draft
+status: stable
 tags: [prompt, realtime, runtime]
 llm_role: realtime
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }

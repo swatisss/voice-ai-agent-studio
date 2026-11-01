@@ -20,6 +20,7 @@ from voiceai.schemas import ESCALATION_CATEGORIES
 MAX_RESULT_CHARS = 2000
 VERIFY_FIRST = "I need to verify your identity first. Can I have your member ID and date of birth?"
 VERIFY_FIRST_IDENTIFIED = "I need to verify your identity first. Can I have your date of birth?"
+VERIFY_UNAVAILABLE = "I can't access account details on this line. I can connect you with a specialist who can."  # TS-11
 VERIFY_FAILED = "I'm sorry, I couldn't verify those details."  # never says which detail was wrong (IDV-04)
 MAX_VERIFICATION_ATTEMPTS = 3
 
@@ -212,7 +213,10 @@ class ToolExecutor:
         attested = self.state.verification_level == "attested" and method == "GET"  # IDV-05: read-only before the date of birth
         if tool.get("requires_verification") and not self.state.verified and not attested:  # TS-01
             self.state.tools_used.append({"name": name, "ok": False, "summary": f"{name}: blocked until identity verified"})
-            say = VERIFY_FIRST_IDENTIFIED if self.state.identified_member_ref else VERIFY_FIRST
+            if not any(t.get("is_verification") for t in self.tools.values()):  # the call can never become verified
+                say = VERIFY_UNAVAILABLE
+            else:
+                say = VERIFY_FIRST_IDENTIFIED if self.state.identified_member_ref else VERIFY_FIRST
             return {"error": "identity_not_verified", "say": say}, True
         url, rest = render_url(tool["url"], args)
         headers = {"X-Tenant-Id": self.tenant_id, "X-Call-Id": self.call_id}

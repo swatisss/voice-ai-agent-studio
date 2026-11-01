@@ -65,7 +65,7 @@ async def search(
         if score < threshold:
             break
         m = meta[i]
-        results.append({**m, "content": m["content"][:700], "score": round(score, 3)})
+        results.append({**m, "score": round(score, 3)})  # the whole chunk, at most 900 characters (KN-08)
         if len(results) >= top_k:
             break
     return {"results": results} if results else dict(NO_ANSWER)

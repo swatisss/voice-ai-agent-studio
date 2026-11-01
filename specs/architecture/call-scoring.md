@@ -2,7 +2,7 @@
 type: Component Spec
 title: Call scoring
 description: Every ended real call gets a scorecard - measures and pass/fail checks derived from the agent version's config, decided in code where possible and by the judge otherwise - rolled up per agent version, reviewed by humans and calibrated.
-status: draft
+status: stable
 tags: [architecture, evaluation, scoring, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---

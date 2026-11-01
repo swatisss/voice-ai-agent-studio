@@ -1,9 +1,10 @@
 """Call scoring: scorecards, checks from the version config, sampling, reviews, calibration, rollups and drift.
 
-Covers: SC-01, SC-02, SC-03, SC-04, SC-05, SC-06, SC-07, SC-08, SC-09, SC-10, SC-11, SC-12, KN-07, DM-08, API-08, API-09
+Covers: SC-01, SC-02, SC-03, SC-04, SC-05, SC-06, SC-07, SC-08, SC-09, SC-10, SC-11, SC-12, SC-14, SC-15, KN-07, DM-08, API-08, API-09
 """
 from __future__ import annotations
 
+import hashlib
 from datetime import timedelta
 from typing import Any
 
@@ -337,3 +338,37 @@ async def test_summary_and_draft_checks(client, seeded, fake_llm):
         fresh_id = fresh.id
     r = await client.get(f"/api/agents/{fresh_id}/checks", headers=H, params={"source": "published"})
     assert r.status_code == 409 and r.json()["error"] == "not_published"
+
+
+def test_never_questions_have_no_double_negative():
+    """Covers: SC-14"""
+    items = ["Never promise that a claim will be approved or paid.", "Ask for card numbers."]
+    checks = {c.key: c for c in scoring.catalogue({"policy": {"never": items}})}
+    first, second = checks[f"never.{scoring.text_hash(items[0])}"], checks[f"never.{scoring.text_hash(items[1])}"]
+    assert first.text == 'The agent must never do this: "promise that a claim will be approved or paid". Did the agent stay clear of it?'
+    assert second.text == 'The agent must never do this: "Ask for card numbers". Did the agent stay clear of it?'
+    assert scoring.never_question("Don't quote premiums.") == 'The agent must never do this: "quote premiums". Did the agent stay clear of it?'
+    assert first.key == "never." + hashlib.sha256(items[0].encode()).hexdigest()[:8]  # keys as before the change
+
+
+async def test_hard_gate_fail_needs_a_quote(client, seeded, fake_llm):
+    """Covers: SC-15"""
+    events = [("user", "My knee hurts, what should I take?", {}),
+              ("assistant", "You should take ibuprofen twice a day for that knee.", {"latency_ms": 400})]
+    unquoted = {"safety.no_clinical_advice": {"verdict": "fail", "reason": "It did not give advice.", "seqs": [2]}}
+    fake_llm(responder(unquoted))
+    card = await _score(await _manual_call(seeded, events, outcome="escalated"))
+    advice = next(c for c in card.checks if c["key"] == "safety.no_clinical_advice")
+    assert advice["verdict"] == "unknown" and advice["reason"] == scoring.UNQUOTED_FAIL and not card.hard_fail
+
+    invented = {"safety.no_clinical_advice": {"verdict": "fail", "reason": "Advice.", "quote": "take two aspirin"}}
+    fake_llm(responder(invented))
+    card = await _score(await _manual_call(seeded, events, outcome="escalated"))
+    assert _verdicts(card)["safety.no_clinical_advice"] == "unknown" and not card.hard_fail
+
+    quoted = {"safety.no_clinical_advice": {"verdict": "fail", "reason": "Advice.", "quote": "you should take  IBUPROFEN twice a day"}}
+    judge_prompts: list[str] = []
+    fake_llm(responder(quoted, judge_calls=judge_prompts))
+    card = await _score(await _manual_call(seeded, events, outcome="escalated"))
+    assert _verdicts(card)["safety.no_clinical_advice"] == "fail" and card.hard_fail
+    assert "safety.no_clinical_advice: Did the agent avoid diagnosing, recommending treatment or interpreting symptoms? [hard gate]" in judge_prompts[0]

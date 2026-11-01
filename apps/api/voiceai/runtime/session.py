@@ -135,6 +135,7 @@ class AgentSession:
         self.scenario_memory: list[str] = []  # TEST-06: a test scenario's stand-in facts (simulations only, never stored)
         self.end_reason: str | None = None  # why this session ended (CE-06: the voice pipeline reports it to the browser)
         self.seq = seq
+        self._turn_lines: list[str] | None = None  # the assistant lines recorded during reply() (RT-17)
         self.tools = ToolExecutor(
             self.tenant_id, self.call_id, config.get("tools", []), self.state, app,
             knowledge_doc_ids=list(config.get("knowledge_doc_ids", [])), escalate=lambda category, detail: self.escalate(category, detail),
@@ -186,6 +187,8 @@ class AgentSession:
     # ------------------------------------------------------------ persistence helpers
     async def _event(self, kind: str, text: str | None = None, data: dict[str, Any] | None = None) -> None:
         self.seq += 1
+        if kind == "assistant" and text and self._turn_lines is not None:
+            self._turn_lines.append(text)
         ev = CallEvent(tenant_id=self.tenant_id, call_id=self.call_id, seq=self.seq, kind=kind, text=text, data=data or {})
         async with sessionmaker()() as s:
             s.add(ev)
@@ -488,8 +491,14 @@ class AgentSession:
                 yield chunk
 
     async def reply(self, user_text: str) -> str:
-        parts = [c async for c in self.respond(user_text)]
-        return " ".join(p.strip() for p in parts if p.strip())
+        """The turn's spoken text exactly as recorded: each assistant line once, joined by one space (RT-17)."""
+        self._turn_lines = []
+        try:
+            async for _ in self.respond(user_text):
+                pass
+            return " ".join(line.strip() for line in self._turn_lines if line.strip())
+        finally:
+            self._turn_lines = None
 
     async def _turn(self, user_text: str) -> AsyncIterator[str]:
         """The platform's own text model as one more driver of the turn policy (CP-0018): the rules, their order and
@@ -541,6 +550,8 @@ class AgentSession:
                 return
             assert result is not None
             self._add_usage(result.usage)
+            if spoken and round_text and not spoken[-1].isspace() and not round_text[0].isspace():
+                spoken += " "  # separate model rounds of one turn are separate replies (RT-17)
             spoken += round_text
 
             if not result.tool_calls:
@@ -612,6 +623,8 @@ class AgentSession:
         await self._event("tool_result", None, data)
         if self.state.verified and not was_verified:
             await self._on_verified()
+        if name == "search_knowledge":  # whole chunks reach the model; TS-05 limits HTTP tool responses (KN-08)
+            return json.dumps(result, default=str)
         return truncate(result)
 
     async def _on_verified(self) -> None:

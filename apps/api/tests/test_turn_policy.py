@@ -1,6 +1,6 @@
 """The AgentSession turn policy: events in, decisions out, for channels whose model speaks for itself.
 
-Covers: RT-11, RT-12, RT-13, RT-14, RT-15
+Covers: RT-11, RT-12, RT-13, RT-14, RT-15, RT-17
 """
 from __future__ import annotations
 
@@ -196,3 +196,24 @@ async def test_text_loop_and_policy_match_on_a_silent_end_call(client, seeded, f
     assert loop.end_reason == driven.end_reason == "end_call"
     assert shape(await stored(loop)) == shape(await stored(driven))
     assert state_of(loop) == state_of(driven)
+
+
+async def test_text_reply_is_the_recorded_text(client, seeded, fake_llm, monkeypatch):
+    """Covers: RT-17"""
+    from voiceai.llm.gateway import ChatResult, ToolCall, gateway
+
+    rounds = [(["up to $", "1", ",", "500 total"], [ToolCall("call_1", "search_knowledge", json.dumps({"query": "baggage"}))]),
+              (["Anything", " else?"], [])]
+
+    async def fragments(role, messages, tools):  # noqa: ANN001, ANN202 - what a real provider streams: pieces of words
+        pieces, calls = rounds.pop(0)
+        for piece in pieces:
+            yield {"type": "text", "text": piece}
+        yield {"type": "done", "result": ChatResult(text="".join(pieces), tool_calls=calls, usage=ROUND)}
+
+    fake_llm(no_model)
+    monkeypatch.setattr(gateway(), "_fake_stream", fragments)
+    session = await open_session(seeded, channel="text")
+    reply = await session.reply("How much for lost baggage?")
+    spoken = [e.text for e in await stored(session) if e.kind == "assistant"][1:]  # after the greeting
+    assert reply == "up to $1,500 total Anything else?" and spoken == [reply]

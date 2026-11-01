@@ -2,7 +2,7 @@
 type: Component Spec
 title: Caller verification
 description: How a call learns who the caller is - identified by a registered phone number, verified by date of birth (registered number) or member ID and date of birth (any number) - with attempt limits, attestation and testing in the playground.
-status: draft
+status: stable
 tags: [architecture, verification, telephony, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-28T00:00:00Z" }
 ---

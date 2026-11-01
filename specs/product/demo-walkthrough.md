@@ -2,7 +2,7 @@
 type: Demo Script
 title: Demo walkthrough - a new agent from scratch
 description: About 25 minutes - build a travel-insurance agent in the empty sandbox business unit from a pasted policy and a web page, publish it, test it by chat, read its scorecard, escalation and test suite, then watch self-learning draft and gate a fix; the same flow runs unattended with scripts/demo_walkthrough.py.
-status: draft
+status: stable
 tags: [product, demo, onboarding]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

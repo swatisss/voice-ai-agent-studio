@@ -2,7 +2,7 @@
 type: Component Spec
 title: Tools and skills
 description: HTTP tool definitions and execution (in-process for relative URLs), the identity verification gate, result shaping, and the skill format rendered into the system prompt.
-status: draft
+status: stable
 tags: [architecture, tools, skills]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

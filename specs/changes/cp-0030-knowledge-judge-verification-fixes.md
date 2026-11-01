@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0030 Full knowledge chunks, sound "never" checks, verification only where it exists
 description: Search returns whole chunks instead of their first 700 characters; text replies are the recorded text; "never" policy checks stop double-negating and a hard-gate fail must quote the breach; agents without a verification tool stop asking for member ID and date of birth, and the builder warns about tools that can never run.
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [knowledge, evaluation, scoring, verification, prompt, ui]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

@@ -1,7 +1,8 @@
-"""Knowledge ingestion and search. Covers: KN-01, KN-02, KN-03, KN-04, KN-05, KN-06"""
+"""Knowledge ingestion and search. Covers: KN-01, KN-02, KN-03, KN-04, KN-05, KN-06, KN-08"""
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 
 from voiceai.db import sessionmaker
@@ -9,6 +10,7 @@ from voiceai.knowledge import okf
 from voiceai.knowledge.chunking import MAX_CHARS, chunk_markdown
 from voiceai.knowledge.ingest import create_doc
 from voiceai.knowledge.search import search
+from voiceai.llm.gateway import FakeReply
 from voiceai.models import Tenant
 
 
@@ -73,3 +75,42 @@ async def test_draft_doc_only_when_listed(database):
         assert all(r["doc_id"] != draft.id for r in published.get("results", []))
         candidate = await search(s, "t1", [active.id, draft.id], "add newborn within 60 days")
         assert candidate["results"][0]["doc_id"] == draft.id
+
+
+LAST = "Travel to countries under a government do-not-travel warning is excluded."
+QUERY = "SafeTrip Standard covers emergency medical care abroad, lost baggage and trip cancellation"  # the hash embedder needs shared words
+FILLER = "SafeTrip Standard covers emergency medical care abroad, lost baggage and trip cancellation for listed reasons. "
+
+
+def _policy_880() -> str:
+    """One paragraph of exactly 880 characters whose last sentence holds the fact (a single chunk, KN-08)."""
+    content = (FILLER * 8)[: 880 - len(LAST) - 1] + " " + LAST
+    assert len(content) == 880
+    return content
+
+
+async def test_search_returns_the_whole_chunk(database):
+    """Covers: KN-08"""
+    content = _policy_880()
+    assert len(chunk_markdown(content)) == 1
+    async with sessionmaker()() as s:
+        await _tenant(s)
+        doc = await create_doc(s, "t1", "SafeTrip policy", content, "text")
+        await s.commit()
+        result = await search(s, "t1", [doc.id], QUERY)
+    top = result["results"][0]
+    assert top["content"] == content and top["content"].endswith(LAST)
+
+
+async def test_model_receives_the_whole_chunk(client, seeded, fake_llm):
+    """Covers: KN-08"""
+    from tests.test_turn_policy import open_session
+
+    fake_llm(lambda role, messages, tools: FakeReply(text="Okay."))
+    async with sessionmaker()() as s:
+        doc = await create_doc(s, "evergreen-care", "SafeTrip policy", _policy_880(), "text")
+        await s.commit()
+    session = await open_session(seeded, channel="text")
+    session.tools.knowledge_doc_ids = [doc.id]
+    to_model = await session._run_tool("call_1", "search_knowledge", json.dumps({"query": QUERY}))
+    assert LAST in to_model and json.loads(to_model)["results"][0]["content"] == _policy_880()

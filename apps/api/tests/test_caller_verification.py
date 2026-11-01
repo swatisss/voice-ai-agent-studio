@@ -1,7 +1,7 @@
 """Caller verification: a registered number identifies, the date of birth verifies; attempts, attestation and playground calls.
 
 Spec: /architecture/caller-verification.md
-Covers: IDV-01, IDV-02, IDV-03, IDV-04, IDV-05, IDV-06, IDV-07, TS-09, ES-09, API-05
+Covers: IDV-01, IDV-02, IDV-03, IDV-04, IDV-05, IDV-06, IDV-07, IDV-09, TS-09, ES-09, API-05
 """
 from __future__ import annotations
 
@@ -137,7 +137,8 @@ async def test_attested_caller_id_unlocks_read_only_tools_only_when_trusted():
         return {"status": "ok"}
 
     tools = [{"name": "read_claims", "method": "GET", "url": "/echo", "requires_verification": True},
-             {"name": "change_address", "method": "POST", "url": "/echo", "requires_verification": True}]
+             {"name": "change_address", "method": "POST", "url": "/echo", "requires_verification": True},
+             {"name": "verify_member", "method": "POST", "url": "/echo", "is_verification": True}]  # the agent can verify (TS-11)
     state = CallState(identified_member_ref="EVG-482913", identified_first_name="Maria", verification_level="attested")
     ex = ToolExecutor("evergreen-care", "c1", tools, state, app=app)
     read, _ = await ex.run("read_claims", "{}")
@@ -184,3 +185,25 @@ async def test_identify_ignores_withheld_numbers(monkeypatch):
     for withheld in ("anonymous", "", "client:alice", None):
         assert await caller_id.identify(withheld) is None
     assert called == []
+
+
+GENERAL_RULE = "Questions about rules, coverage, processes or documents never need verification"
+
+
+def test_agents_that_cannot_verify_never_ask_for_identity():
+    """Covers: IDV-09"""
+    from datetime import datetime
+
+    from voiceai.runtime.prompt import CANNOT_VERIFY, system_prompt
+
+    lookup = {"name": "get_claim_documents", "url": "/x", "requires_verification": True}
+    verifier = {"name": "verify_member", "url": "/v", "is_verification": True}
+    now = datetime(2026, 11, 1)
+    for first_name in (None, "Maria"):  # an unknown and an identified caller
+        text = system_prompt({"tools": [lookup]}, "SafeTrip", None, now, identified_first_name=first_name)
+        assert CANNOT_VERIFY in text and GENERAL_RULE in text
+        assert "Ask for member ID and date of birth" not in text and "ask only for their date of birth" not in text
+    with_tool = system_prompt({"tools": [lookup, verifier]}, "Evergreen Health", None, now)
+    assert "Ask for member ID and date of birth, then call the verification tool." in with_tool and CANNOT_VERIFY not in with_tool
+    identified = system_prompt({"tools": [verifier]}, "Evergreen Health", None, now, identified_first_name="Maria")
+    assert "on Maria's record" in identified and GENERAL_RULE in identified

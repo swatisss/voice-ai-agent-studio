@@ -2,7 +2,7 @@
 type: Prompt
 title: Eval judge prompt
 description: Grades a simulated or real call - outcome, whether the goal was met, grounding in tool or knowledge results, policy violations, and one pass/fail/n/a/unknown verdict with evidence per check it is given.
-status: draft
+status: stable
 tags: [prompt, judge, evaluation, scoring]
 llm_role: judge
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }

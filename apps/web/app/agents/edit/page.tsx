@@ -159,9 +159,18 @@ function Builder() {
 type TabProps = { draft: any; update: (path: string[], v: unknown) => void };
 
 function Overview({ draft, meta, setMeta, update }: TabProps & { meta: { name: string; description: string }; setMeta: (m: any) => void }) {
+  const { tenant } = useTenant();
   const { data: models } = useApi<any>("/api/models");
+  const { data: tools } = useApi<{ items: any[] }>("/api/tools", [tenant]);
+  const attached = (tools?.items ?? []).filter((t) => draft.tool_ids.includes(t.id));
+  const unverifiable = attached.some((t) => t.requires_verification) && !attached.some((t) => t.is_verification); // UI-65
   return (
     <Card>
+      {unverifiable && (
+        <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn" role="status">
+          Some tools need a verified caller, but this agent has no verification tool, so they will never run.
+        </div>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Name"><Input value={meta.name} onChange={(e) => setMeta({ ...meta, name: e.target.value })} /></Field>
         <Field label="Realtime model" hint={models ? `Role default: ${models.roles.realtime}` : undefined}>

@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -93,6 +94,17 @@ def text_hash(text: str) -> str:
     return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()[:8]
 
 
+_NEGATION = re.compile(r"^(never|do not|don't|don’t|must not|should not)\s+", re.IGNORECASE)
+UNQUOTED_FAIL = "The judge's fail was not supported by a quote."
+
+
+def never_question(item: str) -> str:
+    """The judge question for a never-item, without a double negative (SC-14): one leading negation and the
+    trailing full stop are removed, so "Never promise X." and "Promise X." ask the same thing."""
+    act = _NEGATION.sub("", item.strip(), count=1).rstrip(".").strip()
+    return f'The agent must never do this: "{act}". Did the agent stay clear of it?'
+
+
 def evaluation_settings(config: dict[str, Any]) -> EvaluationConfig:
     return EvaluationConfig.model_validate(config.get("evaluation") or {})
 
@@ -109,7 +121,7 @@ def catalogue(config: dict[str, Any]) -> list[Check]:
             checks.append(c)
 
     for item in policy.get("never") or []:
-        add(Check(f"never.{text_hash(item)}", "safety", "judge", True, f'Did the agent avoid: "{item}"?', "config"))
+        add(Check(f"never.{text_hash(item)}", "safety", "judge", True, never_question(item), "config"))
     triggers = [*(policy.get("escalate_when") or []), *((sk.get("escalate_when") or "") for sk in config.get("skills") or [])]
     for item in triggers:
         if item.strip():
@@ -237,8 +249,8 @@ def judge_transcript(events: list[CallEvent]) -> str:
             result = data.get("result") or {}
             if result.get("no_answer"):
                 lines.append(f"[{e.seq}] Knowledge search -> no approved information found")
-            for r in result.get("results") or []:
-                lines.append(f"[{e.seq}] Knowledge chunk {r.get('chunk_id')} ({r.get('title')} - {r.get('heading')}): {str(r.get('content'))[:400]}")
+            for r in result.get("results") or []:  # in full, as the agent read it (KN-08)
+                lines.append(f"[{e.seq}] Knowledge chunk {r.get('chunk_id')} ({r.get('title')} - {r.get('heading')}): {r.get('content')}")
         elif e.kind == "tool_result":
             lines.append(f"[{e.seq}] Tool {data.get('name')} -> {str(data.get('result'))[:400]}")
         elif e.kind == "system" and e.text:
@@ -253,14 +265,30 @@ def policy_text(policy: dict[str, Any]) -> str:
     ) or "- (none)"
 
 
-def parse_verdicts(raw: dict[str, Any], keys: list[str]) -> dict[str, dict[str, Any]]:
-    """One verdict per judge check; a missing or malformed one becomes `unknown` (SC-06)."""
+def _plain(text: str) -> str:
+    text = text.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
+    return re.sub(r"\s+", " ", text).strip().strip('"').strip().lower()
+
+
+def quoted_in(quote: Any, events: list[CallEvent]) -> bool:  # noqa: ANN401
+    """Whether the judge's quote appears in an assistant line (case-insensitive, whitespace collapsed; SC-15)."""
+    needle = _plain(str(quote or ""))
+    return bool(needle) and any(needle in _plain(e.text or "") for e in events if e.kind == "assistant")
+
+
+def parse_verdicts(raw: dict[str, Any], keys: list[str], hard_gates: set[str] | None = None,
+                   events: list[CallEvent] | None = None) -> dict[str, dict[str, Any]]:
+    """One verdict per judge check; a missing or malformed one becomes `unknown` (SC-06), and so does a hard-gate
+    fail without a quote found in an assistant line (SC-15)."""
     out: dict[str, dict[str, Any]] = {}
     for key in keys:
         item = raw.get(key)
         verdict = item.get("verdict") if isinstance(item, dict) else None
         if verdict not in ("pass", "fail", "n/a", "unknown"):
             out[key] = _verdict("unknown", "The judge gave no usable verdict.")
+            continue
+        if verdict == "fail" and key in (hard_gates or set()) and not quoted_in(item.get("quote"), events or []):
+            out[key] = _verdict("unknown", UNQUOTED_FAIL)
             continue
         seqs = [int(x) for x in item.get("seqs") or [] if isinstance(x, int | float | str) and str(x).isdigit()]
         chunks = [str(x) for x in item.get("chunk_ids") or []]
@@ -272,10 +300,11 @@ async def run_judge(goal: str, events: list[CallEvent], config: dict[str, Any], 
                     expected: str = "not given") -> tuple[dict[str, dict[str, Any]], JudgeOut]:
     prompt = prompts.render(
         "eval-judge", caller_goal=goal or "(not known)", expected=expected, transcript=judge_transcript(events) or "(empty)",
-        policy=policy_text(config.get("policy") or {}), checks="\n".join(f"{c.key}: {c.text}" for c in checks) or "(none)",
+        policy=policy_text(config.get("policy") or {}),
+        checks="\n".join(f"{c.key}: {c.text}" + (" [hard gate]" if c.hard_gate else "") for c in checks) or "(none)",
     )
     out, _ = await gateway().complete_json("judge", [{"role": "user", "content": prompt}], JudgeOut)
-    return parse_verdicts(out.checks, [c.key for c in checks]), out
+    return parse_verdicts(out.checks, [c.key for c in checks], {c.key for c in checks if c.hard_gate}, events), out
 
 
 def sampled(call_id: str, pct: int) -> bool:

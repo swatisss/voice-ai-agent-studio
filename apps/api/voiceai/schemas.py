@@ -248,6 +248,7 @@ class LearningConfig(BaseModel):
     nightly: bool = True
     max_proposals_per_night: int = Field(default=3, ge=0, le=10)
     regression_repeats: int = Field(default=3, ge=1, le=5)
+    case_repeats: int = Field(default=2, ge=1, le=5)  # cluster and held-out cases per arm (CP-0033)
     snooze_days: int = Field(default=7, ge=1, le=90)
 
 

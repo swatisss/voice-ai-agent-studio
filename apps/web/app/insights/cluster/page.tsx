@@ -48,7 +48,7 @@ function ClusterDetail() {
   const [busy, setBusy] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [forceNote, setForceNote] = useState<string | null>(null);
-  const [approved, setApproved] = useState<{ version: number } | null>(null);
+  const [approved, setApproved] = useState<{ version: number; draftKept: boolean } | null>(null);
   const [opened, setOpened] = useState<Result[] | null>(null);
 
   const loadProposal = useCallback(async () => {
@@ -88,7 +88,7 @@ function ClusterDetail() {
     setBusy("approve");
     try {
       const r = await api(`/api/proposals/${proposalId}/approve`, { method: "POST", json: { decided_by: "Reviewer", ...(force ? { force: true, note: forceNote } : {}) } });
-      setApproved({ version: r.version.version });
+      setApproved({ version: r.version.version, draftKept: !!r.draft_kept });
       setForceNote(null);
       reload(); loadProposal();
     } catch (e) { toast((e as ApiError).detail, "bad"); } finally { setBusy(null); }
@@ -100,7 +100,8 @@ function ClusterDetail() {
 
   const run = p?.eval_run;
   const summary = run?.status === "done" ? run.summary : null;
-  const gate = summary?.gate as { passed: boolean; reasons: string[] } | undefined;
+  const gate = summary?.gate as { passed: boolean; reasons: string[]; warnings?: string[] } | undefined;
+  const k = summary?.case_repeats ?? 1;  // cluster and held-out cases repeat; counts are runs (CP-0033)
   const notReady = !p ? "" : p.status !== "ready" ? "Run an evaluation first" : "";
   const gateFailed = !!summary && gate && !gate.passed;
   const results: Result[] = run?.results ?? [];
@@ -141,7 +142,8 @@ function ClusterDetail() {
 
       {approved && (
         <div className="flex items-center gap-3 rounded-xl bg-ok-soft px-4 py-3 text-sm text-ok">
-          Published v{approved.version} — From fix: {p?.title}
+          <div>Published v{approved.version} — From fix: {p?.title}
+            {approved.draftKept && <div className="text-xs">Your unpublished draft changes were kept as a draft, with this fix added.</div>}</div>
           <Link className="ml-auto" href={`/test-call/?agent=${p?.agent_id}`}><Button variant="primary">Test it now</Button></Link>
         </div>
       )}
@@ -196,8 +198,8 @@ function ClusterDetail() {
           {summary && (
             <div className="mb-3 space-y-2">
               <div className="rounded-lg bg-accent-soft px-3 py-2 text-sm">
-                Baseline {summary.baseline_pass}/{summary.cluster_cases} → Candidate <b>{summary.candidate_pass}/{summary.cluster_cases}</b> ({summary.lift_pct >= 0 ? "+" : ""}{summary.lift_pct} pts)
-                {summary.held_out_cases > 0 && <> · Held out {summary.held_out_candidate_pass}/{summary.held_out_cases}</>}
+                Baseline {summary.baseline_pass}/{summary.cluster_cases * k} → Candidate <b>{summary.candidate_pass}/{summary.cluster_cases * k}</b> ({summary.lift_pct >= 0 ? "+" : ""}{summary.lift_pct} pts)
+                {summary.held_out_cases > 0 && <> · Held out {summary.held_out_candidate_pass}/{summary.held_out_cases * k}</>}
                 {" "}· {summary.regression_cases - summary.regression_pass ? `${summary.regression_cases - summary.regression_pass} regressed` : "No regressions"}
                 {summary.p95_ms && <> · p95 {secs(summary.p95_ms.baseline)} → {secs(summary.p95_ms.candidate)}</>} · {summary.duration_s}s
               </div>
@@ -206,6 +208,9 @@ function ClusterDetail() {
                   <b>{gate.passed ? "Check passed" : "Check failed"}</b>
                   {!gate.passed && <ul className="mt-1 list-disc pl-5">{gate.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
                 </div>
+              )}
+              {(gate?.warnings ?? []).length > 0 && (
+                <div className="rounded-lg bg-neutral-soft px-3 py-2 text-sm text-muted">{gate!.warnings!.map((w) => <div key={w}>{w}</div>)}</div>
               )}
             </div>
           )}

@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0033 Ship what was proven, and a steadier gate
 description: Approving a fix publishes the published version plus the fix (exactly what was gated) and keeps unpublished draft edits as a draft; the gate repeats cluster cases, measures lift as a pass rate, always keeps a held-out case and blocks on latency only past the agent's budget.
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [learning, evaluation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

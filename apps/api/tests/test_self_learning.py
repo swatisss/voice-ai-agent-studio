@@ -291,5 +291,5 @@ async def test_learning_config_validation(client, seeded):
         assert r.status_code == 422, bad
     draft.pop("learning", None)
     saved = (await client.put(f"/api/agents/{agent_id}", headers=H, json={"draft_config": draft})).json()["draft_config"]
-    assert saved["learning"] == {"nightly": True, "max_proposals_per_night": 3, "regression_repeats": 3, "snooze_days": 7}
+    assert saved["learning"] == {"nightly": True, "max_proposals_per_night": 3, "regression_repeats": 3, "case_repeats": 2, "snooze_days": 7}
     assert scoring  # imported for the scorer the run relies on

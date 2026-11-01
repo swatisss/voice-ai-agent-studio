@@ -66,6 +66,15 @@ async def cluster_evidence(s: AsyncSession, cluster_id: str, limit: int = 10) ->
 
 
 DERIVED_SCENARIOS = 2
+MAX_SHOWN = 10
+
+
+def shown_count(members: int) -> int:
+    """How many of a cluster's member calls the drafter sees: every cluster of 3 or more keeps at least one, and a
+    fifth of the members, held out for the gate (SL-18)."""
+    if members < 3:
+        return members
+    return min(MAX_SHOWN, members - max(1, members // 5))
 
 
 async def _attached_articles(s: AsyncSession, tenant_id: str, cfg: dict[str, Any], cluster: Cluster, evidence: list[dict[str, Any]]) -> list[KnowledgeDoc]:
@@ -107,7 +116,8 @@ async def draft(s: AsyncSession, tenant_id: str, cluster: Cluster, origin: str =
     agent = await s.get(Agent, cluster.agent_id)
     version = await s.get(AgentVersion, agent.published_version_id) if agent and agent.published_version_id else None
     cfg = version.config if version else {}
-    evidence = await cluster_evidence(s, cluster.id)  # the drafter sees only these; the rest are held out (SL-08)
+    members = await cluster_evidence(s, cluster.id, limit=60)
+    evidence = members[: shown_count(len(members))]  # the drafter sees only these; the rest are held out (SL-08, SL-18)
     doc_titles = list((await s.scalars(select(KnowledgeDoc.title).where(KnowledgeDoc.id.in_(cfg.get("knowledge_doc_ids", []))))).all())
     attached = await _attached_articles(s, tenant_id, cfg, cluster, evidence)
     own = {t["name"] for t in cfg.get("tools", [])}
@@ -224,7 +234,9 @@ def candidate_config(base: dict[str, Any], p: FixProposal) -> dict[str, Any]:
     return cfg
 
 
-async def approve(s: AsyncSession, p: FixProposal, decided_by: str, note: str | None, force: bool) -> AgentVersion:
+async def approve(s: AsyncSession, p: FixProposal, decided_by: str, note: str | None, force: bool) -> tuple[AgentVersion, bool]:
+    """Publish the published version plus the change (what the gate evaluated); returns the version and whether the
+    builder's unpublished draft edits were kept as a draft (SL-17)."""
     if p.status != "ready":
         raise ApiError(409, "invalid_state", "Run an evaluation before approving")
     run = await s.get(EvalRun, p.latest_eval_run_id) if p.latest_eval_run_id else None
@@ -246,25 +258,62 @@ async def approve(s: AsyncSession, p: FixProposal, decided_by: str, note: str | 
         await s.commit()
         bus.publish(p.tenant_id, "insights", "proposal.updated", proposal_summary(p))
         assert version is not None
-        return version
-    draft = copy.deepcopy(agent.draft_config or {})
+        return version, False
+    published = await s.get(AgentVersion, agent.published_version_id) if agent.published_version_id else None
+    base = draft_of(published.config if published else agent.draft_config or {})
+    builder = copy.deepcopy(agent.draft_config or {})
+    kept = _comparable(builder) != _comparable(base)  # unpublished edits the gate never saw
+    change = await _resolve_change(s, p)
+    agent.draft_config = _apply_change(base, change)  # SL-17: publish exactly what was gated
+    await _add_derived_scenarios(s, p)  # SL-09
+    version = await publish(s, agent, change_note=f"Fix: {p.title}", source_proposal_id=p.id)
+    if kept:  # the builder's edits stay a draft, with the fix added
+        agent.draft_config = _apply_change(builder, change)
+    p.status, p.decided_by, p.decision_note, p.decided_at, p.resulting_version_id = "approved", decided_by, note, utcnow(), version.id
+    cluster = await s.get(Cluster, p.cluster_id)
+    if cluster:
+        cluster.status = "fixed"
+    await s.commit()
+    bus.publish(p.tenant_id, "insights", "proposal.approved", {"id": p.id, "version_id": version.id, "version": version.version})
+    bus.publish(p.tenant_id, "insights", "proposal.updated", proposal_summary(p))
+    return version, kept
+
+
+def draft_of(config: dict[str, Any]) -> dict[str, Any]:
+    """The draft-shaped part of a version snapshot (ids, not the resolved tools and skills)."""
+    from voiceai.schemas import AgentConfig
+
+    return copy.deepcopy({k: v for k, v in config.items() if k in AgentConfig.model_fields})
+
+
+def _comparable(cfg: dict[str, Any]) -> dict[str, Any]:
+    from voiceai.schemas import AgentConfig
+
+    out = AgentConfig.model_validate(cfg).model_dump(mode="json")
+    if out.get("persona_id"):  # the snapshot resolves the persona from the library
+        out.pop("persona", None)
+    return out
+
+
+async def _resolve_change(s: AsyncSession, p: FixProposal) -> dict[str, Any]:
+    """Do the proposal's one-off side effects (activate or archive docs, create a skill or tool) and return the change as
+    ids, so it can be applied to the published config and to the builder's draft alike."""
+    change: dict[str, Any] = {"add_docs": [], "remove_docs": [], "tool_ids": [], "skill_ids": [], "rules": []}
     if p.kind in ("knowledge_article", "knowledge_edit") and p.draft_doc_id:
         doc = await s.get(KnowledgeDoc, p.draft_doc_id)
         if doc:
             doc.status = "active"
-        ids = list(draft.get("knowledge_doc_ids", []))
         if p.kind == "knowledge_edit":  # SL-06: the revised article replaces the old one, which is archived
             old = await s.get(KnowledgeDoc, p.payload.get("doc_id") or "")
             if old:
                 old.status = "archived"
-            ids = [d for d in ids if d != p.payload.get("doc_id")]
-        draft["knowledge_doc_ids"] = [*ids, p.draft_doc_id]
+            change["remove_docs"].append(p.payload.get("doc_id"))
+        change["add_docs"].append(p.draft_doc_id)
     elif p.kind == "tool_attach":  # SL-07: an existing tool, attached; no new tool row
         tool = await s.scalar(select(Tool).where(Tool.tenant_id == p.tenant_id, Tool.name == p.payload.get("tool_name")))
         if tool is None:
             raise ApiError(409, "tool_not_found", f"The tool {p.payload.get('tool_name')} no longer exists")
-        if tool.id not in draft.get("tool_ids", []):
-            draft["tool_ids"] = [*draft.get("tool_ids", []), tool.id]
+        change["tool_ids"].append(tool.id)
     elif p.kind == "skill":
         tool_payload = p.payload.get("tool")
         if tool_payload:
@@ -273,25 +322,26 @@ async def approve(s: AsyncSession, p: FixProposal, decided_by: str, note: str | 
             if not existing:
                 s.add(tool)
                 await s.flush()
-            if tool.id not in draft.get("tool_ids", []):
-                draft["tool_ids"] = [*draft.get("tool_ids", []), tool.id]
+            change["tool_ids"].append(tool.id)
         skill = Skill(tenant_id=p.tenant_id, **SkillDef.model_validate(p.payload["skill"]).model_dump())
         s.add(skill)
         await s.flush()
-        draft["skill_ids"] = [*draft.get("skill_ids", []), skill.id]
+        change["skill_ids"].append(skill.id)
     elif p.kind == "policy_rule":
-        draft.setdefault("policy", {}).setdefault("rules", []).append(p.payload.get("rule", ""))
-    agent.draft_config = draft
-    await _add_derived_scenarios(s, p)  # SL-09
-    version = await publish(s, agent, change_note=f"Fix: {p.title}", source_proposal_id=p.id)
-    p.status, p.decided_by, p.decision_note, p.decided_at, p.resulting_version_id = "approved", decided_by, note, utcnow(), version.id
-    cluster = await s.get(Cluster, p.cluster_id)
-    if cluster:
-        cluster.status = "fixed"
-    await s.commit()
-    bus.publish(p.tenant_id, "insights", "proposal.approved", {"id": p.id, "version_id": version.id, "version": version.version})
-    bus.publish(p.tenant_id, "insights", "proposal.updated", proposal_summary(p))
-    return version
+        change["rules"].append(p.payload.get("rule", ""))
+    return change
+
+
+def _apply_change(cfg: dict[str, Any], change: dict[str, Any]) -> dict[str, Any]:
+    out = copy.deepcopy(cfg)
+    docs = [d for d in out.get("knowledge_doc_ids", []) if d not in change["remove_docs"]]
+    out["knowledge_doc_ids"] = [*docs, *(d for d in change["add_docs"] if d not in docs)]
+    out["tool_ids"] = [*out.get("tool_ids", []), *(i for i in change["tool_ids"] if i not in out.get("tool_ids", []))]
+    out["skill_ids"] = [*out.get("skill_ids", []), *change["skill_ids"]]
+    if change["rules"]:
+        policy = out.setdefault("policy", {})
+        policy["rules"] = [*policy.get("rules", []), *change["rules"]]
+    return out
 
 
 async def _add_derived_scenarios(s: AsyncSession, p: FixProposal) -> None:

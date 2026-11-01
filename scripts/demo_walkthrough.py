@@ -555,8 +555,8 @@ class Walkthrough:
         s = (out["eval_run"] or {}).get("summary") or {}
         gate = s.get("gate") or {}
         self.r.add("8 Learning", "evaluation finished", out["eval_run"]["status"] == "done",
-                   f"cluster {s.get('baseline_pass')}->{s.get('candidate_pass')} of {s.get('cluster_cases')}, held out "
-                   f"{s.get('held_out_candidate_pass')}/{s.get('held_out_cases')}, regressions {s.get('regression_pass')}/{s.get('regression_cases')}")
+                   f"cluster runs {s.get('baseline_pass')}->{s.get('candidate_pass')} of {s.get('cluster_cases', 0) * s.get('case_repeats', 1)}, held out "
+                   f"{s.get('held_out_candidate_pass')}/{s.get('held_out_cases', 0) * s.get('case_repeats', 1)}, regressions {s.get('regression_pass')}/{s.get('regression_cases')}")
         self.r.add("8 Learning", "no hard fails with the fix", (s.get("hard_fails") or {}).get("candidate", 0) == 0)
         self.r.add("8 Learning", "gate", None, "passed" if gate.get("passed") else "blocked: " + "; ".join(gate.get("reasons") or []))
         self.r.add("8 Learning", "nothing published without a human", None, "the proposal waits in Insights; approve it there if you want")
@@ -635,9 +635,10 @@ class Walkthrough:
         s = (prop.get("eval_run") or {}).get("summary") or {}
         gate = s.get("gate") or {}
         self.r.add(step, "fix evaluation", None,
-                   f"cluster {s.get('baseline_pass')}->{s.get('candidate_pass')} of {s.get('cluster_cases')}, derived kept {s.get('derived_kept')}, "
+                   f"cluster runs {s.get('baseline_pass')}->{s.get('candidate_pass')} of {s.get('cluster_cases', 0) * s.get('case_repeats', 1)}, derived kept {s.get('derived_kept')}, "
                    f"regressions {s.get('regression_pass')}/{s.get('regression_cases')}, p95 {s.get('p95_ms')}")
-        self.r.add(step, "the gate passes", bool(gate.get("passed")), "; ".join(gate.get("reasons") or []) or "passed",
+        self.r.add(step, "the gate passes", bool(gate.get("passed")),
+                   "; ".join(gate.get("reasons") or []) or "passed" + "".join(f" (warning: {w})" for w in gate.get("warnings") or []),
                    known="R16", model=True)
 
         body: dict[str, Any] = {"decided_by": "Demo walkthrough", "note": "Approved in the demo walkthrough"}

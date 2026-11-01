@@ -19,7 +19,7 @@ from voiceai.llm.gateway import FakeReply
 
 STOP = set("a an the and or but if of to in on at for with by from is are was were be been am do does did i me my you your we our "
            "it its this that these those there what which who how much many can could would should will about any some please "
-           "hi hello thanks thank yes no not get got".split())
+           "hi hello thanks thank yes no not get got while still already here from than just also".split())  # filler, never evidence of an answer
 GENERIC = {"caller", "callers", "customer", "member", "members", "someone", "person", "specialist", "request", "wants", "asks",
            "travel", "travelling", "traveling", "trip", "abroad", "policy", "plan", "health", "cover", "covered", "coverage",
            "claim", "claims", "insurance", "know", "want", "need", "help", "tell", "much", "safetrip", "standard"}

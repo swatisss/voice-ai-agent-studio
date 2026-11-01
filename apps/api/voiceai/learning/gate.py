@@ -23,12 +23,13 @@ from voiceai.learning import scoring, test_suites
 from voiceai.learning.evaluate import member_profile, simulate
 from voiceai.learning.propose import candidate_config, cluster_evidence, proposal_summary
 from voiceai.models import AgentVersion, Call, CallEvent, Escalation, EvalResult, EvalRun, EvalScenario, FixProposal, Tenant
-from voiceai.schemas import LearningConfig
+from voiceai.schemas import EvaluationConfig, LearningConfig
 
 log = logging.getLogger("voiceai.eval")
 HELD_OUT = 4
 SLOWDOWN = 1.2
 SLOWDOWN_GRACE_MS = 200  # differences this small are noise, not a slowdown
+MIN_LIFT = 0.25  # the candidate's pass rate over cluster and held-out runs must beat the baseline's by 25 points (SL-19)
 
 
 def _case(key: str, kind: str, scenario: dict[str, Any], repeats: int = 1, scenario_id: str | None = None) -> dict[str, Any]:
@@ -37,21 +38,29 @@ def _case(key: str, kind: str, scenario: dict[str, Any], repeats: int = 1, scena
     return {"key": key, "type": kind, "scenario": {**base, **scenario}, "repeats": repeats, "scenario_id": scenario_id}
 
 
-def evaluate_gate(results: list[dict[str, Any]], repeats: int) -> dict[str, Any]:
+def evaluate_gate(results: list[dict[str, Any]], repeats: int, latency_budget_ms: int | None = None,
+                  case_repeats: int = 1) -> dict[str, Any]:
     """The gate of /architecture/self-learning.md from per-(case, arm, repeat) results:
-    {key, type, arm, repeat, passed, hard_fail, latencies, name}."""
+    {key, type, arm, repeat, passed, hard_fail, latencies, name}. Pass counts are runs (cases × repeats)."""
     def passes(kind: str, arm: str) -> int:
         return sum(1 for r in results if r["type"] == kind and r["arm"] == arm and r["passed"])
 
+    def runs(kind: str) -> int:
+        return sum(1 for r in results if r["type"] == kind and r["arm"] == "baseline")
+
     reasons: list[str] = []
+    warnings: list[str] = []
     cluster_n = len({r["key"] for r in results if r["type"] == "cluster"})
     held_n = len({r["key"] for r in results if r["type"] == "held_out"})
+    lift_runs = runs("cluster") + runs("held_out")
     base_lift = passes("cluster", "baseline") + passes("held_out", "baseline")
     cand_lift = passes("cluster", "candidate") + passes("held_out", "candidate")
-    if cand_lift < base_lift + 1:
-        reasons.append(f"No lift: {cand_lift} passing cluster and held-out cases against {base_lift} on the current version")
-    if held_n and passes("held_out", "candidate") < math.ceil(held_n / 2):
-        reasons.append(f"Held-out cases: {passes('held_out', 'candidate')} of {held_n} pass (needs at least half)")
+    if not lift_runs or (cand_lift - base_lift) / lift_runs < MIN_LIFT - 1e-9:  # SL-19: a pass rate, not one lucky replay
+        reasons.append(f"No lift: {cand_lift} of {lift_runs} cluster and held-out runs pass against {base_lift} on the current "
+                       f"version (needs +{round(MIN_LIFT * 100)} points)")
+    held_runs = runs("held_out")
+    if held_runs and passes("held_out", "candidate") < math.ceil(held_runs / 2):
+        reasons.append(f"Held-out cases: {passes('held_out', 'candidate')} of {held_runs} runs pass (needs at least half)")
     regression: dict[str, dict[str, Any]] = {}
     for r in results:
         if r["type"] == "regression":
@@ -68,7 +77,9 @@ def evaluate_gate(results: list[dict[str, Any]], repeats: int) -> dict[str, Any]
     p95 = {arm: scoring.nearest_rank([x for r in results if r["arm"] == arm for x in r["latencies"]], 0.95) for arm in ("baseline", "candidate")}
     slower = bool(p95["baseline"] and p95["candidate"] and p95["candidate"] > SLOWDOWN * p95["baseline"]
                   and p95["candidate"] - p95["baseline"] > SLOWDOWN_GRACE_MS)
-    if slower:
+    if slower and latency_budget_ms and p95["candidate"] <= latency_budget_ms:  # SL-20: noise inside the budget only warns
+        warnings.append(f"Slower: p95 {p95['candidate']} ms against {p95['baseline']} ms, within the {latency_budget_ms} ms budget")
+    elif slower:
         reasons.append(f"Slower: p95 {p95['candidate']} ms against {p95['baseline']} ms")
     return {
         "cluster_cases": cluster_n, "baseline_pass": passes("cluster", "baseline"), "candidate_pass": passes("cluster", "candidate"),
@@ -77,8 +88,9 @@ def evaluate_gate(results: list[dict[str, Any]], repeats: int) -> dict[str, Any]
         "regression_pass": len(regression) - len(regressed),
         "hard_fails": {arm: sum(1 for r in results if r["arm"] == arm and r["hard_fail"]) for arm in ("baseline", "candidate")},
         "p95_ms": p95,
-        "lift_pct": round(100 * (passes("cluster", "candidate") - passes("cluster", "baseline")) / cluster_n) if cluster_n else 0,
-        "gate": {"passed": not reasons, "reasons": reasons},
+        "case_repeats": case_repeats,
+        "lift_pct": round(100 * (passes("cluster", "candidate") - passes("cluster", "baseline")) / runs("cluster")) if runs("cluster") else 0,
+        "gate": {"passed": not reasons, "reasons": reasons, "warnings": warnings},
     }
 
 
@@ -87,17 +99,19 @@ async def gather_cases(s, p: FixProposal, base_cfg: dict[str, Any]) -> list[dict
     settings = get_settings()
     members = await cluster_evidence(s, p.cluster_id, limit=60)
     shown = set(p.payload.get("evidence_call_ids") or [m["call_id"] for m in members[:10]])
+    learning = LearningConfig.model_validate(base_cfg.get("learning") or {})
     cases = []
     for i, e in enumerate([m for m in members if m["call_id"] in shown][: settings.ev_max_cluster_cases]):
         cases.append(_case(f"cluster-{i + 1}", "cluster", {"caller_goal": e["caller_goal"] or e["gap_summary"],
-                                                           "caller_profile": member_profile(e["caller_ref"], e["call_id"])}))
+                                                           "caller_profile": member_profile(e["caller_ref"], e["call_id"])},
+                           learning.case_repeats))
     for i, e in enumerate([m for m in members if m["call_id"] not in shown and (m["caller_goal"] or m["gap_summary"])][:HELD_OUT]):
         cases.append(_case(f"held-out-{i + 1}", "held_out", {"caller_goal": e["caller_goal"] or e["gap_summary"],
                                                              "caller_profile": member_profile(e["caller_ref"], e["call_id"]),
-                                                             "source_call_id": e["call_id"]}))
+                                                             "source_call_id": e["call_id"]}, learning.case_repeats))
     for i, sc in enumerate(p.payload.get("scenarios") or []):
         cases.append(_case(f"derived-{i + 1}", "derived", sc))
-    repeats = LearningConfig.model_validate(base_cfg.get("learning") or {}).regression_repeats
+    repeats = learning.regression_repeats
     scenarios = (await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == p.agent_id, EvalScenario.enabled.is_(True))
                                  .order_by(EvalScenario.created_at))).all()
     for sc in scenarios:
@@ -165,7 +179,9 @@ async def run_eval(tenant_id: str, payload: dict[str, Any]) -> None:
 
     try:
         await asyncio.gather(*(one(c, a, k) for c, a, k in work))
-        summary = evaluate_gate(collected, repeats)
+        learning = LearningConfig.model_validate(base_cfg.get("learning") or {})
+        budget = EvaluationConfig.model_validate(base_cfg.get("evaluation") or {}).latency_p95_ms
+        summary = evaluate_gate(collected, repeats, latency_budget_ms=budget, case_repeats=learning.case_repeats)
         derived_base = defaultdict(bool)
         for r in collected:
             if r["type"] == "derived" and r["arm"] == "baseline" and r["passed"]:

@@ -23,7 +23,7 @@ Priorities: **P0** blocks real customers or safety; **P1** clear value for the n
 | Full knowledge chunks, sound "never" checks, verification only where the agent can verify | [CP-0030](/changes/cp-0030-knowledge-judge-verification-fixes.md), implemented |
 | Website knowledge sources: crawl a site from one URL, keep it in sync, answer with page citations | [CP-0031](/changes/cp-0031-website-knowledge-sources.md), implemented |
 | Learning actions: fixes verified after they ship, answers only from people, evaluation findings become work (R15, R18, R20) | [CP-0032](/changes/cp-0032-learning-actions.md), accepted |
-| Ship what was proven, a steadier gate (R14, R16) | [CP-0033](/changes/cp-0033-proven-fixes-and-a-steadier-gate.md), accepted |
+| Ship what was proven, a steadier gate (R14, R16) | [CP-0033](/changes/cp-0033-proven-fixes-and-a-steadier-gate.md), implemented |
 
 # From the end-user review
 

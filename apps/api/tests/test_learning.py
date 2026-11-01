@@ -135,8 +135,9 @@ async def test_eval_then_approve(client, seeded, fake_llm):
     assert run["status"] == "done", run
     summary = run["summary"]
     cluster_cases = summary["cluster_cases"]
-    assert sum(1 for r in run["results"] if r["case_type"] == "cluster") == 2 * cluster_cases
-    assert sum(1 for r in run["results"] if r["case_type"] == "held_out") == 2 * summary["held_out_cases"] > 0
+    k = summary["case_repeats"]  # cluster and held-out cases repeat on each arm (SL-18)
+    assert sum(1 for r in run["results"] if r["case_type"] == "cluster") == 2 * k * cluster_cases
+    assert sum(1 for r in run["results"] if r["case_type"] == "held_out") == 2 * k * summary["held_out_cases"] > 0
     assert sum(1 for r in run["results"] if r["case_type"] == "regression") == 8 * 3 * 2  # enabled scenarios × repeats × arms
     assert {r["arm"] for r in run["results"]} == {"baseline", "candidate"} and summary["gate"]["passed"], summary["gate"]
     progress = []

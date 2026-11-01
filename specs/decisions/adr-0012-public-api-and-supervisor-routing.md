@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0012 Public tenant API and supervisor routing
 description: A versioned server-to-server API per tenant authenticated by hashed, scoped API keys; a supervisor that routes each conversation to the right agent from an automatically synced capability catalog with a two-stage decision (embeddings, then a swappable decision model); agent-to-agent transfer inside one conversation. Records the research and the plan across CP-0023…CP-0027.
-status: draft
+status: stable
 tags: [decision, api, routing, security, voice]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

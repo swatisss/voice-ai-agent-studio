@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0028 Routing mode - embedding or a configured decision model
 description: Routing runs on the embedding by default; a tenant can switch to a generic, Jev-compatible decision model configured by URL, key and model name, which falls back to the embedding when it is not configured, fails or is unsure; the routing suite compares both; vendor-named decision targets, the LLM decision target and local Laya are removed.
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [routing, evaluation, settings, configuration]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

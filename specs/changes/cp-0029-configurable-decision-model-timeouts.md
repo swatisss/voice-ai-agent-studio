@@ -2,7 +2,7 @@
 type: Change Proposal
 title: CP-0029 Configurable decision-model time budgets so voice can use the decision model
 description: The decision model's time budget per channel (fixed at 350 ms in voice and 1.5 s in text) becomes two environment settings, so a hosted decision model measured at about 550 ms can decide voice conversations while the caller hears the connecting message; the embedding stays the fallback.
-status: draft
+status: stable
 cp_state: implemented
 tags: [routing, voice, configuration]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }

@@ -2,7 +2,7 @@
 type: UI Spec
 title: Evaluation
 description: How each agent performs, measured - per-version scores and trends, every check with its pass rate and judge calibration, drift flags, and the scored calls behind each number.
-status: draft
+status: stable
 tags: [ui, evaluation, scoring]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---

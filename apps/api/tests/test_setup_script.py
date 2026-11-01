@@ -1,4 +1,4 @@
-"""Onboarding script. Covers: SDD-09"""
+"""Onboarding script. Covers: SDD-09, SDD-10"""
 from __future__ import annotations
 
 import importlib.util
@@ -51,3 +51,17 @@ def test_a_fresh_env_gets_a_tenant_secrets_key(tmp_path):
     line = next(l for l in (tmp_path / "apps" / "api" / ".env").read_text().splitlines() if l.startswith("TENANT_SECRETS_KEY="))
     Fernet(line.split("=", 1)[1].encode())  # a valid Fernet key
     assert mod.has_secrets_key(tmp_path) is True
+
+
+def test_a_fresh_env_gets_a_public_api_secret(tmp_path):
+    """Covers: SDD-10"""
+    mod = _load()
+    (tmp_path / "apps" / "api").mkdir(parents=True)
+    (tmp_path / "apps" / "api" / ".env.example").write_text("GROQ_API_KEY=\nPUBLIC_API_SECRET=          # comment\n")
+    assert mod.ensure_env(tmp_path) == "created"
+    env = tmp_path / "apps" / "api" / ".env"
+    line = next(l for l in env.read_text().splitlines() if l.startswith("PUBLIC_API_SECRET="))
+    assert len(line.split("=", 1)[1]) >= 32
+    env.write_text("PUBLIC_API_SECRET=mine\n")  # an existing .env is left untouched (SDD-09)
+    assert mod.ensure_env(tmp_path) == "exists"
+    assert env.read_text() == "PUBLIC_API_SECRET=mine\n"

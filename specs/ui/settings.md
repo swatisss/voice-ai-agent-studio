@@ -2,7 +2,7 @@
 type: UI Spec
 title: Settings
 description: Business-unit settings page - voice pipelines, the unit's own OpenAI key, the front desk of routed conversations, API keys and webhooks.
-status: draft
+status: stable
 tags: [ui, settings, tenancy]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-27T00:00:00Z" }
 ---

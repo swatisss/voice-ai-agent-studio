@@ -14,12 +14,17 @@ type Line = { segment: number | null; speaker: "caller" | "agent" | "front_desk"
 type Decision = {
   at: string; trigger: string; method: string; agent_id: string | null; confidence: number | null; reason: string;
   candidates: { agent_id: string; score: number }[]; stage_b: { target: string; model: string; choice: string; confidence: number; ms: number } | null;
-  fallbacks: { target: string; error: string }[]; clarification: string | null; stage_a_ms?: number; excluded?: string[];
+  fallbacks: { target: string; error: string }[]; clarification: string | null; stage_a_ms?: number; excluded?: string[]; mode?: string;
 };
 type View = {
   id: string; status: string; outcome: string | null; agent: { id: string; name: string } | null; routing: Decision[];
   segments: { call_id: string; agent_id: string; agent_name: string; segment: number; routed_by: string; outcome: string | null }[];
   transcript: Line[]; escalation: { id: string; status: string } | null;
+};
+
+const ROUTING_MODE: Record<string, string> = { embedding: "Embedding", decision_model: "Decision model" };
+const FALLBACK: Record<string, string> = {
+  not_configured: "not configured", phi_mode: "blocked by PHI mode", timeout: "timed out", invalid_answer: "gave an invalid answer", unsure: "was unsure",
 };
 
 const METHOD: Record<string, string> = {
@@ -37,6 +42,7 @@ export function RoutingTrace({ decisions, names }: { decisions: Decision[]; name
             <Badge tone={d.trigger === "transfer" ? "warn" : "info"}>{d.trigger === "transfer" ? "Transfer" : d.trigger === "start" ? "Start" : d.trigger}</Badge>
             <span className="font-medium">{d.agent_id ? names[d.agent_id] ?? d.agent_id : d.clarification ? "Clarifying" : "No agent"}</span>
             {d.confidence != null && <span className="text-muted">{d.confidence.toFixed(2)}</span>}
+            {d.mode && <Badge tone="neutral">{ROUTING_MODE[d.mode] ?? d.mode}</Badge>}
           </div>
           <div className="text-muted">{METHOD[d.method] ?? d.method}{d.reason ? ` — ${d.reason}` : ""}</div>
           {d.candidates?.length > 0 && (
@@ -50,8 +56,8 @@ export function RoutingTrace({ decisions, names }: { decisions: Decision[]; name
               ))}
             </ul>
           )}
-          {d.stage_b && <div className="text-muted">Stage B: {d.stage_b.target} chose {d.stage_b.choice === "none" ? "none" : names[d.stage_b.choice] ?? d.stage_b.choice} at {d.stage_b.confidence.toFixed(2)} in {d.stage_b.ms} ms</div>}
-          {d.fallbacks?.length > 0 && <div className="text-warn">{d.fallbacks.map((f) => `${f.target}: ${f.error.replace("_", " ")}`).join(" → ")} → next</div>}
+          {d.stage_b && <div className="text-muted">Decision model chose {d.stage_b.choice === "none" ? "none" : names[d.stage_b.choice] ?? d.stage_b.choice} at {d.stage_b.confidence.toFixed(2)} in {d.stage_b.ms} ms</div>}
+          {d.fallbacks?.length > 0 && <div className="text-warn">{d.fallbacks.map((f) => `${f.target === "decision_model" ? "Decision model" : f.target} ${FALLBACK[f.error] ?? f.error.replace(/_/g, " ")}`).join(" · ")} → embedding</div>}
           {d.clarification && <div>Asked: &ldquo;{d.clarification}&rdquo;</div>}
         </li>
       ))}

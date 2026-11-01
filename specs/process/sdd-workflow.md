@@ -2,7 +2,7 @@
 type: Process
 title: Spec-driven development workflow
 description: The loop every change follows in this repo - change proposal, spec edits, review, implementation, verification - with specs and code shipped together.
-status: draft
+status: stable
 tags: [process, sdd]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

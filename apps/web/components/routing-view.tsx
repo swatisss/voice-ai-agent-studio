@@ -12,7 +12,12 @@ type RunSummary = {
   cases: number; passed: number; accuracy: number | null; pass_mark: number; passes: boolean; confusion: Record<string, Record<string, number>>;
   by_method: Record<string, number>; latency_ms: { p50: number | null; p95: number | null }; fallbacks: number;
 };
-type Run = { id: string; trigger: string; status: string; summary: Partial<RunSummary>; created_at: string; finished_at: string | null };
+type ModeRow = {
+  configured: boolean; cases?: number; answerable?: number; right_first?: number; decided_alone?: number; right_when_decided?: number;
+  vague?: number; vague_asked?: number; fallbacks?: number; latency_ms?: { p50: number | null; p95: number | null };
+};
+type Comparison = { current: "embedding" | "decision_model"; embedding: ModeRow; decision_model: ModeRow };
+type Run = { id: string; trigger: string; status: string; summary: Partial<RunSummary> & { compare?: Comparison }; created_at: string; finished_at: string | null };
 type RunDetail = Run & { results: { case_id: string; utterance: string; expected_agent_name: string | null; chosen_agent_name: string | null; method: string; confidence: number | null; passed: boolean }[]; agent_names: Record<string, string> };
 type RoutingSummary = {
   decisions: number; by_method: Record<string, number>; stage_b_rate: number | null; fallback_rate: number | null; clarification_rate: number | null;
@@ -21,6 +26,37 @@ type RoutingSummary = {
 };
 
 const TRIGGER: Record<string, string> = { catalog: "Catalog change", target: "Target change", manual: "Manual" };
+const MODES = [["embedding", "Embedding"], ["decision_model", "Decision model"]] as const;
+
+const ratio = (n: number | undefined, of: number | undefined) => (n == null || !of ? "—" : `${pct(n / of)} (${n}/${of})`);
+
+function CompareTable({ c, saving, onUse }: { c: Comparison; saving: boolean; onUse: (mode: Comparison["current"]) => void }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-left text-muted">
+          <tr><th className="py-1">Mode</th><th>Right first choice</th><th>Decided without asking</th><th>Right when decided</th><th>Vague requests asked about</th><th>p50 / p95</th><th /></tr>
+        </thead>
+        <tbody>{MODES.map(([key, label]) => {
+          const r = c[key];
+          return (
+            <tr key={key} className="border-t border-[var(--border)]">
+              <td className="py-1 pr-3 font-medium">{label} {c.current === key && <Badge tone="info">Current</Badge>}</td>
+              {!r.configured ? <td colSpan={5} className="text-muted">Not configured</td> : (<>
+                <td className="pr-3">{ratio(r.right_first, r.answerable)}</td>
+                <td className="pr-3">{ratio(r.decided_alone, r.answerable)}</td>
+                <td className="pr-3">{ratio(r.right_when_decided, r.decided_alone)}</td>
+                <td className="pr-3">{ratio(r.vague_asked, r.vague)}</td>
+                <td className="pr-3 tabular-nums">{r.latency_ms?.p50 ?? "—"} / {r.latency_ms?.p95 ?? "—"} ms</td>
+              </>)}
+              <td className="text-right">{c.current !== key && r.configured && <Button loading={saving} onClick={() => onUse(key)}>Use this mode</Button>}</td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+    </div>
+  );
+}
 
 function Confusion({ detail }: { detail: RunDetail }) {
   const conf = detail.summary.confusion ?? {};
@@ -51,23 +87,38 @@ export function RoutingView({ tenant }: { tenant: string }) {
   const [days, setDays] = useState(28);
   const { data: summary } = useApi<RoutingSummary>(`/api/routing/summary?days=${days}`, [tenant, days]);
   const { data: runs, reload: reloadRuns } = useApi<{ items: Run[] }>("/api/routing/runs", [tenant]);
-  const latest = runs?.items.find((r) => r.status === "done");
+  const latest = runs?.items.find((r) => r.status === "done" && !r.summary.compare);
+  const latestCompare = runs?.items.find((r) => r.status === "done" && r.summary.compare);
+  const { data: fd, reload: reloadFd } = useApi<{ routing_mode: Comparison["current"] }>("/api/tenant-settings/front-desk", [tenant]);
   const { data: detail, reload: reloadDetail } = useApi<RunDetail>(latest ? `/api/routing/runs/${latest.id}` : null, [tenant, latest?.id]);
   const { data: cases, reload: reloadCases } = useApi<{ items: Case[] }>("/api/routing/cases", [tenant]);
   const { data: agents } = useApi<{ items: { id: string; name: string; mode: string; published_version: unknown }[] }>("/api/agents", [tenant]);
   const [form, setForm] = useState<{ id?: string; utterance: string; expected_agent_id: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  const [usingMode, setUsingMode] = useState(false);
 
   useEvents(["evaluation"], (e) => {
-    if (e.type === "routing_run.finished") { setStarting(false); reloadRuns(); reloadDetail(); }
+    if (e.type === "routing_run.finished") { setStarting(false); setComparing(false); reloadRuns(); reloadDetail(); }
   }, tenant);
 
   const routable = (agents?.items ?? []).filter((a) => a.published_version && a.mode !== "outbound");
 
-  async function start() {
-    setStarting(true);
-    try { await api("/api/routing/runs", { method: "POST" }); reloadRuns(); } catch (e) { setStarting(false); setError((e as ApiError).detail); }
+  async function start(compare = false) {
+    const busy = compare ? setComparing : setStarting;
+    busy(true);
+    setRunError(null);
+    try { await api("/api/routing/runs", { method: "POST", json: { compare } }); reloadRuns(); } catch (e) { busy(false); setRunError((e as ApiError).detail); }
+  }
+
+  async function applyMode(mode: Comparison["current"]) {
+    setUsingMode(true);
+    setRunError(null);
+    try { await api("/api/tenant-settings/front-desk", { method: "PUT", json: { routing_mode: mode } }); reloadFd(); }
+    catch (e) { setRunError((e as ApiError).detail); }
+    finally { setUsingMode(false); }
   }
 
   async function saveCase() {
@@ -115,7 +166,11 @@ export function RoutingView({ tenant }: { tenant: string }) {
           )}
         </Card>
       )}
-      <Card title="Routing suite" actions={<Button variant="primary" loading={starting} onClick={start}>Run routing suite</Button>}>
+      <Card title="Routing suite" actions={<div className="flex gap-2">
+        <Button loading={comparing} disabled={starting} onClick={() => start(true)}>Compare modes</Button>
+        <Button variant="primary" loading={starting} disabled={comparing} onClick={() => start()}>Run routing suite</Button>
+      </div>}>
+        {runError && <p className="mb-3 text-sm text-bad">{runError}</p>}
         {!runs ? <Spinner /> : !latest ? <p className="text-sm text-muted">No finished runs yet.</p> : (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
@@ -136,11 +191,17 @@ export function RoutingView({ tenant }: { tenant: string }) {
             )}
           </div>
         )}
+        {latestCompare?.summary.compare && (
+          <div className="mt-4 space-y-2">
+            <div className="text-sm font-medium">Routing modes compared <span className="font-normal text-muted">· {latestCompare.summary.cases} cases · {when(latestCompare.created_at)}</span></div>
+            <CompareTable c={{ ...latestCompare.summary.compare, current: fd?.routing_mode ?? latestCompare.summary.compare.current }} saving={usingMode} onUse={applyMode} />
+          </div>
+        )}
         {runs && runs.items.length > 1 && (
           <table className="mt-4 w-full text-sm">
             <thead className="text-left text-muted"><tr><th className="py-1">Started</th><th>Trigger</th><th>Status</th><th>Accuracy</th></tr></thead>
             <tbody>{runs.items.map((r) => (
-              <tr key={r.id} className="border-t border-[var(--border)]"><td className="py-1">{when(r.created_at)}</td><td>{TRIGGER[r.trigger] ?? r.trigger}</td><td>{r.status}</td><td>{pct(r.summary.accuracy ?? null)}</td></tr>
+              <tr key={r.id} className="border-t border-[var(--border)]"><td className="py-1">{when(r.created_at)}</td><td>{TRIGGER[r.trigger] ?? r.trigger}{r.summary.compare ? " · Compare modes" : ""}</td><td>{r.status}</td><td>{r.summary.compare ? "—" : pct(r.summary.accuracy ?? null)}</td></tr>
             ))}</tbody>
           </table>
         )}

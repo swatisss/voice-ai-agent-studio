@@ -110,3 +110,9 @@ UI-59
 UI-60
 UI-61
 UI-62
+# CP-0028 Evaluation Routing Compare modes and Settings Front desk routing controls: no browser harness; clicked through on
+# 2026-11-01 against the local stack (comparison table with both modes, Use this mode after a reload, Decision model and a
+# 0.70 clear win saved and reloaded, the full-flow routing trace showing the mode). The API behind them is covered by
+# tests/test_supervisor_routing.py and tests/test_capability_catalog.py. These lines need the reviewer's approval.
+UI-63
+UI-64

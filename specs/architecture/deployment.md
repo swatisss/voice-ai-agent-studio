@@ -2,7 +2,7 @@
 type: Component Spec
 title: Deployment
 description: Local zero-infrastructure development and the GCP Cloud Run deployment topology, configuration and constraints.
-status: draft
+status: stable
 tags: [architecture, deployment, gcp]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

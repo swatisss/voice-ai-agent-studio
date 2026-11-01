@@ -2,7 +2,7 @@
 type: Component Spec
 title: Supervisor routing
 description: The front desk and the supervisor that picks which agent handles a conversation - the embedding by default or a configured decision model with embedding fallback, PHI mode, clarification, default agent, phone numbers and the playground, and the routing record and trace.
-status: draft
+status: stable
 tags: [architecture, routing, llm, voice, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

@@ -2,7 +2,7 @@
 type: Glossary
 title: Glossary
 description: Shared vocabulary used across specs, code and UI labels.
-status: draft
+status: stable
 tags: [product, glossary]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

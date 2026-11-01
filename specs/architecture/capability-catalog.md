@@ -2,7 +2,7 @@
 type: Component Spec
 title: Capability catalog
 description: What the supervisor knows about each agent - a capability profile per published, routable agent built from its description, use cases, tools, knowledge and generated examples, indexed for semantic search and kept in sync automatically; plus the tenant's routing suite.
-status: draft
+status: stable
 tags: [architecture, routing, knowledge, evaluation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

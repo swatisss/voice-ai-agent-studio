@@ -12,3 +12,4 @@
 * [Insights](insights.md) - Clusters, fix proposals, evaluation results and approval
 * [Evaluation](evaluation.md) - Per-version scores and trends, checks with pass rates and calibration, drift, and the scored calls behind them
 * [Member memory](member-memory.md) - What an agent remembers about one member: timeline, source of each memory, restore, erase and export
+* [Compliance](compliance.md) - Healthcare controls with their test status, regulation, enforcement and open gaps

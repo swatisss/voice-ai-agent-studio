@@ -2,7 +2,7 @@
 type: Component Spec
 title: Telephony (Twilio phone channel)
 description: Inbound phone calls through Twilio Media Streams - number-to-agent mapping, voice webhook and TwiML, the media-stream WebSocket, IVR context, transfer to a person, request security and settings.
-status: stable
+status: draft
 tags: [architecture, telephony, twilio, ivr]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }
 ---
@@ -24,6 +24,21 @@ caller phone ─▶ (your IVR forwards here, optional) ─▶ Twilio number
 ```
 
 Only inbound calls are supported. Outbound agents are still simulated in the browser ([/architecture/call-modes.md](/architecture/call-modes.md)).
+
+# Carrier adapters
+
+Everything carrier-specific sits behind one interface ([ADR-0013](/decisions/adr-0013-carrier-adapters-and-sip-paths.md)), so another carrier or the customer's own Asterisk is one more module. An adapter has a `name` (the `{carrier}` in its routes and `meta.telephony.provider`) and:
+
+| Method | Twilio adapter |
+|---|---|
+| `configured()` | `TWILIO_AUTH_TOKEN` set (`/healthz` `providers.twilio`) |
+| `verify(url, params, headers)` | `X-Twilio-Signature` (TEL-02, TEL-10) |
+| `inbound(params)` | `CallSid`, `From`, `To`, `StirVerstat`, `ivr_*` and `SipHeader_X-IVR-*` |
+| `answer(stream_url, call_id)` / `not_in_service()` | `<Connect><Stream>` / `<Say>` + `<Hangup/>` TwiML |
+| `serializer(start)` | mu-law 8 kHz frames, `clear` on barge-in (TEL-06) |
+| `transfer(call_ref, destination)` | REST update with `<Dial>` (TEL-07) |
+
+Routes are `/api/telephony/{carrier}/voice`, `/api/telephony/{carrier}/stream/{call_id}` and `/api/telephony/{carrier}/conversation/{conversation_id}`; an unregistered carrier answers 404 `unknown_carrier`. The call-bound stream token, IVR context rules, caller identification, admission and the pipeline are shared by every adapter. **SIP** reaches the platform through a carrier's SIP trunk or SIP domain into its adapter (with Twilio today), through the customer's own Asterisk over WebSocket (`externalMedia`, the next adapter), or through a speech model's own SIP endpoint; never as raw RTP on Cloud Run.
 
 # Phone numbers
 
@@ -123,3 +138,4 @@ Two ways, both in [/build/runbook-phone.md](/build/runbook-phone.md):
 - **TEL-10** — Given `TWILIO_VALIDATE_SIGNATURE=0`, when the process is on Cloud Run (`K_SERVICE` set), then the telephony routes refuse to start; when it is not, unsigned requests are accepted and a warning is logged; given no `TWILIO_AUTH_TOKEN`, the webhook answers the "not in service" TwiML and `/healthz` reports `providers.twilio: false`.
 - **TEL-11** — Given a phone call that ends for any reason in [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md), when the closing speech has finished, then the stream socket closes with 1000, `calls.end_reason` is that reason, and no feedback prompt is created for the call.
 - **TEL-12** — Given a number with target `front_desk`, when its signed webhook is called, then a phone conversation is created (no call row until an agent is chosen), the TwiML stream URL names the conversation, the front desk speaks first after `start`, and the routed segment carries `meta.telephony` and the IVR context; given a tenant with no routable member agent, the webhook answers "not in service".
+- **TEL-13** — Given the carrier registry, then `twilio` is the only registered adapter, TEL-01…TEL-12 pass unchanged on the Twilio URLs, and `POST /api/telephony/acme/voice` answers 404 `unknown_carrier` without creating a call.

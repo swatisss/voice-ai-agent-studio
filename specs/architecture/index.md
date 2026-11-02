@@ -33,3 +33,4 @@
 * [Webhooks](webhooks.md) - Signed, retried webhooks for public-API conversations; IDs only by default
 * [WebRTC transport](webrtc-transport.md) - WebRTC voice for public-API and playground conversations, TURN on Cloud Run
 * [Deployment](deployment.md) - Local dev and GCP Cloud Run topology
+* [Studio sign-in and roles](studio-auth.md) - Two demo accounts, signed session cookie, the API guard and admin-only table, who is recorded

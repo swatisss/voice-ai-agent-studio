@@ -2,7 +2,7 @@
 type: Scope
 title: v1 scope
 description: What the v1 (hackathon) platform includes, what it excludes, and the non-goals.
-status: stable
+status: draft
 tags: [product, scope]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -24,13 +24,15 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * An **optional realtime speech-to-speech voice pipeline** (OpenAI Realtime) chosen per agent; the Insurance Claims Agent uses it, all other agents keep the Deepgram cascade ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)).
 * A **public, key-authenticated API** per tenant (`/v1`) for tenant backends: text, voice over WebSocket, a Twilio-format media stream for any carrier, and WebRTC; per-key rate limits; signed webhooks ([/api/public-api.md](/api/public-api.md)).
 * **Supervisor routing**: a front desk and a supervisor pick the agent from an automatically synced capability catalog; agents transfer conversations to each other ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)).
+* **Studio sign-in with two roles**: an admin and a reviewer (the human in the loop); only an admin can change what callers hear ([/architecture/studio-auth.md](/architecture/studio-auth.md)).
+* A **Compliance evidence** page: each healthcare control, the regulation it supports and the tests that prove it ([/product/compliance-evidence.md](/product/compliance-evidence.md)).
 * Local dev with zero infrastructure (SQLite); GCP Cloud Run deployment.
 * Spec-driven development tooling (`spec_check.py`, git hooks, agent instructions).
 
 # Out of scope (v1) — roadmap
 
-* Telephony beyond inbound Twilio calls and Twilio-format media streams: SIP trunks and SIP URIs (planned after ADR-0012), IVR/CCaaS connectors (Genesys, Amazon Connect), buying or managing phone numbers from the app, warm transfer of live audio to a human (a redirect of the live call is in scope), DTMF input, call recording.
-* Studio authentication, SSO, RBAC (a tenant switcher stands in); API keys authenticate only the `/v1` API. OAuth, per-user tokens and browser-held keys.
+* Telephony beyond inbound Twilio calls and Twilio-format media streams: carriers other than Twilio and the customer's own Asterisk (the carrier-adapter interface and the SIP paths are decided in [ADR-0013](/decisions/adr-0013-carrier-adapters-and-sip-paths.md); SIP through a Twilio trunk or SIP domain works today), IVR/CCaaS connectors (Genesys, Amazon Connect), buying or managing phone numbers from the app, warm transfer of live audio to a human (a redirect of the live call is in scope), DTMF input, call recording.
+* SSO, user management, roles beyond admin and reviewer, per-business-unit permissions; API keys authenticate only the `/v1` API. OAuth, per-user tokens and browser-held keys.
 * Audio recording storage and playback.
 * PHI redaction pipeline, BAAs, audit log export, data retention policies.
 * Languages other than English.

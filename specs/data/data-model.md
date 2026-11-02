@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: stable
+status: draft
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -41,7 +41,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **personas** — `id`, `tenant_id`, `name`, `description`, `voice`, `speed` float, `greeting`, `disclosure`, `opening`, `style`, `created_at`, `updated_at` ([/architecture/personas.md](/architecture/personas.md))
 
-**agent_versions** — `id`, `tenant_id`, `agent_id`, `version` int (1..n per agent, unique with agent_id), `config` JSON (snapshot), `change_note`, `source_proposal_id` (nullable), `created_at`
+**agent_versions** — `id`, `tenant_id`, `agent_id`, `version` int (1..n per agent, unique with agent_id), `config` JSON (snapshot), `change_note`, `source_proposal_id` (nullable), `published_by` (nullable; the signed-in publisher, "Studio" with sign-in off, [/architecture/studio-auth.md](/architecture/studio-auth.md)), `created_at`
 
 **tools** — `id`, `tenant_id`, `name` (unique per tenant), `description`, `method`, `url`, `parameters` JSON, `requires_verification` bool, `is_verification` bool, `timeout_s` int, `status` (`active`|`draft`), `created_at`, `updated_at`
 
@@ -111,6 +111,7 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 - **DM-01** — Given a fresh database, when the app starts, then all 37 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards`, `check_reviews`, `learning_runs`, `api_keys`, `conversations`, `webhook_endpoints`, `webhook_deliveries`, `capability_profiles`, `capability_entries`, `routing_cases`, `knowledge_sources` or `learning_actions`, when the app starts, then those tables are created and existing rows are untouched.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.
+- **DM-14** — Given an existing database without `agent_versions.published_by`, when the app starts, then the column is added as null and existing versions are unchanged.
 - **DM-13** — Given an existing database without `clusters.human_answer`, `clusters.human_answer_by` and `clusters.reopened_at`, when the app starts, then the columns are added as null and existing clusters keep their status.
 - **DM-12** — Given an existing database without `knowledge_docs.source_id`, `knowledge_docs.miss_count`, `knowledge_docs.updated_at` and `knowledge_chunks.content_hash`, when the app starts, then the columns are added (null or 0), existing docs have no source, and search over them is unchanged.
 - **DM-10** — Given an existing database without the CP-0023…CP-0026 columns (`calls.conversation_id`, `segment`, `routed_by`; `phone_numbers.target`; `tenant_settings.front_desk`; `use_cases.updated_at`; nullable `eval_runs.agent_id` and `phone_numbers.agent_id`), when the app starts, then they are added with their defaults, existing calls have no conversation, existing numbers have target `agent`, and no row is lost.

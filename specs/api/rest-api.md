@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -12,10 +12,23 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * JSON in/out; `snake_case` fields; timestamps ISO 8601 UTC.
 * Tenant header `X-Tenant-Id` on every request except `GET /api/tenants` ([/architecture/multi-tenancy.md](/architecture/multi-tenancy.md)).
 * The key-authenticated `/v1` API for tenant backends is a separate contract: [/api/public-api.md](/api/public-api.md).
-* Errors: `{"error": "<code>", "detail": "<human text>"}` with 400/404/409/422/500.
+* Errors: `{"error": "<code>", "detail": "<human text>"}` with 400/401/403/404/409/422/500.
+* **Sign-in** ([/architecture/studio-auth.md](/architecture/studio-auth.md)): when it is on, every `/api/` request except `/api/auth/*` and `/api/telephony/*` needs the `studio_session` cookie (401 `login_required`), admin-only requests from a reviewer get 403 `admin_required`, and the signed-in user's name replaces body names (`decided_by`, `assignee`, `reviewer`, `by`).
 * Lists return `{"items": [...]}`; no pagination in v1 (lists capped at 500, newest first).
 
 # Endpoints
+
+## Sign-in
+| Method | Path | Body → Result |
+|---|---|---|
+| POST | `/api/auth/login` | `{email, password}` → `{user: {email, name, role}}` and the session cookie; 401 `bad_credentials` |
+| POST | `/api/auth/logout` | → 204, cookie cleared |
+| GET | `/api/auth/me` | → `{enabled, user}` (`user` `null` without a session) |
+
+## Compliance
+| Method | Path | Result |
+|---|---|---|
+| GET | `/api/compliance/evidence` | → `{controls: [{id, rule, reference, enforcement, where, status, evidence: [{id, status, tests}]}], gaps: [text], report: {generated_at, commit} \| null}` ([/product/compliance-evidence.md](/product/compliance-evidence.md)); not tenant-scoped |
 
 ## Tenants & models
 | Method | Path | Result |
@@ -105,7 +118,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |
 | PATCH | `/api/calls/{id}/live` | `{persona_id?, turn_detection?}` → `{settings}`; changes persona and/or turn detection of a running call (404 unknown, 409 ended, 422 invalid). 409 `realtime_pipeline` for a call on the realtime pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md), RV-15). See [/architecture/personas.md](/architecture/personas.md), [/architecture/turn-detection.md](/architecture/turn-detection.md). |
 | GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `direction?`, `feedback?` (`up`\|`down`\|`none`), `include_seed=true` → `{items: [call summary]}` (eval calls excluded); each summary carries `feedback` (`"up"`, `"down"` or `null`) and `transport` (`"phone"` for a call that came in through Twilio, else `"browser"`) |
-| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `telephony` (`{provider, call_sid, from_last4, to}` for a phone call, else `null`) + `identification` (`{first_name, method, attestation}` or `null`) + `memory` (`{used: [memory], updated: [memory event]}`) + `scorecard` (the call's scorecard with `reviews: {check_key: review}`, or `null`) |
+| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `telephony` (`{provider, call_sid, from_last4, to}` for a phone call, else `null`) + `identification` (`{first_name, method, attestation}` or `null`) + `memory` (`{used: [memory], updated: [memory event]}`) + `scorecard` (the call's scorecard with `reviews: {check_key: review}`, or `null`) + `version_info` (`{version, published_by, published_at, change_note, source_proposal: {id, title, decided_by, decided_at} | null}`, CMP-03) |
 | POST | `/api/calls/{id}/rescore` | → `{job_id}`; queues `score_call` again; 409 `call_active`, 409 `not_scorable` for a simulation call |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
 

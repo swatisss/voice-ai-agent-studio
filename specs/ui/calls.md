@@ -2,7 +2,7 @@
 type: UI Spec
 title: Calls
 description: Call explorer with filters and a call detail page showing transcript, tool calls, escalation packet and analysis.
-status: stable
+status: draft
 tags: [ui, calls]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -14,6 +14,7 @@ Filters: agent, outcome, channel, direction, feedback (Any · Not helpful · Hel
 # Detail (`/calls/detail/?id=…`)
 
 * Header: outcome badge, channel, version, start/end, duration, end reason, cost, tokens; for a phone call also the dialled number and the caller's last four digits.
+* **Audit line** under the header (from `version_info`, CMP-03): "Answered by v{n} · published by {published_by or 'unknown'} on {date}" and, when the version came from a learning fix, " · from fix '{title}' approved by {decided_by}" linking to the proposal's cluster.
 * Transcript (same rendering as test call) with tool calls inline as expandable rows (`JsonView` of args/result).
 * **Escalation** card (if any): status, reason, disposition, resolution note, packet (same component as the console).
 * **Caller feedback** card (when given): the rating as "Helpful" / "Not helpful", the comment and when it was given.
@@ -30,3 +31,4 @@ Filters: agent, outcome, channel, direction, feedback (Any · Not helpful · Hel
 - **UI-39** — Given a phone call and a browser voice call, then the explorer shows a **Phone** badge only on the phone call, and the phone call's detail header shows the dialled number and the caller's last four digits but no full caller number.
 - **UI-36** — Given calls with and without feedback, then the explorer shows "Helpful" / "Not helpful" badges, filtering by Not helpful lists only those calls, and a call's detail page shows the caller's comment.
 - **UI-61** — Given a conversation with two segments, then both calls show in the explorer with Routed / Transferred badges and segment numbers, and each detail page's Conversation card lists both segments with links, the routing method and confidence, and the transfer reason.
+- **UI-72** — Given a call answered by a version the admin published by approving a fix, then the call detail's audit line reads "Answered by v2 · published by Alex Admin on …" followed by "from fix '…' approved by Alex Admin" with a link to the cluster; for a seeded call on a version without a publisher it reads "published by unknown".

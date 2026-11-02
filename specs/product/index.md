@@ -8,3 +8,4 @@
 * [Demo walkthrough](demo-walkthrough.md) - Build a new agent from scratch in the sandbox and follow it through test calls, scoring, escalation and self-learning; manual steps and the automated run
 * [Roadmap](roadmap.md) - Candidate features after v1, ranked P0-P2, from the end-user review and a competitor survey
 * [Healthcare compliance](healthcare-compliance.md) - Safety, privacy and disclosure rules for the healthcare & insurance domain
+* [Compliance evidence](compliance-evidence.md) - Each healthcare control, the regulation it supports, how it is enforced and the tests that prove it; open gaps

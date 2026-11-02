@@ -1,5 +1,8 @@
 # Change proposals
 
+* [CP-0036 Carrier adapters](cp-0036-carrier-adapters.md) - Telephony behind one carrier-adapter interface and registry, carrier-named routes; Twilio stays the only adapter, any carrier or SIP source plugs in as one module
+* [CP-0035 Compliance evidence](cp-0035-compliance-evidence.md) - Each healthcare control with its regulation, enforcement and passing tests on a Compliance page; an audit line on every call; the adversarial-caller demo act
+* [CP-0034 Studio sign-in and roles](cp-0034-studio-sign-in-and-roles.md) - Sign-in with two demo accounts; reviewers do the human-in-the-loop work, only an admin publishes or approves a fix; the API enforces it and records who
 * [CP-0001 Initial platform build](cp-0001-initial-platform.md) - Build the v1 platform: builder, voice and text test calls, escalation with groundwork packets, fleet learning with eval-gated fixes
 * [CP-0002 Spec enforcement in CI and contributor onboarding](cp-0002-spec-enforcement-and-onboarding.md) - CI gate, PR-level spec-first/log/lifecycle rules, acceptance ratchet, setup script, README
 * [CP-0033 Ship what was proven, and a steadier gate](cp-0033-proven-fixes-and-a-steadier-gate.md) - Approval publishes the published version plus the fix; cluster cases repeat, lift is a pass rate, small clusters keep a held-out case, latency blocks only past the agent's budget

@@ -125,3 +125,13 @@ UI-64
 # tests/test_knowledge_sources.py. Approval requested from the reviewer with CP-0031.
 UI-65
 UI-66
+
+# CP-0032 learning actions, clicked through on 2026-11-02 on a fake server (scripts/demo/fake_server.py, built web on :8099,
+# no model calls). UI-67: Needs attention lists open actions ranked with kind labels (Fix did not hold, Test failing) and
+# next-step links; Dismiss with an inline note removes the row without reload; the dashboard's Self-learning card shows
+# the open count (0 need attention, matching the API). UI-68: a missing-knowledge cluster with no specialist note shows the
+# answer form instead of Draft fix and "—" for the specialist column; Save answer & draft fix showed the reviewer's answer
+# and the proposal (Evaluating, then Ready with its gate) within about 7 s; a fixed cluster shows "Fixed in v4" and its fix
+# line. Approval requested from the product owner.
+UI-67
+UI-68

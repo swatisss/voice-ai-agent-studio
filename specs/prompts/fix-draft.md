@@ -2,7 +2,7 @@
 type: Prompt
 title: Fix draft prompt
 description: Drafts a knowledge article, a skill (with an existing or new tool), or a policy rule for a fixable cluster, grounded in human resolution notes.
-status: draft
+status: stable
 tags: [prompt, drafting, learning]
 llm_role: drafting
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }

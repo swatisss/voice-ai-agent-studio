@@ -291,6 +291,9 @@ class Cluster(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="open")
     snoozed_until: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)  # SL-05
+    human_answer: Mapped[str | None] = mapped_column(Text, nullable=True)  # a reviewer's answer (answer_needed, CP-0032)
+    human_answer_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reopened_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)  # the fix did not hold (SL-15)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
@@ -497,6 +500,29 @@ class LearningRun(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class LearningAction(Base):
+    """One finding of evaluation or learning with one next step for a person (/architecture/learning-actions.md)."""
+
+    __tablename__ = "learning_actions"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    kind: Mapped[str] = mapped_column(String(32))  # fix_not_holding | answer_needed | check_failing | drift | scenario_failing
+    key: Mapped[str] = mapped_column(String(200), index=True)
+    severity: Mapped[str] = mapped_column(String(16), default="medium")  # high | medium
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open | done | dismissed | resolved
+    title: Mapped[str] = mapped_column(String(300))
+    detail: Mapped[str] = mapped_column(Text, default="")
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    impact: Mapped[float] = mapped_column(Float, default=0.0)
+    closed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    suppressed_until: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)  # done or dismissed: not reopened before
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
 class Job(Base):

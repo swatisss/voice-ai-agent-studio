@@ -15,10 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai.db import get_session, utcnow
 from voiceai.errors import ApiError
-from voiceai.learning import evaluate, nightly, propose, test_suites
+from voiceai.learning import actions, evaluate, nightly, propose, test_suites
 from voiceai.learning.analyze import cluster_summary
 from voiceai.learning.impact import impact
-from voiceai.models import Agent, Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc, LearningRun
+from voiceai.models import (
+    Agent, Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc, LearningAction, LearningRun,
+)
 from voiceai.tenancy import current_tenant
 
 router = APIRouter(prefix="/api")
@@ -59,7 +61,9 @@ async def clusters(agent_id: str | None = None, tenant_id: str = Depends(current
     if agent_id:
         q = q.where(Cluster.agent_id == agent_id)
     recent = await recent_stats(s, tenant_id)
-    items = [cluster_out(c, recent) for c in (await s.scalars(q)).all()]
+    rows = list((await s.scalars(q)).all())
+    extras = await actions.cluster_extras(s, rows)  # CP-0032: needs_answer, fix
+    items = [{**cluster_out(c, recent), **extras[c.id]} for c in rows]
     items.sort(key=lambda c: (-c["est_weekly_cost_usd"], c["name"]))
     return {"items": items}
 
@@ -77,7 +81,8 @@ async def cluster_detail(cluster_id: str, tenant_id: str = Depends(current_tenan
     recent = await recent_stats(s, tenant_id)
     evidence = await propose.cluster_evidence(s, c.id, limit=50)
     proposals = (await s.scalars(select(FixProposal).where(FixProposal.cluster_id == c.id).order_by(FixProposal.created_at.desc()))).all()
-    return {**cluster_out(c, recent), "calls": evidence, "proposals": [propose.proposal_summary(p) for p in proposals]}
+    extras = (await actions.cluster_extras(s, [c]))[c.id]
+    return {**cluster_out(c, recent), **extras, "calls": evidence, "proposals": [propose.proposal_summary(p) for p in proposals]}
 
 
 @router.post("/insights/clusters/{cluster_id}/draft-fix")
@@ -86,6 +91,8 @@ async def draft_fix(cluster_id: str, tenant_id: str = Depends(current_tenant), s
     recent = await recent_stats(s, tenant_id)
     if not cluster_out(c, recent)["ready_for_fix"]:
         raise ApiError(409, "cluster_not_ready", "Cluster is not fixable, below threshold, or already has a proposal")
+    if actions.needs_answer(c, await actions.clusters_with_notes(s, [c.id])):  # FL-09
+        raise ApiError(409, "answer_needed", "No specialist has answered these callers yet: give the answer first")
     from voiceai import jobs
 
     job = await jobs.enqueue(s, tenant_id, "draft_fix", {"cluster_id": cluster_id})
@@ -99,6 +106,48 @@ async def ignore(cluster_id: str, tenant_id: str = Depends(current_tenant), s: A
     c.status = "ignored"
     await s.commit()
     return cluster_out(c, await recent_stats(s, tenant_id))
+
+
+class ActionClose(BaseModel):
+    by: str = "Reviewer"
+    note: str | None = None
+
+
+class ActionAnswer(BaseModel):
+    answer: str
+    by: str = "Reviewer"
+
+
+@router.get("/insights/actions")
+async def list_actions(agent_id: str | None = None, status: str = "open", tenant_id: str = Depends(current_tenant),
+                       s: AsyncSession = Depends(get_session)) -> dict:
+    """Learning actions, ranked (/architecture/learning-actions.md, LA-08)."""
+    q = select(LearningAction).where(LearningAction.tenant_id == tenant_id)
+    if agent_id:
+        q = q.where(LearningAction.agent_id == agent_id)
+    if status != "all":
+        q = q.where(LearningAction.status == status)
+    rows = actions.rank(list((await s.scalars(q)).all()))
+    names = dict((await s.execute(select(Agent.id, Agent.name).where(Agent.tenant_id == tenant_id))).all())
+    return {"items": [actions.action_out(a, names.get(a.agent_id)) for a in rows]}
+
+
+@router.post("/actions/{action_id}/done")
+async def action_done(action_id: str, body: ActionClose, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    a = await actions.close(s, await actions.get_action(s, tenant_id, action_id), "done", body.by, body.note)
+    return actions.action_out(a)
+
+
+@router.post("/actions/{action_id}/dismiss")
+async def action_dismiss(action_id: str, body: ActionClose, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    a = await actions.close(s, await actions.get_action(s, tenant_id, action_id), "dismissed", body.by, body.note)
+    return actions.action_out(a)
+
+
+@router.post("/actions/{action_id}/answer")
+async def action_answer(action_id: str, body: ActionAnswer, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    a = await actions.answer(s, await actions.get_action(s, tenant_id, action_id), body.answer, body.by)
+    return actions.action_out(a)
 
 
 class ProposalUpdate(BaseModel):

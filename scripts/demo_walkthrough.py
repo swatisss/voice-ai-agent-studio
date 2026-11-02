@@ -563,11 +563,10 @@ class Walkthrough:
 
     # 9 -------------------------------------------------------------
     def _retire_earlier_loop(self, step: str) -> None:
-        """An earlier run's cluster for the loop question is fixed or has a fix waiting. A fixed cluster never becomes
-        ready again even when its calls come back (roadmap R15), so new calls would join it and the loop would stall:
-        reject its waiting fix and ignore it, so this run starts a fresh cluster."""
+        """An earlier run left a fix for the loop question waiting, unapproved: reject it and ignore its cluster, so this run
+        starts fresh. A cluster an earlier run *fixed* is left alone: its calls coming back reopen it (CP-0032, SL-15)."""
         for c in self.api.get(f"/api/insights/clusters?agent_id={self.agent_id}")["items"]:
-            if c["status"] in ("open", "ignored"):
+            if c["status"] != "fix_proposed":
                 continue
             detail = self.api.get(f"/api/insights/clusters/{c['id']}")
             if not any(e.get("resolution_note") == LOOP_NOTE for e in detail.get("calls", [])):
@@ -576,8 +575,7 @@ class Walkthrough:
                 if p["status"] in ("draft", "ready"):
                     self.api.post(f"/api/proposals/{p['id']}/reject", {"decided_by": "Demo walkthrough", "note": "Superseded by a new demo run"})
             self.api.post(f"/api/insights/clusters/{c['id']}/ignore")
-            self.r.add(step, "a fixed cluster reopens when its problem comes back (R15)", False,
-                       f"'{c['name']}' ({c['status']}) from an earlier run can never be ready again; ignored it", known="R15")
+            self.r.add(step, "an earlier run's unapproved fix", None, f"rejected it and ignored '{c['name']}'")
 
     def close_the_loop(self) -> None:
         """Act 6: bad calls a specialist answers, Run learning now, approve the drafted article, ask again."""
@@ -585,6 +583,7 @@ class Walkthrough:
         step = "9 Loop"
         self._retire_earlier_loop(step)
         cluster: dict[str, Any] = {}
+        after_fix = 0  # calls that joined a cluster an earlier run fixed (Act 1 published the agent without that article)
         for n, question in enumerate(LOOP_QUESTIONS, 1):
             cid, rep, _ = self._chat([question, "Yes, please connect me with a specialist."])
             escalated = any(t.get("escalated") for t in rep)
@@ -602,12 +601,18 @@ class Walkthrough:
             cluster = self.api.get(f"/api/insights/clusters/{call['analysis']['cluster_id']}")
             print(f"      bad call {n}: escalated, specialist note saved; cluster '{cluster['name']}' "
                   f"{cluster['signal_count']}/{cluster['min_cluster_size']} signals", flush=True)
-            if cluster["ready_for_fix"]:
+            after_fix += cluster["status"] == "fixed"
+            if cluster["ready_for_fix"] or after_fix >= 2:  # two calls after a fix: the run reopens the cluster (SL-15)
                 break
-        self.r.add(step, f"{n} bad calls cluster and the cluster is ready for a fix", bool(cluster.get("ready_for_fix")),
-                   f"'{cluster.get('name')}', {cluster.get('signal_count')} signals, {cluster.get('min_cluster_size')} needed")
-        if not cluster.get("ready_for_fix"):
-            return
+        reopening = cluster.get("status") == "fixed"
+        if reopening:
+            self.r.add(step, f"{n} bad calls joined the cluster an earlier run fixed", True,
+                       f"'{cluster.get('name')}': the next learning run should find that the fix did not hold")
+        else:
+            self.r.add(step, f"{n} bad calls cluster and the cluster is ready for a fix", bool(cluster.get("ready_for_fix")),
+                       f"'{cluster.get('name')}', {cluster.get('signal_count')} signals, {cluster.get('min_cluster_size')} needed")
+            if not cluster.get("ready_for_fix"):
+                return
 
         try:
             run_id = self.api.post("/api/learning/run")["learning_run_id"]
@@ -622,6 +627,12 @@ class Walkthrough:
         self.r.add(step, "learning run finished", run["status"] == "done",
                    f"{mine.get('calls_reviewed')} calls reviewed, signals {mine.get('signals')}, drafted {mine.get('drafted')}, "
                    f"gate passed {mine.get('passed')}" + (f", errors {mine['errors']}" if mine.get("errors") else ""))
+        if reopening:
+            self.r.add(step, "the fix did not hold: cluster reopened (SL-15)", mine.get("reopened", 0) >= 1, f"reopened {mine.get('reopened')}")
+        open_actions = self.api.get(f"/api/insights/actions?agent_id={self.agent_id}")["items"]
+        self.r.add(step, "Needs attention", None, "; ".join(a["title"] for a in open_actions)[:300] or "nothing open")
+        if reopening:
+            self.r.add(step, "a 'Fix did not hold' action is open", any(a["kind"] == "fix_not_holding" for a in open_actions))
         detail = self.api.get(f"/api/insights/clusters/{cluster['id']}")
         prop = next((p for p in detail.get("proposals", []) if p["status"] == "ready"), None)
         if prop is None:
@@ -639,7 +650,7 @@ class Walkthrough:
                    f"regressions {s.get('regression_pass')}/{s.get('regression_cases')}, p95 {s.get('p95_ms')}")
         self.r.add(step, "the gate passes", bool(gate.get("passed")),
                    "; ".join(gate.get("reasons") or []) or "passed" + "".join(f" (warning: {w})" for w in gate.get("warnings") or []),
-                   known="R16", model=True)
+                   known="R9", model=True)  # a blocked gate with live models is mostly the simulated caller (R9)
 
         body: dict[str, Any] = {"decided_by": "Demo walkthrough", "note": "Approved in the demo walkthrough"}
         if not gate.get("passed"):

@@ -4,7 +4,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { ClusterLabel } from "@/components/cluster-label";
+import { type Action, AnswerForm, useActions } from "@/components/actions";
+import { ClusterLabel, FixLine } from "@/components/cluster-label";
 import { FeedbackBadge } from "@/components/feedback";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, Card, Field, Input, JsonView, Spinner, Textarea, useToast } from "@/components/ui";
@@ -50,6 +51,8 @@ function ClusterDetail() {
   const [forceNote, setForceNote] = useState<string | null>(null);
   const [approved, setApproved] = useState<{ version: number; draftKept: boolean } | null>(null);
   const [opened, setOpened] = useState<Result[] | null>(null);
+  const actionsRes = useActions(tenant);
+  const answerAction = actionsRes.data?.items.find((a: Action) => a.kind === "answer_needed" && a.evidence.cluster_id === id);
 
   const loadProposal = useCallback(async () => {
     if (!proposalId) return setP(null);
@@ -127,11 +130,20 @@ function ClusterDetail() {
         <h1 className="text-xl font-semibold">{c.name}</h1>
         <ClusterLabel c={c} />
         <div className="ml-auto flex gap-2">
-          {c.ready_for_fix && <Button variant="primary" loading={busy === "draft"} onClick={draftFix}>Draft fix</Button>}
+          {c.ready_for_fix && !c.needs_answer && <Button variant="primary" loading={busy === "draft"} onClick={draftFix}>Draft fix</Button>}
           {c.status === "open" && <Button variant="ghost" onClick={() => act("ignore", async () => { await api(`/api/insights/clusters/${id}/ignore`, { method: "POST" }); setBusy(null); reload(); })}>Ignore</Button>}
         </div>
       </div>
       <p className="text-sm text-muted">{c.description}</p>
+      <FixLine c={c} />
+      {c.needs_answer && !p && (
+        <Card title="Answer needed">
+          <p className="mb-2 text-sm text-muted">No specialist has answered these callers yet. Knowledge is only drafted from what people say.</p>
+          {answerAction ? <AnswerForm action={answerAction} prompt="What should the agent tell these callers?" onSent={() => setBusy("draft")} />
+            : <p className="text-sm text-muted">The next learning run asks for the answer here and under Needs attention.</p>}
+        </Card>
+      )}
+      {c.human_answer && <div className="rounded-lg bg-accent-soft px-3 py-2 text-sm">Reviewer's answer{c.human_answer_by ? ` (${c.human_answer_by})` : ""}: {c.human_answer}</div>}
       <div className="flex flex-wrap gap-4 text-sm">
         <Badge tone={c.fixable ? "accent" : "neutral"}>{ROOT_CAUSE[c.root_cause]}</Badge>
         <span>{c.escalations_28d} escalations in 28 days</span>

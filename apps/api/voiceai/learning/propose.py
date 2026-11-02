@@ -57,7 +57,7 @@ async def cluster_evidence(s: AsyncSession, cluster_id: str, limit: int = 10) ->
     return [
         {
             "call_id": a.call_id, "date": c.started_at.isoformat(), "caller_goal": a.caller_goal, "gap_summary": a.gap_summary,
-            "resolution_note": (e.resolution_note if e else "") or a.resolution_summary, "caller_ref": c.caller_ref,
+            "resolution_note": (e.resolution_note if e else "") or "", "caller_ref": c.caller_ref,  # FL-09: never the AI's own summary
             "verified": bool(c.caller_ref), "root_cause": a.root_cause, "outcome": a.outcome,
             "feedback": {"rating": f.rating, "comment": f.comment or ""} if f else None,  # UI-37
         }
@@ -126,7 +126,8 @@ async def draft(s: AsyncSession, tenant_id: str, cluster: Cluster, origin: str =
     prompt = prompts.render(
         "fix-draft",
         cluster_name=cluster.name, cluster_description=cluster.description, root_cause=cluster.root_cause,
-        evidence="\n".join(f"- Goal: {e['caller_goal']} | Gap: {e['gap_summary']} | Specialist: {e['resolution_note'] or '(no note)'}" for e in evidence),
+        evidence="\n".join([*(f"- Goal: {e['caller_goal']} | Gap: {e['gap_summary']} | Specialist: {e['resolution_note'] or '(no note)'}" for e in evidence),
+                             *([f"- Reviewer's answer for all of these callers: {cluster.human_answer}"] if cluster.human_answer else [])]),
         attached_articles="\n\n".join(f"[{d.id}] {d.title}\n{d.content[:3000]}" for d in attached) or "(none)",
         existing_tools="\n".join(f"- {t['name']}: {t['description']}" for t in cfg.get("tools", [])) or "- (none)",
         unattached_tools="\n".join(f"- {t.name}: {t.description}" for t in unattached) or "- (none)",

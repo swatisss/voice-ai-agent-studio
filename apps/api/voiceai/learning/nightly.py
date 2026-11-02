@@ -18,7 +18,7 @@ from voiceai.config import get_settings
 from voiceai.db import sessionmaker, utcnow
 from voiceai.errors import ApiError
 from voiceai.events import bus
-from voiceai.learning import analyze, evaluate, gate, propose, score_report
+from voiceai.learning import actions, analyze, evaluate, gate, propose, score_report
 from voiceai.models import (
     Agent, AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, CallScorecard, CheckReview, Cluster, Escalation, EvalRun,
     LearningRun, Tenant,
@@ -114,13 +114,15 @@ async def schedule_nightly(now: datetime | None = None, running_since: datetime 
 async def _agent_pass(tenant_id: str, agent: Agent, since: datetime) -> dict[str, Any]:
     """One agent's night: signals → re-analysis → ready clusters → up to N proposals, each gated."""
     report: dict[str, Any] = {"agent_name": agent.name, "calls_reviewed": 0, "signals": dict.fromkeys(SIGNAL_KINDS, 0),
-                              "reanalysed": 0, "ready_clusters": 0, "drafted": 0, "passed": 0, "proposals": []}
+                              "reanalysed": 0, "reopened": 0, "ready_clusters": 0, "drafted": 0, "passed": 0, "proposals": []}
     async with sessionmaker()() as s:
         version = await s.get(AgentVersion, agent.published_version_id)
         learning = LearningConfig.model_validate(((version.config if version else {}) or {}).get("learning") or {})
         if not learning.nightly:
             report["skipped"] = "learning is off for this agent"
             return report
+        report["reopened"] = len(await actions.verify_fixes(s, tenant_id, agent.id))  # step 0, SL-15
+        await s.commit()
         calls = list((await s.scalars(select(Call).where(
             Call.agent_id == agent.id, Call.tenant_id == tenant_id, Call.is_eval.is_(False), Call.is_seed.is_(False),
             Call.channel != "simulation", Call.ended_at.is_not(None), Call.ended_at >= since))).all())
@@ -151,7 +153,10 @@ async def _agent_pass(tenant_id: str, agent: Agent, since: datetime) -> dict[str
         ready = sorted((cluster_out(c, stats) for c in clusters), key=lambda c: -c["est_weekly_cost_usd"])
         ready = [c for c in ready if c["ready_for_fix"]]
         report["ready_clusters"] = len(ready)
-        chosen = [c["id"] for c in ready[: learning.max_proposals_per_night]]  # SL-04
+        noted = await actions.clusters_with_notes(s, [c["id"] for c in ready])
+        by_id = {c.id: c for c in clusters}
+        draftable = [c for c in ready if not actions.needs_answer(by_id[c["id"]], noted)]  # SL-16: an answer_needed action instead
+        chosen = [c["id"] for c in draftable[: learning.max_proposals_per_night]]  # SL-04
     for cluster_id in chosen:
         try:
             async with sessionmaker()() as s:
@@ -170,6 +175,9 @@ async def _agent_pass(tenant_id: str, agent: Agent, since: datetime) -> dict[str
         except Exception as exc:  # noqa: BLE001 - one cluster must not stop the night
             log.warning("nightly draft for cluster %s failed: %s", cluster_id, exc)
             report.setdefault("errors", []).append(f"{cluster_id}: {str(exc)[:200]}")
+    async with sessionmaker()() as s:  # step 7: learning actions
+        report["actions"] = await actions.derive(s, tenant_id, agent.id)
+        await s.commit()
     return report
 
 
@@ -195,8 +203,10 @@ async def nightly_learning(tenant_id: str, payload: dict[str, Any]) -> None:
         report["routing"] = await routing_learning.draft_proposals(tenant_id, since)  # SL-13: misroutes, proposals only
         totals = Counter()
         for a in report["agents"].values():
-            for k in ("calls_reviewed", "reanalysed", "ready_clusters", "drafted", "passed"):
-                totals[k] += a[k]
+            for k in ("calls_reviewed", "reanalysed", "reopened", "ready_clusters", "drafted", "passed"):
+                totals[k] += a.get(k, 0)
+            for k, n in (a.get("actions") or {}).items():
+                totals[f"actions.{k}"] += n
             for k, n in a["signals"].items():
                 totals[f"signals.{k}"] += n
             totals["failed_drafts"] += len(a.get("errors", []))  # shown, so a broken run is never silent

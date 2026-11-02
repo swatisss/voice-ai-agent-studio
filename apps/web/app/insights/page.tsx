@@ -1,10 +1,11 @@
-// Spec: /ui/insights.md (Learning inbox, Cluster list)
+// Spec: /ui/insights.md (Needs attention, Learning inbox, Cluster list)
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ClusterLabel } from "@/components/cluster-label";
+import { NeedsAttention } from "@/components/actions";
+import { ClusterLabel, FixLine } from "@/components/cluster-label";
 import { LearningInbox } from "@/components/learning";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, EmptyState, Select, Spinner, Stat, useToast } from "@/components/ui";
@@ -46,6 +47,7 @@ export default function InsightsPage() {
         <h1 className="text-xl font-semibold">Insights</h1>
         <Select className="ml-auto w-60" value={agent} onChange={(e) => setAgent(e.target.value)}><option value="">All agents</option>{agents?.items.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
       </div>
+      <NeedsAttention tenant={tenant} agent={agent} />
       <LearningInbox tenant={tenant} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Open clusters" value={items.filter((c) => c.status === "open" || c.status === "fix_proposed").length} />
@@ -70,6 +72,7 @@ export default function InsightsPage() {
                 <span className="font-medium">{money(c.est_weekly_cost_usd)}/week</span>
                 <span className="text-xs text-muted">last {when(c.last_seen_at)}</span>
               </div>
+              <FixLine c={c} />
               {c.ready_for_fix && (
                 <div className="mt-3"><Button variant="primary" loading={drafting === c.id} onClick={() => draft(c.id)}>{drafting === c.id ? "Drafting fix…" : "Draft fix"}</Button></div>
               )}

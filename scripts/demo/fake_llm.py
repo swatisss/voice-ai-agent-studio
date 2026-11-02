@@ -180,6 +180,7 @@ def json_reply(role: str, prompt: str, schema: str) -> dict[str, Any]:
         return {"name": "Recurring question", "description": "Callers ask about the same topic."}
     if schema == "FixDraft":
         notes = list(dict.fromkeys(m.strip() for m in re.findall(r"Specialist: ([^|\n]+)", prompt) if "(no note)" not in m))
+        notes += [m.strip() for m in re.findall(r"Reviewer's answer for all of these callers: (.+)", prompt)]  # CP-0032
         title = re.search(r"Cluster: (.+)", prompt)
         name = re.split(r" [—-] ", title.group(1).strip())[0] if title else "Answer to a recurring question"
         body = "\n".join(f"- {n}" for n in notes[:8]) or "- Specialists answered this question; see the evidence."

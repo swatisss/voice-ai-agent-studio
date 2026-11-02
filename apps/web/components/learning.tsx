@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { api, type ApiError, useApi, useEvents } from "@/lib/api";
 import { label, when } from "@/lib/format";
+import { useActions } from "./actions";
 import { Badge, Button, Card, Spinner, useToast } from "./ui";
 
 type Run = { id: string; trigger: string; status: string; summary: { totals?: Record<string, number> }; started_at: string; finished_at: string | null };
@@ -59,6 +60,8 @@ function Counts({ run }: { run: Run }) {
 export function LearningCard({ tenant }: { tenant: string }) {
   const { runs, inbox, running, runNow, last } = useLearning(tenant);
   const waiting = inbox?.items.length ?? 0;
+  const open = useActions(tenant).data?.items ?? [];
+  const high = open.filter((a) => a.severity === "high").length;
   return (
     <Card title="Self-learning" actions={<Button variant="primary" onClick={runNow} disabled={running} loading={running}>{running ? "Learning…" : "Run learning now"}</Button>}>
       {!runs ? <Spinner /> : (
@@ -70,6 +73,10 @@ export function LearningCard({ tenant }: { tenant: string }) {
           <div className="flex items-center gap-3">
             <Badge tone={waiting ? "accent" : "neutral"}>{waiting} waiting for review</Badge>
             <Link className="font-medium text-accent" href="/insights/#inbox">Review proposals</Link>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge tone={high ? "bad" : open.length ? "warn" : "neutral"}>{open.length} need attention</Badge>
+            <Link className="font-medium text-accent" href="/insights/">See what needs attention</Link>
           </div>
         </div>
       )}

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Learning actions
 description: What evaluation and self-learning find becomes a ranked list of actions per agent - a fix that did not hold, an answer only a person can give, a check failing on many calls, drift, a test scenario failing on the live version - each with one next step, closing itself when the finding clears.
-status: draft
+status: stable
 tags: [architecture, learning, evaluation, insights]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

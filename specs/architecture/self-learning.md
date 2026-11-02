@@ -2,7 +2,7 @@
 type: Component Spec
 title: Self-learning
 description: A nightly job checks that earlier fixes held, turns each agent's day of calls into typed config change proposals - knowledge, tools, skills, rules - proves each one offline against the current version, queues it for a human and lists what needs attention; agents never change themselves.
-status: draft
+status: stable
 tags: [architecture, learning, evaluation, compliance]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-31T00:00:00Z" }
 ---

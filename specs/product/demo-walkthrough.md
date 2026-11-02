@@ -110,12 +110,18 @@ The agent learns something nobody wrote down: whether travellers can **extend th
 | "Yes, please connect me with a specialist." (also when the agent did not offer) | *Escalated — waiting for a specialist* | |
 | **Agent console** → the escalation → **Accept**; disposition *Resolved by human*; note: *You can extend SafeTrip cover once while abroad, by up to 30 extra days, if you ask before your original end date. Extend it in the SafeTrip app or by calling +1 555 0100. The extension does not cover anything that started before it.* → **Resolve** | Resolved | "The hint says it: what you tell the caller teaches the agent." |
 | Repeat the call and the resolution with "I've decided to stay abroad longer than planned. Can I extend my travel cover from here?" (and more paraphrases until the threshold) | **Insights** shows a cluster about cover extensions, *Ready for fix* | "Same gap, different words: they cluster." |
-| **Dashboard** → Self-learning card → **Run learning now** | "Learning…", then the card shows the run: calls reviewed, signals, 1 proposal drafted | "This is the nightly run, started by hand." |
+| **Dashboard** → Self-learning card → **Run learning now** | "Learning…", then the card shows the run: calls reviewed, signals, 1 proposal drafted, and how many things need attention | "This is the nightly run, started by hand." |
+| **Insights** → **Needs attention** | What the run found besides the fix, each with its next step: a check failing on many calls, a test scenario failing on the live version, a fix that did not hold ([learning actions](/architecture/learning-actions.md), CP-0032) | "Evaluation is not a report: every finding becomes something a person can do, and it closes itself once it is handled." |
 | **Review proposals** → the *Nightly* card → **Open** | A knowledge article built from the specialists' note and its gate: cluster calls before and after, test scenarios, latency | "Every fact comes from a person. The gate replayed the failing calls and our test suite on both versions." |
 | **Approve & publish** (or **Publish anyway** with a note, below) | A new version, change note "Fix: …" | "A person decided. The agent never edits itself." |
 | **Test call** → "I'm loving Portugal and want to stay ten more days. Can I extend my cover from here?" | Up to 30 extra days, before the original end date, app or +1 555 0100; no hand-off | "Same question, new words, answered by the fixed version." |
 
-Present a blocked gate honestly: with live models the simulated caller may accept a specialist it did not need ([roadmap](/product/roadmap.md) R9), and the latency rule is noisy (R16). The reviewer can still **Publish anyway** with a written note; the last test call is the proof. What the loop does not do yet (check after publishing that the fix held, learn facts only from human answers, ship exactly what was gated) is in [How self-learning should work](/architecture/self-learning-target.md).
+Present a blocked gate honestly: with live models the simulated caller may accept a specialist it did not need ([roadmap](/product/roadmap.md) R9). The reviewer can still **Publish anyway** with a written note; the last test call is the proof. Since CP-0033 the gate repeats the failing calls, needs a 25-point lift and only warns about latency within the agent's budget, and approval publishes exactly what was gated.
+
+**Two more beats** (CP-0032), if there is time:
+
+* **No specialist answered?** Make the bad calls but leave the escalations unresolved. The cluster then shows **Answer needed** instead of **Draft fix**: "Knowledge is only drafted from what people say." Type the answer and **Save answer & draft fix**; the proposal arrives with its gate.
+* **The fix did not hold.** Run Act 6 again on the same database (Act 1 publishes the agent without the article, so the gap returns). Two bad calls join the fixed cluster; **Run learning now** reopens it, **Needs attention** shows *Fix did not hold* with a link to roll back, and a new fix is drafted.
 
 # Known gaps to mention or avoid
 
@@ -126,8 +132,8 @@ Present a blocked gate honestly: with live models the simulated caller may accep
 | The same site added twice shows every search result twice | Act 1, if repeated | not yet planned |
 | Chat box loses focus after each message | Act 2 | [roadmap](/product/roadmap.md) R13 |
 | Simulated caller invents follow-ups and accepts hand-offs | Acts 4, 5 and 6 | roadmap R9 |
-| The gate blocks a good fix on latency noise | Acts 5 and 6 | roadmap R16 |
-| A fixed cluster never reopens, so repeating Act 6 on the same database stalls (the automated run ignores the old cluster) | Act 6, second time | roadmap R15 |
+| ~~The gate blocks a good fix on latency noise~~ | Acts 5 and 6 | fixed by [CP-0033](/changes/cp-0033-proven-fixes-and-a-steadier-gate.md) |
+| ~~A fixed cluster never reopens, so repeating Act 6 on the same database stalls~~ | Act 6, second time | fixed by [CP-0032](/changes/cp-0032-learning-actions.md) |
 
 # Automated run
 
@@ -146,7 +152,7 @@ python scripts/demo_walkthrough.py --live --learning --api https://<host>   # li
 python scripts/demo_walkthrough.py --serve-site     # only host the demo website (manual demo)
 ```
 
-What it does, in order: checks the API and the business unit; serves the demo website on `127.0.0.1:8765` (any free port if taken); pastes the policy and indexes the help centre as a website source (on a server without website sources, imports the gadget page alone); runs four test searches; creates or updates the tool, the skill and the agent **Travel Cover Helpdesk** and publishes a new version; holds calls A–D by text; waits for call A's scorecard and call D's groundwork packet; creates or updates four test scenarios and runs the suite; with `--learning`, drafts (or reuses) the newborn fix and evaluates it without approving it (Act 5), then closes the loop on the sandbox agent (Act 6): ignores an earlier run's cluster for the extension question (R15), holds bad calls until the cluster is ready, resolving each escalation with the specialist's note, starts **Run learning now**, checks that the drafted article carries the note, approves it as *Demo walkthrough* (with `force` and the gate's reasons as the note when the gate blocked; reported as KNOWN R16), and asks the question again on the new version. Act 6 is the only approval the runner makes, and only in the sandbox.
+What it does, in order: checks the API and the business unit; serves the demo website on `127.0.0.1:8765` (any free port if taken); pastes the policy and indexes the help centre as a website source (on a server without website sources, imports the gadget page alone); runs four test searches; creates or updates the tool, the skill and the agent **Travel Cover Helpdesk** and publishes a new version; holds calls A–D by text; waits for call A's scorecard and call D's groundwork packet; creates or updates four test scenarios and runs the suite; with `--learning`, drafts (or reuses) the newborn fix and evaluates it without approving it (Act 5), then closes the loop on the sandbox agent (Act 6): rejects an earlier run's unapproved fix for the extension question, holds bad calls until the cluster is ready (or, on a rerun, until two calls joined the cluster the last run fixed, which the learning run then reopens and reports under Needs attention), resolving each escalation with the specialist's note, starts **Run learning now**, checks that the drafted article carries the note, approves it as *Demo walkthrough* (with `force` and the gate's reasons as the note when the gate blocked), and asks the question again on the new version. Act 6 is the only approval the runner makes, and only in the sandbox.
 
 **Report**: printed live and saved to `apps/api/data/demo-runs/demo-<time>.md` (git-ignored), with each check's result and evidence (replies, scores, failures, call ids).
 

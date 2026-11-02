@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0032 Learning actions - evaluation and learning findings become work
 description: Every learning run turns what evaluation and learning find into a ranked list of actions (a fix that did not hold, an answer only a person can give, a check failing on many calls, drift, a test scenario failing on the live version); each action names its next step, closes itself when the condition clears, and knowledge fixes are drafted only from human answers.
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [learning, evaluation, insights, ui, api]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

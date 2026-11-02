@@ -54,6 +54,33 @@ export function useApi<T = any>(path: string | null, deps: unknown[] = []) {
 
 export type BusEvent = { id: string; topic: string; type: string; at: string; data: any };
 
+const EVENT_TYPES = ["call.event", "call.escalated", "call.ended", "escalation.created", "escalation.updated", "analysis.created",
+  "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published", "scorecard.updated", "test_run.progress", "test_run.finished", "learning.run.finished",
+  "catalog.updated", "routing_run.finished", "routing.decision", "conversation.transferred", "conversation.segment", "conversation.ended",
+  "action.updated"];
+
+/** One EventSource per tenant and topic set, shared by every hook that asks for it: a browser keeps only about six
+ * connections per host open, and each stream holds one for as long as the page is open. */
+type Stream = { es: EventSource | null; handlers: Set<(e: BusEvent) => void>; closed: boolean; delay: number };
+const streams = new Map<string, Stream>();
+
+function openStream(id: string, url: string, st: Stream) {
+  if (st.closed) return;
+  const es = new EventSource(url);
+  st.es = es;
+  es.onopen = () => { st.delay = 1000; };
+  es.onmessage = () => undefined;
+  for (const t of EVENT_TYPES) es.addEventListener(t, (ev) => {
+    let parsed: BusEvent;
+    try { parsed = JSON.parse((ev as MessageEvent).data); } catch { return; }
+    for (const h of st.handlers) h(parsed);
+  });
+  es.onerror = () => {
+    es.close();
+    if (!st.closed) setTimeout(() => openStream(id, url, st), (st.delay = Math.min(st.delay * 2, 15000)));
+  };
+}
+
 /** Subscribe to SSE topics for the current tenant; reconnects with backoff. */
 export function useEvents(topics: string[], handler: (e: BusEvent) => void, tenant: string) {
   const ref = useRef(handler);
@@ -61,24 +88,24 @@ export function useEvents(topics: string[], handler: (e: BusEvent) => void, tena
   const key = topics.filter(Boolean).join(",");
   useEffect(() => {
     if (!tenant || !key) return;
-    let es: EventSource | null = null;
-    let closed = false;
-    let delay = 1000;
-    const open = () => {
-      es = new EventSource(`${API_BASE}/api/events?tenant=${encodeURIComponent(tenant)}&topics=${encodeURIComponent(key)}`);
-      es.onopen = () => { delay = 1000; };
-      es.onmessage = () => undefined;
-      const types = ["call.event", "call.escalated", "call.ended", "escalation.created", "escalation.updated", "analysis.created",
-        "cluster.updated", "proposal.updated", "eval.progress", "proposal.approved", "agent.published", "scorecard.updated", "test_run.progress", "test_run.finished", "learning.run.finished",
-        "catalog.updated", "routing_run.finished", "routing.decision", "conversation.transferred", "conversation.segment", "conversation.ended"];
-      for (const t of types) es.addEventListener(t, (ev) => { try { ref.current(JSON.parse((ev as MessageEvent).data)); } catch { /* ignore */ } });
-      es.onerror = () => {
-        es?.close();
-        if (!closed) setTimeout(open, (delay = Math.min(delay * 2, 15000)));
-      };
+    const id = `${tenant}|${key}`;
+    let st = streams.get(id);
+    if (!st) {
+      st = { es: null, handlers: new Set(), closed: false, delay: 1000 };
+      streams.set(id, st);
+      openStream(id, `${API_BASE}/api/events?tenant=${encodeURIComponent(tenant)}&topics=${encodeURIComponent(key)}`, st);
+    }
+    const mine = (e: BusEvent) => { try { ref.current(e); } catch { /* a handler's error must not stop the others */ } };
+    st.handlers.add(mine);
+    const stream = st;
+    return () => {
+      stream.handlers.delete(mine);
+      if (!stream.handlers.size) {  // the last subscriber left: close the connection
+        stream.closed = true;
+        stream.es?.close();
+        streams.delete(id);
+      }
     };
-    open();
-    return () => { closed = true; es?.close(); };
   }, [key, tenant]);
 }
 

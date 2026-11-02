@@ -2,7 +2,7 @@
 type: UI Spec
 title: Dashboard
 description: Four headline metrics (calls, containment rate, escalated to human, response time), containment trend, escalations by root cause and recent agent versions for the selected tenant.
-status: draft
+status: stable
 tags: [ui, dashboard]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

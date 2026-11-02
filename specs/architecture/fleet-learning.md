@@ -2,7 +2,7 @@
 type: Component Spec
 title: Fleet learning
 description: Post-call analysis, gap clustering, impact estimation, fix drafting from human resolutions, and approval into a new agent version.
-status: draft
+status: stable
 tags: [architecture, learning, clustering]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

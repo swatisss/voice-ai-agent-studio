@@ -14,6 +14,7 @@
 * [Telephony](telephony.md) - Inbound phone calls through Twilio Media Streams: number mapping, webhook and stream, IVR context, transfer, security
 * [Realtime voice](realtime-voice.md) - The optional OpenAI speech-to-speech pipeline per agent: streaming, latency, shared runtime, trade-offs
 * [Languages](languages.md) - English and Hindi with switching mid-call on realtime agents; Hindi safety phrases, English tool arguments and knowledge queries
+* [Contact tools](contact-tools.md) - Email (Brevo), SMS and message calls (Twilio) on every agent: registered contact after verification or a confirmed address, masked records, outbox, no delivery from simulations
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios

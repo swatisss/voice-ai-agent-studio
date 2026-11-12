@@ -57,6 +57,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **call_feedback** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `rating` (`up`|`down`), `comment` (nullable, ≤ 300 chars), `created_at`, `updated_at`; one row per call, replaced when the caller answers again; never created for simulation calls ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md))
 
+**contact_messages** — `id`, `tenant_id`, `call_id` (indexed), `agent_id`, `seq` int (1..3 per call, sending order), `channel` (`email`|`sms`|`call`), `destination` (`registered`|`other`), `to_masked` (≤ 80 chars; the full address is never stored), `subject` (nullable), `body`, `provider` (`brevo`|`twilio`|`outbox`|`simulated`), `status` (`sent`|`outbox`|`simulated`|`failed`), `provider_ref` (nullable), `error` (nullable, ≤ 300 chars), `redirected` bool, `created_at`; one row per confirmed send of a contact tool ([/architecture/contact-tools.md](/architecture/contact-tools.md))
+
 **call_events** — `id`, `tenant_id`, `call_id` (indexed), `seq` int (1..n per call), `at`, `kind` (`user`|`assistant`|`tool_call`|`tool_result`|`system`), `text` (nullable), `data` JSON (tool name/args/result, `latency_ms`, usage)
 
 **escalations** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `status` (`waiting`|`accepted`|`resolved`), `reason_category`, `reason_detail`, `packet` JSON (nullable), `packet_status` (`pending`|`ready`|`fallback`), `assignee` (nullable), `disposition` (nullable), `resolution_note` (nullable), `created_at`, `accepted_at`, `resolved_at`
@@ -96,6 +98,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ```
 tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
         │         │                         ├─ escalation
+        │         │                         ├─ contact_message
         │         │                         ├─ call_scorecard ── check_review
         │         │                         └─ call_analysis ── cluster ── fix_proposal ── eval_run ── eval_result
         │         ├─ eval_scenario
@@ -108,7 +111,8 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 
 # Acceptance
 
-- **DM-01** — Given a fresh database, when the app starts, then all 37 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards`, `check_reviews`, `learning_runs`, `api_keys`, `conversations`, `webhook_endpoints`, `webhook_deliveries`, `capability_profiles`, `capability_entries`, `routing_cases`, `knowledge_sources` or `learning_actions`, when the app starts, then those tables are created and existing rows are untouched.
+- **DM-01** — Given a fresh database, when the app starts, then all 38 tables exist and `eval_runs`, `eval_results` and `eval_scenarios` have the CP-0021 columns (added with their defaults to an existing database); given an existing database without `call_feedback`, `phone_numbers`, `tenant_settings`, `tenant_credentials`, `member_memories`, `memory_events`, `call_scorecards`, `check_reviews`, `learning_runs`, `api_keys`, `conversations`, `webhook_endpoints`, `webhook_deliveries`, `capability_profiles`, `capability_entries`, `routing_cases`, `knowledge_sources`, `learning_actions` or `contact_messages`, when the app starts, then those tables are created and existing rows are untouched.
+- **DM-15** — Given an existing database without `contact_messages`, when the app starts, then the table is created and no other table or row changes; a confirmed send stores `to_masked` and never the full address.
 - **DM-02** — Given an agent, when two versions are published, then their `version` numbers are 1 and 2 and both configs are retained unchanged.
 - **DM-03** — Given a knowledge doc is deleted, then its chunks are deleted.
 - **DM-14** — Given an existing database without `agent_versions.published_by`, when the app starts, then the column is added as null and existing versions are unchanged.

@@ -142,6 +142,16 @@ async def member_profile(x_member_ref: str | None = Header(default=None)) -> dic
             "preferred_contact": data.PREFERRED_CONTACT.get(x_member_ref or "")}
 
 
+@router.get("/healthcare/members/me/contact", response_model=None)
+async def member_contact(x_member_ref: str | None = Header(default=None)) -> dict[str, Any] | JSONResponse:
+    """MOCK-18: the contact on the verified member's record, read by the contact tools at sending time only."""
+    member = data.MEMBERS.get(x_member_ref or "")
+    if not member:
+        return unverified()
+    mobile = next((phone for phone, ref in data.PHONES.items() if ref == x_member_ref), None)
+    return {"email": member.get("email"), "mobile": mobile}
+
+
 @router.get("/healthcare/benefits", response_model=None)
 async def benefits(x_member_ref: str | None = Header(default=None)) -> dict[str, Any] | JSONResponse:
     member = data.MEMBERS.get(x_member_ref or "")

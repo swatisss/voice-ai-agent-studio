@@ -44,7 +44,7 @@ Deploy script: `infra/deploy-cloudrun.sh` ([/build/runbook-gcp.md](/build/runboo
 
 # Health
 
-`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"groq":bool,"openrouter":bool,"openai":bool,"deepgram":bool,"twilio":bool},"public_api":bool,"router":{"decision_model":{"configured":bool,"hosted":bool,"blocked":bool}},"webrtc":bool}` (booleans = configured, no network call; `public_api` = `PUBLIC_API_SECRET` set).
+`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"groq":bool,"openrouter":bool,"openai":bool,"deepgram":bool,"twilio":bool},"public_api":bool,"router":{"decision_model":{"configured":bool,"hosted":bool,"blocked":bool}},"webrtc":bool,"messaging":{"email":"brevo"|"outbox","sms":"twilio"|"outbox","call":"twilio"|"outbox"}}` (booleans = configured, no network call; `public_api` = `PUBLIC_API_SECRET` set; `messaging` = the provider each contact tool would use now, [/architecture/contact-tools.md](/architecture/contact-tools.md)).
 
 # Acceptance
 
@@ -52,4 +52,5 @@ Deploy script: `infra/deploy-cloudrun.sh` ([/build/runbook-gcp.md](/build/runboo
 - **DEP-02** — Given `WEB_DIST_DIR` with an exported build, when `/` and `/agents/` are requested, then the static pages are served and unknown `/api/*` paths still return JSON 404.
 - **DEP-04** — Given `TWILIO_AUTH_TOKEN` set only as a line in `apps/api/.env`, when `/healthz` is requested, then `providers.twilio` is `true` (false when absent); and given `infra/deploy-cloudrun.sh` run with `PUBLIC_BASE_URL` set and Secret Manager secrets `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID` and `OPENAI_API_KEY`, then the service is deployed with env `PUBLIC_BASE_URL` and those secrets attached, and a missing optional secret is skipped with a message and does not fail the deploy (script check by hand).
 - **DEP-03** — Given the Dockerfile, when built, then the image contains the web export and the fastembed model so first requests need no downloads.
+- **DEP-06** — Given no messaging settings, then `/healthz` reports `messaging` `{email: "outbox", sms: "outbox", call: "outbox"}`; given `BREVO_API_KEY` and `EMAIL_FROM` set only as lines in `apps/api/.env`, `email` is `brevo`; given `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM_NUMBER`, `sms` and `call` are `twilio`; no key value appears in the response.
 - **DEP-05** — Given `PUBLIC_API_SECRET`, `DECISION_MODEL_URL` and `PHI_MODE` set only as lines in `apps/api/.env`, then `/healthz` reports `public_api: true` and the router block from them; given `K_SERVICE` set, no `PHI_MODE` and a hosted decision model, `router.decision_model.blocked` is `true`; and `infra/deploy-cloudrun.sh` attaches the new secrets when they exist and skips them otherwise (script check by hand).

@@ -26,6 +26,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * **Supervisor routing**: a front desk and a supervisor pick the agent from an automatically synced capability catalog; agents transfer conversations to each other ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)).
 * **Studio sign-in with two roles**: an admin and a reviewer (the human in the loop); only an admin can change what callers hear ([/architecture/studio-auth.md](/architecture/studio-auth.md)).
 * **English and Hindi with switching mid-call** for agents on the realtime pipeline, and a Hindi-aware safety screen on every agent ([/architecture/languages.md](/architecture/languages.md)).
+* **Contact tools on every agent**: during any call or chat the agent can send the caller details by email (Brevo), SMS or an automated message call (Twilio), to a verified member's registered contact or an address the caller gives and confirms; an outbox stands in when no provider is configured ([/architecture/contact-tools.md](/architecture/contact-tools.md)).
 * A **Compliance evidence** page: each healthcare control, the regulation it supports and the tests that prove it ([/product/compliance-evidence.md](/product/compliance-evidence.md)).
 * Local dev with zero infrastructure (SQLite); GCP Cloud Run deployment.
 * Spec-driven development tooling (`spec_check.py`, git hooks, agent instructions).
@@ -37,7 +38,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Audio recording storage and playback.
 * PHI redaction pipeline, BAAs, audit log export, data retention policies.
 * Languages other than English and Hindi; Hindi on the cascade pipeline; Hindi knowledge articles and Studio UI.
-* Real outbound dialing (phone calls placed by the platform): dialer, caller ID, consent and do-not-call management, voicemail detection (v1 simulates outbound calls in the browser). SMS and chat widgets for end customers.
+* Real outbound dialing (phone calls placed by the platform): dialer, caller ID, consent and do-not-call management, voicemail detection (v1 simulates outbound calls in the browser); a phone callback that connects the person to an agent. Two-way SMS, WhatsApp and chat widgets for end customers (one-way messages from the contact tools are in scope).
 * Horizontal scaling (v1 runs as a single instance; see [/decisions/adr-0005-single-service.md](/decisions/adr-0005-single-service.md)).
 
 # Non-goals

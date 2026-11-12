@@ -68,6 +68,13 @@ LLM_ROLE_TURN=openai:gpt-4.1-mini
 
 Realtime agents (the Insurance Claims Agent) need only `OPENAI_API_KEY` for voice and no Deepgram key; try one from the Test call page first. Answering a real phone call locally (Twilio number, tunnel, `PUBLIC_BASE_URL`) or simulating one with no Twilio account is in [/build/runbook-phone.md](/build/runbook-phone.md); for a demo, `python scripts/phone_demo.py` does all of it from values in `.env` ([/build/phone-demo.md](/build/phone-demo.md)).
 
+**Email, SMS and message calls** ([/architecture/contact-tools.md](/architecture/contact-tools.md)). With no settings every agent's messages go to the **outbox**: shown on the call detail, never delivered. To deliver for real:
+
+* Email (Brevo, free plan 300 a day): create an account at brevo.com, verify a sender address (Senders & IP), create an API key (SMTP & API), then set `BREVO_API_KEY` and `EMAIL_FROM` (the verified sender; optional `EMAIL_FROM_NAME`).
+* SMS and message calls (Twilio): with the account used for phone calls, buy or use a number that can send SMS and call, then set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM_NUMBER`. A trial account only reaches numbers verified under Phone Numbers > Verified Caller IDs.
+* The seeded members' contacts are fictional; set `CONTACT_REDIRECT_EMAIL` and `CONTACT_REDIRECT_PHONE` to your own inbox and verified phone so every real message lands there.
+* `/healthz` shows `messaging` with the provider of each channel; restart the API after changing `.env`.
+
 Duplicate keys in `.env` are a trap: when a variable appears twice the later line wins, so a stale or truncated second `GROQ_API_KEY=` silently replaces a good first one (Groq then answers 401 `invalid_api_key`).
 
 Without `DEEPGRAM_API_KEY` the Talk tab refuses the voice socket (close code 4500) and shows a toast; the API stays healthy. The refused voice call row stays `active` in the Calls list. Add the key later with no other change.

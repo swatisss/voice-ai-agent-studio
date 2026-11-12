@@ -80,6 +80,9 @@ Defaults for the hand-off message ("I'm connecting you with a specialist.") and 
 | `escalate_to_human` | `reason_category` (enum, see escalation spec), `reason_detail: string` | Marks the call escalated and returns `{"status":"escalated","say":<handoff_message>}`. The runtime then speaks the handoff message itself and ends the turn without another LLM round (deterministic wording, no extra latency); the call then ends with reason `handoff` (CE-01). |
 | `end_call` | `summary: string` | Marks the call for ending after the reply. If the model produced no goodbye text in that turn, the runtime says "Thank you for calling. Take care!" |
 | `transfer_to_agent` | `reason: string`, `summary: string` | Only in conversations with another routable agent in scope. Ends the turn without another LLM round; the supervisor picks the next agent and the conversation continues on a new segment, or the call escalates with `transfer_failed` ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)). |
+| `send_email` | `to`, `subject`, `message`, `confirmed` | On every agent and channel. Sends the caller details by email to the registered contact (verified calls) or an address the caller gave, after a read-back ([/architecture/contact-tools.md](/architecture/contact-tools.md)). |
+| `send_sms` | `to`, `message`, `confirmed` | As `send_email`, by text message. |
+| `place_call` | `to`, `message`, `confirmed` | As `send_email`, by an automated call that reads the message aloud twice. |
 
 Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-skills.md](/architecture/tools-and-skills.md). Name collisions with built-ins are rejected at tool creation.
 

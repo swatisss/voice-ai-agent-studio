@@ -141,6 +141,7 @@ class AgentSession:
             knowledge_doc_ids=list(config.get("knowledge_doc_ids", [])),
             knowledge_source_ids=list(config.get("knowledge_source_ids") or []), escalate=lambda category, detail: self.escalate(category, detail),
             handoff_message=(config.get("policy") or {}).get("handoff_message", ""),
+            agent_id=self.agent_id, tenant_name=tenant_name, simulated=self.is_eval or self.channel == "simulation",  # CT-10
         )
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[SettingsChange], Awaitable[None]]] = []  # the running voice pipeline (TD-09)

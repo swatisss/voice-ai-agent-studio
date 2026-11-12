@@ -99,6 +99,10 @@ Agent config `telephony.transfer_to` ([/data/agent-config.md](/data/agent-config
 
 A true warm transfer (the agent stays on the line, introduces the caller) is out of scope.
 
+# Outbound SMS and message calls
+
+The contact tools ([/architecture/contact-tools.md](/architecture/contact-tools.md), [CP-0038](/changes/cp-0038-contact-tools.md)) send SMS and place **message calls** through Twilio's REST API with the same `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`, from `TWILIO_FROM_NUMBER`: `Messages.json` for an SMS, `Calls.json` with inline `Twiml` for a call that reads the message twice and hangs up. Neither uses a media stream, a webhook or `PUBLIC_BASE_URL`, and neither connects the person to an agent: inbound calls stay the only conversations by phone. A Twilio trial account reaches only numbers verified in the Twilio console.
+
 # Request security
 
 * **Webhook signature (TEL-02).** Twilio signs each webhook with `X-Twilio-Signature`: Base64 HMAC-SHA1, keyed with the account's auth token, over the full URL Twilio called plus the sorted form fields. The platform computes the URL from `PUBLIC_BASE_URL` + the request path and query, compares in constant time and rejects mismatches with 403. A tunnel or proxy that changes the host makes every signature fail, so `PUBLIC_BASE_URL` must be exactly the URL configured in Twilio ([/build/runbook-phone.md](/build/runbook-phone.md)).
@@ -112,7 +116,8 @@ A true warm transfer (the agent stays on the line, introduces the caller) is out
 |---|---|
 | `PUBLIC_BASE_URL` | Public `https://` base of this service, for example the ngrok URL locally or the Cloud Run URL. Used in the stream URL (`wss://`) and for signature validation. |
 | `TWILIO_AUTH_TOKEN` | Validates webhooks, mints stream tokens, authenticates REST calls. Required for the telephony routes. |
-| `TWILIO_ACCOUNT_SID` | Only needed for transfer (REST). |
+| `TWILIO_ACCOUNT_SID` | Needed for transfer and for outbound SMS and message calls (REST). |
+| `TWILIO_FROM_NUMBER` | Twilio number (E.164) that sends SMS and places message calls ([/architecture/contact-tools.md](/architecture/contact-tools.md)). |
 | `TWILIO_VALIDATE_SIGNATURE` | Default `1`. `0` is for local experiments only (TEL-10). |
 
 `GET /healthz` reports `providers.twilio` (auth token configured, no network call) ([/architecture/deployment.md](/architecture/deployment.md)).

@@ -1,7 +1,7 @@
 """Calls: create, text messages, end, explorer, detail, and the voice WebSocket.
 
 Spec: /api/rest-api.md (Calls), /api/voice-protocol.md, /architecture/agent-runtime.md, /architecture/realtime-voice.md,
-/architecture/tenant-settings.md, /architecture/call-admission.md, /architecture/call-scoring.md
+/architecture/tenant-settings.md, /architecture/call-admission.md, /architecture/call-scoring.md, /architecture/contact-tools.md
 """
 from __future__ import annotations
 
@@ -20,7 +20,8 @@ from voiceai import jobs
 from voiceai.db import utcnow
 from voiceai.learning import score_report, scoring
 from voiceai.models import (
-    AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, CallScorecard, CheckReview, Escalation, FixProposal, Persona,
+    AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, CallScorecard, CheckReview, ContactMessage, Escalation, FixProposal,
+    Persona,
 )
 from voiceai.schemas import E164_RE, TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
@@ -253,7 +254,17 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
         "routing": (call.meta or {}).get("routing"),  # UI-61: how this segment was routed
         "handoff": {k: v for k, v in ((call.meta or {}).get("handoff") or {}).items() if k in ("reason", "summary")} or None,
         "version_info": await _version_info(s, version),
+        "contact_messages": await _contact_messages(s, call_id),  # API-16
     }
+
+
+async def _contact_messages(s: AsyncSession, call_id: str) -> list[dict[str, Any]]:
+    """API-16: the messages the agent sent in this call, oldest first, recipients masked."""
+    rows = (await s.scalars(select(ContactMessage).where(ContactMessage.call_id == call_id)
+                            .order_by(ContactMessage.seq, ContactMessage.created_at))).all()
+    return [{"id": m.id, "channel": m.channel, "destination": m.destination, "to": m.to_masked, "subject": m.subject,
+             "body": m.body, "provider": m.provider, "status": m.status, "redirected": m.redirected, "error": m.error,
+             "created_at": m.created_at.isoformat()} for m in rows]
 
 
 async def _version_info(s: AsyncSession, version: AgentVersion | None) -> dict[str, Any] | None:

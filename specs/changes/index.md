@@ -1,5 +1,6 @@
 # Change proposals
 
+* [CP-0038 Contact tools - email, SMS and message calls](cp-0038-contact-tools.md) - Every agent can send the caller details by email (Brevo), SMS or an automated message call (Twilio), to the registered contact or a confirmed address; outbox by default, never from simulations
 * [CP-0037 Hindi and English, switching mid-call](cp-0037-hindi-english-switching.md) - Bilingual agents on the realtime pipeline reply in the caller's language and follow a switch at any turn; Hindi safety screen on every agent; identifiers and knowledge queries normalised to English
 * [CP-0036 Carrier adapters](cp-0036-carrier-adapters.md) - Telephony behind one carrier-adapter interface and registry, carrier-named routes; Twilio stays the only adapter, any carrier or SIP source plugs in as one module
 * [CP-0035 Compliance evidence](cp-0035-compliance-evidence.md) - Each healthcare control with its regulation, enforcement and passing tests on a Compliance page; an audit line on every call; the adversarial-caller demo act

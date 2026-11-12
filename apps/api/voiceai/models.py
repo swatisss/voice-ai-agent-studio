@@ -1,6 +1,7 @@
 """ORM models - the tables of the data model.
 
-Spec: /data/data-model.md, /architecture/call-scoring.md, /architecture/self-learning.md, /api/public-api.md, /architecture/webhooks.md
+Spec: /data/data-model.md, /architecture/call-scoring.md, /architecture/self-learning.md, /api/public-api.md, /architecture/webhooks.md,
+/architecture/contact-tools.md
 """
 from __future__ import annotations
 
@@ -252,6 +253,27 @@ class CallFeedback(Base):
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class ContactMessage(Base):
+    """One confirmed send of a contact tool (DM-15). Only the masked recipient is stored. Spec: /architecture/contact-tools.md"""
+    __tablename__ = "contact_messages"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    call_id: Mapped[str] = mapped_column(String(32), ForeignKey("calls.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    seq: Mapped[int] = mapped_column(Integer, default=1)  # 1..3 per call, sending order (timestamps can tie)
+    channel: Mapped[str] = mapped_column(String(8))  # email | sms | call
+    destination: Mapped[str] = mapped_column(String(16))  # registered | other
+    to_masked: Mapped[str] = mapped_column(String(80))
+    subject: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    body: Mapped[str] = mapped_column(Text)
+    provider: Mapped[str] = mapped_column(String(16))  # brevo | twilio | outbox | simulated
+    status: Mapped[str] = mapped_column(String(16))  # sent | outbox | simulated | failed
+    provider_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    redirected: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = _created()
 
 
 class CallAnalysis(Base):

@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from voiceai import contact
 from voiceai.config import get_settings
 from voiceai.db import get_session
 from voiceai.events import bus
@@ -62,6 +63,7 @@ async def healthz(s: AsyncSession = Depends(get_session)) -> dict:
         "public_api": bool(settings.public_api_secret),  # DEP-05: connect tokens can be minted
         "router": _router_health(),  # RTE-11: configured, no network call
         "webrtc": _webrtc_health(),  # WRTC-03
+        "messaging": contact.health(),  # DEP-06: provider per contact channel, no network call
     }
 
 

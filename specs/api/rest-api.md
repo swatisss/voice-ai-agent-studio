@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: draft
+status: stable
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -65,7 +65,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | Method | Path | Body → Result |
 |---|---|---|
 | GET | `/api/agents` | `{items: [{id, name, description, mode, published_version, updated_at}]}` |
-| POST | `/api/agents` | `{name, description, draft_config?}` → agent (default config filled in) |
+| POST | `/api/agents` | `{name, description, draft_config?}` → agent (default config filled in; on a tenant that allows `realtime` the default is the realtime pipeline with `languages: ["en","hi"]`, otherwise cascade with `["en"]`; values in `draft_config` win, [/architecture/languages.md](/architecture/languages.md) LANG-11) |
 | GET | `/api/agents/{id}` | `{id, name, description, draft_config, published_version: {id, version, created_at} \| null}` |
 | PUT | `/api/agents/{id}` | `{name?, description?, draft_config?}` → agent (validated per [/data/agent-config.md](/data/agent-config.md); 422 `pipeline_not_allowed`) |
 | POST | `/api/agents/{id}/publish` | `{change_note?}` → `{id, version, created_at}`; 422 on validation failure, including `pipeline_not_allowed` |
@@ -118,7 +118,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/calls/{id}/feedback` | `{rating: "up"\|"down", comment?: string ≤ 300}` → `{rating, comment}`; only for an ended call: 404 unknown, 409 `call_active`, 409 `not_ratable` (simulation calls), 422 invalid. Sending again replaces the earlier answer; a `down` queues one more `analyze_call`. See [/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md). |
 | PATCH | `/api/calls/{id}/live` | `{persona_id?, turn_detection?}` → `{settings}`; changes persona and/or turn detection of a running call (404 unknown, 409 ended, 422 invalid). 409 `realtime_pipeline` for a call on the realtime pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md), RV-15). See [/architecture/personas.md](/architecture/personas.md), [/architecture/turn-detection.md](/architecture/turn-detection.md). |
 | GET | `/api/calls` | query `agent_id?`, `outcome?`, `channel?`, `direction?`, `feedback?` (`up`\|`down`\|`none`), `include_seed=true` → `{items: [call summary]}` (eval calls excluded); each summary carries `feedback` (`"up"`, `"down"` or `null`) and `transport` (`"phone"` for a call that came in through Twilio, else `"browser"`) |
-| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `telephony` (`{provider, call_sid, from_last4, to}` for a phone call, else `null`) + `identification` (`{first_name, method, attestation}` or `null`) + `memory` (`{used: [memory], updated: [memory event]}`) + `scorecard` (the call's scorecard with `reviews: {check_key: review}`, or `null`) + `version_info` (`{version, published_by, published_at, change_note, source_proposal: {id, title, decided_by, decided_at} | null}`, CMP-03) |
+| GET | `/api/calls/{id}` | call + `events` + `escalation` + `analysis` + `feedback` (`{rating, comment, at}` or `null`) + `telephony` (`{provider, call_sid, from_last4, to}` for a phone call, else `null`) + `identification` (`{first_name, method, attestation}` or `null`) + `memory` (`{used: [memory], updated: [memory event]}`) + `scorecard` (the call's scorecard with `reviews: {check_key: review}`, or `null`) + `version_info` (`{version, published_by, published_at, change_note, source_proposal: {id, title, cluster_id, decided_by, decided_at} | null}`, CMP-03) |
 | POST | `/api/calls/{id}/rescore` | → `{job_id}`; queues `score_call` again; 409 `call_active`, 409 `not_scorable` for a simulation call |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
 

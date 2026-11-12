@@ -65,7 +65,7 @@ export function TestSuitesView({ agentId, tenant, versions, publishedId }: {
   const published = versions.find((v) => v.id === publishedId);
   return (
     <div className="space-y-5">
-      <Card title="Scenarios" actions={<Button variant="primary" onClick={() => setEditing({})}><Plus size={14} />New scenario</Button>}>
+      <Card title="Scenarios" actions={<Button adminOnly variant="primary" onClick={() => setEditing({})}><Plus size={14} />New scenario</Button>}>
         {scen.items.length === 0 ? (
           <EmptyState title="No test scenarios yet. Add the situations this agent must handle." />
         ) : (
@@ -85,8 +85,8 @@ export function TestSuitesView({ agentId, tenant, versions, publishedId }: {
                     <td>{sc.last ? <Badge tone={ratioTone(sc.last.passed, sc.last.of)}>{sc.last.passed}/{sc.last.of}</Badge> : <span className="text-muted">—</span>}</td>
                     <td><input type="checkbox" role="switch" aria-label={`Enable ${sc.name}`} className="h-4 w-4 accent-[var(--accent)]" checked={sc.enabled} onChange={() => toggle(sc)} /></td>
                     <td className="whitespace-nowrap text-right">
-                      <Button variant="ghost" onClick={() => setEditing(sc)}>Edit</Button>
-                      <Button variant="ghost" aria-label={`Delete ${sc.name}`} onClick={() => setDeleting(sc)}><Trash2 size={14} /></Button>
+                      <Button adminOnly variant="ghost" onClick={() => setEditing(sc)}>Edit</Button>
+                      <Button adminOnly variant="ghost" aria-label={`Delete ${sc.name}`} onClick={() => setDeleting(sc)}><Trash2 size={14} /></Button>
                     </td>
                   </tr>
                 ))}

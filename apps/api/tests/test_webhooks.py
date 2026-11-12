@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import uuid
 from datetime import timedelta
 
@@ -155,7 +156,8 @@ async def test_transcripts_only_on_request(client, seeded, fake_llm):
     assert len(plain) == len(bodies) - 1
     for body in plain:
         text = json.dumps(body)
-        assert "transcript" not in body["data"] and "EVG-" not in text and "+12025550141" not in text and "0141" not in text
+        assert "transcript" not in body["data"] and "EVG-" not in text and "+12025550141" not in text
+        assert not re.search(r"(?<![0-9a-f])0141(?![0-9a-f])", text)  # the last four digits, not a chance match inside a hex id
     analyzed = [json.loads(q.content) for q in recv.requests if json.loads(q.content)["type"] == "conversation.analyzed"]
     assert len(analyzed) == 2 and sum("transcript" in a["data"] for a in analyzed) == 1
 

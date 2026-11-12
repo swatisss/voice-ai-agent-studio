@@ -35,7 +35,7 @@ export default function AgentsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Agents</h1>
-        <Button variant="primary" onClick={() => setOpen(true)}>New agent</Button>
+        <Button adminOnly variant="primary" onClick={() => setOpen(true)}>New agent</Button>
       </div>
       {!data ? <Spinner /> : data.items.length === 0 ? (
         <EmptyState title="No agents yet">Create an agent, add knowledge, tools and skills, then publish it.</EmptyState>

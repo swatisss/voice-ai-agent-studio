@@ -70,6 +70,8 @@ Indexing and every re-sync run as the job `sync_knowledge_source` ([/architectur
 
 The runtime stores each search in the `search_knowledge` tool-result event as `data.retrieval`: `{query, no_answer, chunks: [{chunk_id, doc_id, score}]}`, so [call scoring](/architecture/call-scoring.md) and the call detail can cite the exact chunks.
 
+Queries are English. On a bilingual agent the model translates the caller's question before searching; a query containing Devanagari is not searched and returns `query_not_english` ([/architecture/languages.md](/architecture/languages.md), LANG-07).
+
 The runtime treats `no_answer` as a signal for the no-answer streak ([/architecture/escalation.md](/architecture/escalation.md)) and the analysis treats it as evidence of `missing_knowledge`.
 
 # Acceptance

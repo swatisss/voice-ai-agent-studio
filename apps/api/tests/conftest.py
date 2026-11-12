@@ -23,6 +23,9 @@ os.environ.update({
     "PUBLIC_BASE_URL": "",
     "TENANT_SECRETS_KEY": "",
     "PUBLIC_API_SECRET": "",
+    "STUDIO_ADMIN_PASSWORD": "",  # sign-in off unless a test turns it on (/architecture/studio-auth.md)
+    "STUDIO_REVIEWER_PASSWORD": "",
+    "STUDIO_SESSION_SECRET": "",
     "WEBRTC_TURN_URLS": "",
     # a developer's LLM_ROLE_* lines in apps/api/.env must not change the default roles the tests expect
     "LLM_ROLE_REALTIME": "",

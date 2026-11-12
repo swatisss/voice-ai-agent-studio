@@ -56,7 +56,7 @@ export function UseCasesTab({ agentId, tenant, published }: { agentId: string; t
   const status = pending ? "indexing" : profile?.status;
   return (
     <div className="space-y-4">
-      <Card title="Use cases" actions={<Button onClick={() => setForm({ title: "", summary: "", category: "", channels: ["voice", "chat"], samples: "" })}><Plus size={14} />Add use case</Button>}>
+      <Card title="Use cases" actions={<Button adminOnly onClick={() => setForm({ title: "", summary: "", category: "", channels: ["voice", "chat"], samples: "" })}><Plus size={14} />Add use case</Button>}>
         <p className="mb-3 text-sm text-muted">Use cases update routing right away; they are not part of a version.</p>
         {!data ? <Spinner /> : data.items.length === 0 ? <p className="text-sm text-muted">No use cases yet. Add the requests this agent handles so callers can be routed to it.</p> : (
           <ul className="divide-y divide-[var(--border)]">
@@ -67,8 +67,8 @@ export function UseCasesTab({ agentId, tenant, published }: { agentId: string; t
                   {u.summary && <div className="text-sm text-muted">{u.summary}</div>}
                   <div className="mt-1 flex flex-wrap gap-1">{u.sample_utterances.map((x) => <Badge key={x} tone="info">{x}</Badge>)}</div>
                 </div>
-                <Button variant="ghost" aria-label={`Edit ${u.title}`} onClick={() => setForm({ id: u.id, title: u.title, summary: u.summary, category: u.category, channels: u.channels, samples: u.sample_utterances.join("\n") })}><Pencil size={14} /></Button>
-                <Button variant="ghost" aria-label={`Delete ${u.title}`} onClick={() => setDeleting(u)}><Trash2 size={14} /></Button>
+                <Button adminOnly variant="ghost" aria-label={`Edit ${u.title}`} onClick={() => setForm({ id: u.id, title: u.title, summary: u.summary, category: u.category, channels: u.channels, samples: u.sample_utterances.join("\n") })}><Pencil size={14} /></Button>
+                <Button adminOnly variant="ghost" aria-label={`Delete ${u.title}`} onClick={() => setDeleting(u)}><Trash2 size={14} /></Button>
               </li>
             ))}
           </ul>

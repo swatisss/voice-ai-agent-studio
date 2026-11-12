@@ -25,6 +25,8 @@ GENERIC = {"caller", "callers", "customer", "member", "members", "someone", "per
            "claim", "claims", "insurance", "know", "want", "need", "help", "tell", "much", "safetrip", "standard"}
 GOODBYE = re.compile(r"\b(bye|goodbye|that's (all|everything)|that is all|nothing else)\b", re.I)
 HANDOFF_ASK = re.compile(r"\b(speak|talk) to (a|an|someone|a real) (person|human|agent)|\breal person\b|\bconnect me\b", re.I)
+CLAIM_ID = re.compile(r"\bC-\d{4,6}\b")
+DOB = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 CLAIM_TYPES = {"outpatient": ("outpatient", "doctor", "gp", "clinic"), "urgent_care": ("urgent",),
                "inpatient": ("inpatient", "hospital stay", "admitted"), "dental": ("dental", "dentist", "tooth")}
 
@@ -72,6 +74,12 @@ def _answer_from_tool(name: str, result: dict[str, Any], question: str) -> FakeR
     if name == "get_claim_documents" and isinstance(result.get("documents"), list):
         docs = [d.get("document") or d.get("name") for d in result["documents"] if isinstance(d, dict)]
         return FakeReply(text="Please send: " + "; ".join(d for d in docs if d) + ". Send everything within 30 days of returning home.")
+    if name == "verify_member":
+        if result.get("verified"):
+            return FakeReply(text="Thank you, you're verified. How can I help with your claim?")
+        return FakeReply(text="Sorry, that doesn't match our records. Could you give me your date of birth again?")
+    if name == "get_claim_status" and result.get("status"):
+        return FakeReply(text=f"Claim {result.get('claim_id', '')} is {result['status']}. Is there anything else I can help with?")
     if result.get("say"):
         return FakeReply(text=str(result["say"]))
     return FakeReply(text="Thanks, that's done. Is there anything else I can help with?")
@@ -95,6 +103,10 @@ def agent(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None) ->
     asked = words(question)
     if HANDOFF_ASK.search(question) or any(asked & {w for w in words(rule) if len(w) > 5 and w not in GENERIC} for rule in _escalation_rules(system)[1:-1]):
         return FakeReply(tool_calls=[("escalate_to_human", {"reason_category": "policy_required", "reason_detail": question[:200]})])
+    if "verify_member" in names and DOB.search(question):  # an identified caller verifies with the date of birth only
+        return FakeReply(tool_calls=[("verify_member", {"date_of_birth": DOB.search(question).group(1)})])
+    if "get_claim_status" in names and CLAIM_ID.search(question):  # the runtime's gate decides, not this stand-in
+        return FakeReply(tool_calls=[("get_claim_status", {"claim_id": CLAIM_ID.search(question).group(0)})])
     if "promise" in question.lower():
         return FakeReply(text="I can't promise that a claim will be paid; claims are assessed against the policy and the documents you send.")
     if "get_claim_documents" in names and re.search(r"\b(document|paperwork|send)\b", question, re.I):

@@ -10,6 +10,7 @@ import { FeedbackBadge } from "@/components/feedback";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, Card, Field, Input, JsonView, Spinner, Textarea, useToast } from "@/components/ui";
 import { api, ApiError, useApi, useEvents } from "@/lib/api";
+import { useIsAdmin } from "@/lib/auth";
 import { label, money, ROOT_CAUSE, secs, when } from "@/lib/format";
 
 export default function Page() {
@@ -37,6 +38,7 @@ const ARTICLE_KINDS = ["knowledge_article", "knowledge_edit"];
 type Result = { case_key: string; case_type: string; arm: string; passed: boolean; repeat: number; failures: string[]; call_id: string | null; scenario_name: string | null };
 
 function ClusterDetail() {
+  const isAdmin = useIsAdmin();
   const id = useSearchParams().get("id") ?? "";
   const { tenant } = useTenant();
   const toast = useToast();
@@ -251,9 +253,9 @@ function ClusterDetail() {
           {(p.status === "ready" || p.status === "draft") && (
             <div className="mt-4 space-y-3 border-t border-line pt-3">
               <div className="flex flex-wrap items-end gap-2">
-                <Button variant="primary" disabled={!!notReady || gateFailed} loading={busy === "approve" && forceNote === null} onClick={() => approve(false)}>Approve & publish</Button>
+                <Button adminOnly variant="primary" disabled={!!notReady || gateFailed} loading={busy === "approve" && forceNote === null} onClick={() => approve(false)}>Approve & publish</Button>
                 {notReady && <span className="text-xs text-muted">{notReady}</span>}
-                {gateFailed && forceNote === null && <button className="text-xs text-accent underline" onClick={() => setForceNote("")}>Publish anyway</button>}
+                {gateFailed && forceNote === null && isAdmin && <button className="text-xs text-accent underline" onClick={() => setForceNote("")}>Publish anyway</button>}
                 <div className="ml-auto flex items-end gap-2">
                   <Field label="Reject note" hint="The next nights skip this cluster for a while"><Input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} /></Field>
                   <Button variant="danger" onClick={reject}>Reject</Button>
@@ -262,7 +264,7 @@ function ClusterDetail() {
               {forceNote !== null && (
                 <div className="flex flex-wrap items-end gap-2 rounded-lg bg-warn-soft p-3">
                   <Field label="Why publish although the check failed?"><Input className="w-96" value={forceNote} onChange={(e) => setForceNote(e.target.value)} /></Field>
-                  <Button variant="danger" loading={busy === "approve"} onClick={() => approve(true)}>Publish anyway</Button>
+                  <Button adminOnly variant="danger" loading={busy === "approve"} onClick={() => approve(true)}>Publish anyway</Button>
                   <Button variant="ghost" onClick={() => setForceNote(null)}>Cancel</Button>
                 </div>
               )}

@@ -62,8 +62,8 @@ LLM_ROLE_REALTIME=openai:gpt-4.1-mini
 LLM_ROLE_ANALYSIS=openai:gpt-4.1-mini
 LLM_ROLE_DRAFTING=openai:gpt-4.1-mini
 LLM_ROLE_JUDGE=openai:gpt-4.1-mini
-LLM_ROLE_SIMULATOR=openai:gpt-4.1-nano
-LLM_ROLE_TURN=openai:gpt-4.1-nano
+LLM_ROLE_SIMULATOR=openai:gpt-4.1-mini
+LLM_ROLE_TURN=openai:gpt-4.1-mini
 ```
 
 Realtime agents (the Insurance Claims Agent) need only `OPENAI_API_KEY` for voice and no Deepgram key; try one from the Test call page first. Answering a real phone call locally (Twilio number, tunnel, `PUBLIC_BASE_URL`) or simulating one with no Twilio account is in [/build/runbook-phone.md](/build/runbook-phone.md); for a demo, `python scripts/phone_demo.py` does all of it from values in `.env` ([/build/phone-demo.md](/build/phone-demo.md)).

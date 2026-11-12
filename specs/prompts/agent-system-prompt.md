@@ -25,6 +25,17 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `call_context` | outbound call context lines (used inside the outbound mode prompt) |
 | `transfer_instructions` | empty, or, when `transfer_to_agent` is offered ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)), the "Other teams" block of CP-0026 |
 | `handoff` | empty, or, for a routed or transferred segment, the "How this caller reached you" block with the transfer reason and the previous assistant's summary |
+| `language_instructions` | empty for an English-only agent (`languages: ["en"]`), so its prompt is unchanged; for a bilingual agent (`["en","hi"]`) the **Language** block below ([/architecture/languages.md](/architecture/languages.md), CP-0037) |
+
+Language block (bilingual agents):
+
+```text
+# Language
+- The caller may speak English, Hindi or a mix of both, and may switch at any time. Reply in the language of the caller's latest turn: Hindi gets a Hindi reply written in Devanagari, English gets an English reply. If a turn mixes both, use the language most of it is in. When the caller switches, switch with them.
+- Keep member IDs, claim numbers, plan names, amounts and dates as English words and digits, also inside a Hindi sentence.
+- Always write tool arguments in English with ASCII digits. If the caller says a member ID, date of birth or claim number in Hindi, convert it to English and digits before you call the tool, and read it back in the caller's language for a yes.
+- Always write search_knowledge queries in English: translate the caller's question first.
+```
 
 # Prompt
 
@@ -37,6 +48,8 @@ You are {{persona_name}}, the voice assistant for {{tenant_name}}. You are on a 
 {{transfer_instructions}}
 
 {{handoff}}
+
+{{language_instructions}}
 
 # How you speak
 - {{persona_style}}

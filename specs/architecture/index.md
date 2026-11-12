@@ -13,6 +13,7 @@
 * [Call ending and feedback](call-ending-and-feedback.md) - How calls close (goodbye, farewell, hand-off, silence, max length) and the thumbs up/down feedback that feeds Insights
 * [Telephony](telephony.md) - Inbound phone calls through Twilio Media Streams: number mapping, webhook and stream, IVR context, transfer, security
 * [Realtime voice](realtime-voice.md) - The optional OpenAI speech-to-speech pipeline per agent: streaming, latency, shared runtime, trade-offs
+* [Languages](languages.md) - English and Hindi with switching mid-call on realtime agents; Hindi safety phrases, English tool arguments and knowledge queries
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios

@@ -112,8 +112,8 @@ function Builder() {
         {agent.published_version ? <Badge tone="ok">v{agent.published_version.version}</Badge> : <Badge>Not published</Badge>}
         {dirty && <Badge tone="warn">Draft changes</Badge>}
         <div className="ml-auto flex gap-2">
-          <Button onClick={save} loading={saving} disabled={!dirty}>Save draft</Button>
-          <Button variant="primary" onClick={() => setPublishOpen(true)}>Publish</Button>
+          <Button adminOnly onClick={save} loading={saving} disabled={!dirty}>Save draft</Button>
+          <Button adminOnly variant="primary" onClick={() => setPublishOpen(true)}>Publish</Button>
           <Button onClick={runTests} disabled={!scenarios?.items.some((x) => x.enabled) || (!!testRun && !testRun.result)}
             title={scenarios?.items.some((x) => x.enabled) ? "Run the test scenarios against this draft" : "Add test scenarios on the Evaluation page first"}>Run tests</Button>
           <Link href={`/test-call/?agent=${id}`}><Button disabled={!agent.published_version}>Test call</Button></Link>
@@ -145,11 +145,11 @@ function Builder() {
       {dirty && (
         <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-panel px-4 py-2 shadow-lg">
           <span className="text-sm">Unsaved changes</span>
-          <Button variant="primary" onClick={save} loading={saving}>Save draft</Button>
+          <Button adminOnly variant="primary" onClick={save} loading={saving}>Save draft</Button>
         </div>
       )}
       <Modal open={publishOpen} title="Publish a new version" onClose={() => setPublishOpen(false)}
-        footer={<><Button onClick={() => setPublishOpen(false)}>Cancel</Button><Button variant="primary" onClick={publish}>Publish</Button></>}>
+        footer={<><Button onClick={() => setPublishOpen(false)}>Cancel</Button><Button adminOnly variant="primary" onClick={publish}>Publish</Button></>}>
         <Field label="Change note"><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What changed?" /></Field>
         {publishError && <div className="rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{publishError}</div>}
       </Modal>
@@ -265,6 +265,7 @@ function VoiceTab({ draft, update }: TabProps) {
   const allowed = (id: string) => id === "cascade" || !!settings?.allowed_pipelines.includes(id);  // UI-41
   const pipeline: "cascade" | "realtime" = draft.voice?.pipeline === "realtime" ? "realtime" : "cascade";
   const realtime = pipeline === "realtime";
+  const hindi = !!draft.languages?.includes("hi");
   const setVoice = (patch: Record<string, unknown>) => update(["voice"], { ...(draft.voice ?? {}), ...patch });
   return (
     <div className="space-y-4">
@@ -290,6 +291,21 @@ function VoiceTab({ draft, update }: TabProps) {
               </Select>
             </Field>
           </div>
+        )}
+      </Card>
+      <Card title="Languages">
+        {/* UI-73, /architecture/languages.md */}
+        <div className="flex flex-wrap gap-6 text-sm">
+          <label className="flex items-center gap-2 opacity-70"><input type="checkbox" checked disabled />English</label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" className="accent-[var(--accent)]" checked={hindi}
+              onChange={(e) => update(["languages"], e.target.checked ? ["en", "hi"] : ["en"])} />
+            Hindi
+          </label>
+        </div>
+        <p className="mt-2 max-w-3xl text-xs text-muted">Callers can speak Hindi, English or both and switch at any time. Needs Realtime speech-to-speech.</p>
+        {hindi && !realtime && (
+          <div role="alert" className="mt-3 rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">Hindi needs Realtime speech-to-speech - switch the voice pipeline to publish.</div>
         )}
       </Card>
       <Card title="Transfer on hand-off">
@@ -537,11 +553,11 @@ function KnowledgeTab({ draft, update }: TabProps) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <Card className="lg:col-span-2" title="Documents" actions={<>
-        <Button onClick={() => setMode("text")}>Paste text</Button>
+        <Button adminOnly onClick={() => setMode("text")}>Paste text</Button>
         <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-1.5 text-sm font-medium hover:bg-neutral-soft">
           <Upload size={14} />Upload<input type="file" hidden accept=".md,.txt,.pdf,.zip" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
         </label>
-        <Button onClick={() => setAddingUrl(true)}>From URL</Button>
+        <Button adminOnly onClick={() => setAddingUrl(true)}>From URL</Button>
       </>}>
         {busy && <Spinner label="Processing…" />}
         <WebsiteSources draft={draft} update={update} adding={addingUrl} onAdded={() => setAddingUrl(false)} onClose={() => setAddingUrl(false)} />
@@ -606,7 +622,7 @@ function ToolsTab({ draft, update }: TabProps) {
   }
 
   return (
-    <Card title="Tools" actions={<Button onClick={() => open(EMPTY_TOOL)}><Plus size={14} />New tool</Button>}>
+    <Card title="Tools" actions={<Button adminOnly onClick={() => open(EMPTY_TOOL)}><Plus size={14} />New tool</Button>}>
       <ul className="divide-y divide-line">
         {data?.items.map((t) => (
           <li key={t.id} className="flex items-center gap-3 py-2 text-sm">
@@ -621,7 +637,7 @@ function ToolsTab({ draft, update }: TabProps) {
         ))}
       </ul>
       <Modal open={!!edit} title={edit?.id ? `Edit ${edit.name}` : "New tool"} onClose={() => setEdit(null)}
-        footer={<><Button onClick={() => setEdit(null)}>Cancel</Button><Button variant="primary" onClick={save}>Save</Button></>}>
+        footer={<><Button onClick={() => setEdit(null)}>Cancel</Button><Button adminOnly variant="primary" onClick={save}>Save</Button></>}>
         {edit && <>
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2"><Field label="Name (snake_case)"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field></div>
@@ -662,7 +678,7 @@ function SkillsTab({ draft, update }: TabProps) {
   }
 
   return (
-    <Card title="Skills" actions={<Button onClick={() => setEdit({ ...EMPTY_SKILL })}><Plus size={14} />New skill</Button>}>
+    <Card title="Skills" actions={<Button adminOnly onClick={() => setEdit({ ...EMPTY_SKILL })}><Plus size={14} />New skill</Button>}>
       <ul className="divide-y divide-line">
         {data?.items.map((k) => (
           <li key={k.id} className="flex items-start gap-3 py-2 text-sm">
@@ -674,7 +690,7 @@ function SkillsTab({ draft, update }: TabProps) {
         ))}
       </ul>
       <Modal open={!!edit} title={edit?.id ? `Edit ${edit.name}` : "New skill"} onClose={() => setEdit(null)}
-        footer={<><Button onClick={() => setEdit(null)}>Cancel</Button><Button variant="primary" onClick={save}>Save</Button></>}>
+        footer={<><Button onClick={() => setEdit(null)}>Cancel</Button><Button adminOnly variant="primary" onClick={save}>Save</Button></>}>
         {edit && <>
           <Field label="Name"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <Field label="Use when"><Input value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} /></Field>

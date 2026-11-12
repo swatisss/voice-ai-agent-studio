@@ -4,11 +4,12 @@ Spec: /api/rest-api.md (Escalations), /architecture/escalation.md (Console lifec
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from voiceai import auth
 from voiceai.db import get_session
 from voiceai.models import Call, CallEvent, Escalation
 from voiceai.routes.calls import call_summary
@@ -54,8 +55,8 @@ async def detail(escalation_id: str, tenant_id: str = Depends(current_tenant), s
 
 
 @router.post("/{escalation_id}/accept")
-async def accept(escalation_id: str, body: AcceptBody, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    return esc_mod.summary(await esc_mod.accept(s, tenant_id, escalation_id, body.assignee))
+async def accept(escalation_id: str, body: AcceptBody, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    return esc_mod.summary(await esc_mod.accept(s, tenant_id, escalation_id, auth.actor(request, body.assignee)))
 
 
 @router.post("/{escalation_id}/resolve")

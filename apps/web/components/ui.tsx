@@ -3,14 +3,17 @@
 
 import { ChevronDown, ChevronRight, Loader2, X } from "lucide-react";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { ADMIN_ONLY_HINT, useMe } from "@/lib/auth";
 import type { Tone } from "@/lib/format";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
 type BtnVariant = "primary" | "secondary" | "ghost" | "danger";
 export function Button({
-  children, variant = "secondary", loading, className, ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; loading?: boolean }) {
+  children, variant = "secondary", loading, className, adminOnly, ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; loading?: boolean; adminOnly?: boolean }) {
+  const me = useMe();
+  const blocked = !!adminOnly && me.user?.role !== "admin";  // UI-70: visible, disabled, says why
   const styles: Record<BtnVariant, string> = {
     primary: "bg-accent text-on-accent hover:brightness-95 active:brightness-90",
     secondary: "bg-panel border-[1.5px] border-accent text-accent hover:bg-accent-soft",
@@ -20,11 +23,13 @@ export function Button({
   return (
     <button
       {...rest}
-      disabled={rest.disabled || loading}
+      title={blocked ? ADMIN_ONLY_HINT : rest.title}
+      disabled={rest.disabled || loading || blocked}
       className={cx("inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed", styles[variant], className)}
     >
       {loading && <Loader2 size={14} className="animate-spin" />}
       {children}
+      {blocked && <span className="text-[0.7rem] font-normal">({ADMIN_ONLY_HINT})</span>}
     </button>
   );
 }

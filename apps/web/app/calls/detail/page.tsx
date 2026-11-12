@@ -55,6 +55,16 @@ function CallDetail() {
           <Badge tone="info">Identified by caller ID{c.identification.attestation ? ` · ${c.identification.attestation}` : ""}</Badge>
         )}
       </div>
+      {c.version_info && (  // UI-72: the audit trail (CMP-03)
+        <p className="text-sm text-muted" aria-label="Audit trail">
+          Answered by v{c.version_info.version} · published by {c.version_info.published_by ?? "unknown"} on {when(c.version_info.published_at)}
+          {c.version_info.source_proposal && (
+            <> · from fix{" "}
+              <Link className="text-accent underline" href={`/insights/cluster/?id=${c.version_info.source_proposal.cluster_id}`}>&lsquo;{c.version_info.source_proposal.title}&rsquo;</Link>
+              {" "}approved by {c.version_info.source_proposal.decided_by ?? "unknown"}</>
+          )}
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-6 lg:grid-cols-8">
         <div><div className="text-xs text-muted">Started</div>{when(c.started_at)}</div>
         <div><div className="text-xs text-muted">Duration</div>{duration ? secs(duration) : "—"}</div>

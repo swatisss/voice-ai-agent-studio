@@ -2,7 +2,7 @@
 type: UI Spec
 title: Calls
 description: Call explorer with filters and a call detail page showing transcript, tool calls, escalation packet and analysis.
-status: draft
+status: stable
 tags: [ui, calls]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

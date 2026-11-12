@@ -16,6 +16,10 @@ function wsUrl(path: string): string {
   return base.replace(/^http/, "ws") + path;
 }
 
+/** Jitter buffer: when nothing is queued (a reply starts, or delivery fell behind), hold this much before playing so a
+ * late chunk does not break the voice (/api/voice-protocol.md, Browser client requirements). */
+const PREBUFFER_S = 0.2;
+
 export class VoiceClient {
   private ws: WebSocket | null = null;
   private stream: MediaStream | null = null;
@@ -78,7 +82,8 @@ export class VoiceClient {
     const src = this.ctxOut.createBufferSource();
     src.buffer = audio;
     src.connect(this.ctxOut.destination);
-    const at = Math.max(this.ctxOut.currentTime + 0.02, this.playHead);
+    const now = this.ctxOut.currentTime;
+    const at = this.playHead > now ? this.playHead : now + PREBUFFER_S;  // back-to-back while queued, else rebuffer
     src.start(at);
     this.playHead = at + audio.duration;
     this.sources.add(src);

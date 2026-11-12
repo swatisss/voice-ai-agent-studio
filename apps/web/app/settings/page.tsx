@@ -7,6 +7,7 @@ import { ApiKeysCard, WebhooksCard } from "@/components/integrations";
 import { useTenant } from "@/components/shell";
 import { Button, Card, Field, Input, Spinner, useToast } from "@/components/ui";
 import { api, ApiError, useApi } from "@/lib/api";
+import { ADMIN_ONLY_HINT, useIsAdmin } from "@/lib/auth";
 import { ago } from "@/lib/format";
 
 type TenantSettings = {
@@ -22,6 +23,7 @@ export default function SettingsPage() {
   const [key, setKey] = useState("");
   const [keyError, setKeyError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const isAdmin = useIsAdmin();
 
   async function put(body: Record<string, unknown>) {
     setInUse(null);
@@ -70,7 +72,7 @@ export default function SettingsPage() {
           <li className="flex items-center gap-3"><input type="checkbox" role="switch" checked disabled aria-label="Cascade" className="h-4 w-4 accent-[var(--accent)]" />Cascade (always on)</li>
           <li>
             <label className="flex items-center gap-3 font-medium">
-              <input type="checkbox" role="switch" className="h-4 w-4 accent-[var(--accent)]" checked={realtime}
+              <input type="checkbox" role="switch" className="h-4 w-4 accent-[var(--accent)]" checked={realtime} disabled={!isAdmin} title={isAdmin ? undefined : ADMIN_ONLY_HINT}
                 onChange={(e) => put({ allowed_pipelines: e.target.checked ? ["cascade", "realtime"] : ["cascade"] })} />
               Allow realtime speech-to-speech
             </label>
@@ -88,11 +90,11 @@ export default function SettingsPage() {
               <Input type="password" autoComplete="off" value={key} placeholder="sk-…" onChange={(e) => setKey(e.target.value)} />
             </Field>
           </div>
-          <Button variant="primary" loading={saving} disabled={!key.trim()} onClick={saveKey}>Save key</Button>
-          {openai.key_set && <Button variant="ghost" onClick={removeKey}>Remove key</Button>}
+          <Button adminOnly variant="primary" loading={saving} disabled={!key.trim()} onClick={saveKey}>Save key</Button>
+          {openai.key_set && <Button adminOnly variant="ghost" onClick={removeKey}>Remove key</Button>}
         </div>
         <label className="mt-4 flex items-center gap-3 text-sm">
-          <input type="checkbox" role="switch" className="h-4 w-4 accent-[var(--accent)]" checked={openai.platform_fallback}
+          <input type="checkbox" role="switch" className="h-4 w-4 accent-[var(--accent)]" checked={openai.platform_fallback} disabled={!isAdmin} title={isAdmin ? undefined : ADMIN_ONLY_HINT}
             onChange={(e) => put({ openai_platform_fallback: e.target.checked })} />
           Use the platform key when this unit has none
         </label>

@@ -30,6 +30,8 @@ def main() -> None:
         "GROQ_API_KEY": "", "OPENROUTER_API_KEY": "", "OPENAI_API_KEY": "", "DEEPGRAM_API_KEY": "",
         "DECISION_MODEL_URL": "", "DECISION_MODEL_API_KEY": "", "TWILIO_ACCOUNT_SID": "", "TWILIO_AUTH_TOKEN": "",
         "SIMLI_API_KEY": "", "LIVEKIT_API_KEY": "", "LIVEKIT_API_SECRET": "",
+        # Studio sign-in on, with throwaway passwords the runner knows (scripts/demo_walkthrough.py)
+        "STUDIO_ADMIN_PASSWORD": "fake-admin-pass", "STUDIO_REVIEWER_PASSWORD": "fake-reviewer-pass", "STUDIO_SESSION_SECRET": "",
     })
     sys.path.insert(0, str(HERE))
     import uvicorn

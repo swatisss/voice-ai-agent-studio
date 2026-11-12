@@ -13,7 +13,8 @@ import sys
 def _serve(args: argparse.Namespace) -> None:
     import uvicorn
 
-    uvicorn.run("voiceai.main:app", host=args.host, port=args.port, reload=args.reload, log_level="info")
+    # an open event stream must not hold a reload or a stop forever
+    uvicorn.run("voiceai.main:app", host=args.host, port=args.port, reload=args.reload, log_level="info", timeout_graceful_shutdown=3)
 
 
 async def _seed(args: argparse.Namespace) -> None:

@@ -96,6 +96,7 @@ class AgentVersion(Base):
     config: Mapped[dict[str, Any]] = mapped_column(JSON)
     change_note: Mapped[str] = mapped_column(Text, default="")
     source_proposal_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    published_by: Mapped[str | None] = mapped_column(String(120), nullable=True)  # DM-14 (/architecture/studio-auth.md)
     created_at: Mapped[datetime] = _created()
 
 
@@ -406,6 +407,7 @@ class EvalScenario(Base):
     caller_goal: Mapped[str] = mapped_column(Text)
     caller_profile: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     persona: Mapped[str] = mapped_column(String(16), default="calm")  # calm | confused | impatient | adversarial
+    language: Mapped[str] = mapped_column(String(8), default="en")  # en | hi | mixed (LANG-10)
     expected: Mapped[str] = mapped_column(String(16), default="resolved")
     required_tools: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     forbidden_tools: Mapped[list[str]] = mapped_column(JSON, default=list)

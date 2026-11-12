@@ -44,7 +44,7 @@ export function FrontDeskCard({ tenant, allowRealtime }: { tenant: string; allow
   }
 
   return (
-    <Card title="Front desk" actions={<Button variant="primary" loading={saving} onClick={save}>Save</Button>}>
+    <Card title="Front desk" actions={<Button adminOnly variant="primary" loading={saving} onClick={save}>Save</Button>}>
       <p className="mb-1 max-w-3xl text-sm text-muted">How routed conversations open: the front desk greets the caller, and the supervisor picks the agent.</p>
       {dmStatus && <p className="mb-3 text-xs text-muted">Decision model: {dmStatus}</p>}
       <div className="grid max-w-3xl gap-4 md:grid-cols-2">

@@ -8,11 +8,12 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from voiceai import auth
 from voiceai.db import get_session, utcnow
 from voiceai.errors import ApiError
 from voiceai.learning import actions, evaluate, nightly, propose, test_suites
@@ -133,20 +134,20 @@ async def list_actions(agent_id: str | None = None, status: str = "open", tenant
 
 
 @router.post("/actions/{action_id}/done")
-async def action_done(action_id: str, body: ActionClose, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    a = await actions.close(s, await actions.get_action(s, tenant_id, action_id), "done", body.by, body.note)
+async def action_done(action_id: str, body: ActionClose, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    a = await actions.close(s, await actions.get_action(s, tenant_id, action_id), "done", auth.actor(request, body.by), body.note)
     return actions.action_out(a)
 
 
 @router.post("/actions/{action_id}/dismiss")
-async def action_dismiss(action_id: str, body: ActionClose, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    a = await actions.close(s, await actions.get_action(s, tenant_id, action_id), "dismissed", body.by, body.note)
+async def action_dismiss(action_id: str, body: ActionClose, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    a = await actions.close(s, await actions.get_action(s, tenant_id, action_id), "dismissed", auth.actor(request, body.by), body.note)
     return actions.action_out(a)
 
 
 @router.post("/actions/{action_id}/answer")
-async def action_answer(action_id: str, body: ActionAnswer, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    a = await actions.answer(s, await actions.get_action(s, tenant_id, action_id), body.answer, body.by)
+async def action_answer(action_id: str, body: ActionAnswer, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    a = await actions.answer(s, await actions.get_action(s, tenant_id, action_id), body.answer, auth.actor(request, body.by))
     return actions.action_out(a)
 
 
@@ -233,9 +234,10 @@ async def evaluate_proposal(proposal_id: str, tenant_id: str = Depends(current_t
 
 
 @router.post("/proposals/{proposal_id}/approve")
-async def approve(proposal_id: str, body: Decision, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+async def approve(proposal_id: str, body: Decision, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     p = await propose.get_proposal(s, tenant_id, proposal_id)
-    version, kept = await propose.approve(s, p, body.decided_by, body.note, body.force)
+    version, kept = await propose.approve(s, p, auth.actor(request, body.decided_by), body.note, body.force,
+                                          published_by=auth.publisher(request))  # AUTH-05
     agent = await s.get(Agent, p.agent_id)
     if agent and p.kind != "routing_update" and await test_suites.start_on_publish(s, agent, version):  # TEST-08 (a routing update makes no version)
         await s.commit()
@@ -243,6 +245,6 @@ async def approve(proposal_id: str, body: Decision, tenant_id: str = Depends(cur
 
 
 @router.post("/proposals/{proposal_id}/reject")
-async def reject(proposal_id: str, body: Decision, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    p = await propose.reject(s, await propose.get_proposal(s, tenant_id, proposal_id), body.decided_by, body.note or "")
+async def reject(proposal_id: str, body: Decision, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    p = await propose.reject(s, await propose.get_proposal(s, tenant_id, proposal_id), auth.actor(request, body.decided_by), body.note or "")
     return await _proposal_out(s, p)

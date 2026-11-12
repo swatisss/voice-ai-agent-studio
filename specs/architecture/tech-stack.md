@@ -39,7 +39,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 | Purpose | Default | Alternatives (config only) |
 |---|---|---|
-| LLM — all roles | Groq `openai/gpt-oss-120b` | Any OpenRouter model; Groq `openai/gpt-oss-20b`; OpenAI `gpt-4.1-mini` / `gpt-4.1-nano` |
+| LLM — all roles | Groq `openai/gpt-oss-120b` | Any OpenRouter model; Groq `openai/gpt-oss-20b`; OpenAI `gpt-4.1-mini` |
 | Speech-to-text | Deepgram `nova-3` streaming | — |
 | Text-to-speech | Deepgram `aura-2-thalia-en` (per persona voice) | Other Deepgram Aura-2 voices |
 | Speech-to-speech (optional, per agent) | OpenAI Realtime, gateway role `speech` ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) | another provider by a later CP |

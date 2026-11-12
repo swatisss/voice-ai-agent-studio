@@ -1,7 +1,7 @@
 """AgentSession - the shared brain for voice, text and simulation channels.
 
 Spec: /architecture/agent-runtime.md (Turn policy), /architecture/escalation.md (Triggers), /architecture/realtime-voice.md, /architecture/knowledge.md (KN-07), /architecture/test-suites.md (Scenario memory),
-/architecture/caller-verification.md, /architecture/agent-memory.md
+/architecture/caller-verification.md, /architecture/agent-memory.md, /architecture/languages.md
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from voiceai import call_settings
 from voiceai.call_settings import CallSettings
 from voiceai.live import SettingsChange
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, Tenant
-from voiceai.runtime import endings, escalation, outbound
+from voiceai.runtime import endings, escalation, language, outbound
 from voiceai.runtime.prompt import NOT_VERIFIED, NOTHING, system_prompt
 from voiceai.runtime.state import CallState
 from voiceai.runtime.tools import ToolExecutor, all_schemas, truncate
@@ -433,7 +433,7 @@ class AgentSession:
         if endings.is_farewell(text):
             return _Rule(GOODBYE, end_reason="farewell", data={"farewell": True})
         if policy.get("safety_screen", True) and escalation.safety_match(text):
-            return _Rule(escalation.SAFETY_MESSAGE, end_reason="handoff", data={"safety": True},
+            return _Rule(escalation.safety_message(text), end_reason="handoff", data={"safety": True},
                          escalate=("safety", "Caller used emergency or self-harm language"))
         return None
 
@@ -463,7 +463,8 @@ class AgentSession:
     async def _record_user(self, text: str) -> None:
         self.state.turns += 1
         self.history.append({"role": "user", "content": text})
-        await self._event("user", text)
+        self.state.caller_language = language.turn_language(text)  # LANG-05
+        await self._event("user", text, {"language": self.state.caller_language} if language.is_bilingual(self.config) else None)
 
     def _add_usage(self, usage: Usage | None) -> None:
         if usage is not None:  # RT-09

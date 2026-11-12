@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: draft
+status: stable
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -71,7 +71,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **eval_results** — `id`, `tenant_id`, `eval_run_id`, `case_key`, `case_type` (`cluster`|`regression`|`suite`|`routing`), `arm` (`baseline`|`candidate`|`target`), `scenario_id` (nullable), `repeat` int (1..k, default 1), `scenario` JSON (suite runs: the scenario as it ran), `call_id`, `expected`, `passed` bool, `failures` JSON list of strings, `judge` JSON, `created_at`
 
-**eval_scenarios** — `id`, `tenant_id`, `agent_id`, `name`, `caller_goal`, `caller_profile` JSON, `persona` (`calm`|`confused`|`impatient`|`adversarial`, default `calm`), `expected` (`resolved`|`escalated`), `required_tools` JSON, `forbidden_tools` JSON, `expected_results` JSON, `memory` JSON list, `enabled` bool, `created_at`, `updated_at`; existing rows get the defaults on start (empty lists, `enabled: true`)
+**eval_scenarios** — `id`, `tenant_id`, `agent_id`, `name`, `caller_goal`, `caller_profile` JSON, `persona` (`calm`|`confused`|`impatient`|`adversarial`, default `calm`), `language` (`en`|`hi`|`mixed`, default `en`, CP-0037), `expected` (`resolved`|`escalated`), `required_tools` JSON, `forbidden_tools` JSON, `expected_results` JSON, `memory` JSON list, `enabled` bool, `created_at`, `updated_at`; existing rows get the defaults on start (empty lists, `enabled: true`)
 
 **call_scorecards** — `id`, `tenant_id`, `call_id` (unique), `agent_id`, `agent_version_id`, `measures` JSON, `checks` JSON list (`{key, group, method, hard_gate, text, verdict, reason, evidence}`), `hard_fail` bool, `score` float (nullable), `judged` bool, `judge_model` (nullable), `source` (`llm`|`seed`), `created_at`, `updated_at` ([/architecture/call-scoring.md](/architecture/call-scoring.md))
 

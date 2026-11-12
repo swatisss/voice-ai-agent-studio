@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { loginUrl } from "./auth";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
@@ -23,9 +24,12 @@ export async function api<T = any>(path: string, init: RequestInit & { json?: un
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(init.json);
   }
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, body });
+  const res = await fetch(`${API_BASE}${path}`, { credentials: "include", ...init, headers, body });  // the session cookie (UI-69)
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.error === "login_required" && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    window.location.href = loginUrl();
+  }
   if (!res.ok) throw new ApiError(res.status, data.error ?? "error", data.detail ?? res.statusText);
   return data as T;
 }
@@ -66,7 +70,7 @@ const streams = new Map<string, Stream>();
 
 function openStream(id: string, url: string, st: Stream) {
   if (st.closed) return;
-  const es = new EventSource(url);
+  const es = new EventSource(url, { withCredentials: true });
   st.es = es;
   es.onopen = () => { st.delay = 1000; };
   es.onmessage = () => undefined;

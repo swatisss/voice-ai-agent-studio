@@ -2,7 +2,7 @@
 type: Component Spec
 title: Studio sign-in and roles
 description: Two fixed demo accounts (admin and reviewer), a signed session cookie, the API guard that refuses admin-only requests from reviewers, and how the signed-in person is recorded on approvals, reviews and published versions.
-status: draft
+status: stable
 tags: [architecture, auth, security, roles]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-02T00:00:00Z" }
 ---

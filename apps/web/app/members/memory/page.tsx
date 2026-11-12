@@ -93,7 +93,7 @@ function MemberMemoryPage() {
         )}
         <div className="ml-auto flex gap-2">
           <Button onClick={exportJson} disabled={notFound}><Download size={14} />Export</Button>
-          <Button variant="danger" onClick={() => setConfirmOpen(true)} disabled={notFound}><Trash2 size={14} />Erase member</Button>
+          <Button adminOnly variant="danger" onClick={() => setConfirmOpen(true)} disabled={notFound}><Trash2 size={14} />Erase member</Button>
         </div>
       </div>
 

@@ -233,9 +233,9 @@ async def test_openai_models_are_priced_and_selectable(client, monkeypatch, fake
     """Covers: LG-11"""
     g = _gateway(monkeypatch)
     used = {ref for role in ROLE_REFS for ref in g.refs_for(role) if ref.startswith("openai:")}
-    assert used == {"openai:gpt-4.1-mini", "openai:gpt-4.1-nano"}
+    assert used == {"openai:gpt-4.1-mini"}  # gpt-4.1-nano was retired by OpenAI (404 model_not_found)
     assert all(g.models[ref].get("input") and g.models[ref].get("output") for ref in used)
     assert not any(g.models[ref].get("reasoning_effort") for ref in used)  # non-reasoning models only
     monkeypatch.setattr(gw, "_gateway", g)
     selectable = (await client.get("/api/models")).json()["selectable"]
-    assert {"openai:gpt-4.1-mini", "openai:gpt-4.1-nano"} <= set(selectable)
+    assert "openai:gpt-4.1-mini" in selectable and "openai:gpt-4.1-nano" not in selectable

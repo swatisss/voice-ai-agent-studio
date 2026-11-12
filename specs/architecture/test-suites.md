@@ -21,6 +21,7 @@ One `eval_scenarios` row per scenario ([/data/data-model.md](/data/data-model.md
 | `caller_goal` | 10–600 chars, the simulator's goal |
 | `caller_profile` | name, member ID, date of birth and extra facts the caller shares when asked; `{}` = not a member |
 | `persona` | `calm` (default) · `confused` · `impatient` · `adversarial` (the simulator's style, below) |
+| `language` | `en` (default) · `hi` · `mixed`: the language the simulated caller speaks; the simulator's style gets the matching line from [/prompts/caller-simulator.md](/prompts/caller-simulator.md) ([/architecture/languages.md](/architecture/languages.md), LANG-10) |
 | `expected` | `resolved` or `escalated` |
 | `required_tools` | ≤ 10 of `{name, args: {key: value}}`: each must be called at least once with a successful result and, for every listed key, an argument equal to the value (strings compared case-insensitively, trimmed) |
 | `forbidden_tools` | ≤ 10 tool names that must never return a successful result |

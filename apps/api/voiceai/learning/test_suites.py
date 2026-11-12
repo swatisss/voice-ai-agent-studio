@@ -27,8 +27,8 @@ from voiceai.models import Agent, AgentVersion, Call, CallEvent, EvalResult, Eva
 from voiceai.schemas import BUILTIN_TOOLS, ScenarioIn
 
 log = logging.getLogger("voiceai.tests")
-SCENARIO_FIELDS = ("name", "caller_goal", "caller_profile", "persona", "expected", "required_tools", "forbidden_tools",
-                   "expected_results", "memory", "enabled")
+SCENARIO_FIELDS = ("name", "caller_goal", "caller_profile", "persona", "language", "expected", "required_tools",
+                   "forbidden_tools", "expected_results", "memory", "enabled")
 
 
 def scenario_dict(sc: EvalScenario) -> dict[str, Any]:
@@ -222,7 +222,8 @@ async def run_test_suite(tenant_id: str, payload: dict[str, Any]) -> None:
         async with sem:
             try:
                 call_id, _ = await simulate(tenant_id, run.agent_id, version_id, tenant_name, config, sc["caller_goal"],
-                                            sc["caller_profile"] or {}, persona=sc["persona"], memory=sc["memory"])
+                                            sc["caller_profile"] or {}, persona=sc["persona"], memory=sc["memory"],
+                                            language=sc.get("language") or "en")
                 async with sessionmaker()() as s2:
                     call = await s2.get(Call, call_id)
                     card = await scoring.score(s2, call, config=config, always_judge=True, goal=sc["caller_goal"], expected=sc["expected"])

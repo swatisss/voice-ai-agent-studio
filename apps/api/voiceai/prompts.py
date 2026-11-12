@@ -28,6 +28,19 @@ def load(name: str) -> str:
     return match.group(1).rstrip() + "\n"
 
 
+@lru_cache(maxsize=32)
+def fragment(name: str, label: str) -> str:
+    """A fixed prompt fragment kept in a prompt spec outside its main prompt: the first ```text block after the line
+    `label` (for example the Language block of /prompts/agent-system-prompt.md), verbatim and without the fence."""
+    path = get_settings().specs_dir / "prompts" / f"{name}.md"
+    text = path.read_text(encoding="utf-8")
+    at = text.find("\n" + label + "\n")
+    match = re.compile(r"^```text\s*$\n(.*?)^```\s*$", re.S | re.M).search(text, at + 1) if at >= 0 else None
+    if not match:
+        raise PromptError(f"{path.name}: no ```text block after '{label}'")
+    return match.group(1).rstrip()
+
+
 def variables(name: str) -> set[str]:
     return set(_VAR.findall(load(name)))
 

@@ -79,7 +79,7 @@ export function WebsiteSources({ draft, update, adding, onAdded, onClose }: Prop
                 <span className="min-w-0 flex-1 truncate text-xs text-muted">{s.start_url}</span>
                 {statusBadge(s)}
                 {s.last_synced_at && s.status !== "indexing" && <span className="text-xs text-muted">synced {ago(s.last_synced_at)} ago</span>}
-                <Button variant="ghost" onClick={() => sync(s.id)} disabled={s.status === "indexing"} aria-label="Sync now"><RefreshCw size={14} />Sync now</Button>
+                <Button adminOnly variant="ghost" onClick={() => sync(s.id)} disabled={s.status === "indexing"} aria-label="Sync now"><RefreshCw size={14} />Sync now</Button>
               </div>
               {open[s.id] && (
                 <ul className="ml-8 mt-2 space-y-1 text-xs">
@@ -95,7 +95,7 @@ export function WebsiteSources({ draft, update, adding, onAdded, onClose }: Prop
         </ul>
       )}
       <Modal open={adding} title="Add from URL" onClose={onClose}
-        footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" loading={busy} disabled={!form.url.trim()} onClick={add}>Add</Button></>}>
+        footer={<><Button onClick={onClose}>Cancel</Button><Button adminOnly variant="primary" loading={busy} disabled={!form.url.trim()} onClick={add}>Add</Button></>}>
         <Field label="URL"><Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://…" /></Field>
         <Field label="What to index">
           <Select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}>

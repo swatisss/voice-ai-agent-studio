@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0034 Studio sign-in with two roles - admin and reviewer
 description: The Studio gets a sign-in page and two fixed demo accounts; reviewers work the human-in-the-loop tasks (console, answers, call reviews, learning runs, rejecting fixes) while only an admin can change what a live agent does (publish, approve a fix, edit agents, knowledge, tools and settings), enforced by the API and recorded as who did it.
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [auth, security, api, ui, healthcare]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-02T00:00:00Z" }
 ---
@@ -43,7 +43,7 @@ Defined in the specs above: **AUTH-01…AUTH-07**, **DM-14**, **UI-69**, **UI-70
 2. `voiceai/auth.py`: settings, accounts, signed session cookie, `/api/auth/login|logout|me`, the guard middleware with the admin-only table, `current_user` for routes; CORS with credentials — AUTH-01…AUTH-04, AUTH-07.
 3. Routes record the signed-in user (approve, reject, accept, review, action done, dismiss and answer, publish); column `agent_versions.published_by` and its upgrade — AUTH-05, AUTH-06, DM-14.
 4. Web: `/login/` page, `fetch` and `EventSource` with credentials, redirect on 401, the user block in the sidebar, `useMe()` and disabled admin-only controls — UI-69, UI-70.
-5. `.env.example` lines; `dev.py --check` reports whether sign-in is on; demo walkthrough uses the two accounts.
+5. `.env.example` lines; demo walkthrough uses the two accounts. (`dev.py --check` reporting sign-in was dropped: the launcher spec does not cover it.)
 6. Tests in `tests/test_studio_auth.py`.
 
 # Risks and rollout

@@ -1,11 +1,12 @@
 // Spec: /ui/app-shell.md, /ui/design-system.md (Layout)
 "use client";
 
-import { AudioWaveform, Bot, Gauge, Headphones, LayoutDashboard, Lightbulb, Menu, Phone, PhoneCall, Settings, UserRound, X } from "lucide-react";
+import { AudioWaveform, Bot, Gauge, Headphones, LayoutDashboard, Lightbulb, LogOut, Menu, Phone, PhoneCall, Settings, ShieldCheck, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, setApiTenant, useEvents } from "@/lib/api";
+import { loginUrl, MeCtx, type Me } from "@/lib/auth";
 import { Badge, cx, Select, ToastProvider } from "./ui";
 
 type Tenant = { id: string; name: string };
@@ -21,6 +22,7 @@ const NAV = [
   { href: "/console/", label: "Agent console", icon: Headphones, badge: "console" as const },
   { href: "/insights/", label: "Insights", icon: Lightbulb, badge: "insights" as const },
   { href: "/evaluation/", label: "Evaluation", icon: Gauge },
+  { href: "/compliance/", label: "Compliance", icon: ShieldCheck },
   { href: "/settings/", label: "Settings", icon: Settings },
 ];
 
@@ -31,6 +33,23 @@ const CAPTION = "Voice Agent Studio";
 export const unitOf = (name: string) => (name.includes("·") ? name.split("·").slice(1).join("·") : name).trim();
 
 export function Shell({ children }: { children: ReactNode }) {
+  const path = usePathname();
+  const [me, setMe] = useState<Me | null>(null);
+  useEffect(() => {  // UI-69: who is signed in, before anything else loads
+    api<Me>("/api/auth/me").then(setMe).catch(() => setMe({ enabled: false, user: null }));
+  }, [path]);
+  if (path.startsWith("/login")) {
+    return <MeCtx.Provider value={me ?? { enabled: false, user: null }}><ToastProvider>{children}</ToastProvider></MeCtx.Provider>;
+  }
+  if (me === null) return null;
+  if (me.enabled && !me.user) {
+    if (typeof window !== "undefined") window.location.replace(loginUrl());
+    return null;
+  }
+  return <MeCtx.Provider value={me}><Studio me={me}>{children}</Studio></MeCtx.Provider>;
+}
+
+function Studio({ me, children }: { me: Me; children: ReactNode }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenant, setTenantState] = useState("");
   const [health, setHealth] = useState<{ providers?: Record<string, boolean> } | null>(null);
@@ -38,6 +57,10 @@ export function Shell({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const path = usePathname();
+  const signOut = async () => {
+    await api("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    window.location.href = "/login/";
+  };
 
   const setTenant = useCallback((t: string) => {
     setApiTenant(t);
@@ -107,6 +130,17 @@ export function Shell({ children }: { children: ReactNode }) {
         })}
       </nav>
       <div className="space-y-3 border-t border-line p-4">
+        {me.enabled && me.user && (
+          <div className="flex items-center gap-2" aria-label="Signed in">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">{me.user.name}</span>
+              <Badge tone={me.user.role === "admin" ? "accent" : "neutral"}>{me.user.role === "admin" ? "Admin" : "Reviewer"}</Badge>
+            </span>
+            <button className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-accent hover:bg-accent-soft" onClick={signOut}>
+              <LogOut size={14} aria-hidden="true" />Sign out
+            </button>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-xs font-medium text-muted" htmlFor={`business-unit-${copy}`}>Business unit</label>
           <Select id={`business-unit-${copy}`} className="unit-select" value={tenant} onChange={(e) => setTenant(e.target.value)}>

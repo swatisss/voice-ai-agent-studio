@@ -1,17 +1,19 @@
 """Escalation: safety screen, escalation rows, groundwork packets, console lifecycle.
 
-Spec: /architecture/escalation.md, /prompts/escalation-packet.md
+Spec: /architecture/escalation.md, /prompts/escalation-packet.md, /architecture/languages.md (Safety screen)
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import unicodedata
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai import jobs, prompts
+from voiceai.runtime.language import HINDI, turn_language
 from voiceai.db import sessionmaker, utcnow
 from voiceai.errors import ApiError
 from voiceai.events import bus
@@ -30,12 +32,32 @@ SAFETY_MESSAGE = (
     "you can call or text 988 at any time. I'm connecting you with a nurse right now."
 )
 
+# Hindi phrases, Devanagari and Latin letters, matched on every agent (/architecture/languages.md, Safety screen; LANG-08)
+SAFETY_PHRASES_HI = (
+    "आत्महत्या", "खुदकुशी", "ख़ुदकुशी", "खुद को मार", "ख़ुद को मार", "खुद को नुकसान", "मरना चाहता", "मरना चाहती",
+    "जान दे दूं", "जान दे दूँ", "सीने में दर्द", "छाती में दर्द", "सांस नहीं", "साँस नहीं", "बेहोश", "दिल का दौरा",
+    "हार्ट अटैक", "बहुत खून", "ओवरडोज़", "ओवरडोज", "लकवा",
+    "aatmahatya", "atmahatya", "khudkushi", "khud ko maar", "khud ko nuksan", "marna chahta", "marna chahti",
+    "jaan de dun", "seene mein dard", "seene me dard", "chhati mein dard", "saans nahi", "sans nahi", "behosh", "dil ka daura",
+)
+# /product/healthcare-compliance.md rule 6, the Hindi message for a turn in Devanagari
+SAFETY_MESSAGE_HI = (
+    "अगर यह मेडिकल इमरजेंसी है, तो कृपया फ़ोन रखें और 911 पर कॉल करें। अगर आप खुद को नुकसान पहुँचाने के बारे में सोच रहे हैं, "
+    "तो आप कभी भी 988 पर कॉल या मैसेज कर सकते हैं। अब आपको एक नर्स से जोड़ा जा रहा है।"
+)
+
 _packet_tasks: set[asyncio.Task[None]] = set()
+_PHRASES = tuple(unicodedata.normalize("NFC", p) for p in (*SAFETY_PHRASES, *SAFETY_PHRASES_HI))
 
 
 def safety_match(text: str) -> bool:
-    t = text.lower().replace("’", "'")
-    return any(p in t for p in SAFETY_PHRASES)
+    t = unicodedata.normalize("NFC", text).lower().replace("’", "'")
+    return any(p in t for p in _PHRASES)
+
+
+def safety_message(text: str) -> str:
+    """The fixed safety line in the caller's language: Hindi for a turn in Devanagari, English otherwise (LANG-08)."""
+    return SAFETY_MESSAGE_HI if turn_language(text) == HINDI else SAFETY_MESSAGE
 
 
 def summary(e: Escalation) -> dict[str, Any]:

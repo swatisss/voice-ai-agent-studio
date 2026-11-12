@@ -2,7 +2,7 @@
 type: UI Spec
 title: Compliance page
 description: The /compliance/ page - each healthcare control with its status from the latest test report, the rule and regulation it supports, how it is enforced, its evidence tests, and the open gaps.
-status: draft
+status: stable
 tags: [ui, compliance, healthcare]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-02T00:00:00Z" }
 ---

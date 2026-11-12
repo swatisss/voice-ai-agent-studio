@@ -42,5 +42,5 @@ Transcripts, tool calls and status are **not** sent on this socket; the page sub
 
 * `getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1}})`.
 * Capture via an `AudioWorklet` that downsamples from the context rate to 16 kHz and posts 20 ms Int16 frames.
-* Playback via a 24 kHz `AudioContext` scheduling `AudioBuffer`s back-to-back; on `interrupt`, stop all scheduled sources and reset the play head.
+* Playback via a 24 kHz `AudioContext` scheduling `AudioBuffer`s back-to-back; when nothing is queued (a reply starts, or delivery fell behind playback) the next buffer starts 200 ms after now, a jitter buffer so that a chunk arriving late does not break the voice mid-sentence; on `interrupt`, stop all scheduled sources and reset the play head.
 * A level meter for the mic and a "speaking" indicator for agent audio.

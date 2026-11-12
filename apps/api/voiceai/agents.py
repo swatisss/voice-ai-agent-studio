@@ -1,6 +1,7 @@
 """Agent config validation, snapshots and publishing.
 
-Spec: /data/agent-config.md, /architecture/multi-tenancy.md (rule 3), /architecture/tools-and-skills.md (TS-07)
+Spec: /data/agent-config.md, /architecture/multi-tenancy.md (rule 3), /architecture/tools-and-skills.md (TS-07),
+/architecture/languages.md (LANG-02, LANG-11)
 """
 from __future__ import annotations
 
@@ -20,6 +21,19 @@ from voiceai.schemas import AgentConfig
 
 def default_config() -> dict[str, Any]:
     return AgentConfig().model_dump()
+
+
+def new_agent_config(raw: dict[str, Any] | None, realtime_allowed: bool) -> dict[str, Any]:
+    """LANG-11: a new agent is bilingual on the realtime pipeline where the tenant allows realtime, else cascade and
+    English; a pipeline or languages given in the request win. Only applied when an agent is created."""
+    raw = dict(raw or {})
+    voice = dict(raw.get("voice") or {})
+    if "pipeline" not in voice:
+        voice["pipeline"] = "realtime" if realtime_allowed else "cascade"
+    raw["voice"] = voice
+    if "languages" not in raw:
+        raw["languages"] = ["en", "hi"] if voice["pipeline"] == "realtime" and realtime_allowed else ["en"]
+    return raw
 
 
 def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
@@ -59,6 +73,8 @@ def skill_dict(s: Skill) -> dict[str, Any]:
 async def build_snapshot(s: AsyncSession, tenant_id: str, draft: dict[str, Any]) -> dict[str, Any]:
     """Resolve ids into a self-contained, immutable config (DM-05); validate references (MT-03, TS-07)."""
     cfg = validate_config(draft)
+    if "hi" in cfg["languages"] and cfg["voice"]["pipeline"] != "realtime":  # LANG-02: the cascade is English-only
+        raise ApiError(422, "language_needs_realtime", "Hindi needs the realtime speech-to-speech pipeline")
     tools = list((await s.scalars(select(Tool).where(Tool.tenant_id == tenant_id, Tool.id.in_(cfg["tool_ids"])))).all())
     skills = list((await s.scalars(select(Skill).where(Skill.tenant_id == tenant_id, Skill.id.in_(cfg["skill_ids"])))).all())
     docs = list((await s.scalars(select(KnowledgeDoc.id).where(
@@ -97,7 +113,7 @@ async def build_snapshot(s: AsyncSession, tenant_id: str, draft: dict[str, Any])
 
 
 async def publish(
-    s: AsyncSession, agent: Agent, change_note: str = "", source_proposal_id: str | None = None,
+    s: AsyncSession, agent: Agent, change_note: str = "", source_proposal_id: str | None = None, published_by: str | None = None,
 ) -> AgentVersion:
     snapshot = await build_snapshot(s, agent.tenant_id, agent.draft_config or {})
     snapshot["description"] = agent.description or ""  # CAT-06: the catalog reads the published description
@@ -105,6 +121,7 @@ async def publish(
     version = AgentVersion(
         tenant_id=agent.tenant_id, agent_id=agent.id, version=current + 1, config=snapshot,
         change_note=change_note or f"Version {current + 1}", source_proposal_id=source_proposal_id,
+        published_by=published_by,
     )
     s.add(version)
     await s.flush()

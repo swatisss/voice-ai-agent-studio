@@ -151,7 +151,7 @@ function RoutingProposal({ p, onDone }: { p: { id: string; payload: any; eval_su
       {gate && <div className={gate.passed ? "text-ok" : "text-bad"}>Routing gate: {gate.passed ? "passed" : gate.reasons.join("; ")} · suite {gate.suite_before} → {gate.suite_after} of {gate.cases}</div>}
       <div className="flex flex-wrap items-center gap-2">
         <input className="min-w-56 flex-1 rounded-lg border border-line bg-panel px-3 py-1.5" placeholder="Note (required to reject or to override a failed gate)" value={note} onChange={(e) => setNote(e.target.value)} />
-        <Button variant="primary" disabled={!gate?.passed && !note.trim()} onClick={() => decide("approve")}>Approve</Button>
+        <Button adminOnly variant="primary" disabled={!gate?.passed && !note.trim()} onClick={() => decide("approve")}>Approve</Button>
         <Button variant="ghost" disabled={!note.trim()} onClick={() => decide("reject")}>Reject</Button>
       </div>
     </div>

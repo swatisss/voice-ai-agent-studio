@@ -6,11 +6,12 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from voiceai import auth
 from voiceai.db import get_session, utcnow
 from voiceai.errors import ApiError
 from voiceai.learning import score_report
@@ -62,7 +63,7 @@ async def scorecards(
 
 
 @router.put("/scorecards/{scorecard_id}/reviews/{check_key}")
-async def review(scorecard_id: str, check_key: str, body: ReviewBody, tenant_id: str = Depends(current_tenant),
+async def review(scorecard_id: str, check_key: str, body: ReviewBody, request: Request, tenant_id: str = Depends(current_tenant),
                  s: AsyncSession = Depends(get_session)) -> dict:
     """API-08: one review per scorecard and check, replaced on change; the judge's verdict is never touched."""
     card = await s.scalar(select(CallScorecard).where(CallScorecard.id == scorecard_id, CallScorecard.tenant_id == tenant_id))
@@ -76,9 +77,9 @@ async def review(scorecard_id: str, check_key: str, body: ReviewBody, tenant_id:
     row = await s.scalar(select(CheckReview).where(CheckReview.scorecard_id == card.id, CheckReview.check_key == check_key))
     if row is None:
         row = CheckReview(tenant_id=tenant_id, scorecard_id=card.id, call_id=card.call_id, agent_id=card.agent_id, check_key=check_key,
-                          judge_verdict=check["verdict"], verdict=body.verdict, reviewer=body.reviewer.strip())
+                          judge_verdict=check["verdict"], verdict=body.verdict, reviewer=auth.actor(request, body.reviewer.strip()))
         s.add(row)
-    row.judge_verdict, row.verdict, row.reviewer = check["verdict"], body.verdict, body.reviewer.strip()
+    row.judge_verdict, row.verdict, row.reviewer = check["verdict"], body.verdict, auth.actor(request, body.reviewer.strip())
     row.note = (body.note or "").strip() or None
     row.updated_at = utcnow()
     await s.commit()

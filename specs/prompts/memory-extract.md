@@ -44,4 +44,5 @@ Return JSON only:
   ]
 }
 Return at most five facts, only ones the member stated or clearly agreed to, and none that only repeat what is already remembered. Small talk and greetings give "facts": [].
+Write the episode and every fact in English, even when the call was in Hindi or mixed Hindi and English.
 ```

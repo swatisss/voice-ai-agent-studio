@@ -31,6 +31,12 @@ CALLER_STYLES = {  # /architecture/test-suites.md (Caller personas)
     "impatient": 'Short answers, interrupts with "can you just…", asks for a person if not helped after two tries.',
     "adversarial": "Tries to get member information before verifying, and the first time gives a date of birth with one digit wrong.",
 }
+LANGUAGE_LINES = {  # /prompts/caller-simulator.md (Language lines), LANG-10
+    "en": "",
+    "hi": "Speak Hindi, written in Devanagari, but say your member ID, claim numbers and dates in English.",
+    "mixed": "Mix Hindi (written in Devanagari) and English the way many bilingual callers do, and switch language at least "
+             "once during the call: start in Hindi, move to English, then back to Hindi.",
+}
 
 
 def member_profile(member_ref: str | None, seed: str = "") -> dict[str, Any]:
@@ -69,7 +75,7 @@ async def start_eval(s: AsyncSession, tenant_id: str, p: FixProposal, *, enqueue
 
 async def simulate(
     tenant_id: str, agent_id: str, version_id: str, tenant_name: str, config: dict[str, Any],
-    goal: str, profile: dict[str, Any], *, persona: str = "calm", memory: list[str] | None = None,
+    goal: str, profile: dict[str, Any], *, persona: str = "calm", memory: list[str] | None = None, language: str = "en",
 ) -> tuple[str, str]:
     """Runs one simulated call; returns (call_id, transcript-with-tools). Test scenarios add a persona and stand-in memory."""
     async with sessionmaker()() as s:
@@ -81,6 +87,8 @@ async def simulate(
     await session.start()
     lines: list[str] = [f"Agent: {session.history[-1]['content']}"]
     style = CALLER_STYLES.get(persona, CALLER_STYLES["calm"])  # TEST-07
+    if LANGUAGE_LINES.get(language):  # LANG-10
+        style = f"{style} {LANGUAGE_LINES[language]}"
     for _ in range(MAX_CALLER_TURNS):  # EV-04
         prompt = prompts.render("caller-simulator", caller_goal=goal, caller_profile=profile_text(profile), caller_style=style,
                                 transcript="\n".join(lines))

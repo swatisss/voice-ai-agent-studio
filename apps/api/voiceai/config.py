@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     tenant_secrets_key: str | None = None
     # HMAC secret of public-API connect tokens (/api/public-api.md, Voice connect); unset = no voice over /v1
     public_api_secret: str | None = None
+    # Studio sign-in (/architecture/studio-auth.md): on when a password is set; unset secret = derived from the passwords
+    studio_admin_password: str | None = None
+    studio_reviewer_password: str | None = None
+    studio_session_secret: str | None = None
     # WebRTC transport (/architecture/webrtc-transport.md)
     webrtc_stun_urls: str = "stun:stun.l.google.com:19302"
     webrtc_turn_urls: str | None = None

@@ -19,7 +19,9 @@ from voiceai.call_settings import effective_settings, persona_dict
 from voiceai import jobs
 from voiceai.db import utcnow
 from voiceai.learning import score_report, scoring
-from voiceai.models import AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, CallScorecard, CheckReview, Escalation, Persona
+from voiceai.models import (
+    AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, CallScorecard, CheckReview, Escalation, FixProposal, Persona,
+)
 from voiceai.schemas import E164_RE, TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
 from voiceai.runtime.session import AgentSession, create_call
@@ -250,6 +252,20 @@ async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s:
         "scorecard": await _scorecard(s, call_id),
         "routing": (call.meta or {}).get("routing"),  # UI-61: how this segment was routed
         "handoff": {k: v for k, v in ((call.meta or {}).get("handoff") or {}).items() if k in ("reason", "summary")} or None,
+        "version_info": await _version_info(s, version),
+    }
+
+
+async def _version_info(s: AsyncSession, version: AgentVersion | None) -> dict[str, Any] | None:
+    """CMP-03: the audit trail - which version answered, who published it, the fix it came from."""
+    if version is None:
+        return None
+    p = await s.get(FixProposal, version.source_proposal_id) if version.source_proposal_id else None
+    return {
+        "version": version.version, "published_by": version.published_by, "published_at": version.created_at.isoformat(),
+        "change_note": version.change_note,
+        "source_proposal": {"id": p.id, "title": p.title, "cluster_id": p.cluster_id, "decided_by": p.decided_by,
+                            "decided_at": p.decided_at.isoformat() if p.decided_at else None} if p else None,
     }
 
 

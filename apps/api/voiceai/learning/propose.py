@@ -235,7 +235,8 @@ def candidate_config(base: dict[str, Any], p: FixProposal) -> dict[str, Any]:
     return cfg
 
 
-async def approve(s: AsyncSession, p: FixProposal, decided_by: str, note: str | None, force: bool) -> tuple[AgentVersion, bool]:
+async def approve(s: AsyncSession, p: FixProposal, decided_by: str, note: str | None, force: bool,
+                  published_by: str | None = None) -> tuple[AgentVersion, bool]:
     """Publish the published version plus the change (what the gate evaluated); returns the version and whether the
     builder's unpublished draft edits were kept as a draft (SL-17)."""
     if p.status != "ready":
@@ -267,7 +268,7 @@ async def approve(s: AsyncSession, p: FixProposal, decided_by: str, note: str | 
     change = await _resolve_change(s, p)
     agent.draft_config = _apply_change(base, change)  # SL-17: publish exactly what was gated
     await _add_derived_scenarios(s, p)  # SL-09
-    version = await publish(s, agent, change_note=f"Fix: {p.title}", source_proposal_id=p.id)
+    version = await publish(s, agent, change_note=f"Fix: {p.title}", source_proposal_id=p.id, published_by=published_by)
     if kept:  # the builder's edits stay a draft, with the fix added
         agent.draft_config = _apply_change(builder, change)
     p.status, p.decided_by, p.decision_note, p.decided_at, p.resulting_version_id = "approved", decided_by, note, utcnow(), version.id

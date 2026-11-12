@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0035 Compliance evidence - prove the healthcare controls
 description: A Compliance page lists each healthcare control with the regulation it supports, how it is enforced and the acceptance tests that prove it, with each test's latest result; every call shows the version that answered, who published it and the fix it came from; the demo gains an adversarial-caller act.
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [compliance, healthcare, evaluation, ui, api, demo]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-02T00:00:00Z" }
 ---

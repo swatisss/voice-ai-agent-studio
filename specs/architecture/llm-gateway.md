@@ -33,7 +33,6 @@ models:            # price per 1M tokens (USD) for cost accounting
   "groq:openai/gpt-oss-20b":        { input: 0.10, output: 0.50, json_schema: true, reasoning_effort: true }
   "openrouter:openai/gpt-oss-120b": { input: 0.15, output: 0.60, json_schema: false }
   "openai:gpt-4.1-mini":            { input: 0.40, output: 1.60, json_schema: true }   # confirm IDs and prices in the OpenAI console
-  "openai:gpt-4.1-nano":            { input: 0.10, output: 0.40, json_schema: true }
   # Speech-to-speech model (confirm ID and prices in the OpenAI console): text and audio token prices per 1M tokens
   "openai:gpt-realtime-2.1":         { kind: speech, input: 4.00, output: 16.00, audio_input: 32.00, audio_output: 64.00 }
 roles:
@@ -41,10 +40,10 @@ roles:
                fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
   analysis:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0 }, fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
   drafting:  { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: medium, temperature: 0.4 }, fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
-  simulator: { model: "groq:openai/gpt-oss-20b",  params: { reasoning_effort: low, temperature: 0.7 }, fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-nano"] }
+  simulator: { model: "groq:openai/gpt-oss-20b",  params: { reasoning_effort: low, temperature: 0.7 }, fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
   judge:     { model: "groq:openai/gpt-oss-120b", params: { reasoning_effort: low, temperature: 0 }, fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
-  turn:      { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }, fallback: ["openrouter:openai/gpt-oss-20b", "openai:gpt-4.1-nano"] }
-  router:    { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 300 }, fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-nano"] }
+  turn:      { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }, fallback: ["openrouter:openai/gpt-oss-20b", "openai:gpt-4.1-mini"] }
+  router:    { model: "groq:openai/gpt-oss-20b", params: { reasoning_effort: low, temperature: 0, max_tokens: 300 }, fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-mini"] }
   speech:    { model: "openai:gpt-realtime-2.1", voices: [marin, cedar, coral, alloy, ash, ballad, echo, sage, shimmer, verse], params: { transcription_model: "gpt-realtime-whisper" }, fallback: [] }
 ```
 

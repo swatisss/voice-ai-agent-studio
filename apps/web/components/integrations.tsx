@@ -44,7 +44,7 @@ export function ApiKeysCard({ tenant }: { tenant: string }) {
   }
 
   return (
-    <Card title="API keys" actions={<Button onClick={() => setForm({ name: "", scope: "member", rate: "120", voice: "10" })}>New key</Button>}>
+    <Card title="API keys" actions={<Button adminOnly onClick={() => setForm({ name: "", scope: "member", rate: "120", voice: "10" })}>New key</Button>}>
       <p className="mb-3 max-w-3xl text-sm text-muted">Your systems use a key to start conversations with this unit&apos;s agents through the public API. A key for <b>Members</b> reaches member-facing agents; a key for <b>Staff</b> reaches staff assistants.</p>
       {!data ? <Spinner /> : data.items.length === 0 ? <p className="text-sm text-muted">No keys yet.</p> : (
         <div className="overflow-x-auto">
@@ -59,7 +59,7 @@ export function ApiKeysCard({ tenant }: { tenant: string }) {
                   <td className="pr-3">{k.rate_limit_per_min}/min · {k.max_concurrent_voice} voice</td>
                   <td className="pr-3">{ago(k.created_at)}</td>
                   <td className="pr-3">{k.last_used_at ? ago(k.last_used_at) : "Never"}</td>
-                  <td className="text-right">{k.revoked_at ? <Badge tone="neutral">Revoked</Badge> : <Button variant="ghost" onClick={() => setRevoking(k)}>Revoke</Button>}</td>
+                  <td className="text-right">{k.revoked_at ? <Badge tone="neutral">Revoked</Badge> : <Button adminOnly variant="ghost" onClick={() => setRevoking(k)}>Revoke</Button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -152,7 +152,7 @@ export function WebhooksCard({ tenant }: { tenant: string }) {
   }
 
   return (
-    <Card title="Webhooks" actions={<Button disabled={(data?.items.length ?? 0) >= 5} onClick={() => setForm({ url: "", events: ["conversation.ended"], include_transcript: false })}>Add endpoint</Button>}>
+    <Card title="Webhooks" actions={<Button adminOnly disabled={(data?.items.length ?? 0) >= 5} onClick={() => setForm({ url: "", events: ["conversation.ended"], include_transcript: false })}>Add endpoint</Button>}>
       <p className="mb-3 max-w-3xl text-sm text-muted">We post signed events about conversations your systems started through the public API.</p>
       {!data ? <Spinner /> : data.items.length === 0 ? <p className="text-sm text-muted">No endpoints yet.</p> : (
         <ul className="space-y-3">
@@ -163,9 +163,9 @@ export function WebhooksCard({ tenant }: { tenant: string }) {
                 {!ep.enabled && <Badge tone="neutral">Disabled</Badge>}
                 {ep.include_transcript && <Badge tone="warn">Transcripts</Badge>}
                 <span className="ml-auto flex gap-1">
-                  <Button variant="ghost" onClick={() => update(ep, { enabled: !ep.enabled })}>{ep.enabled ? "Disable" : "Enable"}</Button>
-                  <Button variant="ghost" onClick={async () => setSecret((await api<{ secret: string }>(`/api/webhooks/${ep.id}/rotate`, { method: "POST" })).secret)}>Rotate secret</Button>
-                  <Button variant="ghost" onClick={async () => { await api(`/api/webhooks/${ep.id}`, { method: "DELETE" }); reload(); }}>Delete</Button>
+                  <Button adminOnly variant="ghost" onClick={() => update(ep, { enabled: !ep.enabled })}>{ep.enabled ? "Disable" : "Enable"}</Button>
+                  <Button adminOnly variant="ghost" onClick={async () => setSecret((await api<{ secret: string }>(`/api/webhooks/${ep.id}/rotate`, { method: "POST" })).secret)}>Rotate secret</Button>
+                  <Button adminOnly variant="ghost" onClick={async () => { await api(`/api/webhooks/${ep.id}`, { method: "DELETE" }); reload(); }}>Delete</Button>
                   <Button variant="ghost" onClick={() => setOpen(open === ep.id ? null : ep.id)}>{open === ep.id ? "Hide deliveries" : "Deliveries"}</Button>
                 </span>
               </div>

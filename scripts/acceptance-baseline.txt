@@ -135,3 +135,14 @@ UI-66
 # line. Approval requested from the product owner.
 UI-67
 UI-68
+# CP-0034 and CP-0035 (2026-11-02), checked by hand in the browser against the running stack with sign-in on. UI-69: an
+# unsigned visit to /insights/ lands on /login/?next=%2Finsights%2F; a wrong password shows "Email or password is wrong";
+# the reviewer's sign-in returns to Insights with Riley Reviewer, a Reviewer badge and Sign out in the sidebar. UI-70: as the
+# reviewer, a proposal's Approve & publish is disabled "(Admin only)" while Reject is enabled (the API refusals are tested by
+# AUTH-03). UI-71: the Compliance page reads "13 of 13 controls passing" from the report and C1 expands to its six evidence
+# IDs with their tests. UI-72: a call on a version published before CP-0034 reads "Answered by v1 · published by unknown";
+# the fix-approved variant is covered by CMP-03. Approval requested from the product owner.
+UI-69
+UI-70
+UI-71
+UI-72

@@ -224,6 +224,7 @@ class ScenarioIn(BaseModel):
     caller_goal: str = Field(min_length=10, max_length=600)
     caller_profile: dict[str, Any] = Field(default_factory=dict)
     persona: Literal["calm", "confused", "impatient", "adversarial"] = "calm"
+    language: Literal["en", "hi", "mixed"] = "en"  # the simulated caller's language (LANG-10)
     expected: Literal["resolved", "escalated"] = "resolved"
     required_tools: list[RequiredTool] = Field(default_factory=list, max_length=10)
     forbidden_tools: list[str] = Field(default_factory=list, max_length=10)
@@ -262,6 +263,7 @@ class AgentConfig(BaseModel):
     persona_id: str | None = None
     persona: Persona = Field(default_factory=Persona)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
+    languages: list[Literal["en", "hi"]] = Field(default_factory=lambda: ["en"])  # LANG-01, /architecture/languages.md
     policy: Policy = Field(default_factory=Policy)
     tool_ids: list[str] = Field(default_factory=list)
     skill_ids: list[str] = Field(default_factory=list)
@@ -274,6 +276,13 @@ class AgentConfig(BaseModel):
     learning: LearningConfig = Field(default_factory=LearningConfig)
     routable: bool = True  # /architecture/capability-catalog.md: in the supervisor's catalog when published
     handoff_intro: str = Field(default=DEFAULT_HANDOFF_INTRO, max_length=200)  # DM-11
+
+    @field_validator("languages")
+    @classmethod
+    def _languages(cls, v: list[str]) -> list[str]:  # LANG-01: English is always one of them
+        if "en" not in v:
+            raise ValueError("languages must include 'en'")
+        return [lang for lang in ("en", "hi") if lang in v]
 
     @model_validator(mode="after")
     def _outbound_needs_targets(self) -> AgentConfig:

@@ -7,20 +7,21 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai.agents import agent_out, default_config, publish, skill_dict, tool_dict, validate_config
+from voiceai import auth
+from voiceai.agents import agent_out, new_agent_config, publish, skill_dict, tool_dict, validate_config
 from voiceai.db import get_session
 from voiceai.errors import ApiError
 from voiceai.learning import scoring, test_suites
 from voiceai.models import Agent, AgentVersion, CallScorecard, EvalResult, EvalRun, EvalScenario, Skill, Tool
 from voiceai.schemas import ScenarioIn, SkillDef, ToolDef
 from voiceai.tenancy import current_tenant
-from voiceai.tenant_settings import ensure_pipeline_allowed
+from voiceai.tenant_settings import allowed_pipelines, ensure_pipeline_allowed
 
 router = APIRouter(prefix="/api")
 
@@ -63,7 +64,8 @@ async def list_agents(tenant_id: str = Depends(current_tenant), s: AsyncSession 
 
 @router.post("/agents")
 async def create_agent(body: AgentCreate, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    cfg = validate_config(body.draft_config or default_config())
+    realtime_allowed = "realtime" in await allowed_pipelines(s, tenant_id)
+    cfg = validate_config(new_agent_config(body.draft_config, realtime_allowed))  # LANG-11
     await ensure_pipeline_allowed(s, tenant_id, cfg)  # MT-06
     agent = Agent(tenant_id=tenant_id, name=body.name, description=body.description, draft_config=cfg)
     s.add(agent)
@@ -93,10 +95,11 @@ async def update_agent(agent_id: str, body: AgentUpdate, tenant_id: str = Depend
 
 
 @router.post("/agents/{agent_id}/publish")
-async def publish_agent(agent_id: str, body: PublishBody, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+async def publish_agent(agent_id: str, body: PublishBody, request: Request, tenant_id: str = Depends(current_tenant),
+                        s: AsyncSession = Depends(get_session)) -> dict:
     agent = await _agent(s, tenant_id, agent_id)
     await ensure_pipeline_allowed(s, tenant_id, agent.draft_config or {})  # MT-06
-    version = await publish(s, agent, body.change_note)
+    version = await publish(s, agent, body.change_note, published_by=auth.publisher(request))  # AUTH-05
     await test_suites.start_on_publish(s, agent, version)  # TEST-08: the seeder publishes without this
     await s.commit()
     return {"id": version.id, "version": version.version, "created_at": version.created_at.isoformat()}

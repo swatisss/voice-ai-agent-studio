@@ -49,6 +49,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `policy.max_turns` | 4–40 |
 | `policy.silence_reminder_s`, `policy.silence_end_s`, `policy.max_call_seconds` | voice call timers ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md)): 5–60 (default 10), 10–300 (default 30, must be greater than the reminder), 60–3600 (default 600) |
 | `policy.rules`, `policy.escalate_when`, `policy.never` | lists of ≤ 300-char strings, ≤ 30 items each |
+| `languages` | optional, default `["en"]` when absent (a new agent created by `POST /api/agents` gets `["en","hi"]` and `voice.pipeline: "realtime"` when the tenant allows realtime, LANG-11); a list from `en`, `hi` that must contain `en`. `["en","hi"]` makes the agent bilingual and requires `voice.pipeline: "realtime"` at publish (422 `language_needs_realtime`); part of the version snapshot ([/architecture/languages.md](/architecture/languages.md)) |
 | `models.realtime` | `null` (role default) or a model ref listed by `GET /api/models` (chat refs only) |
 | `models.speech` | `null` (role default) or a speech model ref listed under `speech` by `GET /api/models`; used only when `voice.pipeline` is `realtime` |
 | `*_ids` | must reference same-tenant, non-archived objects |

@@ -1,6 +1,6 @@
 """Tool schemas and execution: built-ins, HTTP tools, verification gate.
 
-Spec: /architecture/tools-and-skills.md, /architecture/agent-runtime.md (Built-in tools)
+Spec: /architecture/tools-and-skills.md, /architecture/agent-runtime.md (Built-in tools), /architecture/languages.md
 """
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import httpx
 from voiceai.db import sessionmaker
 from voiceai.knowledge.search import search as kb_search
 from voiceai.knowledge.sources import page_ids
+from voiceai.runtime import language
 from voiceai.runtime.state import CallState
 from voiceai.schemas import ESCALATION_CATEGORIES
 
@@ -158,13 +159,18 @@ class ToolExecutor:
 
     async def run(self, name: str, raw_args: str) -> tuple[dict[str, Any], bool]:
         """Any tool by name. Returns (result, ok)."""
+        raw_args = language.normalise_args(raw_args)  # LANG-06: Devanagari digits and Hindi month names, before any tool
         try:
             args = json.loads(raw_args or "{}")
         except json.JSONDecodeError:
             args = None
         a = args if isinstance(args, dict) else {}
         if name == "search_knowledge":
-            return await self._search_knowledge(str(a.get("query", ""))), True
+            query = str(a.get("query", ""))
+            if language.has_devanagari(query):  # LANG-07: knowledge is English; the model searches again in English
+                self.state.tools_used.append({"name": "search_knowledge", "ok": False, "summary": "Search query was not in English"})
+                return dict(language.QUERY_NOT_ENGLISH), True
+            return await self._search_knowledge(query), True
         if name == "escalate_to_human":
             category = str(a.get("reason_category") or "other")
             if category not in ESCALATION_CATEGORIES:

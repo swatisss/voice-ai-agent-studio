@@ -1,6 +1,6 @@
 """Per-call state tracked by the runtime.
 
-Spec: /architecture/agent-runtime.md (Call state)
+Spec: /architecture/agent-runtime.md (Call state), /architecture/languages.md (Language of a turn)
 """
 from __future__ import annotations
 
@@ -32,3 +32,4 @@ class CallState:
     latencies_ms: list[int] = field(default_factory=list)
     transfer_requested: dict[str, Any] | None = None  # transfer_to_agent called this turn (/architecture/agent-transfer.md)
     transfer_pending: dict[str, Any] | None = None    # a clarifying question was asked; the next caller turn transfers
+    caller_language: str = "en"  # the language of the latest caller turn (LANG-05)

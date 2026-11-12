@@ -52,4 +52,6 @@ Return JSON with:
 - caller_goal: one sentence describing what the caller wanted, written as an instruction for someone role-playing this caller (for example "You recently had a baby and want to know how to add her to your health plan").
 - resolution_summary: what actually resolved the request: the assistant's answer, or the human specialist's resolution note. Empty string if unresolved.
 - sentiment_start and sentiment_end: one of positive, neutral, frustrated, angry, distressed.
+
+Write every text field in English, even when the caller or the assistant spoke Hindi or mixed Hindi and English.
 ```

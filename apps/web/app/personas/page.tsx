@@ -50,7 +50,7 @@ export default function PersonasPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1>Personas</h1>
-        <Button variant="primary" onClick={() => { setErrors(null); setEdit({ ...BLANK }); }}><Plus size={16} />New persona</Button>
+        <Button adminOnly variant="primary" onClick={() => { setErrors(null); setEdit({ ...BLANK }); }}><Plus size={16} />New persona</Button>
       </div>
       <p className="max-w-3xl text-muted">A persona is the voice and manner of an agent: name, voice, speaking speed, how it greets, and its style. Agents pick a persona from here, and you can switch personas live during a test call.</p>
       {!data ? <Spinner /> : !data.items.length ? <EmptyState title="No personas yet">Create the voice of your first agent.</EmptyState> : (
@@ -68,9 +68,9 @@ export default function PersonasPage() {
               <blockquote className="mt-3 flex-1 border-l-4 border-accent-soft pl-3 text-sm italic text-muted">“{p.greeting}”</blockquote>
               <div className="mt-3 text-xs text-muted">{p.used_by.length ? `Used by ${p.used_by.join(", ")}` : "Not used by any agent"}</div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button onClick={() => { setErrors(null); setEdit({ ...p }); }}><Pencil size={14} />Edit</Button>
+                <Button adminOnly onClick={() => { setErrors(null); setEdit({ ...p }); }}><Pencil size={14} />Edit</Button>
                 <Link href={`/test-call/?persona=${p.id}`}><Button variant="ghost">Try in test call</Button></Link>
-                <Button variant="ghost" className="ml-auto" onClick={() => remove(p)} aria-label={`Delete ${p.name}`}><Trash2 size={14} /></Button>
+                <Button adminOnly variant="ghost" className="ml-auto" onClick={() => remove(p)} aria-label={`Delete ${p.name}`}><Trash2 size={14} /></Button>
               </div>
             </div>
           ))}

@@ -41,4 +41,5 @@ Return JSON with exactly these fields:
 - caller_verified: true or false.
 
 Use only information from the transcript and tool results. Do not invent facts.
+Write in English, even when the caller spoke Hindi or mixed Hindi and English; if the caller spoke Hindi, say so in the summary so the specialist knows.
 ```

@@ -10,7 +10,15 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Variables
 
-`caller_goal`, `caller_profile` (name, member ID, date of birth, extra facts like claim numbers — or "not a member / no details"), `caller_style` (one line from the persona table of [/architecture/test-suites.md](/architecture/test-suites.md); cluster cases of proposal runs use the `calm` line), `transcript` (so far).
+`caller_goal`, `caller_profile` (name, member ID, date of birth, extra facts like claim numbers — or "not a member / no details"), `caller_style` (one line from the persona table of [/architecture/test-suites.md](/architecture/test-suites.md); cluster cases of proposal runs use the `calm` line; when the scenario's `language` is not `en`, the language line below is appended), `transcript` (so far).
+
+Language lines (CP-0037):
+
+| `language` | Line appended to `caller_style` |
+|---|---|
+| `en` | (none) |
+| `hi` | "Speak Hindi, written in Devanagari, but say your member ID, claim numbers and dates in English." |
+| `mixed` | "Mix Hindi (written in Devanagari) and English the way many bilingual callers do, and switch language at least once during the call: start in Hindi, move to English, then back to Hindi." |
 
 # Output
 

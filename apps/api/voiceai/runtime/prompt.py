@@ -1,7 +1,7 @@
 """System prompt assembly for the realtime role.
 
 Spec: /prompts/agent-system-prompt.md, /architecture/tools-and-skills.md (Skill format), /architecture/call-modes.md,
-/architecture/caller-verification.md, /architecture/agent-memory.md
+/architecture/caller-verification.md, /architecture/agent-memory.md, /architecture/languages.md
 """
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from voiceai import prompts
+from voiceai.runtime.language import language_instructions
 from voiceai.runtime.outbound import context_lines
 
 
@@ -105,4 +106,5 @@ def system_prompt(
         member_memory=member_memory,
         transfer_instructions=TRANSFER_INSTRUCTIONS if transfer else "",
         handoff=handoff_block(handoff),
+        language_instructions=language_instructions(config),  # LANG-04
     )

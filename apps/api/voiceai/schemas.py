@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-BUILTIN_TOOLS = {"search_knowledge", "escalate_to_human", "end_call", "transfer_to_agent"}  # TS-06, TS-10
+BUILTIN_TOOLS = {"search_knowledge", "escalate_to_human", "end_call", "transfer_to_agent", "send_email", "send_sms", "place_call"}  # TS-06, TS-10, CT
 ESCALATION_CATEGORIES = (
     "caller_requested", "policy_required", "safety", "knowledge_gap", "capability_gap", "tool_failure", "frustration",
     "verification_failed", "transfer_failed", "other",

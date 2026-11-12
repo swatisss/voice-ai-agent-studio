@@ -181,7 +181,8 @@ CARE_SKILLS: list[dict[str, Any]] = [
          "3. If a payment was missed: explain cover is suspended until it is paid and the date to pay by; offer retry_missed_payment, "
          "or send_secure_link with purpose make_payment to pay by card.\n"
          "4. To change the collection day, call change_collection_day.\n"
-         "5. To change bank details, call send_secure_link with purpose change_bank_details. Never take bank or card details on the call."),
+         "5. To change bank details, call send_secure_link with purpose change_bank_details. Never take bank or card details on the call.\n"
+         "6. Offer to text the payment date and amount: send_sms to the registered mobile (to: registered), read back, then send."),
      "required_tools": ["verify_member", "get_member_policies", "get_payments", "retry_missed_payment", "send_secure_link"],
      "escalate_when": "The caller disputes a charge or asks for a refund."},
     {"name": "Update contact details", "description": "Change email address, mobile number or postal address.",
@@ -213,6 +214,13 @@ CARE_SKILLS: list[dict[str, Any]] = [
          "4. To make a claim, explain it is done online with a receipt showing the patient's name, the provider, the date and the cost."),
      "required_tools": ["verify_member", "get_member_policies", "get_cash_plan_benefits", "get_cash_plan_claims", "get_cash_plan_claim"],
      "escalate_when": "The caller disputes a cash plan claim decision."},
+    {"name": "Send details by email or text", "description": "The caller wants details sent to them: a payment date, a reference, opening hours, how to claim.",
+     "instructions": (
+         "1. Ask whether they want an email or a text. A verified member is offered the contact on file first (to: registered), read back masked.\n"
+         "2. If they give another address or number, read it back slowly and wait for a yes; it is used once and never saved.\n"
+         "3. Call send_email or send_sms with confirmed false to get the read-back, then with confirmed true after a yes.\n"
+         "4. Keep the message short: only what was discussed; never the membership number, bank details or medical detail."),
+     "required_tools": [], "escalate_when": ""},
     {"name": "Renewal, cancellation, complaints and bereavement", "description": "Renewal questions, cancelling, making a complaint, or telling us a member has died.",
      "instructions": (
          "1. For how renewal, cooling-off or cancellation work, call search_knowledge and explain briefly.\n"
@@ -233,7 +241,8 @@ CLAIMS_SKILLS: list[dict[str, Any]] = [
          "5. If a GP referral is needed and they have none, explain the open referral and offer a Digital GP appointment through member services.\n"
          "6. Call find_specialists with the condition, their postcode and the policy, and offer the options; mention fee-assured specialists mean no shortfall.\n"
          "7. Read back the condition, treatment and specialist, then call create_pre_authorisation.\n"
-         "8. Read the code slowly, say what it covers, the excess to pay and any forms needed."),
+         "8. Read the code slowly, say what it covers, the excess to pay and any forms needed.\n"
+         "9. Offer to text the code and the specialist's details to the registered mobile (send_sms, to: registered), read back first."),
      "required_tools": ["verify_member", "get_member_policies", "check_treatment_cover", "find_specialists", "create_pre_authorisation"],
      "escalate_when": "Cover depends on a clinical decision, or the treatment is not covered and the caller disagrees."},
     {"name": "Find a consultant or hospital", "description": "The member has a referral and wants a recognised specialist near them.",
@@ -263,7 +272,9 @@ SALES_SKILLS: list[dict[str, Any]] = [
          "1. Ask one thing at a time: who to cover, each person's name and date of birth, whether anyone smoked in the last 12 months, "
          "the policyholder's postcode, and when cover should start.\n"
          "2. Call create_quote.\n"
-         "3. Present the three packages in one short sentence each with the monthly price, cheapest first, and ask what matters most to them."),
+         "3. Present the three packages in one short sentence each with the monthly price, cheapest first, and ask what matters most to them.\n"
+         "4. If they want to think it over, offer to email the quote summary (quote reference, packages, prices, valid-until date): "
+         "take the email address, spell it back, then send_email with confirmed true after a yes."),
      "required_tools": ["create_quote"], "escalate_when": "The caller wants cover for a business or more than 6 people."},
     {"name": "Choose and customise cover", "description": "The caller compares options: product, outpatient limit, excess, hospital list, add-ons.",
      "instructions": (
@@ -404,9 +415,9 @@ def _expect(name: str, **args: str) -> dict[str, Any]:
 
 
 SCENARIOS = [  # Customer Care
-    {"name": "Policy cover", "caller_goal": "You want to know your excess and which hospital list your policy has.",
+    {"name": "Policy cover by text", "caller_goal": "You want to know your excess and which hospital list your policy has, and want the details texted to your mobile on file.",
      "caller_profile": _profile("Sarah Mitchell", "410237", "1984-03-14"), "expected": "resolved",
-     "required_tools": [_expect("verify_member")]},
+     "required_tools": [_expect("verify_member"), _expect("send_sms", to="registered")]},
     {"name": "Missed payment", "caller_goal": "Your Direct Debit failed this month; you want it taken again and to know if you are still covered.",
      "caller_profile": _profile("David Okoro", "522918", "1977-09-02"), "expected": "resolved",
      "required_tools": [_expect("get_payments", policy_id="PMI-300214"), _expect("retry_missed_payment", policy_id="PMI-300214")]},
@@ -431,9 +442,10 @@ SCENARIOS = [  # Customer Care
 ]
 
 CLAIMS_SCENARIOS = [
-    {"name": "Knee pain, Direct Access", "caller_goal": "Your knee has hurt for three weeks; you want to see an orthopaedic specialist near Leeds without going to your GP.",
+    {"name": "Knee pain, Direct Access", "caller_goal": "Your knee has hurt for three weeks; you want to see an orthopaedic specialist near Leeds without going to your GP, and want the pre-authorisation code texted to you.",
      "caller_profile": _profile("Sarah Mitchell", "410237", "1984-03-14", postcode="LS6 2AB"), "expected": "resolved",
-     "required_tools": [_expect("check_treatment_cover", policy_id="PMI-300101"), _expect("create_pre_authorisation", policy_id="PMI-300101")]},
+     "required_tools": [_expect("check_treatment_cover", policy_id="PMI-300101"), _expect("create_pre_authorisation", policy_id="PMI-300101"),
+                        _expect("send_sms", to="registered")]},
     {"name": "Pre-authorisation status", "caller_goal": "You want to know whether your shoulder surgery pre-authorisation PA-500955 is approved yet.",
      "caller_profile": _profile("Emma Clarke", "638405", "1991-06-21"), "expected": "resolved",
      "required_tools": [_expect("get_pre_authorisation", auth_id="PA-500955")]},
@@ -449,9 +461,10 @@ SALES_SCENARIOS = [
      "caller_profile": {"name": "Alex Morgan", "date_of_birth": "1990-05-05", "partner": "Sam Morgan, born 2 February 1992, non-smoker", "postcode": "BS6 6JY",
                         "email": "alex.morgan@example.co.uk", "mobile": "07700 900200", "address": "12 Cotham Road, Bristol BS6 6JY"},
      "expected": "resolved", "required_tools": [_expect("create_quote"), _expect("price_quote"), _expect("assess_underwriting"), _expect("create_policy")]},
-    {"name": "Smoker asks the price", "caller_goal": "You are 52, smoke, live in London and want to know what Complete cover costs with a £250 excess. You are not buying today.",
-     "caller_profile": {"name": "Gareth Lewis", "date_of_birth": "1974-08-19", "postcode": "SE15 4QP"}, "persona": "impatient", "expected": "resolved",
-     "required_tools": [_expect("create_quote"), _expect("price_quote")]},
+    {"name": "Smoker asks the price", "caller_goal": "You are 52, smoke, live in London and want to know what Complete cover costs with a £250 excess. You are not buying today: ask for the quote by email.",
+     "caller_profile": {"name": "Gareth Lewis", "date_of_birth": "1974-08-19", "postcode": "SE15 4QP", "email": "gareth.lewis@example.co.uk"},
+     "persona": "impatient", "expected": "resolved",
+     "required_tools": [_expect("create_quote"), _expect("price_quote"), _expect("send_email", to="gareth.lewis@example.co.uk")]},
     {"name": "Asks for advice", "caller_goal": "You want the agent to tell you which policy is best for you because you have diabetes.",
      "caller_profile": {"name": "Nina Shah", "date_of_birth": "1983-12-01", "postcode": "M20 2RN"}, "persona": "confused", "expected": "escalated"},
 ]
@@ -474,7 +487,7 @@ USE_CASES: list[dict[str, Any]] = [
      "demo_callers": [_caller("Sarah Mitchell", "410237", "14 March 1984", "Family policy: excess, hospital list, who is covered")]},
     {"agent": "care", "title": "Payments & Direct Debit",
      "summary": "Premiums, collection dates, missed payments and getting cover back, changing the collection day or bank account by secure link.",
-     "sample_utterances": ["My Direct Debit bounced, am I still covered?", "Can you take the payment again on Friday?", "I want to change the date my premium is taken.", "I've changed banks."],
+     "sample_utterances": ["My Direct Debit bounced, am I still covered?", "Can you take the payment again on Friday?", "I want to change the date my premium is taken.", "I've changed banks.", "Can you text me when my next payment is due?"],
      "demo_callers": [_caller("David Okoro", "522918", "2 September 1977", "Missed payment: cover suspended, retry the Direct Debit"),
                       _caller("Emma Clarke", "638405", "21 June 1991", "Move the collection day to the 15th")]},
     {"agent": "care", "title": "Update My Details",
@@ -483,7 +496,7 @@ USE_CASES: list[dict[str, Any]] = [
      "demo_callers": [_caller("Emma Clarke", "638405", "21 June 1991", "New email address")]},
     {"agent": "care", "title": "Documents & Membership Card",
      "summary": "Send the membership certificate, policy guide, membership card, premium statement or cash plan table of benefits by email, text or post.",
-     "sample_utterances": ["Can you email me my membership certificate?", "I need my membership card.", "Please post me my policy guide."],
+     "sample_utterances": ["Can you email me my membership certificate?", "I need my membership card.", "Please post me my policy guide.", "Can you send that to my email instead?"],
      "demo_callers": [_caller("Raj Patel", "714560", "30 November 1966", "Membership certificate by email")]},
     {"agent": "care", "title": "Book a Digital GP Appointment",
      "summary": "Video or phone appointments with a GP or advanced nurse practitioner, 6am to 10pm on weekdays and 8am to 10pm at weekends, for anyone on the health policy.",
@@ -502,7 +515,7 @@ USE_CASES: list[dict[str, Any]] = [
                       _caller("Raj Patel", "714560", "30 November 1966", "Complaint about claim handling")]},
     {"agent": "sales", "title": "Get a Health Insurance Quote",
      "summary": "Quotes for individuals, couples and families: who to cover, dates of birth, smoking, postcode and start date; three packages with monthly prices.",
-     "sample_utterances": ["I'd like a quote for private health insurance.", "How much would it cost to cover my family?", "What's the price of health insurance for a 40-year-old?"],
+     "sample_utterances": ["I'd like a quote for private health insurance.", "How much would it cost to cover my family?", "What's the price of health insurance for a 40-year-old?", "Can you email me the quote so I can think about it?"],
      "demo_callers": [_prospect("Alex Morgan", "Born 5 May 1990, partner Sam born 2 February 1992, postcode BS6 6JY")]},
     {"agent": "sales", "title": "Choose & Customise Cover",
      "summary": "Compare Essentials and Complete, outpatient limits, excess, hospital lists and add-ons, with the new price after every change. Facts, not advice.",
@@ -524,7 +537,7 @@ USE_CASES: list[dict[str, Any]] = [
      "demo_callers": [_caller("Emma Clarke", "638405", "21 June 1991", "Orthopaedic specialist near Bristol")]},
     {"agent": "claims", "title": "Claim & Pre-authorisation Status",
      "summary": "Where a pre-authorisation or claim stands, what Northgate paid and what the member owes.",
-     "sample_utterances": ["Has my surgery been approved yet?", "What happened to claim CL-70588?", "Is my pre-authorisation still valid?"],
+     "sample_utterances": ["Has my surgery been approved yet?", "What happened to claim CL-70588?", "Is my pre-authorisation still valid?", "Can you text me my pre-authorisation code?"],
      "demo_callers": [_caller("Emma Clarke", "638405", "21 June 1991", "PA-500955 pending; claim CL-70588 processing")]},
     {"agent": "claims", "title": "Excess, Shortfalls & Invoices",
      "summary": "Why the member got a bill: the excess, or a shortfall when a consultant charges above fee guidelines; disputes go to a specialist.",

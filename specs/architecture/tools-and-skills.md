@@ -52,7 +52,7 @@ v1 includes all of an agent's skills in every prompt (no on-demand loading).
 - **TS-03** — Given url `/mock/healthcare/claims/{claim_id}` and args `{claim_id: "CL-70231", include: "lines"}` with `GET`, when executed, then the request path is `/mock/healthcare/claims/CL-70231?include=lines`.
 - **TS-04** — Given an API returning HTTP 404, when executed, then the result is `{"error":"http_404",...}` and the tool-error streak increments.
 - **TS-05** — Given a response body over 2,000 characters, when returned to the model, then it is truncated to 2,000 characters.
-- **TS-06** — Given a tool named `search_knowledge`, when created, then the API rejects it with 422.
+- **TS-06** — Given a tool named `search_knowledge`, `send_email`, `send_sms` or `place_call`, when created, then the API rejects it with 422.
 - **TS-07** — Given a skill whose `required_tools` includes a tool not on the agent, when publishing, then publish fails with a message naming the missing tool.
 - **TS-09** — Given an identified call, when the verification tool runs, then the request carries `X-Identified-Ref`; given a failed verification, the model receives the uniform `say` text and not the API's reason.
 - **TS-11** — Given an agent with no `is_verification` tool and a tool with `requires_verification`, when the model calls that tool, then no HTTP request is made and the result is `identity_not_verified` with the say text "I can't access account details on this line. I can connect you with a specialist who can."; with a verification tool attached, the say text is unchanged (TS-01).

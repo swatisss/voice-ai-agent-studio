@@ -29,6 +29,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-02T00:00:00Z" }
 | C12 | No caller text to hosted processors without a BAA in routing; webhooks carry IDs only | 45 CFR 164.502(e), 164.504(e) (business associates) | code | supervisor routing PHI mode, webhooks | RTE-04, WH-03 |
 | C13 | Requests are authentic: signed telephony webhooks, single-use stream tokens, signed webhook deliveries | 45 CFR 164.312(c)(1), 164.312(e)(1) (integrity, transmission security) | code | telephony routes, webhooks | TEL-02, TEL-04, TEL-10, WH-04 |
 | C14 | Synthetic data only in every environment | — | process | repo rules, seed data | — |
+| C15 | Messages to callers: the registered contact only after verification and masked, other addresses only after a read-back and never saved, no member ID, at most three per call, never from simulations | 45 CFR 164.502(b), 164.514(h) (minimum necessary, verify before disclosure) | code | contact tools | CT-02, CT-03, CT-05, CT-06, CT-07, CT-10 |
 
 # Status of a control
 
@@ -39,7 +40,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-02T00:00:00Z" }
 
 # Open gaps (shown on the page)
 
-* No Business Associate Agreements yet with the LLM, speech, telephony or cloud providers.
+* No Business Associate Agreements yet with the LLM, speech, telephony, email or cloud providers.
 * No PHI redaction before transcripts reach analytics, clustering and drafting.
 * No call recording, so no recording-consent handling per jurisdiction.
 * No audit-log export or retention policy beyond member memory.

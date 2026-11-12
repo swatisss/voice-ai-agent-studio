@@ -26,11 +26,11 @@ async def test_evidence_without_a_report(client, monkeypatch, tmp_path):
     assert r.status_code == 200
     body = r.json()
     ids = [c["id"] for c in body["controls"]]
-    assert ids == [f"C{i}" for i in range(1, 15)]
+    assert ids == [f"C{i}" for i in range(1, 16)]  # C15: contact tools (CP-0040)
     c1 = body["controls"][0]
     assert c1["enforcement"] == "code" and "164.514(h)" in c1["reference"] and "TS-01" in [e["id"] for e in c1["evidence"]]
     assert all(e["status"] == "not_run" for c in body["controls"] for e in c["evidence"])
-    c14 = body["controls"][-1]
+    c14 = next(c for c in body["controls"] if c["id"] == "C14")
     assert c14["status"] == "process" and c14["evidence"] == []
     assert any("Business Associate" in g for g in body["gaps"])
     assert body["report"] is None

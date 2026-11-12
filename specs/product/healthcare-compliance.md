@@ -28,6 +28,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 12. **Only an admin changes what callers hear.** Reviewers work escalations, answers and reviews; publishing an agent and approving a learning fix need the admin role, and every version records who published it ([/architecture/studio-auth.md](/architecture/studio-auth.md)).
 
+13. **Messages only through the contact tools, minimum necessary.** Email, SMS and message calls go to a verified member's registered contact (read from the business API at sending time, never stored, shown masked) or to an address the caller gives and confirms after a read-back; a new address is never saved to the record. A message never carries the member ID; at most three per call; simulations and evaluations never deliver ([/architecture/contact-tools.md](/architecture/contact-tools.md)).
+
 How each rule is enforced and which tests prove it: [Compliance evidence](/product/compliance-evidence.md).
 
 # Production gaps (not in v1)
@@ -37,4 +39,5 @@ How each rule is enforced and which tests prove it: [Compliance evidence](/produ
 * Audit-log export and an identity provider (v1 has two fixed demo accounts; only the admin may erase member memory); retention and deletion policies beyond member memory.
 * Recording consent handling per jurisdiction.
 * Call scoring sends production transcripts to the judge model and shows them to reviewers ([/architecture/call-scoring.md](/architecture/call-scoring.md)); in production the judge provider needs the same BAA coverage as the call, and review access needs roles and audit logging.
+* Email and SMS are not end-to-end encrypted, and Brevo and Twilio receive message text and recipient addresses: production needs agreements with them, per-number sending limits and possibly portal links instead of details in messages.
 * Webhook URLs are not checked against private networks (SSRF), and API keys are managed by anyone with Studio access; both need roles and network controls in production. A TURN relay for WebRTC processes call audio and needs BAA coverage.

@@ -21,6 +21,9 @@ os.environ.update({
     "TWILIO_ACCOUNT_SID": "",
     "TWILIO_AUTH_TOKEN": "",
     "PUBLIC_BASE_URL": "",
+    # contact tools: outbox unless a test configures a provider (/architecture/contact-tools.md)
+    "EMAIL_PROVIDER": "", "SMS_PROVIDER": "", "CALL_PROVIDER": "", "BREVO_API_KEY": "", "EMAIL_FROM": "",
+    "EMAIL_FROM_NAME": "", "TWILIO_FROM_NUMBER": "", "CONTACT_REDIRECT_EMAIL": "", "CONTACT_REDIRECT_PHONE": "",
     "TENANT_SECRETS_KEY": "",
     "PUBLIC_API_SECRET": "",
     "STUDIO_ADMIN_PASSWORD": "",  # sign-in off unless a test turns it on (/architecture/studio-auth.md)

@@ -41,7 +41,7 @@ async def test_seeded_business_units(client, seeded):
         versions = (await s.scalars(select(AgentVersion).where(AgentVersion.tenant_id == "northgate-health"))).all()
     assert names == {"Olivia", "James", "Hannah"}
     assert len(versions) == 3 and all(v.config["voice"].get("pipeline", "cascade") == "cascade" for v in versions)
-    expected = {"Customer Care": ("Olivia", 15, 8), "Health Cover Sales": ("James", 4, 4), "Claims & Pre-authorisation": ("Hannah", 8, 5)}
+    expected = {"Customer Care": ("Olivia", 15, 9), "Health Cover Sales": ("James", 4, 4), "Claims & Pre-authorisation": ("Hannah", 8, 5)}
     for name, (persona, tools, skills) in expected.items():
         detail = (await client.get(f"/api/agents/{by_name[name]['id']}/versions", headers=H)).json()["items"][0]
         assert detail["version"] == 1
@@ -105,7 +105,7 @@ async def test_customer_care_regression_scenarios(client, seeded):
     async with sessionmaker()() as s:
         rows = (await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == seeded["care"]["agent_id"]))).all()
     assert {r.name: r.expected for r in rows} == {
-        "Policy cover": "resolved", "Missed payment": "resolved", "Digital GP for my daughter": "resolved",
+        "Policy cover by text": "resolved", "Missed payment": "resolved", "Digital GP for my daughter": "resolved",
         "Cash plan optical limit": "resolved", "Membership certificate by email": "resolved", "Complaint": "escalated",
         "Wrong date of birth first": "resolved", "Remembers email preference": "resolved",
     }
@@ -114,7 +114,7 @@ async def test_customer_care_regression_scenarios(client, seeded):
     assert all(r.enabled for r in rows)
     assert {r.name: r.persona for r in rows if r.persona != "calm"} == {
         "Digital GP for my daughter": "impatient", "Cash plan optical limit": "confused", "Wrong date of birth first": "adversarial"}
-    assert by["Policy cover"].caller_profile["name"] == "Sarah Mitchell" and by["Complaint"].caller_profile["name"] == "Raj Patel"
+    assert by["Policy cover by text"].caller_profile["name"] == "Sarah Mitchell" and by["Complaint"].caller_profile["name"] == "Raj Patel"
     assert by["Missed payment"].required_tools == [
         {"name": "get_payments", "args": {"policy_id": "PMI-300214"}}, {"name": "retry_missed_payment", "args": {"policy_id": "PMI-300214"}}]
     assert by["Cash plan optical limit"].required_tools == [{"name": "get_cash_plan_benefits", "args": {"policy_id": "CSH-400118"}}]

@@ -9,13 +9,13 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-12T00:00:00Z" }
 
 All fourteen live in the business unit **Northgate Health · Member & Sales Services** (category *Member & Sales Services*). Three agents serve them ([/demo-data/northgate-health.md](/demo-data/northgate-health.md)); the front desk routes each caller to the right one from what they say, replacing the "choose a topic" menus of a traditional help-and-support site and phone line ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)). Every use case is available in **voice** and **chat**. Data is synthetic ([/demo-data/northgate-members.md](/demo-data/northgate-members.md)).
 
-Common rules: members verify with their membership number and date of birth before any personal detail; prospects (sales) are never asked to verify; agents answer facts only from tools or approved knowledge; bank and card details are never taken on a call (secure links instead); complaints, cancellations, bereavement, disputes, requests for a person and anyone who seems vulnerable go to a person with a groundwork packet ([/architecture/escalation.md](/architecture/escalation.md)); a caller describing an emergency is told to call 999.
+Common rules: any agent can send what was discussed by email or text (contact tools, [/architecture/contact-tools.md](/architecture/contact-tools.md)): a verified member's contact on file is offered first and read back masked, any other address is read back and used once; members verify with their membership number and date of birth before any personal detail; prospects (sales) are never asked to verify; agents answer facts only from tools or approved knowledge; bank and card details are never taken on a call (secure links instead); complaints, cancellations, bereavement, disputes, requests for a person and anyone who seems vulnerable go to a person with a groundwork packet ([/architecture/escalation.md](/architecture/escalation.md)); a caller describing an emergency is told to call 999.
 
 # Customer Care (member help and support)
 
 **1. Policy & Cover Questions** — who is covered, excess, outpatient limit, hospital list, add-ons, underwriting and renewal date. Flow: verify → `get_member_policies` → `get_policy_details`; general "how does it work" → `search_knowledge`. Treatment approval or a consultant → transfer to Claims & Pre-authorisation. Demo: Sarah Mitchell.
 
-**2. Payments & Direct Debit** — monthly amount, next collection, missed payments and getting cover back, the collection day, bank details. Flow: verify → `get_payments` → missed: explain suspension and the pay-by date → `retry_missed_payment` or `send_secure_link` (`make_payment`); `change_collection_day`; new bank → `send_secure_link` (`change_bank_details`). Escalates: disputed charge or refund. Demo: David Okoro (missed £61.20), Emma Clarke (collection day 15th).
+**2. Payments & Direct Debit** — monthly amount, next collection, missed payments and getting cover back, the collection day, bank details. Flow: verify → `get_payments` → missed: explain suspension and the pay-by date → `retry_missed_payment` or `send_secure_link` (`make_payment`); `change_collection_day`; the next payment date by text on request (`send_sms`); new bank → `send_secure_link` (`change_bank_details`). Escalates: disputed charge or refund. Demo: David Okoro (missed £61.20), Emma Clarke (collection day 15th).
 
 **3. Update My Details** — email, mobile, postal address, read back before saving (`update_contact_details`). Escalates: adding or removing a person, change of name. Demo: Emma Clarke.
 
@@ -29,7 +29,7 @@ Common rules: members verify with their membership number and date of birth befo
 
 # Health Cover Sales (new customers, non-advised)
 
-**8. Get a Health Insurance Quote** — who to cover, names, dates of birth, smoking, postcode, start date → `create_quote` → three packages with monthly prices. Demo: Alex Morgan and partner Sam (Bristol).
+**8. Get a Health Insurance Quote** — who to cover, names, dates of birth, smoking, postcode, start date → `create_quote` → three packages with monthly prices; on request the quote summary by email (`send_email`). Demo: Alex Morgan and partner Sam (Bristol).
 
 **9. Choose & Customise Cover** — Essentials or Complete, outpatient limit, excess, hospital list, add-ons; `price_quote` after every change; facts, never a recommendation. Escalates: the caller asks for personal advice. Demo: Gareth Lewis (smoker, London).
 
@@ -41,7 +41,7 @@ Common rules: members verify with their membership number and date of birth befo
 
 **12. Find a Consultant or Hospital** — recognised specialists on the member's hospital list near their postcode, fee-assured first (`find_specialists`). Demo: Emma Clarke near Bristol.
 
-**13. Claim & Pre-authorisation Status** — `get_pre_authorisation`, `get_member_claims`, `get_claim_status`. Demo: Emma Clarke (`PA-500955` pending, `CL-70588` processing).
+**13. Claim & Pre-authorisation Status** — `get_pre_authorisation`, `get_member_claims`, `get_claim_status`; the code texted on request (`send_sms`). Demo: Emma Clarke (`PA-500955` pending, `CL-70588` processing).
 
 **14. Excess, Shortfalls & Invoices** — why the member got a bill; excess once per person per year; shortfall above fee guidelines; disputes to a specialist. Demo: David Okoro (£60 shortfall), Sarah Mitchell (£100 excess).
 

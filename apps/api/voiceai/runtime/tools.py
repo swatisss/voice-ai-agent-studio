@@ -1,6 +1,7 @@
 """Tool schemas and execution: built-ins, HTTP tools, verification gate.
 
-Spec: /architecture/tools-and-skills.md, /architecture/agent-runtime.md (Built-in tools), /architecture/languages.md
+Spec: /architecture/tools-and-skills.md, /architecture/agent-runtime.md (Built-in tools), /architecture/languages.md,
+/architecture/contact-tools.md
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from urllib.parse import quote
 
 import httpx
 
+from voiceai import contact
 from voiceai.db import sessionmaker
 from voiceai.knowledge.search import search as kb_search
 from voiceai.knowledge.sources import page_ids
@@ -94,7 +96,8 @@ def tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
 
 
 def all_schemas(tools: list[dict[str, Any]], transfer: bool = False) -> list[dict[str, Any]]:
-    return BUILTIN_SCHEMAS + ([TRANSFER_SCHEMA] if transfer else []) + [tool_schema(t) for t in tools]
+    """Built-ins (with the contact tools, CT-01), transfer when offered, then the agent's HTTP tools."""
+    return BUILTIN_SCHEMAS + contact.SCHEMAS + ([TRANSFER_SCHEMA] if transfer else []) + [tool_schema(t) for t in tools]
 
 
 def render_url(url: str, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -146,6 +149,7 @@ class ToolExecutor:
         self, tenant_id: str, call_id: str, tools: list[dict[str, Any]], state: CallState, app: Any | None = None,  # noqa: ANN401
         *, knowledge_doc_ids: list[str] | None = None, knowledge_source_ids: list[str] | None = None,
         escalate: Escalate | None = None, handoff_message: str = "",
+        agent_id: str = "", tenant_name: str = "", simulated: bool = False,
     ) -> None:
         self.tenant_id = tenant_id
         self.call_id = call_id
@@ -156,9 +160,12 @@ class ToolExecutor:
         self.knowledge_source_ids = list(knowledge_source_ids or [])  # resolved to their pages on every search (KN-15)
         self.escalate = escalate
         self.handoff_message = handoff_message
+        self.contact = contact.ContactTools(tenant_id, call_id, agent_id, state, tenant_name=tenant_name, simulated=simulated, app=app)
 
     async def run(self, name: str, raw_args: str) -> tuple[dict[str, Any], bool]:
         """Any tool by name. Returns (result, ok)."""
+        if name in contact.TOOL_NAMES:  # CT-12: subject and message stay as written; only `to` is normalised
+            return await self._run_contact(name, raw_args)
         raw_args = language.normalise_args(raw_args)  # LANG-06: Devanagari digits and Hindi month names, before any tool
         try:
             args = json.loads(raw_args or "{}")
@@ -189,6 +196,28 @@ class ToolExecutor:
             self.state.tool_error_streak = 0 if ok else self.state.tool_error_streak + 1
         if (self.tools.get(name) or {}).get("is_verification") and self.state.verification_attempts >= MAX_VERIFICATION_ATTEMPTS                 and not self.state.verified and not self.state.escalated and self.escalate is not None:  # IDV-04
             await self.escalate("verification_failed", "Three failed identity verification attempts")
+        return result, ok
+
+    def _verify_say(self) -> str:
+        """The verification gate's say text for this call (TS-01, TS-11, IDV-02)."""
+        if not any(t.get("is_verification") for t in self.tools.values()):  # the call can never become verified
+            return VERIFY_UNAVAILABLE
+        return VERIFY_FIRST_IDENTIFIED if self.state.identified_member_ref else VERIFY_FIRST
+
+    async def _run_contact(self, name: str, raw_args: str) -> tuple[dict[str, Any], bool]:
+        try:
+            args = json.loads(raw_args or "{}")
+        except json.JSONDecodeError:
+            args = None
+        if not isinstance(args, dict):
+            return {"error": "invalid_arguments"}, True
+        if isinstance(args.get("to"), str):
+            args["to"] = language.normalise_text(args["to"])
+        result, ok = await self.contact.run(name, args, self._verify_say())
+        if not ok:  # only a failed delivery or contact lookup counts toward ES-03
+            self.state.tool_error_streak += 1
+        elif result.get("status") == "sent":
+            self.state.tool_error_streak = 0
         return result, ok
 
     async def _search_knowledge(self, query: str) -> dict[str, Any]:
@@ -223,11 +252,7 @@ class ToolExecutor:
         attested = self.state.verification_level == "attested" and method == "GET"  # IDV-05: read-only before the date of birth
         if tool.get("requires_verification") and not self.state.verified and not attested:  # TS-01
             self.state.tools_used.append({"name": name, "ok": False, "summary": f"{name}: blocked until identity verified"})
-            if not any(t.get("is_verification") for t in self.tools.values()):  # the call can never become verified
-                say = VERIFY_UNAVAILABLE
-            else:
-                say = VERIFY_FIRST_IDENTIFIED if self.state.identified_member_ref else VERIFY_FIRST
-            return {"error": "identity_not_verified", "say": say}, True
+            return {"error": "identity_not_verified", "say": self._verify_say()}, True
         url, rest = render_url(tool["url"], args)
         headers = {"X-Tenant-Id": self.tenant_id, "X-Call-Id": self.call_id}
         if self.state.verified and self.state.verified_member_ref:  # TS-08

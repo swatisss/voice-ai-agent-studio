@@ -28,6 +28,8 @@ Routed calls (Test call **Full flow**, phone numbers that target the front desk,
 | **James** | aura-2-draco-en (British) | 1.0 | "Thanks for calling Northgate Health, this is James from the health insurance team." | clear, friendly, patient; never pushy; prices said slowly |
 | **Hannah** | aura-2-pandora-en (British) | 0.95 | "Thank you for calling Northgate Health claims, this is Hannah." | calm, precise, reassuring; reads codes, dates and amounts slowly |
 
+All three agents also have the built-in contact tools `send_email`, `send_sms` and `place_call` ([CP-0040](/changes/cp-0040-contact-tools.md)).
+
 Every persona's disclosure starts "I'm a virtual assistant, and this call may be recorded for quality and training." and ends with a closing question: Olivia "How can I help you today?", James "Are you looking for a quote today?", Hannah "How can I help with your treatment?".
 
 # Agents (all published as v1, inbound, voice pipeline `cascade`)
@@ -84,9 +86,9 @@ All business-API tools use relative URLs served by the platform ([/api/mock-heal
 
 | Agent | Skills (name — use when) |
 |---|---|
-| Customer Care | **Identity verification** · **Policy and cover questions** — who is covered, excess, outpatient limit, hospital list · **Payments and Direct Debit** — collection, missed payments, collection day, bank details by secure link · **Update contact details** · **Documents and membership card** · **Book a Digital GP appointment** — 999 first for emergencies · **Cash plan** — limits, claims, how to claim · **Renewal, cancellation, complaints and bereavement** — explain, then hand over |
-| Health Cover Sales | **Health insurance quote** — who, dates of birth, smoking, postcode, start date · **Choose and customise cover** — one option at a time, re-price, facts not advice · **Underwriting questions** — moratorium, full medical, switch · **Join and register** — details, key facts, declaration, two clear yeses, `create_policy` |
-| Claims & Pre-authorisation | **Identity verification** · **Get treatment approved (pre-authorisation)** — condition, onset, GP, cover check, specialists, code · **Find a consultant or hospital** · **Pre-authorisation and claim status** · **Excess, shortfalls and invoices** |
+| Customer Care | **Identity verification** · **Policy and cover questions** — who is covered, excess, outpatient limit, hospital list · **Payments and Direct Debit** — collection, missed payments, collection day, bank details by secure link · **Update contact details** · **Documents and membership card** · **Book a Digital GP appointment** — 999 first for emergencies · **Cash plan** — limits, claims, how to claim · **Send details by email or text** — registered contact first, read-back, short message, no membership number (contact tools, [/architecture/contact-tools.md](/architecture/contact-tools.md)) · **Renewal, cancellation, complaints and bereavement** — explain, then hand over |
+| Health Cover Sales | **Health insurance quote** — who, dates of birth, smoking, postcode, start date; offer to email the quote summary · **Choose and customise cover** — one option at a time, re-price, facts not advice · **Underwriting questions** — moratorium, full medical, switch · **Join and register** — details, key facts, declaration, two clear yeses, `create_policy` |
+| Claims & Pre-authorisation | **Identity verification** · **Get treatment approved (pre-authorisation)** — condition, onset, GP, cover check, specialists, code, then offer to text the code · **Find a consultant or hospital** · **Pre-authorisation and claim status** · **Excess, shortfalls and invoices** |
 
 Skill instruction text lives in the seeder and follows these rows.
 
@@ -111,7 +113,7 @@ Fourteen rows in `use_cases` for `northgate-health`, category *Member & Sales Se
 
 | name | caller | persona | expected | expectations |
 |---|---|---|---|---|
-| Policy cover | Sarah Mitchell | calm | resolved | requires `verify_member` |
+| Policy cover by text | Sarah Mitchell | calm | resolved | requires `verify_member` and `send_sms` with `to: registered` |
 | Missed payment | David Okoro | calm | resolved | requires `get_payments` and `retry_missed_payment` with `policy_id: PMI-300214` |
 | Digital GP for my daughter | Sarah Mitchell | impatient | resolved | requires `book_gp_appointment` |
 | Cash plan optical limit | Lucy Evans | confused | resolved | requires `get_cash_plan_benefits` with `policy_id: CSH-400118` |
@@ -120,9 +122,9 @@ Fourteen rows in `use_cases` for `northgate-health`, category *Member & Sales Se
 | Wrong date of birth first | Emma Clarke | adversarial | resolved | requires `verify_member` and `update_contact_details` |
 | Remembers email preference | Sarah Mitchell | calm | resolved | memory "Prefers documents by email"; requires `request_document` with `document_type: membership_card`, `delivery: email` |
 
-**Claims & Pre-authorisation** (4): *Knee pain, Direct Access* (Sarah; requires `check_treatment_cover` and `create_pre_authorisation` on `PMI-300101`; resolved) · *Pre-authorisation status* (Emma; `get_pre_authorisation` `PA-500955`; resolved) · *Shortfall explained* (David; `get_claim_status` `CL-70412`; resolved) · *Excluded back treatment* (Raj disputes `CL-70640`; escalated).
+**Claims & Pre-authorisation** (4): *Knee pain, Direct Access* (Sarah; requires `check_treatment_cover` and `create_pre_authorisation` on `PMI-300101` and `send_sms` to the registered mobile; resolved) · *Pre-authorisation status* (Emma; `get_pre_authorisation` `PA-500955`; resolved) · *Shortfall explained* (David; `get_claim_status` `CL-70412`; resolved) · *Excluded back treatment* (Raj disputes `CL-70640`; escalated).
 
-**Health Cover Sales** (3): *Couple quote and join* (Alex Morgan with partner Sam, BS6 6JY, Balanced, moratorium; requires `create_quote`, `price_quote`, `assess_underwriting`, `create_policy`; resolved) · *Smoker asks the price* (Gareth Lewis, London, impatient; `create_quote`, `price_quote`; resolved) · *Asks for advice* (Nina Shah, confused; escalated).
+**Health Cover Sales** (3): *Couple quote and join* (Alex Morgan with partner Sam, BS6 6JY, Balanced, moratorium; requires `create_quote`, `price_quote`, `assess_underwriting`, `create_policy`; resolved) · *Smoker asks the price* (Gareth Lewis, London, impatient; `create_quote`, `price_quote`, `send_email` of the quote to the address he gives; resolved) · *Asks for advice* (Nina Shah, confused; escalated).
 
 # Acceptance
 

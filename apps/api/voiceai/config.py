@@ -1,6 +1,7 @@
 """Application settings from environment variables and `.env`.
 
-Spec: /architecture/deployment.md, /architecture/llm-gateway.md, /architecture/knowledge.md, /architecture/tenant-settings.md
+Spec: /architecture/deployment.md, /architecture/llm-gateway.md, /architecture/knowledge.md, /architecture/tenant-settings.md,
+/architecture/contact-tools.md
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ class Settings(BaseSettings):
     deepgram_api_key: str | None = None
     member_identify_url: str = "/mock/healthcare/identify"   # business API: who a registered phone number belongs to (IDV)
     member_profile_url: str = "/mock/healthcare/members/me"   # business API: the verified member's profile (agent memory)
+    member_contact_url: str = "/mock/healthcare/members/me/contact"  # business API: the contact on file (contact tools, CT-03)
     openai_realtime_url: str = "wss://api.openai.com/v1/realtime"  # realtime pipeline endpoint; overridden for tests and proxies
     # telephony (/architecture/telephony.md): the public base URL must equal the URL configured in Twilio
     twilio_account_sid: str | None = None
@@ -37,6 +39,17 @@ class Settings(BaseSettings):
     twilio_api_base: str = "https://api.twilio.com"
     twilio_validate_signature: bool = True
     public_base_url: str | None = None
+    # contact tools (/architecture/contact-tools.md): provider per channel; unset = chosen from the keys below, else outbox
+    email_provider: str | None = None   # brevo | outbox
+    sms_provider: str | None = None     # twilio | outbox
+    call_provider: str | None = None    # twilio | outbox
+    brevo_api_key: str | None = None
+    brevo_api_base: str = "https://api.brevo.com"
+    email_from: str | None = None       # a sender verified in Brevo
+    email_from_name: str | None = None  # unset = the tenant's name
+    twilio_from_number: str | None = None  # E.164 number that sends SMS and places message calls
+    contact_redirect_email: str | None = None  # testing: every real email goes here instead (CT-11)
+    contact_redirect_phone: str | None = None  # testing: every real SMS and message call goes here instead
     # Fernet key that encrypts tenants' own provider keys (/architecture/tenant-settings.md)
     tenant_secrets_key: str | None = None
     # HMAC secret of public-API connect tokens (/api/public-api.md, Voice connect); unset = no voice over /v1

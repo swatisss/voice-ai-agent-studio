@@ -146,3 +146,7 @@ UI-69
 UI-70
 UI-71
 UI-72
+
+# CP-0040 Messages sent card on the call detail: there are no browser tests; not yet clicked through.
+# The API behind it is covered by API-16. Approval and a browser check requested from the owner.
+UI-74

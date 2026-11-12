@@ -1,4 +1,4 @@
-// Spec: /ui/calls.md (Detail), /architecture/call-scoring.md
+// Spec: /ui/calls.md (Detail), /architecture/call-scoring.md, /architecture/contact-tools.md
 "use client";
 
 import Link from "next/link";
@@ -97,6 +97,7 @@ function CallDetail() {
               <div className="mt-2 text-xs text-muted">{when(c.feedback.at)}</div>
             </Card>
           )}
+          {c.contact_messages?.length > 0 && <MessagesCard messages={c.contact_messages} />}
           <ScorecardCard card={c.scorecard} events={c.events} onEvidence={showTurn} onChange={reload}
             onRescore={c.channel === "simulation" ? undefined : async () => { await api(`/api/calls/${id}/rescore`, { method: "POST" }); }} />
           {a && (
@@ -115,6 +116,48 @@ function CallDetail() {
         </div>
       </div>
     </div>
+  );
+}
+
+type ContactMessage = {
+  id: string; channel: "email" | "sms" | "call"; destination: "registered" | "other"; to: string; subject: string | null; body: string;
+  provider: string; status: "sent" | "outbox" | "simulated" | "failed"; redirected: boolean; error: string | null; created_at: string;
+};
+
+const CHANNEL_LABEL: Record<ContactMessage["channel"], string> = { email: "Email", sms: "SMS", call: "Call" };
+const STATUS: Record<ContactMessage["status"], { text: string; tone: "ok" | "warn" | "bad" | "info" }> = {
+  sent: { text: "Sent", tone: "ok" }, outbox: { text: "Outbox - not delivered", tone: "warn" },
+  simulated: { text: "Simulated", tone: "info" }, failed: { text: "Failed", tone: "bad" },
+};
+
+/** UI-74: the details the agent sent by email, SMS or message call, recipients masked. */
+function MessagesCard({ messages }: { messages: ContactMessage[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <Card title="Messages sent">
+      <ul className="space-y-2 text-sm">
+        {messages.map((m) => (
+          <li key={m.id} className="rounded-lg border border-line px-2.5 py-1.5">
+            <button type="button" className="flex w-full flex-wrap items-center gap-1.5 text-left" aria-expanded={open === m.id}
+              onClick={() => setOpen(open === m.id ? null : m.id)}>
+              <Badge tone="accent">{CHANNEL_LABEL[m.channel]}</Badge>
+              <span className="mono">{m.to}</span>
+              <Badge>{m.destination === "registered" ? "Registered" : "Other address"}</Badge>
+              <Badge tone={STATUS[m.status].tone}>{STATUS[m.status].text}</Badge>
+              {m.redirected && <Badge tone="info">Redirected</Badge>}
+              <span className="ml-auto text-xs text-muted">{when(m.created_at)}</span>
+            </button>
+            {m.status === "failed" && m.error && <div className="mt-1 text-xs text-bad">{m.error}</div>}
+            {open === m.id && (
+              <div className="mt-2 space-y-1">
+                {m.subject && <div className="font-medium">{m.subject}</div>}
+                <p className="whitespace-pre-wrap rounded-lg bg-neutral-soft p-2">{m.body}</p>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

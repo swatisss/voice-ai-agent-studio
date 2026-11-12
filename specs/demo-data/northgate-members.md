@@ -41,6 +41,8 @@ Example: two non-smokers aged 36 and 34 in Bristol (BS6) pay £50.65 (Essentials
 
 Preferred contact: Sarah email, David phone after 6pm, Emma SMS.
 
+**Contact on file** (read by the contact tools, [/architecture/contact-tools.md](/architecture/contact-tools.md)): every member's email above, and as mobile the registered phone number (Sarah, David and Emma only; Raj, Tom and Lucy have none). All are fictional and undeliverable (`example.co.uk`, 07700 900xxx); to try real delivery set `CONTACT_REDIRECT_EMAIL` / `CONTACT_REDIRECT_PHONE`.
+
 # Policies and payments
 
 Every policy is paid monthly by Direct Debit on the 1st; the next collection is the 1st of next month; the last three collections succeeded, except: David's latest collection failed (`missed`, £61.20, reinstate by T+19, account ending 0937) and Tom has no collections yet. Monthly premiums: Sarah £187.40, David £61.20, Emma £52.80 (+ £13.50 cash plan), Raj £168.90, Tom £29.60, Lucy £23.30. While a payment is missed the policy status is `payment_missed` and every cover check returns `covered: false`.

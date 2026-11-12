@@ -1,19 +1,18 @@
-# Demo kits: SafeTrip and Oakhaven Dental
+# Demo kit: Oakhaven Dental
 
-Two fictional businesses with ready-made knowledge, use cases, tools and test lines. Every person and record is synthetic.
+A fictional UK dental group with ready-made knowledge, use cases, tools and test lines, built next to the Northgate Health agents (Customer Care, Health Cover Sales, Claims & Pre-authorisation) so the front desk can route dental callers to it. Every person and record is synthetic.
 
 | Kit | Knowledge to upload | Use cases | Tools |
 |---|---|---|---|
-| `dental` (Oakhaven Dental Care, UK) | `dental/oakhaven-dental-knowledge-okf.zip` (3 OKF articles in one upload) or the 3 files in `dental/knowledge/` | `dental/use-cases.md` (11) | 11 `dental_*` tools: 10 on the mock patient system `demo_kits.py` serves, 1 (`dental_claim_documents`) on the platform's built-in mock |
-| `safetrip` (travel insurance) | `safetrip-policy-full.md` | `safetrip-use-cases.md` (7) | `get_claim_documents` (built-in mock) |
+| `dental` (Oakhaven Dental Care, UK) | `dental/oakhaven-dental-knowledge-okf.zip` (3 OKF articles in one upload) or the 3 files in `dental/knowledge/` | `dental/use-cases.md` (11) | 11 `dental_*` tools, all on the mock patient system `demo_kits.py` (or `scripts/dev.py`) serves |
 
 ## Demo flow: build the dental agent on stage
 
 1. `python scripts/dev.py` (terminal 1).
-2. In the Studio: **Agents → New agent**, e.g. *Dental Care agent*, in *Evergreen Health · Customer Support & Channels*.
+2. In the Studio: **Agents → New agent**, e.g. *Dental Care agent*, in *Northgate Health · Member & Sales Services*.
 3. Terminal 2, and leave it running (the booking, cover and claim tools call the mock it serves):
    ```
-   python scripts/demo_kits.py dental --agent "Dental Care agent" --tenant evergreen-care
+   python scripts/demo_kits.py dental --agent "Dental Care agent"
    ```
    It adds the 11 tools, 5 skills, the *Maya (Oakhaven Dental)* persona, the guardrails and the 11 use cases to that agent's **draft**. It does not touch knowledge and does not publish. **Reload the editor page** afterwards (an open editor would otherwise save its old draft over it).
 4. **Knowledge → Upload** → `oakhaven-dental-knowledge-okf.zip`: three rows with the *OKF* badge, ticked. **Test search** `knocked out tooth`.
@@ -26,7 +25,7 @@ python scripts/import_use_cases.py --agent "Dental Care agent" --file scripts/de
 ```
 `--replace` also deletes the agent's use cases that are not in the file; `--dry-run` only parses.
 
-Everything prepared in one go instead (agents named *Oakhaven Dental Assistant* and *SafeTrip Policy Assistant*, in the sandbox, published): `python scripts/demo_kits.py dental` / `safetrip`. Rehearse with no keys and no cost: `python scripts/demo_kits.py all --check`.
+Everything prepared in one go instead: `python scripts/demo_kits.py dental` builds and publishes the *Oakhaven Dental Assistant* in `northgate-health` (the default `--tenant`), so a Test call **Full flow** or a phone number on the front desk routes "I need a dental check-up" to it. Rehearse with no keys and no cost: `python scripts/demo_kits.py dental --check`.
 
 ## Dental test lines
 
@@ -50,21 +49,9 @@ Demo patients: **Priya Shah** OD-10231, born 12 April 1988 (Leeds, insurance Lev
 | Escalation | "I want to make a complaint." | Hands over |
 | Guardrail | "Just tell me insurance will pay for my crown." | Will not promise payment |
 
-## SafeTrip test lines
-
-| Caller says | Expected |
-|---|---|
-| "My suitcase never arrived. How much can I get back?" | Up to $1,500, max $300 per item |
-| "My phone was stolen in Rome. How much will you pay?" | $500 per item, $1,000 per trip; police report within 24 hours |
-| "My rental car was damaged. I'm 23, is the excess covered?" | Up to $3,000, but drivers under 25 are not covered |
-| "Can I cancel because I changed my mind?" | Not covered |
-| "What do I need to send for a doctor visit claim?" | Asks the claim type, then the tool: itemised bill, proof of payment |
-| "My husband is in hospital abroad right now." | Escalates |
-| "Does SafeTrip cover my dog?" | No approved information: offers a specialist |
-
 ## Limits worth knowing
 
-* The mock patient system runs on `127.0.0.1` inside `demo_kits.py`: the 10 booking, cover and claim tools work only on this machine while it runs, and it resets on every start. `dental_claim_documents` always works.
+* The mock patient system runs on `127.0.0.1` inside `demo_kits.py` (or `scripts/dev.py`, port 8766): all 11 tools, `dental_claim_documents` included, work only on this machine while it runs, and it resets on every start.
 * The Knowledge tab lists every document of the business unit (only ticked ones are used), and the Use cases tab has no file import yet: both need a change proposal.
 * The platform's own "verify first" line says "member ID"; Maya asks for the "patient ID" everywhere else.
 * The fake LLM (`--check` without `--live`) proves the build, retrieval and escalation, not answer quality.

@@ -14,7 +14,7 @@ from voiceai.live import LiveControls
 from voiceai.voice.processors import BrainProcessor, TurnAggregator, UserTurnFrame
 from voiceai.voice.turn_detection import TurnEvaluator, TurnSettings, expected_slots, heuristic_verdict
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 
 
 def make_aggregator(**turn):  # noqa: ANN003, ANN202
@@ -52,11 +52,11 @@ async def test_normal_mode_merges_and_dispatches_once():
     await agg.handle(VADUserStartedSpeakingFrame())
     await agg.handle(say("My claim is"))
     await agg.handle(VADUserStoppedSpeakingFrame())
-    await agg.handle(say("C-20931."))
+    await agg.handle(say("CL-70231."))
     await asyncio.sleep(0.01)
     assert agg.turns == []  # still inside the silence window
     await asyncio.sleep(0.2)
-    assert agg.turns == ["My claim is C-20931."]
+    assert agg.turns == ["My claim is CL-70231."]
 
 
 async def test_semantic_waits_then_merges_continuation():
@@ -67,9 +67,9 @@ async def test_semantic_waits_then_merges_continuation():
     assert agg.turns == []         # ... but the caller seems unfinished
     await agg.handle(VADUserStartedSpeakingFrame())  # continues within the extra window
     await agg.handle(VADUserStoppedSpeakingFrame())
-    await agg.handle(say("it is C-20931."))
+    await agg.handle(say("it is CL-70231."))
     await asyncio.sleep(0.2)
-    assert agg.turns == ["I would like to check on my claim and it is C-20931."]
+    assert agg.turns == ["I would like to check on my claim and it is CL-70231."]
 
 
 async def test_semantic_expected_digits_and_dob():

@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""Build ready-to-demo agents from Markdown knowledge: SafeTrip travel insurance and Oakhaven Dental Care.
+"""Build a ready-to-demo agent from Markdown knowledge: the Oakhaven Dental Assistant (a UK dental group).
 
     python scripts/demo_kits.py dental --check      # no keys, no cost: throwaway API with the scripted fake LLM, build, check, stop
-    python scripts/demo_kits.py all --check         # both kits the same way
+    python scripts/demo_kits.py all --check         # every kit the same way (today only the dental kit)
     python scripts/dev.py                           # in another terminal, then:
-    python scripts/demo_kits.py safetrip            # build on the running stack (127.0.0.1:8000) and print the talk track
     python scripts/demo_kits.py dental              # build, then serve the mock patient system the tools call until Ctrl+C
     python scripts/demo_kits.py dental --check --live   # hold the scripted calls on the running stack: REAL (paid) LLM calls
 
 A kit (scripts/demo/kits.py) is one agent: persona, guardrails, knowledge uploaded as Markdown files, tools, skills, use
-cases with demo callers. Everything goes through the same REST API as the web app (/api/rest-api.md), lands in the sandbox
-business unit and is updated in place on every run (a new published version each time). Publishing also refreshes the
-router's capability catalog, which asks the `drafting` model for example phrasings: on the live stack that is the same
-small cost as clicking Publish. The dental tools call scripts/demo/dental_mock.py on 127.0.0.1, so the dental agent's
-tools work only while this script runs. All businesses, people and records are fictional and synthetic.
+cases with demo callers. Everything goes through the same REST API as the web app (/api/rest-api.md), lands in the
+Northgate Health business unit (`northgate-health`, next to Customer Care, Health Cover Sales and Claims &
+Pre-authorisation) and is updated in place on every run (a new published version each time). Publishing also refreshes
+the router's capability catalog, so the front desk can route dental callers to the kit's agent; it asks the `drafting`
+model for example phrasings: on the live stack that is the same small cost as clicking Publish. The dental tools call
+scripts/demo/dental_mock.py on 127.0.0.1, so the dental agent's tools work only while this script (or scripts/dev.py)
+serves it. All businesses, people and records are fictional and synthetic.
 
 Exit code: 0 when every check passed, 1 otherwise. Stdlib only.
 """
@@ -359,7 +360,7 @@ def main() -> int:
     ap.add_argument("--live", action="store_true", help="with --check: run on --api with its real LLM keys (paid model calls)")
     ap.add_argument("--api", default="http://127.0.0.1:8000", help="API base URL (default http://127.0.0.1:8000; on Windows \"localhost\" tries IPv6 first and costs ~2 s a request)")
     ap.add_argument("--web", default="http://localhost:3000", help="web app base URL for the printed link (default http://localhost:3000)")
-    ap.add_argument("--tenant", default="evergreen-sandbox", help="business unit for the agents (default evergreen-sandbox)")
+    ap.add_argument("--tenant", default="northgate-health", help="business unit for the agents (default northgate-health, so the front desk routes to them)")
     ap.add_argument("--mock-port", type=int, default=8766, help="port for the mock patient system (default 8766; a free port if taken)")
     ap.add_argument("--agent", metavar="NAME",
                     help="equip an existing agent (made in the UI) with the kit's tools, skills, persona, guardrails and use "

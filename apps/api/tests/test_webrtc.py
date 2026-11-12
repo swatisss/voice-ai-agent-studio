@@ -9,7 +9,7 @@ import pytest
 from voiceai.config import get_settings
 from voiceai.public import auth, tokens
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 
 
 @pytest.fixture

@@ -48,8 +48,8 @@ v1 includes all of an agent's skills in every prompt (no on-demand loading).
 # Acceptance
 
 - **TS-01** — Given a tool with `requires_verification` and an unverified call, when the model calls it, then no HTTP request is made and the result is `identity_not_verified`.
-- **TS-02** — Given a verification tool returning `{"verified": true, "member_ref": "EVG-482913"}`, when executed, then the call is verified and `calls.caller_ref` is `EVG-482913`.
-- **TS-03** — Given url `/mock/healthcare/claims/{claim_id}` and args `{claim_id: "C-20931", include: "lines"}` with `GET`, when executed, then the request path is `/mock/healthcare/claims/C-20931?include=lines`.
+- **TS-02** — Given a verification tool returning `{"verified": true, "member_ref": "NGH-410237"}`, when executed, then the call is verified and `calls.caller_ref` is `NGH-410237`.
+- **TS-03** — Given url `/mock/healthcare/claims/{claim_id}` and args `{claim_id: "CL-70231", include: "lines"}` with `GET`, when executed, then the request path is `/mock/healthcare/claims/CL-70231?include=lines`.
 - **TS-04** — Given an API returning HTTP 404, when executed, then the result is `{"error":"http_404",...}` and the tool-error streak increments.
 - **TS-05** — Given a response body over 2,000 characters, when returned to the model, then it is truncated to 2,000 characters.
 - **TS-06** — Given a tool named `search_knowledge`, when created, then the API rejects it with 422.

@@ -30,7 +30,7 @@ D. **Gemini Live on Vertex AI** instead of OpenAI - GCP-native, keeps audio insi
 
 # Decision
 
-Telephony: option 1, inbound only, with the IVR forwarding to a Twilio number or SIP URI. Voice pipeline: option C. `voice.pipeline` defaults to `cascade`; `realtime` is chosen per agent and the first realtime agent is the Insurance Claims Agent. In realtime mode the speech model replaces only audio-in to audio-out; the system prompt, tools, verification gate, escalation, state, events and fleet learning stay in the shared `AgentSession` ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)). Fixed lines (welcome, farewell, safety, hand-off) are spoken as exact text by cancelling the model's response and having the service read the text.
+Telephony: option 1, inbound only, with the IVR forwarding to a Twilio number or SIP URI. Voice pipeline: option C. `voice.pipeline` defaults to `cascade`; `realtime` is chosen per agent and the first realtime agent is the Insurance Claims Agent (removed with the Evergreen demo by [CP-0039](/changes/cp-0039-northgate-health.md); the Northgate agents run on the cascade, and realtime is chosen per agent in the Studio). In realtime mode the speech model replaces only audio-in to audio-out; the system prompt, tools, verification gate, escalation, state, events and fleet learning stay in the shared `AgentSession` ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)). Fixed lines (welcome, farewell, safety, hand-off) are spoken as exact text by cancelling the model's response and having the service read the text.
 
 # Consequences
 

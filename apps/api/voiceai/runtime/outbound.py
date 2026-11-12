@@ -15,7 +15,7 @@ _PLACEHOLDER = re.compile(r"\{([a-z_][a-z0-9_]*)\}")
 
 
 def brand(tenant_name: str) -> str:
-    """'Evergreen Health · Customer Support & Channels' -> 'Evergreen Health'."""
+    """'Northgate Health · Member & Sales Services' -> 'Northgate Health'."""
     return tenant_name.split("·")[0].strip() or tenant_name
 
 

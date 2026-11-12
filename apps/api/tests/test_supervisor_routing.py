@@ -24,8 +24,8 @@ from voiceai.models import Call, CallEvent, Conversation
 from voiceai.public import auth
 from voiceai.routing import catalog, decision, supervisor
 
-H = {"X-Tenant-Id": "evergreen-care"}
-CLAIM = "I need to report a new claim."
+H = {"X-Tenant-Id": "northgate-health"}
+CLAIM = "My GP has referred me to a specialist."  # a Claims & Pre-authorisation sample utterance: a clear Stage A win
 
 
 class Brain:
@@ -112,17 +112,27 @@ def clear_win(a: str, b: str):  # noqa: ANN201
     return fake
 
 
+async def _internal_agent(client) -> str:  # noqa: ANN001
+    """The seed has no internal agent: add and publish one (staff scope), then index it."""
+    r = await client.post("/api/agents", headers=H, json={"name": "Staff Helpdesk", "draft_config": {"mode": "internal", "voice": {"pipeline": "cascade"}}})
+    assert r.status_code == 200, r.text
+    agent_id = r.json()["id"]
+    assert (await client.post(f"/api/agents/{agent_id}/publish", headers=H, json={})).status_code == 200
+    await run_index_jobs()
+    return agent_id
+
+
 async def _front_desk(**patch) -> None:  # noqa: ANN003
     from voiceai.routing import front_desk
 
     async with sessionmaker()() as s:
-        await front_desk.update(s, "evergreen-care", front_desk.FrontDeskPatch(**patch))
+        await front_desk.update(s, "northgate-health", front_desk.FrontDeskPatch(**patch))
         await s.commit()
 
 
 async def test_clear_match_routes_in_stage_a(indexed, model):
     """Covers: RTE-01, RTE-12"""
-    rec = await supervisor.route("evergreen-care", "member", CLAIM, channel="text")
+    rec = await supervisor.route("northgate-health", "member", CLAIM, channel="text")
     assert rec["mode"] == "embedding" and rec["method"] == "embedding" and rec["agent_id"] == indexed["claims"]["agent_id"]
     assert rec["candidates"][0]["agent_id"] == indexed["claims"]["agent_id"] and rec["stage_b"] is None and not model.requests
 
@@ -133,7 +143,7 @@ async def test_decision_model_decides_first(indexed, model, monkeypatch):
     monkeypatch.setattr(catalog, "stage_a", clear_win(claims, care))
     await _front_desk(routing_mode="decision_model")
     model.answer = {"choice": care, "confidence": 0.36, "x_jev_confidence": 0.91, "probabilities": {care: 0.9}}
-    rec = await supervisor.route("evergreen-care", "member", CLAIM, channel="text")  # Stage A's clear win is claims
+    rec = await supervisor.route("northgate-health", "member", CLAIM, channel="text")  # Stage A's clear win is claims
     assert rec["mode"] == "decision_model" and rec["method"] == "decision" and rec["agent_id"] == care
     assert rec["stage_b"]["confidence"] == 0.91 and rec["stage_b"]["target"] == "decision_model"
     req = model.requests[0]
@@ -151,11 +161,11 @@ async def test_decision_model_falls_back_to_the_embedding(indexed, model, monkey
     for answer, reason in ((httpx.ReadTimeout("slow"), "timeout"), (503, "http_503"), ({"choice": "nobody", "confidence": 0.9}, "invalid_answer"),
                            ({"choice": "none", "confidence": 0.9}, "unsure"), ({"choice": care, "confidence": 0.1}, "unsure")):
         model.answer = answer
-        rec = await supervisor.route("evergreen-care", "member", CLAIM, channel="text")
+        rec = await supervisor.route("northgate-health", "member", CLAIM, channel="text")
         assert rec["method"] == "embedding" and rec["agent_id"] == claims, reason
         assert rec["fallbacks"] == [{"target": "decision_model", "error": reason}]
     monkeypatch.setattr(catalog, "stage_a", close_scores(claims, care))  # no clear win either: unsure, then the default agent
-    rec = await supervisor.route("evergreen-care", "member", "something", channel="text")
+    rec = await supervisor.route("northgate-health", "member", "something", channel="text")
     assert rec["method"] == "default" and rec["agent_id"] == care and rec["unsure"]
 
 
@@ -166,18 +176,18 @@ async def test_phi_mode_blocks_a_hosted_model(indexed, model, monkeypatch):
     model.answer = {"choice": indexed["care"]["agent_id"], "confidence": 0.99}
     monkeypatch.setenv("PHI_MODE", "1")
     get_settings.cache_clear()
-    rec = await supervisor.route("evergreen-care", "member", CLAIM, channel="voice")
+    rec = await supervisor.route("northgate-health", "member", CLAIM, channel="voice")
     assert not model.requests and rec["fallbacks"] == [{"target": "decision_model", "error": "phi_mode"}] and rec["method"] == "embedding"
     monkeypatch.setenv("DECISION_MODEL_HOSTED", "0")
     get_settings.cache_clear()
-    rec = await supervisor.route("evergreen-care", "member", CLAIM, channel="voice")
+    rec = await supervisor.route("northgate-health", "member", CLAIM, channel="voice")
     assert len(model.requests) == 1 and rec["method"] == "decision"
 
 
 async def test_not_configured_runs_the_embedding(indexed, monkeypatch):
     """Covers: RTE-13"""
     await _front_desk(routing_mode="decision_model")
-    rec = await supervisor.route("evergreen-care", "member", CLAIM, channel="text")
+    rec = await supervisor.route("northgate-health", "member", CLAIM, channel="text")
     assert rec["method"] == "embedding" and rec["fallbacks"] == [{"target": "decision_model", "error": "not_configured"}]
 
 
@@ -190,9 +200,9 @@ async def test_thresholds_are_settings(indexed, monkeypatch):
 
     monkeypatch.setattr(catalog, "stage_a", scores)
     await _front_desk(max_clarifications=0)
-    assert (await supervisor.route("evergreen-care", "member", "x", channel="text"))["unsure"]
+    assert (await supervisor.route("northgate-health", "member", "x", channel="text"))["unsure"]
     await _front_desk(clear_win=0.6, clear_margin=0.02)
-    rec = await supervisor.route("evergreen-care", "member", "x", channel="text")
+    rec = await supervisor.route("northgate-health", "member", "x", channel="text")
     assert rec["method"] == "embedding" and rec["agent_id"] == claims
 
 
@@ -202,24 +212,25 @@ async def test_clarify_then_default(indexed, brain, monkeypatch):
     monkeypatch.setattr(catalog, "stage_a", close_scores(claims, care))
     await _front_desk(default_agents={"member": claims}, max_clarifications=1)
     brain.router.append({"question": "Is this about a claim, or about your coverage?"})
-    rec = await supervisor.route("evergreen-care", "member", "I have a question", channel="voice")
+    rec = await supervisor.route("northgate-health", "member", "I have a question", channel="voice")
     assert rec["method"] == "clarify" and rec["clarification"] == "Is this about a claim, or about your coverage?"
-    rec = await supervisor.route("evergreen-care", "member", "I have a question still", channel="voice", clarifications_used=1)
+    rec = await supervisor.route("northgate-health", "member", "I have a question still", channel="voice", clarifications_used=1)
     assert rec["method"] == "default" and rec["agent_id"] == claims
     await _front_desk(max_clarifications=0)
-    rec = await supervisor.route("evergreen-care", "member", "hm", channel="voice")
+    rec = await supervisor.route("northgate-health", "member", "hm", channel="voice")
     assert rec["method"] == "default"
 
 
-async def test_scopes(indexed):
+async def test_scopes(client, indexed):
     """Covers: RTE-06"""
+    internal = await _internal_agent(client)
     async with sessionmaker()() as s:
-        member = set(await supervisor.candidates(s, "evergreen-care", "member"))
-        staff = set(await supervisor.candidates(s, "evergreen-care", "staff"))
-    assert member == {indexed["care"]["agent_id"], indexed["claims"]["agent_id"]}
-    assert staff == {indexed["internal"]["agent_id"]}
-    rec = await supervisor.route("evergreen-care", "staff", "who handles fraud?", channel="text")
-    assert rec["method"] == "single" and rec["agent_id"] == indexed["internal"]["agent_id"]
+        member = set(await supervisor.candidates(s, "northgate-health", "member"))
+        staff = set(await supervisor.candidates(s, "northgate-health", "staff"))
+    assert member == {indexed["care"]["agent_id"], indexed["sales"]["agent_id"], indexed["claims"]["agent_id"]}
+    assert staff == {internal}
+    rec = await supervisor.route("northgate-health", "staff", "who handles fraud?", channel="text")
+    assert rec["method"] == "single" and rec["agent_id"] == internal
 
 
 async def test_routed_voice_conversation(client, indexed, model, brain, monkeypatch, app):
@@ -238,17 +249,17 @@ async def test_routed_voice_conversation(client, indexed, model, brain, monkeypa
     voice_before = session.call_settings.cascade_voice
     greeting = await session.start()
     assert "virtual assistant" in greeting.lower()
-    brain.realtime.append("I can help you report it.")
+    brain.realtime.append("I can help you get that referral covered.")
     chunks = [c async for c in session.respond(CLAIM)]
     joined = "".join(chunks)
-    assert chunks[0] == "You're now with our claims team." and "report it" in joined
+    assert chunks[0] == "You're now with our claims and treatment team." and "referral covered" in joined
     assert session.call_settings.cascade_voice == voice_before  # one voice for the whole conversation
     async with sessionmaker()() as s:
         call = await s.scalar(select(Call).where(Call.conversation_id == cid))
         events = (await s.scalars(select(CallEvent).where(CallEvent.call_id == call.id).order_by(CallEvent.seq))).all()
     assert events[0].data.get("front_desk") and events[0].text == greeting
     kinds = [(e.kind, e.text) for e in events if e.kind in ("user", "assistant")]
-    assert kinds[1] == ("user", CLAIM) and kinds[2][1] == "You're now with our claims team."
+    assert kinds[1] == ("user", CLAIM) and kinds[2][1] == "You're now with our claims and treatment team."
     # the realtime pipeline: intro, then the agent's model answers with refreshed instructions
     r2 = await client.post("/api/conversations", headers=H, json={"channel": "voice", "scope": "member"})
     async with sessionmaker()() as s:
@@ -256,7 +267,7 @@ async def test_routed_voice_conversation(client, indexed, model, brain, monkeypa
     rt = await ConversationSession.open(conv2, app)
     await rt.start()
     d = await rt.caller_turn(CLAIM)
-    assert d.say == "You're now with our claims team." and d.model_turn and d.refresh
+    assert d.say == "You're now with our claims and treatment team." and d.model_turn and d.refresh
     assert "never answer questions yourself" not in rt.prompt() and "How this caller reached you" in rt.prompt()  # the agent's prompt
 
 
@@ -274,9 +285,9 @@ async def test_front_desk_phone_number(app, tmp_path, monkeypatch, fake_llm):
     get_settings.cache_clear()
     with TestClient(app) as c:
         await run_index_jobs()
-        r = c.post("/api/phone-numbers", headers=H, json={"e164": "+15550002222", "target": "front_desk"})
+        r = c.post("/api/phone-numbers", headers=H, json={"e164": "+447700900222", "target": "front_desk"})
         assert r.status_code == 200 and r.json()["target"] == "front_desk" and r.json()["agent_id"] is None
-        params = {"CallSid": "CA9", "From": "+15551234567", "To": "+15550002222"}
+        params = {"CallSid": "CA9", "From": "+447700900567", "To": "+447700900222"}
         url = "https://abc.ngrok.test/api/telephony/twilio/voice?ivr_menu=claims"
         sig = telephony.compute_signature("tok", url, {k: [v] for k, v in params.items()})
         twiml = c.post("/api/telephony/twilio/voice?ivr_menu=claims", data=params, headers={"X-Twilio-Signature": sig}).text
@@ -284,22 +295,22 @@ async def test_front_desk_phone_number(app, tmp_path, monkeypatch, fake_llm):
         async with sessionmaker()() as s:
             conv = await s.scalar(select(Conversation).where(Conversation.source == "phone"))
             assert conv.scope == "member" and not await s.scalar(select(Call).where(Call.conversation_id == conv.id))
-        out = await conversations.front_desk_turn(conv.id, "evergreen-care", CLAIM, app)
+        out = await conversations.front_desk_turn(conv.id, "northgate-health", CLAIM, app)
         assert out["kind"] == "routed"
         async with sessionmaker()() as s:
             call = await s.get(Call, out["call_id"])
-            assert call.meta["telephony"]["to"] == "+15550002222" and call.meta["context"]["ivr_menu"] == "claims"
+            assert call.meta["telephony"]["to"] == "+447700900222" and call.meta["context"]["ivr_menu"] == "claims"
     get_settings.cache_clear()
 
 
 async def test_routing_trace_events(client, indexed, model):
     """Covers: RTE-09, PUB-05, PUB-03"""
-    sub = bus.subscribe("evergreen-care", set())
+    sub = bus.subscribe("northgate-health", set())
     r = await client.post("/api/conversations", headers=H, json={"channel": "text", "scope": "member", "message": CLAIM})
     body = r.json()
-    assert body["agent"]["name"] == "Insurance Claims Agent" and body["routing"]["method"] == "embedding"
+    assert body["agent"]["name"] == "Claims & Pre-authorisation" and body["routing"]["method"] == "embedding"
     assert [m["speaker"] for m in body["messages"]][:2] == ["front_desk", "agent"]
-    assert body["messages"][1]["text"] == "You're now with our claims team." and len(body["messages"]) == 3
+    assert body["messages"][1]["text"] == "You're now with our claims and treatment team." and len(body["messages"]) == 3
     sub.topics = {f"conversation:{body['conversation_id']}"}
     view = (await client.get(f"/api/conversations/{body['conversation_id']}", headers=H)).json()
     decision_rec = view["routing"][-1]
@@ -307,7 +318,7 @@ async def test_routing_trace_events(client, indexed, model):
     bus.unsubscribe(sub)
     # the event is published on the conversation topic
     seen: list[dict] = []
-    sub = bus.subscribe("evergreen-care", set())
+    sub = bus.subscribe("northgate-health", set())
     r = await client.post("/api/conversations", headers=H, json={"channel": "text", "scope": "member"})
     cid = r.json()["conversation_id"]
     assert r.json()["agent"] is None and r.json()["messages"][0]["speaker"] == "front_desk"
@@ -363,12 +374,12 @@ def test_router_role_only(tmp_path):
 
 async def test_front_desk_settings(client, indexed):
     """Covers: API-13, MT-16"""
-    fd = (await client.get("/api/tenant-settings/front-desk", headers={"X-Tenant-Id": "evergreen-sandbox"})).json()
+    fd = (await client.get("/api/tenant-settings/front-desk", headers={"X-Tenant-Id": "northgate-sandbox"})).json()
     assert fd["max_clarifications"] == 1 and fd["pipeline"] == "cascade" and fd["default_agents"] == {"member": None, "staff": None}
-    for body in ({"default_agents": {"member": indexed["internal"]["agent_id"]}}, {"max_clarifications": 3}):
+    for body in ({"default_agents": {"member": await _internal_agent(client)}}, {"max_clarifications": 3}):
         assert (await client.put("/api/tenant-settings/front-desk", headers=H, json=body)).status_code == 422
-    await client.put("/api/tenant-settings", headers={"X-Tenant-Id": "evergreen-sandbox"}, json={"allowed_pipelines": ["cascade"]})
-    assert (await client.put("/api/tenant-settings/front-desk", headers={"X-Tenant-Id": "evergreen-sandbox"}, json={"pipeline": "realtime"})).status_code == 422
+    await client.put("/api/tenant-settings", headers={"X-Tenant-Id": "northgate-sandbox"}, json={"allowed_pipelines": ["cascade"]})
+    assert (await client.put("/api/tenant-settings/front-desk", headers={"X-Tenant-Id": "northgate-sandbox"}, json={"pipeline": "realtime"})).status_code == 422
     ok = await client.put("/api/tenant-settings/front-desk", headers=H, json={"pipeline": "realtime", "default_agents": {"member": indexed["care"]["agent_id"]}})
     assert ok.status_code == 200
     r = await client.put("/api/tenant-settings", headers=H, json={"allowed_pipelines": ["cascade"]})
@@ -385,7 +396,7 @@ async def test_routing_suite_run(client, indexed, model):
     assert r.status_code == 409 and r.json()["error"] == "run_in_progress"  # the catalog's own run is waiting
     async with sessionmaker()() as s:
         run = await s.scalar(select(EvalRun).where(EvalRun.kind == "routing", EvalRun.trigger == "catalog"))
-    summary = await suite.run(run.id, "evergreen-care")
+    summary = await suite.run(run.id, "northgate-health")
     assert summary["cases"] > 0 and summary["accuracy"] is not None and "confusion" in summary and "passes" in summary
     detail = (await client.get(f"/api/routing/runs/{run.id}", headers=H)).json()
     assert len(detail["results"]) == summary["cases"] and all("method" in r and "latency_ms" in r for r in detail["results"])
@@ -404,7 +415,7 @@ async def test_compare_modes(client, indexed, model):
         run.config = {"compare": True}
         await s.commit()
     model.answer = {"choice": care, "confidence": 0.9}
-    summary = (await suite.run_compare(run.id, "evergreen-care"))["compare"]
+    summary = (await suite.run_compare(run.id, "northgate-health"))["compare"]
     cases = summary["embedding"]["cases"]
     assert summary["current"] == "embedding" and len(model.requests) <= cases
     for mode in ("embedding", "decision_model"):
@@ -419,7 +430,7 @@ async def test_compare_modes(client, indexed, model):
     os.environ["DECISION_MODEL_URL"] = ""
     gs.cache_clear()
     try:
-        assert (await suite.compare_case("evergreen-care", "member", CLAIM))["decision_model"] == {"configured": False} and not model.requests
+        assert (await suite.compare_case("northgate-health", "member", CLAIM))["decision_model"] == {"configured": False} and not model.requests
     finally:
         os.environ["DECISION_MODEL_URL"] = "http://decision.test"
         gs.cache_clear()
@@ -442,7 +453,7 @@ async def test_time_budgets_are_settings(indexed, model, monkeypatch):
         monkeypatch.setenv("DECISION_MODEL_TIMEOUT_VOICE_MS", voice_ms)
         monkeypatch.setenv("DECISION_MODEL_TIMEOUT_TEXT_MS", text_ms)
         get_settings.cache_clear()
-        return await supervisor.route("evergreen-care", "member", CLAIM, channel=channel)
+        return await supervisor.route("northgate-health", "member", CLAIM, channel=channel)
 
     rec = await route("voice", "1000", "")
     assert rec["method"] == "decision" and rec["agent_id"] == care and rec["fallbacks"] == []

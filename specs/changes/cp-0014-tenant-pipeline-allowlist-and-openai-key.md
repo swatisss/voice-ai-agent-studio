@@ -36,7 +36,7 @@ CP-0012 made the voice pipeline a per-agent choice. On a multi-tenant platform t
 * [/ui/settings.md](/ui/settings.md) - **new** page; UI-40
 * [/ui/app-shell.md](/ui/app-shell.md) - Settings navigation item; UI-29 reworded (eight items)
 * [/ui/agent-builder.md](/ui/agent-builder.md) - Realtime card disabled when not allowed; UI-41
-* [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md) - seeded settings per tenant; UC-06
+* [/demo-data/evergreen-health.md](/demo-data/northgate-health.md) - seeded settings per tenant; UC-06
 
 # Acceptance criteria
 

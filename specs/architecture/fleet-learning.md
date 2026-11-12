@@ -55,7 +55,7 @@ Prompt [/prompts/fix-draft.md](/prompts/fix-draft.md), role `drafting`. Evidence
 | Kind | When | Payload |
 |---|---|---|
 | `knowledge_article` | `missing_knowledge` | `{title, content_markdown}` — becomes a `knowledge_docs` row with status `draft` |
-| `skill` | `missing_skill` | `{skill: {name, description, instructions, required_tools, escalate_when}, tool: <tool def or null>, existing_tool_name: <name or null>}` — tool drafts may only target endpoints listed in the tenant's tool catalog ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)) |
+| `skill` | `missing_skill` | `{skill: {name, description, instructions, required_tools, escalate_when}, tool: <tool def or null>, existing_tool_name: <name or null>}` — tool drafts may only target endpoints listed in the tenant's tool catalog ([/demo-data/northgate-health.md](/demo-data/northgate-health.md)) |
 | `policy_rule` | `agent_error` | `{rule: "one sentence added to policy.rules"}` |
 | `knowledge_edit` | `missing_knowledge`, an attached article covers the topic | `{doc_id, article: {title, content_markdown}}` — the revised article becomes a `draft` doc |
 | `tool_attach` | `missing_skill`, an existing tenant tool fits | `{tool_name}` |

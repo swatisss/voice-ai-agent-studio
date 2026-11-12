@@ -13,7 +13,6 @@ from typing import Any
 
 DEMO_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(DEMO_DIR.parent))
-from demo_walkthrough import POLICY as SAFETRIP_POLICY, SKILL as SAFETRIP_SKILL, TOOL as SAFETRIP_TOOL  # noqa: E402 - one definition
 from import_use_cases import load as load_use_cases  # noqa: E402 - use cases live in Markdown files
 
 
@@ -46,34 +45,6 @@ class Kit:
     chats: list[Chat]
     mock: bool = False
     voice_pipeline: str = ""  # "realtime": OpenAI speech-to-speech, when the business unit allows it; empty keeps the agent's
-
-
-# ------------------------------------------------------------------ SafeTrip (travel insurance, one policy document)
-SAFETRIP = Kit(
-    key="safetrip",
-    agent_name="SafeTrip Policy Assistant",
-    description=("Answers SafeTrip travel insurance policyholders' questions about what the Standard plan covers, limits and "
-                 "exclusions, and what to do and send to make a claim."),
-    category="Travel insurance",
-    persona={"name": "Ava (SafeTrip)", "description": "SafeTrip travel insurance helpline",
-             "greeting": "Thanks for calling SafeTrip travel insurance, this is Ava.",
-             "disclosure": "I'm a virtual assistant, and this call may be recorded for quality. How can I help with your trip?",
-             "style": "Friendly and clear. Give the limit first, then the conditions. One question at a time."},
-    policy=SAFETRIP_POLICY,
-    knowledge=[DEMO_DIR / "safetrip-policy-full.md"],
-    tools=[SAFETRIP_TOOL],
-    skills=[SAFETRIP_SKILL],
-    use_cases=load_use_cases(DEMO_DIR / "safetrip-use-cases.md"),
-    chats=[
-        Chat("Lost baggage limit", ["My suitcase never arrived after my flight. How much can I get back for lost baggage?"], "Lost baggage", {0: [r"1,?500"]}),
-        Chat("Stolen phone", ["My phone was stolen in Rome. How much will you pay for a stolen phone?"], "Gadget cover", {0: [r"500"]}),
-        Chat("Rental car, young driver", ["My rental car was damaged. I'm 23, is the excess covered?"], "Rental car excess", {0: [r"25"]}),
-        Chat("Changed my mind", ["Can I cancel my trip because I changed my mind?"], "Trip cancellation", {0: [r"changed your mind|notcovered|isnotcovered"]}),
-        Chat("Repatriation approval", ["Do I need approval before I'm flown home by a doctor's advice?"], "Medical repatriation", {0: [r"approv"]}),
-        Chat("Skydiving exclusion", ["I hurt my back skydiving on the trip. Is that covered?"], "exclusions", {0: [r"skydiving|extremesports"]}),
-        Chat("Hospital now escalates", ["My husband is in hospital abroad right now and needs help with the bill."], escalates=True),
-    ],
-)
 
 
 # ------------------------------------------------------------------ Oakhaven Dental Care (UK dental group, mock patient system)
@@ -133,9 +104,9 @@ DENTAL_TOOLS = [
           "GET", "/dental/estimate", {"treatment": TREATMENT}, ["treatment"], verified=True),
     _tool("dental_claim_status", "Status of one of the verified patient's dental insurance claims (numbers start with DC).",
           "GET", "/dental/claims/{claim_id}", {"claim_id": {"type": "string", "description": "e.g. DC-5531"}}, ["claim_id"], verified=True),
-    # the platform's built-in mock: works even when demo_kits.py is not running, no verification needed
+    # general information on the dental mock, no verification needed
     {"name": "dental_claim_documents", "description": "List the documents a patient must send with a dental insurance claim.",
-     "method": "GET", "url": "/mock/insurance/claims/requirements",
+     "method": "GET", "url": "{mock}/dental/claim-documents",
      "parameters": {"type": "object", "properties": {"claim_type": {"type": "string", "enum": ["dental"],
                                                                     "description": "always dental"}}, "required": ["claim_type"]},
      "requires_verification": False, "is_verification": False, "timeout_s": 8},
@@ -225,12 +196,12 @@ DENTAL = Kit(
         Chat("Red flags", ["My face is swollen and it's spreading to my eye. What should I do?"], "999", {0: [r"999|A&E"]}),
         Chat("Complaint escalates", ["I want to make a complaint about my treatment."], escalates=True),
         Chat("Book as Priya", ["I'd like to book a hygiene appointment at Leeds, please.", "Yes, my patient ID is OD-10231 and my date of birth is 12 April 1988.",
-                               "The first slot is fine.", "Yes, please book it."], {3: [r"BK-\d+"]}, needs_model=True),
+                               "The first slot is fine.", "Yes, please book it."], expect={3: [r"BK-\d+"]}, needs_model=True),
         Chat("Crown estimate as Priya", ["How much would a crown cost me with my insurance? My patient ID is OD-10231, date of birth 1988-04-12."],
-             {0: [r"795"]}, needs_model=True),
+             expect={0: [r"795"]}, needs_model=True),
         Chat("Claim DC-5560 as Tom", ["What's the status of claim DC-5560? I'm patient OD-10457, born 30 September 1975."],
-             {0: [r"receipt"]}, needs_model=True),
+             expect={0: [r"receipt"]}, needs_model=True),
     ],
 )
 
-KITS = {k.key: k for k in (SAFETRIP, DENTAL)}
+KITS = {k.key: k for k in (DENTAL,)}

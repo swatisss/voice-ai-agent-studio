@@ -12,8 +12,8 @@ from voiceai.db import sessionmaker
 from voiceai.models import AgentVersion, CapabilityEntry, CapabilityProfile, Job, RoutingCase
 from voiceai.routing import catalog
 
-H = {"X-Tenant-Id": "evergreen-care"}
-SANDBOX = {"X-Tenant-Id": "evergreen-sandbox"}
+H = {"X-Tenant-Id": "northgate-health"}
+SANDBOX = {"X-Tenant-Id": "northgate-sandbox"}
 
 
 def drafting(calls: list[str] | None = None):  # noqa: ANN201
@@ -50,16 +50,23 @@ async def run_index_jobs() -> int:
 async def test_profiles_for_routable_agents_only(client, seeded, fake_llm):
     """Covers: CAT-01"""
     fake_llm(drafting())
+    extra = {}  # the seed has only inbound agents: add a published internal and a published outbound agent
+    for key, cfg in (("internal", {"mode": "internal"}),
+                     ("outbound", {"mode": "outbound", "outbound": {"targets_url": "/mock/insurance/outreach/renewals"}})):
+        r = await client.post("/api/agents", headers=H, json={"name": key.title(), "draft_config": {**cfg, "voice": {"pipeline": "cascade"}}})
+        assert r.status_code == 200, r.text
+        extra[key] = r.json()["id"]
+        assert (await client.post(f"/api/agents/{extra[key]}/publish", headers=H, json={})).status_code == 200
     await run_index_jobs()
     async with sessionmaker()() as s:
         profiles = {p.agent_id: p for p in (await s.scalars(select(CapabilityProfile))).all()}
-    assert set(profiles) == {seeded["care"]["agent_id"], seeded["claims"]["agent_id"], seeded["internal"]["agent_id"]}
+    assert set(profiles) == {seeded["care"]["agent_id"], seeded["sales"]["agent_id"], seeded["claims"]["agent_id"], extra["internal"]}
     claims = profiles[seeded["claims"]["agent_id"]]
     card = claims.card
     assert card["description"] and card["skills"] and all(sk["examples"] for sk in card["skills"])
     assert any(t["name"] == "get_claim_status" for t in card["tools"]) and card["knowledge"]
     assert 10 <= len(card["generated_examples"]) <= 20 and claims.scope == "member" and len(claims.summary) <= 600
-    assert profiles[seeded["internal"]["agent_id"]].scope == "staff"
+    assert profiles[extra["internal"]].scope == "staff"
     async with sessionmaker()() as s:
         kinds = set((await s.scalars(select(CapabilityEntry.kind).where(CapabilityEntry.profile_id == claims.id))).all())
         assert {"description", "use_case", "utterance", "generated", "tool"} <= kinds
@@ -87,7 +94,7 @@ async def test_new_use_case_reaches_stage_a(client, seeded, fake_llm):
         assert await s.scalar(select(func.count()).select_from(Job).where(Job.kind == "index_capabilities", Job.status == "queued")) == 1
     await run_index_jobs()
     async with sessionmaker()() as s:
-        ranked = await catalog.stage_a(s, "evergreen-care", "member", "I lost my insurance card at the beach")
+        ranked = await catalog.stage_a(s, "northgate-health", "member", "I lost my insurance card at the beach")
     assert ranked[0]["agent_id"] == care and ranked[0]["score"] > 0.99
     listed = (await client.get(f"/api/use-cases?agent_id={care}", headers=H)).json()["items"]
     assert "Lost ID card" in [u["title"] for u in listed]
@@ -123,7 +130,7 @@ async def test_tool_edits_wait_for_publish_and_unchanged_inputs_do_nothing(clien
     profile = (await client.get(f"/api/agents/{claims}/capability", headers=H)).json()
     assert "CHANGED DESCRIPTION" not in str(profile["tools"])
     n = len(calls)
-    assert (await catalog.index_agent("evergreen-care", claims)).status == "unchanged"
+    assert (await catalog.index_agent("northgate-health", claims)).status == "unchanged"
     assert len(calls) == n
 
 

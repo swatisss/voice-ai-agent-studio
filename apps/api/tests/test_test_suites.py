@@ -18,9 +18,9 @@ from voiceai.models import (
     Agent, AgentVersion, Call, CallEvent, CallScorecard, EvalResult, EvalRun, Job, MemberMemory, MemoryEvent,
 )
 
-H = {"X-Tenant-Id": "evergreen-care"}
-MARIA = {"name": "Maria Lopez", "member_id": "482913", "date_of_birth": "1986-04-12"}
-VERIFY = ("verify_member", {"member_id": "482913", "date_of_birth": "1986-04-12"})
+H = {"X-Tenant-Id": "northgate-health"}
+SARAH = {"name": "Sarah Mitchell", "member_id": "410237", "date_of_birth": "1984-03-14"}
+VERIFY = ("verify_member", {"member_id": "410237", "date_of_birth": "1984-03-14"})
 
 
 def fake(*, goal_fails: dict[str, int] | None = None, verify_first: bool = False, seen: dict[str, list[str]] | None = None):  # noqa: ANN201
@@ -83,20 +83,20 @@ PASSING = [{"key": "outcome.goal_met", "verdict": "pass", "hard_gate": False, "t
 
 def test_required_tools_and_arguments():
     """Covers: TEST-01"""
-    sc = {"expected": "resolved", "required_tools": [{"name": "get_claim_status", "args": {"claim_id": "C-20931"}}]}
-    wrong = _events(*_tool("get_claim_status", {"claim_id": "C-20977"}, True, {"status": "processing"}, "a"))
+    sc = {"expected": "resolved", "required_tools": [{"name": "get_claim_status", "args": {"claim_id": "CL-70231"}}]}
+    wrong = _events(*_tool("get_claim_status", {"claim_id": "CL-70277"}, True, {"status": "processing"}, "a"))
     failures = test_suites.check(sc, wrong, "resolved", PASSING, False)
-    assert failures == ["get_claim_status was never called with claim_id=C-20931"]
-    right = _events(*_tool("get_claim_status", {"claim_id": "c-20931 "}, True, {"status": "paid"}, "b"))
+    assert failures == ["get_claim_status was never called with claim_id=CL-70231"]
+    right = _events(*_tool("get_claim_status", {"claim_id": "cl-70231 "}, True, {"status": "paid"}, "b"))
     assert test_suites.check(sc, right, "resolved", PASSING, False) == []
-    failed = _events(*_tool("get_claim_status", {"claim_id": "C-20931"}, False, {"error": "timeout"}, "c"))
+    failed = _events(*_tool("get_claim_status", {"claim_id": "CL-70231"}, False, {"error": "timeout"}, "c"))
     assert test_suites.check(sc, failed, "resolved", PASSING, False) != []
 
 
 def test_forbidden_tools_and_expected_results():
     """Covers: TEST-02"""
     forbid = {"expected": "resolved", "forbidden_tools": ["submit_claim"]}
-    ev = _events(*_tool("submit_claim", {}, True, {"claim_id": "C-1"}, "a"))
+    ev = _events(*_tool("submit_claim", {}, True, {"claim_id": "CL-1"}, "a"))
     assert test_suites.check(forbid, ev, "resolved", PASSING, False) == ["submit_claim was called, but it is forbidden"]
     expect = {"expected": "resolved", "expected_results": [{"tool": "request_document", "field": "status", "equals": "queued"}]}
     ok = _events(*_tool("request_document", {}, True, {"request_id": "DOC-1", "status": "queued"}, "b"))
@@ -154,7 +154,7 @@ async def test_run_refusals(client, seeded, fake_llm):
     assert again.status_code == 409 and again.json()["error"] == "run_in_progress"
     await jobs.drain()
     async with sessionmaker()() as session:
-        fresh = Agent(tenant_id="evergreen-care", name="Fresh", draft_config={})
+        fresh = Agent(tenant_id="northgate-health", name="Fresh", draft_config={})
         session.add(fresh)
         await session.commit()
     r = await client.post(f"/api/agents/{fresh.id}/test-runs", headers=H, json={})
@@ -174,7 +174,7 @@ async def test_scenario_memory(client, seeded, fake_llm):
     async with sessionmaker()() as session:
         mems = await session.scalar(select(func.count()).select_from(MemberMemory))
         mem_events = await session.scalar(select(func.count()).select_from(MemoryEvent))
-    sc = await _scenario(client, agent_id, name="Memory", caller_profile=MARIA, memory=["Prefers documents by email"])
+    sc = await _scenario(client, agent_id, name="Memory", caller_profile=SARAH, memory=["Prefers documents by email"])
     run = await _run(client, agent_id, scenario_ids=[sc["id"]], repeats=1)
     call_id = run["results"][0]["call_id"]
     assert any("Prefers documents by email" in p for p in seen["realtime"])
@@ -222,7 +222,7 @@ async def test_progress_events_and_hidden_calls(client, seeded, fake_llm):
     fake_llm(fake())
     agent_id = seeded["care"]["agent_id"]
     sc = await _scenario(client, agent_id, name="Events")
-    sub = bus.subscribe("evergreen-care", {"evaluation"})
+    sub = bus.subscribe("northgate-health", {"evaluation"})
     run = await _run(client, agent_id, scenario_ids=[sc["id"]], repeats=2)
     got = []
     while not sub.queue.empty():

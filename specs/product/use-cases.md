@@ -1,99 +1,64 @@
 ---
 type: Product Brief
-title: Customer Support & Channels use cases
-description: The eight demo use cases for a health insurer - agent, mode, channels, flow, tools, knowledge, escalation triggers and demo callers for each.
+title: Northgate Health use cases
+description: The fourteen demo use cases of a UK health insurer - member help and support, health insurance sales, and claims and pre-authorisation - with agent, flow, tools, knowledge, escalation triggers and demo callers.
 status: stable
 tags: [product, use-cases, demo]
-generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-12T00:00:00Z" }
 ---
 
-All eight live in the business unit **Evergreen Health · Customer Support & Channels** (category in the API data: *Customer Support & Channels*). Five agents serve them ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md)). Every use case is available in **voice** (browser microphone) and **chat**. Data is synthetic ([/demo-data/members-and-claims.md](/demo-data/members-and-claims.md)). Tool names are the platform tools of [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
+All fourteen live in the business unit **Northgate Health · Member & Sales Services** (category *Member & Sales Services*). Three agents serve them ([/demo-data/northgate-health.md](/demo-data/northgate-health.md)); the front desk routes each caller to the right one from what they say, replacing the "choose a topic" menus of a traditional help-and-support site and phone line ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)). Every use case is available in **voice** and **chat**. Data is synthetic ([/demo-data/northgate-members.md](/demo-data/northgate-members.md)).
 
-Common rules: identity is verified (member ID + date of birth) before any policy, claim or document detail; the agent answers facts only from tools or approved knowledge; appeals, grievances, safety language and requests for a person escalate with a groundwork packet ([/architecture/escalation.md](/architecture/escalation.md)).
+Common rules: members verify with their membership number and date of birth before any personal detail; prospects (sales) are never asked to verify; agents answer facts only from tools or approved knowledge; bank and card details are never taken on a call (secure links instead); complaints, cancellations, bereavement, disputes, requests for a person and anyone who seems vulnerable go to a person with a groundwork packet ([/architecture/escalation.md](/architecture/escalation.md)); a caller describing an emergency is told to call 999.
 
-# 1. Policy Inquiry & Status
+# Customer Care (member help and support)
 
-* **Agent / mode**: Customer Care, inbound.
-* **Goal**: tell the policyholder what policies they hold, whether each is active, when it renews, what they pay and whether payments are up to date.
-* **Flow**: verify → `get_member_policies` → (if a specific policy) `get_policy_details` → explain status, cover period, premium, next payment, renewal date; explain grace periods from knowledge when a payment is overdue.
-* **Knowledge**: policy types and statuses, premiums and payments.
-* **Escalates when**: the caller wants to cancel, change cover mid-term or dispute a charge.
-* **Success**: resolved without a human; sample: "Is my policy still active and when does it renew?"
-* **Demo caller**: Maria Lopez (health, renews in 25 days); Robert Chen (payment overdue, in grace period).
+**1. Policy & Cover Questions** — who is covered, excess, outpatient limit, hospital list, add-ons, underwriting and renewal date. Flow: verify → `get_member_policies` → `get_policy_details`; general "how does it work" → `search_knowledge`. Treatment approval or a consultant → transfer to Claims & Pre-authorisation. Demo: Sarah Mitchell.
 
-# 2. Claims Status Tracking
+**2. Payments & Direct Debit** — monthly amount, next collection, missed payments and getting cover back, the collection day, bank details. Flow: verify → `get_payments` → missed: explain suspension and the pay-by date → `retry_missed_payment` or `send_secure_link` (`make_payment`); `change_collection_day`; new bank → `send_secure_link` (`change_bank_details`). Escalates: disputed charge or refund. Demo: David Okoro (missed £61.20), Emma Clarke (collection day 15th).
 
-* **Agent / mode**: Customer Care, inbound.
-* **Goal**: give status, amounts, expected decision date and the timeline of a claim.
-* **Flow**: verify → claim number (or `get_member_claims` to find it) → `get_claim_status` → status, what the plan paid, member share, timeline and next step.
-* **Knowledge**: claim statuses and timelines, appeals and grievances.
-* **Escalates when**: the claim is denied and the caller disputes it or wants to appeal (policy: `policy_required`).
-* **Demo callers**: Maria Lopez, claim C-20931 (paid), C-20977 (processing); James Carter, C-31544 (denied, appeal → escalation with packet).
+**3. Update My Details** — email, mobile, postal address, read back before saving (`update_contact_details`). Escalates: adding or removing a person, change of name. Demo: Emma Clarke.
 
-# 3. Document Center & Green Card
+**4. Documents & Membership Card** — membership certificate, policy guide, membership card, premium statement, cash plan table of benefits by email, text link or post (`list_documents`, `request_document`). Demo: Raj Patel.
 
-* **Agent / mode**: Customer Care, inbound.
-* **Goal**: send policy documents (policy schedule, policy wording, membership card, premium invoice, tax certificate, certificate of insurance) and issue the **Green Card** - the international motor insurance certificate that proves motor cover when driving abroad.
-* **Flow**: verify → `list_documents` for the policy → confirm delivery (email, download link, post) → `request_document`; for a Green Card also collect destination countries and travel dates (motor policies only, up to 90 days, email or download).
-* **Knowledge**: document center, Green Card rules and covered countries, membership cards.
-* **Escalates when**: the destination is not covered, the policy is not active, or the caller needs a document the center does not offer.
-* **Demo callers**: James Carter (motor policy MP-200415 → Green Card for Spain); Maria Lopez asks for a Green Card but has no motor policy (explained, no document issued); Daniel Kim (policy schedule by email).
+**5. Book a Digital GP Appointment** — video or phone with a GP or advanced nurse practitioner, 6am–10pm weekdays, 8am–10pm weekends, for anyone on the health policy (`get_gp_slots`, `book_gp_appointment`); emergencies → 999. Demo: Sarah Mitchell for her daughter Isla; Lucy Evans (cash plan only: not included).
 
-# 4. Outbound Renewal Calls
+**6. Cash Plan Cover & Claims** — limits used and left (`get_cash_plan_benefits`), claim status (`get_cash_plan_claims`, `get_cash_plan_claim`), how to claim with a receipt. Demo: Lucy Evans (optical claim above the limit), Emma Clarke (receipt without the patient's name).
 
-* **Agent / mode**: Renewal Outreach, **outbound**: the agent calls the policyholder.
-* **Goal**: remind about the upcoming renewal, explain the price change, offer options and record the decision (accept, decline, callback).
-* **Flow**: agent opens with the persona's outbound opening ("Hello, may I speak with <first name>? … calling about your renewal") → confirms the person and verifies date of birth (no detail before this) → `get_renewal_quote` → explains the premium change and reasons → presents options → `record_renewal_decision`.
-* **Knowledge**: renewal process, price changes explained, payment options and discounts, changing or cancelling cover.
-* **Escalates when**: the callee is upset, asks for a person, wants to cancel for a complaint, or asks for advice the agent cannot give.
-* **Targets**: policyholders whose policy renews within 60 days, from the renewal outreach list (nearest first). **Demo targets**: James Carter (motor, +8%, 13 days), Maria Lopez (health, +4%, 25 days).
+**7. Renewal, Cancellation, Complaints & Bereavement** — explains renewal and the 21-day cooling-off from knowledge; cancelling, complaints and bereavement always hand over with a summary. Demo: Tom Harris (inside cooling-off), Raj Patel (complaint).
 
-# 5. Policyholder Onboarding
+# Health Cover Sales (new customers, non-advised)
 
-* **Agent / mode**: Welcome & Onboarding, **outbound** welcome call to new policyholders.
-* **Goal**: complete the onboarding checklist: confirm contact details, communication preferences, online account registration, membership card download, choose a primary provider, review waiting periods.
-* **Flow**: opening → verify date of birth → `get_onboarding_status` → walk through pending steps, `complete_onboarding_step` as each is done, `request_document` to send the membership card → summarize what is left.
-* **Knowledge**: welcome guide, digital account setup, using your membership card, first 30 days (waiting periods).
-* **Escalates when**: the member reports an error in their policy or cannot be verified.
-* **Targets**: members with open onboarding steps. **Demo targets**: Aisha Okafor (5 steps left), Daniel Kim (3 left).
+**8. Get a Health Insurance Quote** — who to cover, names, dates of birth, smoking, postcode, start date → `create_quote` → three packages with monthly prices. Demo: Alex Morgan and partner Sam (Bristol).
 
-# 6. Internal Knowledge Assistant
+**9. Choose & Customise Cover** — Essentials or Complete, outpatient limit, excess, hospital list, add-ons; `price_quote` after every change; facts, never a recommendation. Escalates: the caller asks for personal advice. Demo: Gareth Lewis (smoker, London).
 
-* **Agent / mode**: Internal Knowledge Assistant, **internal** (audience: Evergreen staff, assumed authenticated by the surrounding channel).
-* **Goal**: answer procedure and policy questions for claims handlers and agents: claims handling steps, authorization limits, complaints and escalation matrix, fraud indicators, data-protection rules, call-handling standards.
-* **Flow**: `search_knowledge` first, answer with the article title as the source; `get_authorization_limit` for approval limits; `get_escalation_contact` for who to contact.
-* **Rules**: never discloses member data; says when the procedure is not documented; no member verification.
-* **Escalates when**: the question is not covered by internal knowledge twice (`knowledge_gap`).
-* **Sample questions**: "What can a claims handler approve for inpatient?", "Who do I contact about a suspected fraud?"
+**10. Underwriting & Join by Phone** — moratorium, full medical underwriting or switching insurer → `assess_underwriting` (risk score, exclusions, final price; referrals go to a person) → personal details read back → key facts and declaration with a clear yes to each → `create_policy` → policy and membership numbers, start date, documents and a secure Direct Debit link by email or text, 21-day cooling-off. Demo: Alex Morgan (declares asthma: exclusion read out).
 
-# 7. Coverage Information Support
+# Claims & Pre-authorisation (members getting treatment)
 
-* **Agent / mode**: Customer Care, inbound.
-* **Goal**: explain what the plan covers: benefits, limits and what is left, waiting periods, pre-authorization, co-pay, exclusions, deductible and out-of-pocket status, in-network providers.
-* **Flow**: general question → `search_knowledge`; own plan → verify → `get_coverage_detail` (benefit, limit, used, remaining, waiting period, pre-authorization) and `get_benefits` (deductible, out-of-pocket, copays); `find_providers` for network questions.
-* **Knowledge**: coverage benefits overview, waiting periods and exclusions, deductibles and out-of-pocket maximums, copays by plan, finding providers, prior authorization, nurse line.
-* **Escalates when**: coverage for a specific treatment is ambiguous or needs a clinical decision; never gives medical advice.
-* **Demo callers**: Priya Nair (dental limit and waiting period), Daniel Kim (specialist copay and deductible).
+**11. Get Treatment Approved (Pre-authorisation)** — condition, when symptoms started, GP and recommended treatment → `check_treatment_cover` (exclusions, moratorium, missed payment, Essentials diagnostics; Direct Access or open referral) → `find_specialists` → read back → `create_pre_authorisation` → code, what it covers, excess, forms; surgery stays pending until the procedure code arrives. Escalates: disputes, clinical decisions, distress about cancer. Demo: Sarah Mitchell (knee pain, Direct Access, Leeds), Raj Patel (back pain excluded), David Okoro (cover suspended).
 
-# 8. Claims First Notice & Status (phone)
+**12. Find a Consultant or Hospital** — recognised specialists on the member's hospital list near their postcode, fee-assured first (`find_specialists`). Demo: Emma Clarke near Bristol.
 
-* **Agent / mode**: Insurance Claims Agent, inbound, on the realtime speech-to-speech pipeline ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)). Channels: browser voice, **phone** (Twilio, [/architecture/telephony.md](/architecture/telephony.md)) and chat.
-* **Goal**: tell a member where a claim stands, report a new claim (first notice) and explain which documents to send.
-* **Flow**: verify → claim number or `get_member_claims` → `get_claim_status`; or `get_member_policies` → collect claim type, date, provider, short description and a rough amount → read back → `start_claim` → read out the new claim number and the required documents; "what do I need" → `get_claim_requirements` (no verification).
-* **Knowledge**: filing a claim, required documents, claim timelines and payment ([/demo-data/kb/claims/](/demo-data/kb/claims/)).
-* **Escalates when**: the caller disputes a denial or wants to appeal, reports an injury or emergency, suspects fraud, has an estimated loss above $10,000, or asks for a person. On a phone call with a transfer number the live call is redirected after the hand-off message.
-* **Demo callers**: Maria Lopez (status of C-20931 and C-20977), Aisha Okafor (new urgent care claim), James Carter (documents for a collision; denial of C-31544 → escalation).
-* **Sample utterances**: "I want to check on a claim.", "I need to report a new claim.", "What documents do I need for a dental claim?"
+**13. Claim & Pre-authorisation Status** — `get_pre_authorisation`, `get_member_claims`, `get_claim_status`. Demo: Emma Clarke (`PA-500955` pending, `CL-70588` processing).
+
+**14. Excess, Shortfalls & Invoices** — why the member got a bill; excess once per person per year; shortfall above fee guidelines; disputes to a specialist. Demo: David Okoro (£60 shortfall), Sarah Mitchell (£100 excess).
+
+# Dental (demo kit)
+
+The Oakhaven Dental Assistant and its eleven use cases are installed into the same business unit by `python scripts/demo_kits.py dental`; the front desk then routes dental callers to it ([scripts/demo/DEMO-KITS.md]).
 
 # Editing use cases
 
-The eight above are seeded. Builders add, edit and delete use cases per agent in the agent builder's **Use cases** tab ([/ui/agent-builder.md](/ui/agent-builder.md)) and through `/api/use-cases` ([/api/rest-api.md](/api/rest-api.md)). Use cases describe what an agent handles; the [capability catalog](/architecture/capability-catalog.md) indexes them for routing, so a change reaches the supervisor after the re-index. They are not versioned with the agent.
+The fourteen above are seeded. Builders add, edit and delete use cases per agent in the agent builder's **Use cases** tab ([/ui/agent-builder.md](/ui/agent-builder.md)) and through `/api/use-cases` ([/api/rest-api.md](/api/rest-api.md)). Use cases describe what an agent handles; the [capability catalog](/architecture/capability-catalog.md) indexes them for routing, so a change reaches the supervisor after the re-index. They are not versioned with the agent.
 
-# Planted learning gaps (Act 3 of the demo)
+# Planted learning gaps (Act 6 of the demo)
 
-The Customer Care agent deliberately lacks (a) knowledge on **adding a newborn to a policy** and (b) a **prior-authorization status lookup**. Seeded history shows these as recurring escalation clusters; fixing them demonstrates fleet learning ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)).
+The Customer Care agent deliberately lacks (a) knowledge on **adding a newborn to a policy** and (b) a **pre-authorisation status lookup**. Seeded history shows these as recurring escalation clusters; fixing them demonstrates fleet learning ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)).
 
 # Acceptance
 
-- **UC-02** — Given the seeded business unit, when `GET /api/use-cases` is called, then it returns the eight use cases in the order above, all with category "Customer Support & Channels", each linked to an existing published agent, and each with at least two sample utterances.
+- **~~UC-02~~** — Retired by CP-0039: the eight Evergreen use cases are replaced by the fourteen Northgate use cases (UC-11). Was: `GET /api/use-cases` returned eight use cases in category "Customer Support & Channels".
 - **UC-07** — Given a builder who adds a use case "Lost ID card" with two sample utterances to the Customer Care agent, then `GET /api/use-cases` lists it under that agent, Test call's Handles line and Test script show it, and deleting it removes it from all three.
+- **UC-11** — Given the seeded business unit, when `GET /api/use-cases` is called, then it returns the fourteen use cases in the order above, all with category "Member & Sales Services", seven linked to Customer Care, three to Health Cover Sales and four to Claims & Pre-authorisation, each linked to a published agent and each with at least three sample utterances.

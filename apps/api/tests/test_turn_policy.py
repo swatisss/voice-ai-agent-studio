@@ -15,9 +15,9 @@ from voiceai.models import CallEvent, Escalation
 from voiceai.runtime import endings, escalation
 from voiceai.runtime.session import GOODBYE, HANDOFF_DEFAULT, AgentSession, create_call
 
-TENANT = "evergreen-care"
-VERIFY = ("verify_member", {"member_id": "482913", "date_of_birth": "1986-04-12"})
-CLAIM = ("get_claim_status", {"claim_id": "C-20931"})
+TENANT = "northgate-health"
+VERIFY = ("verify_member", {"member_id": "410237", "date_of_birth": "1984-03-14"})
+POLICY = ("get_policy_details", {"policy_id": "PMI-300101"})
 
 
 async def open_session(seeded, channel: str = "voice", agent: str = "care") -> AgentSession:
@@ -78,19 +78,19 @@ async def test_tool_rounds_and_refresh(client, seeded, fake_llm):
     """Covers: RT-12"""
     fake_llm(no_model)
     session = await open_session(seeded)
-    await session.caller_turn("Check claim C-20931")
-    blocked = await session.tool_requested(*CLAIM)
+    await session.caller_turn("Check my policy PMI-300101")
+    blocked = await session.tool_requested(*POLICY)
     assert "identity_not_verified" in blocked.output and not blocked.refresh
     verified = await session.tool_requested(*VERIFY)
-    assert verified.refresh and session.state.verified_member_ref == "EVG-482913"
-    await session.tool_requested(*CLAIM)
-    await session.tool_requested(*CLAIM)
+    assert verified.refresh and session.state.verified_member_ref == "NGH-410237"
+    await session.tool_requested(*POLICY)
+    await session.tool_requested(*POLICY)
     calls_before = sum(1 for e in await stored(session) if e.kind == "tool_call")
-    fifth = await session.tool_requested(*CLAIM)
+    fifth = await session.tool_requested(*POLICY)
     assert json.loads(fifth.output) == {"error": "tool_round_limit"}
     assert sum(1 for e in await stored(session) if e.kind == "tool_call") == calls_before  # not run
     await session.caller_turn("And the other one?")  # the count restarts
-    assert "error" not in json.loads((await session.tool_requested(*CLAIM)).output)
+    assert "error" not in json.loads((await session.tool_requested(*POLICY)).output)
 
 
 async def test_post_turn_trigger_hands_off(client, seeded, fake_llm):
@@ -139,17 +139,17 @@ def state_of(session: AgentSession) -> tuple:
 
 async def test_text_loop_and_policy_events_match(client, seeded, fake_llm):
     """Covers: RT-15"""
-    fake_llm(script(FakeReply(tool_calls=[CLAIM]), FakeReply(tool_calls=[VERIFY]), FakeReply(tool_calls=[CLAIM]), FakeReply(text="Paid.")))
+    fake_llm(script(FakeReply(tool_calls=[POLICY]), FakeReply(tool_calls=[VERIFY]), FakeReply(tool_calls=[POLICY]), FakeReply(text="Active.")))
     loop = await open_session(seeded, channel="text")
-    await loop.reply("What about claim C-20931?")
+    await loop.reply("What about my policy PMI-300101?")
 
     fake_llm(no_model)
     driven = await open_session(seeded, channel="text")
-    await driven.caller_turn("What about claim C-20931?")
-    for name, args in (CLAIM, VERIFY, CLAIM):
+    await driven.caller_turn("What about my policy PMI-300101?")
+    for name, args in (POLICY, VERIFY, POLICY):
         await driven.tool_requested(name, args)
         await driven.reply_finished("", usage=ROUND, decide=False)
-    await driven.reply_finished("Paid.", usage=ROUND)
+    await driven.reply_finished("Active.", usage=ROUND)
 
     assert shape(await stored(loop)) == shape(await stored(driven))
     assert state_of(loop) == state_of(driven)

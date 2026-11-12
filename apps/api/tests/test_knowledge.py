@@ -16,14 +16,14 @@ from voiceai.models import Tenant
 
 def test_heading_chunks():
     """Covers: KN-01"""
-    md = "## Claims\nPaid claims are explained on the EOB statement.\n## Appeals\nYou can appeal within 180 days of a denial.\n## Cards\nDigital cards are available in the app right away."
+    md = "## Claims\nPaid claims are explained in your claim statement.\n## Appeals\nYou can complain within 6 months of a decision.\n## Cards\nDigital membership cards are available in the app straight away."
     chunks = chunk_markdown(md)
     assert [c.heading for c in chunks] == ["Claims", "Appeals", "Cards"]
 
 
 def test_long_sections_split_with_overlap():
     """Covers: KN-02"""
-    para = "Sentence about coverage rules and plan details. " * 8
+    para = "Sentence about cover rules and policy details. " * 8
     md = "## Long\n" + "\n\n".join([para] * 6)
     chunks = chunk_markdown(md)
     assert len(chunks) > 1
@@ -53,12 +53,12 @@ async def test_search_no_answer_and_doc_scoping(database):
     """Covers: KN-04, KN-05"""
     async with sessionmaker()() as s:
         await _tenant(s)
-        d1 = await create_doc(s, "t1", "ID cards", "## Replacement\nReplacement ID cards arrive by mail in 7 to 10 business days.", "text")
-        d2 = await create_doc(s, "t1", "Telehealth", "## Video visits\nTelehealth video visits cost zero dollars on silver plans.", "text")
+        d1 = await create_doc(s, "t1", "ID cards", "## Replacement\nReplacement ID cards arrive by post in 7 to 10 working days.", "text")
+        d2 = await create_doc(s, "t1", "Digital GP", "## Video appointments\nDigital GP video appointments cost nothing on every health policy.", "text")
         await s.commit()
-        hit = await search(s, "t1", [d1.id], "replacement id card mail")
+        hit = await search(s, "t1", [d1.id], "replacement id card post")
         assert hit["results"][0]["doc_id"] == d1.id
-        scoped = await search(s, "t1", [d1.id], "telehealth video visits cost")
+        scoped = await search(s, "t1", [d1.id], "digital gp video appointments cost")
         assert all(r["doc_id"] != d2.id for r in scoped.get("results", []))
         miss = await search(s, "t1", [d1.id, d2.id], "quantum chromodynamics lattice gauge")
         assert miss.get("no_answer") is True
@@ -68,18 +68,18 @@ async def test_draft_doc_only_when_listed(database):
     """Covers: KN-06"""
     async with sessionmaker()() as s:
         await _tenant(s)
-        active = await create_doc(s, "t1", "Cards", "## Cards\nDigital ID cards are in the app.", "text")
-        draft = await create_doc(s, "t1", "Newborns", "## Newborns\nAdd a newborn within 60 days of birth.", "proposal", status="draft")
+        active = await create_doc(s, "t1", "Cards", "## Cards\nDigital membership cards are in the app.", "text")
+        draft = await create_doc(s, "t1", "Newborns", "## Newborns\nAdd a newborn within 3 months of birth.", "proposal", status="draft")
         await s.commit()
-        published = await search(s, "t1", [active.id], "add newborn within 60 days")
+        published = await search(s, "t1", [active.id], "add newborn within 3 months")
         assert all(r["doc_id"] != draft.id for r in published.get("results", []))
-        candidate = await search(s, "t1", [active.id, draft.id], "add newborn within 60 days")
+        candidate = await search(s, "t1", [active.id, draft.id], "add newborn within 3 months")
         assert candidate["results"][0]["doc_id"] == draft.id
 
 
-LAST = "Travel to countries under a government do-not-travel warning is excluded."
-QUERY = "SafeTrip Standard covers emergency medical care abroad, lost baggage and trip cancellation"  # the hash embedder needs shared words
-FILLER = "SafeTrip Standard covers emergency medical care abroad, lost baggage and trip cancellation for listed reasons. "
+LAST = "Treatment for a condition you had in the five years before joining is excluded under moratorium."
+QUERY = "Northgate Complete covers inpatient and day-patient treatment, outpatient consultations and diagnostic tests"  # the hash embedder needs shared words
+FILLER = "Northgate Complete covers inpatient and day-patient treatment, outpatient consultations and diagnostic tests for eligible conditions. "
 
 
 def _policy_880() -> str:
@@ -95,7 +95,7 @@ async def test_search_returns_the_whole_chunk(database):
     assert len(chunk_markdown(content)) == 1
     async with sessionmaker()() as s:
         await _tenant(s)
-        doc = await create_doc(s, "t1", "SafeTrip policy", content, "text")
+        doc = await create_doc(s, "t1", "Northgate Complete policy", content, "text")
         await s.commit()
         result = await search(s, "t1", [doc.id], QUERY)
     top = result["results"][0]
@@ -108,7 +108,7 @@ async def test_model_receives_the_whole_chunk(client, seeded, fake_llm):
 
     fake_llm(lambda role, messages, tools: FakeReply(text="Okay."))
     async with sessionmaker()() as s:
-        doc = await create_doc(s, "evergreen-care", "SafeTrip policy", _policy_880(), "text")
+        doc = await create_doc(s, "northgate-health", "Northgate Complete policy", _policy_880(), "text")
         await s.commit()
     session = await open_session(seeded, channel="text")
     session.tools.knowledge_doc_ids = [doc.id]

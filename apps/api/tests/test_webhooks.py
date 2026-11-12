@@ -22,7 +22,7 @@ from voiceai.db import sessionmaker, utcnow
 from voiceai.models import Conversation, Job, WebhookDelivery, WebhookEndpoint
 from voiceai.public import auth
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 
 
 @pytest.fixture(autouse=True)
@@ -69,7 +69,7 @@ async def make_endpoint(client, events, include_transcript=False) -> dict:  # no
 
 async def api_conversation(client, seeded, source_key=None) -> tuple[str, dict]:  # noqa: ANN001
     key = source_key or (await client.post("/api/api-keys", headers=H, json={"name": uuid.uuid4().hex[:8], "scope": "member"})).json()
-    r = await client.post("/v1/tenants/evergreen-care/conversations", headers={"Authorization": f"Bearer {key['key']}"},
+    r = await client.post("/v1/tenants/northgate-health/conversations", headers={"Authorization": f"Bearer {key['key']}"},
                           json={"channel": "text", "agent_id": seeded["care"]["agent_id"], "external_id": "case-1", "metadata": {"crm": 7}})
     return r.json()["conversation_id"], key
 
@@ -81,7 +81,7 @@ async def test_ended_event_is_signed_and_api_only(client, seeded, fake_llm):
     recv = Receiver()
     webhooks.transport = httpx.MockTransport(recv)
     cid, key = await api_conversation(client, seeded)
-    await client.post(f"/v1/tenants/evergreen-care/conversations/{cid}/end", headers={"Authorization": f"Bearer {key['key']}"})
+    await client.post(f"/v1/tenants/northgate-health/conversations/{cid}/end", headers={"Authorization": f"Bearer {key['key']}"})
     # a playground conversation produces no webhook
     play = (await client.post("/api/conversations", headers=H, json={"channel": "text", "agent_id": seeded["care"]["agent_id"]})).json()["conversation_id"]
     await client.post(f"/api/conversations/{play}/end", headers=H)
@@ -122,7 +122,7 @@ async def test_retry_schedule_and_failure(client, seeded, fake_llm):
         await s.commit()
         row = await s.scalar(select(WebhookDelivery))
     webhooks.transport = httpx.MockTransport(Receiver([503]))
-    await webhooks.deliver("evergreen-care", {"delivery_id": row.id})
+    await webhooks.deliver("northgate-health", {"delivery_id": row.id})
     async with sessionmaker()() as s:
         row = await s.scalar(select(WebhookDelivery))
         assert row.status == "failed" and row.attempts == 7 and row.last_status_code == 503
@@ -139,13 +139,13 @@ async def test_transcripts_only_on_request(client, seeded, fake_llm):
     recv = Receiver()
     webhooks.transport = httpx.MockTransport(recv)
     key = (await client.post("/api/api-keys", headers=H, json={"name": "t", "scope": "member"})).json()
-    r = await client.post("/v1/tenants/evergreen-care/conversations", headers={"Authorization": f"Bearer {key['key']}"},
-                          json={"channel": "text", "agent_id": seeded["care"]["agent_id"], "caller": {"number": "+12025550141"}, "message": "hello"})
+    r = await client.post("/v1/tenants/northgate-health/conversations", headers={"Authorization": f"Bearer {key['key']}"},
+                          json={"channel": "text", "agent_id": seeded["care"]["agent_id"], "caller": {"number": "+447700900141"}, "message": "hello"})
     cid = r.json()["conversation_id"]
-    await client.post(f"/v1/tenants/evergreen-care/conversations/{cid}/end", headers={"Authorization": f"Bearer {key['key']}"})
+    await client.post(f"/v1/tenants/northgate-health/conversations/{cid}/end", headers={"Authorization": f"Bearer {key['key']}"})
     async with sessionmaker()() as s:  # stand-in for the score_call job
         call = await s.scalar(select(Call).where(Call.conversation_id == cid))
-        s.add(CallScorecard(tenant_id="evergreen-care", call_id=call.id, agent_id=call.agent_id, agent_version_id=call.agent_version_id,
+        s.add(CallScorecard(tenant_id="northgate-health", call_id=call.id, agent_id=call.agent_id, agent_version_id=call.agent_version_id,
                             measures={}, checks=[], hard_fail=False, score=1.0, judged=False))
         await s.flush()
         await conversations.segment_scored(s, call)
@@ -156,7 +156,7 @@ async def test_transcripts_only_on_request(client, seeded, fake_llm):
     assert len(plain) == len(bodies) - 1
     for body in plain:
         text = json.dumps(body)
-        assert "transcript" not in body["data"] and "EVG-" not in text and "+12025550141" not in text
+        assert "transcript" not in body["data"] and "NGH-" not in text and "+447700900141" not in text
         assert not re.search(r"(?<![0-9a-f])0141(?![0-9a-f])", text)  # the last four digits, not a chance match inside a hex id
     analyzed = [json.loads(q.content) for q in recv.requests if json.loads(q.content)["type"] == "conversation.analyzed"]
     assert len(analyzed) == 2 and sum("transcript" in a["data"] for a in analyzed) == 1

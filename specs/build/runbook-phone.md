@@ -11,19 +11,19 @@ Spec: [/architecture/telephony.md](/architecture/telephony.md), [/architecture/r
 
 # One command (recommended for demos)
 
-Put these in `apps/api/.env` once: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` (your Twilio number, `+1…`), `OPENAI_API_KEY`, and optionally `DEMO_TRANSFER_TO` (a phone to hand the call to). Install `ngrok` (and run `ngrok config add-authtoken …` once) or `cloudflared`. Then:
+Put these in `apps/api/.env` once: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` (your Twilio number in international format, e.g. `+44…`), `DEEPGRAM_API_KEY` and an LLM key (`GROQ_API_KEY` or `OPENAI_API_KEY`), and optionally `DEMO_TRANSFER_TO` (a phone to hand the call to). Install `ngrok` (and run `ngrok config add-authtoken …` once) or `cloudflared`. Then:
 
 ```bash
 python scripts/phone_demo.py
 ```
 
-It starts the tunnel and the API, maps the number to the Insurance Claims Agent, points the Twilio number at the tunnel and prints the number to call; Ctrl+C restores everything. Spec: [/build/phone-demo.md](/build/phone-demo.md). The numbered steps below are what it automates, and the fallback if you want to do them yourself.
+It starts the tunnel and the API, maps the number to the Customer Care agent (`DEMO_AGENT` picks another), points the Twilio number at the tunnel and prints the number to call; Ctrl+C restores everything. Spec: [/build/phone-demo.md](/build/phone-demo.md). The numbered steps below are what it automates, and the fallback if you want to do them yourself.
 
-# 0. Try the realtime agent without any phone
+# 0. Try the agent without any phone
 
-1. Add `OPENAI_API_KEY` to `apps/api/.env` and start the stack (`python scripts/dev.py`).
-2. Open Test call, choose **Insurance Claims Agent**, press Talk. A realtime agent needs no Deepgram key.
-3. Say "I want to check on a claim", then verify as Maria Lopez (member 482913, born April 12, 1986) and ask about claim C-20931.
+1. Add `DEEPGRAM_API_KEY` and an LLM key to `apps/api/.env` and start the stack (`python scripts/dev.py`).
+2. Open Test call, choose **Customer Care**, press Talk. (An agent switched to the realtime pipeline needs only `OPENAI_API_KEY` and no Deepgram key.)
+3. Say "Who is covered on my policy?", then verify as Sarah Mitchell (membership number 410237, born 14 March 1984) and ask "And what is my excess?"
 
 If this works the pipeline, tools and prompts are fine, and only the phone path remains.
 
@@ -36,7 +36,8 @@ You need: a Twilio account (a trial is enough), one Twilio phone number with voi
    ```
    TWILIO_ACCOUNT_SID=AC...
    TWILIO_AUTH_TOKEN=...
-   OPENAI_API_KEY=...         # realtime agent; DEEPGRAM_API_KEY + an LLM key for cascade agents
+   DEEPGRAM_API_KEY=...       # cascade agents (the seeded ones), plus an LLM key
+   GROQ_API_KEY=...           # or OPENAI_API_KEY; OPENAI_API_KEY alone is enough for a realtime agent
    ```
 3. **Tunnel.** Start the API (`cd apps/api && uv run voiceai serve`, or `python scripts/dev.py`), then in another terminal:
    ```bash
@@ -46,12 +47,12 @@ You need: a Twilio account (a trial is enough), one Twilio phone number with voi
 4. **Tell the app its public URL.** In `apps/api/.env` set `PUBLIC_BASE_URL=https://<your-tunnel-host>` (no trailing slash) and **restart the API**. It must be exactly the host Twilio will call, or signature checks fail.
 5. **Map your number to an agent.**
    ```bash
-   cd apps/api && uv run voiceai phone add +15551234567 --agent "Insurance Claims Agent"
+   cd apps/api && uv run voiceai phone add +441632960001 --agent "Customer Care"
    uv run voiceai phone list
    ```
 6. **Point Twilio at the app.** Console → Phone Numbers → your number → Voice Configuration → *A call comes in* → Webhook, **HTTP POST**, URL `https://<your-tunnel-host>/api/telephony/twilio/voice`. Save.
 7. **Call the number from your mobile.** The agent speaks the welcome, then you can run the same script as in step 0. Open the Calls page: the call shows a **Phone** badge, its transcript and tools; `GET /healthz` shows `providers.twilio: true`.
-8. **IVR context.** Add `?ivr_menu=claims` to the webhook URL in Twilio, call again, and open the call: the context shows `ivr_menu: claims`.
+8. **IVR context.** Add `?ivr_menu=payments` to the webhook URL in Twilio, call again, and open the call: the context shows `ivr_menu: payments`.
 9. **Transfer.** In the agent builder set *Transfer to* to your second phone number (E.164) and publish. Call, ask for a person: the agent speaks the hand-off message and your second phone rings.
 
 Every time the tunnel restarts its URL changes (free ngrok and cloudflared quick tunnels): update `PUBLIC_BASE_URL`, restart the API and update the Twilio webhook.
@@ -59,8 +60,8 @@ Every time the tunnel restarts its URL changes (free ngrok and cloudflared quick
 # 2. Local check with no Twilio account
 
 ```bash
-cd apps/api && uv run voiceai phone add +15550001111 --agent "Insurance Claims Agent"
-uv run python ../../scripts/fake_twilio.py --base http://localhost:8000 --to +15550001111 --wav your-recording.wav --ivr menu=claims
+cd apps/api && uv run voiceai phone add +441632960002 --agent "Customer Care"
+uv run python ../../scripts/fake_twilio.py --base http://localhost:8000 --to +441632960002 --wav your-recording.wav --ivr menu=payments
 ```
 
 Run it from `apps/api` so it uses the API's Python environment; `--wav` is optional (without it the caller plays a one second tone, which exercises the pipeline but says nothing the agent can answer). `fake_twilio.py` signs a webhook request with `TWILIO_AUTH_TOKEN` (set any value in `.env`, and `PUBLIC_BASE_URL=http://localhost:8000`), follows the returned TwiML to the stream URL, plays the WAV as mu-law `media` events, prints events and writes the agent's reply audio to a WAV file. It exercises the webhook, signature, token, stream, pipeline and call recording, but not the phone network, Twilio's trial prompt or real mu-law line noise.
@@ -68,10 +69,10 @@ Run it from `apps/api` so it uses the API's Python environment; `--wav` is optio
 # 3. Cloud Run (GCP)
 
 1. Deploy as in [/build/runbook-gcp.md](/build/runbook-gcp.md). Cloud Run already has what phone calls need: timeout 3600 s, CPU always on, one instance kept warm, session affinity, public HTTPS.
-2. Store the Twilio secrets: `printf '%s' "$TWILIO_AUTH_TOKEN" | gcloud secrets create TWILIO_AUTH_TOKEN --data-file=-` (and `TWILIO_ACCOUNT_SID`, `OPENAI_API_KEY` if not already there). The deploy script attaches them when they exist.
+2. Store the Twilio secrets: `printf '%s' "$TWILIO_AUTH_TOKEN" | gcloud secrets create TWILIO_AUTH_TOKEN --data-file=-` (and `TWILIO_ACCOUNT_SID`, `DEEPGRAM_API_KEY` and the LLM keys if not already there). The deploy script attaches them when they exist.
 3. Set `PUBLIC_BASE_URL` to the service URL (or your custom domain) and redeploy: `PUBLIC_BASE_URL=https://voiceai-xxxx-uc.a.run.app PROJECT_ID=… ./infra/deploy-cloudrun.sh`.
 4. Map the number on the deployed service (the API with the tenant header, or `uv run voiceai phone add` against the Cloud SQL database), then change the Twilio webhook to `https://<service-url>/api/telephony/twilio/voice`.
-5. Check `curl https://<url>/healthz` shows `providers.twilio: true` and `providers.openai: true`, then call.
+5. Check `curl https://<url>/healthz` shows `providers.twilio: true` and `providers.deepgram: true`, then call.
 
 Use the same region as your Twilio edge and the provider (default `us-central1`). Concurrent phone calls share the single instance's CPU: load-test before a larger demo.
 

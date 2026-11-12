@@ -34,7 +34,7 @@ _EXCLUDED = [
                r"illness|disease|infection|injur\w*|allerg\w*)\b", re.I),
     re.compile(r"\b(card|bank|account|routing|iban|sort code|cvv|credit|debit)\b.{0,20}\d|\d.{0,20}\b(card|bank|account)\b", re.I),
     re.compile(r"\b(?:\d[ -]?){12,19}\b"),              # card-like digit runs
-    re.compile(r"\bEVG-?\s?\d{4,}\b|\b\d{6,}\b", re.I),  # member IDs and other long identifiers
+    re.compile(r"\bNGH-?\s?\d{4,}\b|\b\d{6,}\b", re.I),  # member IDs and other long identifiers
     re.compile(r"\b(date of birth|born on|birthday|dob)\b", re.I),
     re.compile(r"\+?\d[\d\s().-]{8,}\d"),                # phone numbers
     re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"),              # email addresses

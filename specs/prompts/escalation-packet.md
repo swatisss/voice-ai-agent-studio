@@ -32,9 +32,9 @@ Transcript:
 
 Return JSON with exactly these fields:
 - summary: 2-3 plain sentences: who is calling, what they want, what has happened so far.
-- intent: snake_case label for the caller's main goal (for example claim_appeal, claim_status, add_dependent_newborn, prior_auth_status).
+- intent: snake_case label for the caller's main goal (for example complaint, payment_question, add_dependent_newborn, prior_auth_status).
 - entities: object of identifiers mentioned or found (claim_id, auth_id, member_ref, provider, dates, amounts). Only include values that appear in the transcript or tool results.
-- already_tried: list of short past-tense steps the assistant completed, including results (for example "Looked up claim C-31544: denied, out-of-network facility").
+- already_tried: list of short past-tense steps the assistant completed, including results (for example "Looked up claim CL-70640: declined, excluded condition").
 - escalation_reason: {category, detail} — use the category given above; write a clear one-sentence detail.
 - sentiment: {start, end, trend} where start/end are one of positive, neutral, frustrated, angry, distressed and trend is one of improving, stable, declining.
 - suggested_next_action: one sentence telling the specialist the most useful next step. Do not promise outcomes to the caller.

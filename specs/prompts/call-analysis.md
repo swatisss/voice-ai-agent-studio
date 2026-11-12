@@ -37,18 +37,18 @@ Transcript:
 
 Return JSON with:
 - outcome: "resolved" if the assistant fully handled the caller's request without a human; "escalated" if the call was handed to a human; "abandoned" if the caller left before resolution without escalation.
-- intent: snake_case label of the caller's main goal (policy_status, claim_status, document_request, coverage_question, find_provider, claim_appeal, add_dependent_newborn, prior_auth_status, ...).
+- intent: snake_case label of the caller's main goal (policy_status, payment_question, document_request, coverage_question, gp_booking, complaint, add_dependent_newborn, prior_auth_status, ...).
 - root_cause: for resolved calls "none", unless the caller gave a thumbs down or quality signals are listed: then never "none"; pick the most likely cause from the list below (agent_error if the assistant had what it needed but answered badly, missing_knowledge if the answer lacked approved detail, missing_skill if an action was missing, tool_error if a business system failed, other if unclear), using the caller's comment and the signals as evidence. Otherwise exactly one of:
   missing_knowledge (the assistant lacked approved information to answer),
   missing_skill (the request needed an action or lookup the assistant had no tool for),
   tool_error (a business system failed),
-  policy_required (policy requires a human, e.g. appeals, grievances, disputes),
+  policy_required (policy requires a human, e.g. complaints, cancellations, disputes),
   safety (emergency or self-harm),
   caller_requested (caller asked for a person without a deeper unmet need),
   asr_error (speech was misrecognized),
   agent_error (the assistant had what it needed but behaved incorrectly),
   other.
-- gap_summary: for escalated or abandoned calls, one generic sentence naming what was missing, written so similar calls produce similar sentences (for example "How to add a newborn to an existing plan" or "Checking the status of a prior authorization"). Empty string for resolved calls without a thumbs down or quality signals. If the caller gave a thumbs down or signals are listed, always give one, even for a call you judge resolved: what went wrong, written generically in the same style (for example "Explaining why a payment is overdue and what grace period applies").
+- gap_summary: for escalated or abandoned calls, one generic sentence naming what was missing, written so similar calls produce similar sentences (for example "How to add a newborn baby to an existing health insurance policy" or "Checking the status of a prior authorization"). Empty string for resolved calls without a thumbs down or quality signals. If the caller gave a thumbs down or signals are listed, always give one, even for a call you judge resolved: what went wrong, written generically in the same style (for example "Explaining why a payment is overdue and what grace period applies").
 - caller_goal: one sentence describing what the caller wanted, written as an instruction for someone role-playing this caller (for example "You recently had a baby and want to know how to add her to your health plan").
 - resolution_summary: what actually resolved the request: the assistant's answer, or the human specialist's resolution note. Empty string if unresolved.
 - sentiment_start and sentiment_end: one of positive, neutral, frustrated, angry, distressed.

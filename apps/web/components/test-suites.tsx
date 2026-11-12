@@ -257,7 +257,7 @@ function ScenarioForm({ agentId, value, tools, onClose, onSaved }: {
       footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save} loading={busy}>Save scenario</Button></>}>
       <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
         <Field label="Name"><Input value={f.name} maxLength={120} onChange={(e) => set({ name: e.target.value })} /></Field>
-        <Field label="Caller's goal" hint="Written to the simulated caller, e.g. “You want to know whether claim C-20931 was paid.”">
+        <Field label="Caller's goal" hint="Written to the simulated caller, e.g. “You want to know whether claim CL-70231 was paid.”">
           <Textarea maxLength={600} value={f.caller_goal} onChange={(e) => set({ caller_goal: e.target.value })} />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -321,7 +321,7 @@ function KVEditor({ label: text, rows, onChange }: { label: string; rows: KV[]; 
       {rows.map((r, i) => (
         <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2">
           <Input aria-label="Key" placeholder="claim_id" value={r.key} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} />
-          <Input aria-label="Value" placeholder="C-20931" value={r.value} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
+          <Input aria-label="Value" placeholder="CL-70231" value={r.value} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
           <Button variant="ghost" aria-label="Remove" onClick={() => onChange(rows.filter((_, j) => j !== i))}><Trash2 size={14} /></Button>
         </div>
       ))}

@@ -24,7 +24,7 @@ The demo should show the platform serving a real insurer's customer-support esta
 # Affected specs
 
 New: [/product/use-cases.md](/product/use-cases.md), [/architecture/call-modes.md](/architecture/call-modes.md), [/prompts/mode-inbound.md](/prompts/mode-inbound.md), [/prompts/mode-outbound.md](/prompts/mode-outbound.md), [/prompts/mode-internal.md](/prompts/mode-internal.md).
-Rewritten: [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md), [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md), [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md), [/product/demo-script.md](/product/demo-script.md), the knowledge bases under [/demo-data/kb/](/demo-data/kb/).
+Rewritten: [/demo-data/evergreen-health.md](/demo-data/northgate-health.md), [/demo-data/members-and-claims.md](/demo-data/northgate-members.md), [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md), [/product/demo-script.md](/product/demo-script.md), the knowledge bases under [/demo-data/kb/](/demo-data/kb/).
 Updated: product vision, scope and glossary; [/demo-data/call-history.md](/demo-data/call-history.md); [/api/rest-api.md](/api/rest-api.md); [/data/agent-config.md](/data/agent-config.md); [/data/data-model.md](/data/data-model.md); [/architecture/agent-runtime.md](/architecture/agent-runtime.md); [/prompts/agent-system-prompt.md](/prompts/agent-system-prompt.md); [/ui/test-call.md](/ui/test-call.md), [/ui/agent-builder.md](/ui/agent-builder.md), [/ui/calls.md](/ui/calls.md).
 
 # Acceptance criteria

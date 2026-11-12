@@ -7,7 +7,7 @@ okf_version: "0.2"
 * [Product vision](product/vision.md) - What we are building and why it matters (resolve → escalate well → learn)
 * [System overview](architecture/system-overview.md) - High-level architecture and the three core flows
 * [Task plan](build/task-plan.md) - Ordered build tasks with acceptance checks
-* [Demo script](product/demo-script.md) - The three-act hackathon demo
+* [Demo script](product/demo-script.md) - The hackathon demo on Northgate Health: resolve, route, sell, pre-authorise, escalate well, learn
 
 # Sections
 

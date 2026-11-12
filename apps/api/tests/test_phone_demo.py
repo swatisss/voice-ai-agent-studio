@@ -30,7 +30,7 @@ def _load():  # noqa: ANN202
 demo = _load()
 FULL = {
     "TWILIO_ACCOUNT_SID": "ACtest", "TWILIO_AUTH_TOKEN": "secret-token-value", "TWILIO_PHONE_NUMBER": "+15551234567",
-    "OPENAI_API_KEY": "sk-secret-key-value",
+    "DEEPGRAM_API_KEY": "dg-secret-key-value", "GROQ_API_KEY": "gsk-secret-key-value",
 }
 
 
@@ -47,9 +47,11 @@ def test_preflight_names_each_problem_and_never_prints_keys():
     cfg = {"TWILIO_ACCOUNT_SID": "ACtest", "TWILIO_PHONE_NUMBER": "555-1234", "DEMO_TRANSFER_TO": "0123"}
     problems = demo.preflight(cfg, args(), which=which_none, uv=["uv"], in_use=lambda p: True)
     text = "\n".join(problems)
-    for expected in ("TWILIO_AUTH_TOKEN is missing", "OPENAI_API_KEY is missing", "international format", "DEMO_TRANSFER_TO", "no tunnel tool", "port 8000 is busy"):
+    for expected in ("TWILIO_AUTH_TOKEN is missing", "DEEPGRAM_API_KEY is missing", "no LLM key", "international format", "DEMO_TRANSFER_TO", "no tunnel tool", "port 8000 is busy"):
         assert expected in text, expected
     assert "ACtest" not in text and "TWILIO_ACCOUNT_SID" not in text
+    only_openai = {k: v for k, v in FULL.items() if k != "GROQ_API_KEY"} | {"OPENAI_API_KEY": "sk-secret-key-value"}
+    assert demo.preflight(only_openai, args(public_url="https://x.example"), which=which_none, uv=["uv"], in_use=lambda p: False) == []
     assert demo.preflight({**FULL, "TWILIO_AUTH_TOKEN": "secret-token-value"}, args(), which=which_none, uv=["uv"], in_use=lambda p: False) != []
     assert demo.preflight(FULL, args(), which=lambda n: "/bin/ngrok", uv=["uv"], in_use=lambda p: False) == []
     assert demo.preflight(FULL, args(public_url="https://x.example"), which=which_none, uv=["uv"], in_use=lambda p: False) == []
@@ -135,8 +137,8 @@ class FakeApi:
     """The three endpoints setup_agent uses, in memory."""
 
     def __init__(self, mapped_to: str | None = None, published: bool = True) -> None:
-        self.agents = [{"id": "a1", "name": "Insurance Claims Agent", "published_version": {"version": 1} if published else None},
-                       {"id": "a2", "name": "Customer Care Agent", "published_version": {"version": 1}}]
+        self.agents = [{"id": "a1", "name": "Claims & Pre-authorisation", "published_version": {"version": 1} if published else None},
+                       {"id": "a2", "name": "Customer Care", "published_version": {"version": 1}}]
         self.numbers = [{"id": "n1", "e164": "+15551234567", "agent_id": mapped_to}] if mapped_to else []
         self.draft = {"telephony": {"transfer_to": None}}
         self.log: list[str] = []
@@ -166,24 +168,24 @@ class FakeApi:
 def test_mapping_is_idempotent():
     """Covers: DEV-10"""
     api = FakeApi()
-    assert demo.setup_agent(api, "Insurance Claims Agent", "+15551234567") == ["+15551234567 -> Insurance Claims Agent"]
+    assert demo.setup_agent(api, "Claims & Pre-authorisation", "+15551234567") == ["+15551234567 -> Claims & Pre-authorisation"]
     assert api.numbers[0]["agent_id"] == "a1"
-    assert demo.setup_agent(api, "Insurance Claims Agent", "+15551234567") == []  # nothing left to do
+    assert demo.setup_agent(api, "Claims & Pre-authorisation", "+15551234567") == []  # nothing left to do
     other = FakeApi(mapped_to="a2")
-    done = demo.setup_agent(other, "Insurance Claims Agent", "+15551234567")
+    done = demo.setup_agent(other, "Claims & Pre-authorisation", "+15551234567")
     assert other.numbers[0]["agent_id"] == "a1" and any("re-mapped" in d for d in done)
 
     api = FakeApi(mapped_to="a1")
-    done = demo.setup_agent(api, "Insurance Claims Agent", "+15551234567", "+15557654321")
+    done = demo.setup_agent(api, "Claims & Pre-authorisation", "+15551234567", "+15557654321")
     assert done == ["transfer number +15557654321 saved and published"] and api.draft["telephony"]["transfer_to"] == "+15557654321"
     api.log.clear()
-    assert demo.setup_agent(api, "Insurance Claims Agent", "+15551234567", "+15557654321") == []
+    assert demo.setup_agent(api, "Claims & Pre-authorisation", "+15551234567", "+15557654321") == []
     assert not any(c.startswith(("PUT", "POST")) for c in api.log)  # equal already: no second publish
 
-    with pytest.raises(demo.DemoError, match="Mortgage Agent.*Customer Care Agent"):
+    with pytest.raises(demo.DemoError, match="Mortgage Agent.*Customer Care"):
         demo.setup_agent(FakeApi(), "Mortgage Agent", "+15551234567")
     with pytest.raises(demo.DemoError, match="not published"):
-        demo.setup_agent(FakeApi(published=False), "Insurance Claims Agent", "+15551234567")
+        demo.setup_agent(FakeApi(published=False), "Claims & Pre-authorisation", "+15551234567")
 
 
 class FakeProc:

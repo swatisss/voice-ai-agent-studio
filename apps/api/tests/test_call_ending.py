@@ -22,7 +22,7 @@ from voiceai.runtime.session import AgentSession
 from voiceai.voice.processors import BrainProcessor
 from voiceai.voice.turn_detection import TurnSettings
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 
 
 async def _start(client, seeded, channel: str = "text") -> str:  # noqa: ANN001
@@ -78,7 +78,7 @@ async def test_farewell_phrase_ends_the_call_without_the_model(client, seeded, f
     assert (await _call(call_id)).end_reason == "farewell"
 
 
-@pytest.mark.parametrize("text", ["Thank you.", "That's all wrong, can you check again?", "So that's it?", "What are my copays?"])
+@pytest.mark.parametrize("text", ["Thank you.", "That's all wrong, can you check again?", "So that's it?", "What is my excess?"])
 async def test_other_turns_are_not_farewells(client, seeded, fake_llm, text):
     """Covers: CE-02"""
     fake_llm(script(FakeReply(text="Let me look.")))
@@ -91,7 +91,7 @@ async def test_farewell_does_not_end_an_escalated_session(client, seeded, fake_l
     """Covers: CE-02, RT-02"""
     fake_llm(lambda *a: (_ for _ in ()).throw(AssertionError("LLM must not be called")))
     call_id = await _start(client, seeded)
-    session = await AgentSession.open(call_id, "evergreen-care")
+    session = await AgentSession.open(call_id, "northgate-health")
     await session.escalate("other", "open and escalated")
     reply = await session.reply("bye")
     assert reply.startswith("A specialist will be with you shortly") and not session.state.ended
@@ -132,7 +132,7 @@ class _Brain(BrainProcessor):
             return text
 
         async def start() -> str:
-            return "Hello, this is Ava."
+            return "Hello, this is Olivia."
 
         async def on_end(reason: str) -> None:
             self.closed.append(reason)
@@ -247,7 +247,7 @@ async def test_a_hangup_racing_the_goodbye_ends_the_call_once():
 async def test_end_reason_is_reported_after_the_closing_speech(app, database, seeded, fake_llm):
     """Covers: CE-06"""
     fake_llm(lambda *a: (_ for _ in ()).throw(AssertionError("LLM must not be called")))
-    session = await AgentSession.open((await _make_call(seeded)), "evergreen-care")
+    session = await AgentSession.open((await _make_call(seeded)), "northgate-health")
     parts = [c async for c in session.respond("goodbye")]
     assert parts == [endings.GOODBYE] and session.state.ended and session.end_reason == "farewell"
 
@@ -256,7 +256,7 @@ async def _make_call(seeded) -> str:  # noqa: ANN001
     from voiceai.runtime.session import create_call
 
     async with sessionmaker()() as s:
-        call = await create_call(s, "evergreen-care", seeded["care"]["agent_id"], "voice")
+        call = await create_call(s, "northgate-health", seeded["care"]["agent_id"], "voice")
         await s.commit()
         return call.id
 
@@ -328,7 +328,7 @@ async def test_thumbs_down_queues_one_more_analysis_and_it_sees_the_feedback(cli
     fake_llm(analysis)
     from voiceai.learning.analyze import analyze_call
 
-    await analyze_call("evergreen-care", {"call_id": call_id})
+    await analyze_call("northgate-health", {"call_id": call_id})
     assert "Caller feedback after the call: thumbs down: Too slow, again" in seen[0]
     async with sessionmaker()() as s:
         a = await s.scalar(select(CallAnalysis).where(CallAnalysis.call_id == call_id))
@@ -348,7 +348,7 @@ async def test_thumbs_down_resolved_call_joins_a_cluster_and_counts_toward_readi
         call_id = await _start(client, seeded)
         await client.post(f"/api/calls/{call_id}/end", headers=H)
         await client.post(f"/api/calls/{call_id}/feedback", headers=H, json={"rating": "down", "comment": "Did not explain the grace period"})
-        await analyze_call("evergreen-care", {"call_id": call_id})
+        await analyze_call("northgate-health", {"call_id": call_id})
         ids.append(call_id)
     async with sessionmaker()() as s:
         analyses = list((await s.scalars(select(CallAnalysis).where(CallAnalysis.call_id.in_(ids)))).all())

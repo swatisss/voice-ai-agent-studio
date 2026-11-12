@@ -1,64 +1,91 @@
-"""Claim first notice and required documents in the mock insurance API. Covers: MOCK-13, MOCK-14"""
+"""Mock cover check, specialist finder and pre-authorisation. Covers: MOCK-24, MOCK-25, MOCK-26"""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 from voiceai.mock import data
 
-AISHA = {"X-Member-Ref": "EVG-725031"}
-HEALTH = "HP-100877"
+SARAH = {"X-Member-Ref": "NGH-410237"}
+DAVID = {"X-Member-Ref": "NGH-522918"}
+EMMA = {"X-Member-Ref": "NGH-638405"}
+RAJ = {"X-Member-Ref": "NGH-714560"}
+TOM = {"X-Member-Ref": "NGH-805193"}
 
 
-def _notice(**over):  # noqa: ANN003, ANN202
-    body = {
-        "policy_id": HEALTH, "claim_type": "urgent_care", "service_date": (data.today() - timedelta(days=1)).isoformat(),
-        "provider": "Harbor Urgent Care", "description": "Sprained ankle, urgent care visit", "estimated_amount": 150,
-    }
+async def _check(client, who, policy_id, condition, treatment="consultation"):  # noqa: ANN001, ANN202
+    r = await client.get(f"/mock/insurance/policies/{policy_id}/eligibility", headers=who, params={"condition": condition, "treatment": treatment})
+    assert r.status_code == 200
+    return r.json()
+
+
+async def test_cover_check(client):
+    """Covers: MOCK-24"""
+    sarah = await _check(client, SARAH, "PMI-300101", "knee pain", "MRI scan")
+    assert sarah["covered"] is True and sarah["referral_needed"] is False and sarah["direct_access_category"]
+    assert any("pre-treatment form" in f for f in sarah["forms_needed"])
+    raj = await _check(client, RAJ, "PMI-300452", "back pain")
+    assert raj["covered"] is False and "excluded" in raj["reason"]
+    emma_migraine = await _check(client, EMMA, "PMI-300377", "migraine")
+    assert emma_migraine["covered"] is False and "Moratorium" in emma_migraine["reason"]
+    david = await _check(client, DAVID, "PMI-300214", "knee osteoarthritis", "knee replacement")
+    assert david["covered"] is False and "missed" in david["reason"]
+    tom_consult = await _check(client, TOM, "PMI-300519", "knee pain", "consultation")
+    assert tom_consult["covered"] is False and "Essentials" in tom_consult["reason"]
+    tom_surgery = await _check(client, TOM, "PMI-300519", "knee osteoarthritis", "knee replacement")
+    assert tom_surgery["covered"] is True and tom_surgery["referral_needed"] is True
+    emma = await _check(client, EMMA, "PMI-300377", "shoulder pain", "consultation")
+    assert emma["outpatient_remaining"] == 360
+    r = await client.get("/mock/insurance/policies/CSH-400204/eligibility", headers=EMMA, params={"condition": "knee pain"})
+    assert r.status_code == 409 and r.json()["error"] == "not_applicable"
+
+
+async def test_specialist_finder(client):
+    """Covers: MOCK-25"""
+    params = {"condition": "knee pain", "postcode": "LS6 2AB", "policy_id": "PMI-300101"}
+    body = (await client.get("/mock/healthcare/specialists", headers=SARAH, params=params)).json()
+    assert body["specialty"] == "orthopaedics" and body["hospital_list"] == "extended"
+    rows = body["specialists"]
+    ids = [s["specialist_id"] for s in rows]
+    assert 1 <= len(rows) <= 3
+    by_id = {s["id"]: s for s in data.SPECIALISTS}
+    assert all(by_id[i]["specialty"] == "orthopaedics" and "extended" in by_id[i]["lists"] for i in ids)
+    leeds = [by_id[i]["area"] == "LS" for i in ids]
+    assert leeds[0] and leeds == sorted(leeds, reverse=True)  # Leeds ones first
+    others = [s["fee_assured"] for s in rows if by_id[s["specialist_id"]]["area"] != "LS"]
+    assert others == sorted(others, reverse=True)  # then fee-assured before not fee-assured
+    assert ids == ["CN-101", "CN-102", "CN-104"]
+    wide = (await client.get("/mock/healthcare/specialists", headers=SARAH, params={"specialty": "orthopaedics", "policy_id": "PMI-300101"})).json()
+    assert "CN-106" not in [s["specialist_id"] for s in wide["specialists"]]  # London Premium only
+    r = await client.get("/mock/healthcare/specialists", params={"postcode": "LS6 2AB"})
+    assert r.status_code == 422
+
+
+def _pre_auth(**over):  # noqa: ANN003, ANN202
+    body = {"policy_id": "PMI-300101", "condition": "knee pain", "treatment": "consultation", "referral": "direct_access",
+            "specialist_id": "CN-101", "symptoms_started": "two weeks ago"}
     return {**body, **over}
 
 
-async def test_first_notice_creates_a_claim_and_rejects_bad_requests(client):
-    """Covers: MOCK-13"""
-    r = await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice())
+async def test_pre_authorisation(client):
+    """Covers: MOCK-26"""
+    r = await client.post("/mock/healthcare/pre-authorisations", headers=SARAH, json=_pre_auth())
     assert r.status_code == 200
     body = r.json()
-    assert body["claim_id"] == "C-90001" and body["status"] == "received" and body["expected_decision_days"] == 30
-    assert [d["document"] for d in body["required_documents"]][:2] == ["Itemized provider bill", "Proof of payment"]
-    listed = (await client.get("/mock/healthcare/claims", headers=AISHA)).json()["claims"]
-    assert "C-90001" in [c["claim_id"] for c in listed]
-    detail = (await client.get("/mock/healthcare/claims/C-90001", headers=AISHA)).json()
-    assert detail["status"] == "received" and detail["provider"] == "Harbor Urgent Care"
-
-    dup = await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice())
-    assert dup.status_code == 409 and dup.json()["error"] == "duplicate_claim" and dup.json()["existing_claim_id"] == "C-90001"
-    mismatch = await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice(claim_type="motor_glass"))
-    assert mismatch.status_code == 409 and mismatch.json()["error"] == "claim_type_mismatch"
-    future = (data.today() + timedelta(days=2)).isoformat()
-    assert (await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice(service_date=future))).status_code == 422
-    assert (await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice(claim_type="vet"))).status_code == 422
-    assert (await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice(description="x"))).status_code == 422
-    assert (await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice(policy_id="MP-200415"))).status_code == 404
-    assert (await client.post("/mock/insurance/claims/first-notice", json=_notice())).status_code == 401
-
-
-async def test_new_claims_reset_with_the_business_data(client):
-    """Covers: MOCK-13"""
-    assert (await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice())).status_code == 200
-    data.reset()
-    assert "C-90001" not in data.CLAIMS
-    again = await client.post("/mock/insurance/claims/first-notice", headers=AISHA, json=_notice())
-    assert again.json()["claim_id"] == "C-90001"
-
-
-async def test_requirements_need_no_member_and_cover_every_type(client):
-    """Covers: MOCK-14"""
-    collision = (await client.get("/mock/insurance/claims/requirements", params={"claim_type": "motor_collision"})).json()
-    assert [d["document"] for d in collision["documents"]] == [
-        "Repair estimate or invoice", "Photos of all vehicles involved", "The other party's details", "Police report number",
-    ]
-    assert collision["where_to_send"]
-    for kind in data.CLAIM_TYPES:
-        r = (await client.get("/mock/insurance/claims/requirements", params={"claim_type": kind})).json()
-        assert r["claim_type"] == kind and r["documents"]
-    bad = await client.get("/mock/insurance/claims/requirements", params={"claim_type": "vet"})
-    assert bad.status_code == 422 and bad.json()["error"] == "invalid_claim_type"
+    assert body["status"] == "approved" and body["pre_auth_code"] == "PA-502001" and body["excess_to_pay"] == 0
+    assert date.fromisoformat(body["valid_through"]) == data.today() + timedelta(days=90)
+    r = await client.post("/mock/healthcare/pre-authorisations", headers=SARAH, json=_pre_auth(treatment="knee arthroscopy"))
+    assert r.status_code == 200 and r.json()["status"] == "pending"
+    r = await client.post("/mock/healthcare/pre-authorisations", headers=RAJ,
+                          json=_pre_auth(policy_id="PMI-300452", condition="back pain", specialist_id=None))
+    assert r.status_code == 409 and r.json()["error"] == "not_covered"
+    r = await client.post("/mock/healthcare/pre-authorisations", headers=TOM,
+                          json=_pre_auth(policy_id="PMI-300519", condition="knee osteoarthritis", treatment="knee replacement",
+                                         referral="none", specialist_id=None))
+    assert r.status_code == 409 and r.json()["error"] == "referral_needed"
+    r = await client.post("/mock/healthcare/pre-authorisations", headers=SARAH, json=_pre_auth(symptoms_started=None))
+    assert r.status_code == 422
+    r = await client.post("/mock/healthcare/pre-authorisations", headers=SARAH, json=_pre_auth(specialist_id="CN-106"))
+    assert r.status_code == 409 and r.json()["error"] == "specialist_not_on_list"
+    r = await client.post("/mock/healthcare/pre-authorisations", headers=EMMA,
+                          json=_pre_auth(policy_id="PMI-300377", condition="shoulder pain", specialist_id="CN-103"))
+    assert r.status_code == 200 and r.json()["shortfall_warning"]

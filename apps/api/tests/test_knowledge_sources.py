@@ -22,22 +22,22 @@ from voiceai.llm.gateway import FakeReply
 from voiceai.models import AgentVersion, Job, KnowledgeChunk, KnowledgeDoc, KnowledgeSource, Tenant
 from voiceai.runtime.session import AgentSession, create_call
 
-H = {"X-Tenant-Id": "evergreen-care"}
-BASE = "http://help.safetrip.test"
+H = {"X-Tenant-Id": "northgate-health"}
+BASE = "http://help.northgate.test"
 PUBLIC_IP = "93.184.216.34"
 
 
 def page(title: str, body: str) -> str:
-    return (f"<html><head><title>{title}</title></head><body><header><h1>SafeTrip Help Centre</h1></header>"
+    return (f"<html><head><title>{title}</title></head><body><header><h1>Northgate Help Centre</h1></header>"
             f"<nav><a href='/help/'>Home</a> <a href='/help/gadgets.html'>Gadgets</a></nav><main>{body}</main>"
-            "<footer>SafeTrip is fictional.</footer></body></html>")
+            "<footer>Northgate is fictional.</footer></body></html>")
 
 
-GADGETS = page("Gadget cover", "<h1>Gadget cover</h1><h2>What is covered</h2><p>Phones and laptops stolen on a trip are covered up to $500 per item.</p>"
+GADGETS = page("Gadget cover", "<h1>Gadget cover</h1><h2>What is covered</h2><p>Phones and laptops stolen on a trip are covered up to £500 per item.</p>"
                "<h2>How to claim</h2><p>Report a theft to the police within 24 hours and attach the police report.</p>")
-RENTAL = page("Rental car excess", "<h1>Rental car excess</h1><p>The rental excess you paid is refunded up to $3,000 per trip.</p>")
+RENTAL = page("Rental car excess", "<h1>Rental car excess</h1><p>The rental excess you paid is refunded up to £3,000 per trip.</p>")
 MEDICAL = page("Medical help abroad", "<h1>Medical help abroad</h1><p>Call the assistance line within 48 hours of a hospital admission.</p>")
-INDEX = page("SafeTrip Help Centre", "<h1>Help home</h1><p>Answers for SafeTrip Standard policyholders, by topic.</p><ul>"
+INDEX = page("Northgate Help Centre", "<h1>Help home</h1><p>Answers for Northgate policyholders, by topic.</p><ul>"
              "<li><a href='gadgets.html'>Gadgets</a></li><li><a href='rental-car.html?ref=home'>Rental cars</a></li>"
              "<li><a href='medical-abroad.html#top'>Medical</a></li><li><a href='private/notes.html'>Staff</a></li>"
              "<li><a href='/blog/news.html'>Blog</a></li></ul>")
@@ -69,7 +69,7 @@ class Site:
         return httpx.Response(status, headers={"content-type": ctype}, text=body)
 
 
-ADDRESSES = {"help.safetrip.test": [PUBLIC_IP], "loopback.test": ["127.0.0.1"], "intranet.test": ["10.0.0.5"],
+ADDRESSES = {"help.northgate.test": [PUBLIC_IP], "loopback.test": ["127.0.0.1"], "intranet.test": ["10.0.0.5"],
              "metadata.test": ["169.254.169.254"]}
 
 
@@ -119,7 +119,7 @@ async def test_html_becomes_markdown_with_headings(database, site):
     md = converted.markdown
     assert converted.title == "Gadget cover"
     assert md.count("\n## ") == 2 and md.startswith("# Gadget cover")
-    assert "SafeTrip Help Centre" not in md and "Gadgets" not in md and "fictional" not in md  # header, nav, footer dropped
+    assert "Northgate Help Centre" not in md and "Gadgets" not in md and "fictional" not in md  # header, nav, footer dropped
     title, content = await text_from_url(f"{BASE}/help/gadgets.html")
     await _tenant()
     async with sessionmaker()() as s:
@@ -190,7 +190,7 @@ async def test_sync_changes_adds_and_archives_after_two_misses(database, site):
     async with sessionmaker()() as s:
         chunk_ids = {d: set((await s.scalars(select(KnowledgeChunk.id).where(KnowledgeChunk.doc_id == doc.id))).all()) for d, doc in before.items()}
         old_hash = await s.scalar(select(KnowledgeChunk.content_hash).where(KnowledgeChunk.doc_id == before[f"{BASE}/help/gadgets.html"].id))
-    site.pages["/help/gadgets.html"] = (200, "text/html", GADGETS.replace("$500", "$750"))  # changed
+    site.pages["/help/gadgets.html"] = (200, "text/html", GADGETS.replace("£500", "£750"))  # changed
     site.pages["/help/visa.html"] = (200, "text/html", page("Visa", "<h1>Visa refusals</h1><p>A refused visa is a covered reason to cancel.</p>"))
     site.pages["/sitemap.xml"] = (200, "application/xml", site.pages["/sitemap.xml"][2].replace(
         "</urlset>", f"<url><loc>{BASE}/help/visa.html</loc></url></urlset>"))  # new
@@ -200,7 +200,7 @@ async def test_sync_changes_adds_and_archives_after_two_misses(database, site):
     async with sessionmaker()() as s:
         new_hash = await s.scalar(select(KnowledgeChunk.content_hash).where(KnowledgeChunk.doc_id == after[f"{BASE}/help/gadgets.html"].id))
         rental_ids = set((await s.scalars(select(KnowledgeChunk.id).where(KnowledgeChunk.doc_id == after[f"{BASE}/help/rental-car.html"].id))).all())
-    assert new_hash != old_hash and "$750" in after[f"{BASE}/help/gadgets.html"].content
+    assert new_hash != old_hash and "£750" in after[f"{BASE}/help/gadgets.html"].content
     assert rental_ids == chunk_ids[f"{BASE}/help/rental-car.html"]  # unchanged page keeps its chunks
     assert f"{BASE}/help/visa.html" in after
     assert f"{BASE}/help/medical-abroad.html" in after  # one miss: still active
@@ -224,19 +224,19 @@ async def test_published_agent_answers_from_the_latest_sync(client, seeded, fake
 
     async def ask() -> dict:
         async with sessionmaker()() as s:
-            call = await create_call(s, "evergreen-care", agent_id, "text")
+            call = await create_call(s, "northgate-health", agent_id, "text")
             await s.commit()
-        session = await AgentSession.open(call.id, "evergreen-care")
+        session = await AgentSession.open(call.id, "northgate-health")
         return json.loads(await session._run_tool("c1", "search_knowledge", json.dumps(
             {"query": "Gadget cover phones laptops stolen trip covered per item"})))
 
     first = (await ask())["results"][0]
-    assert "$500" in first["content"] and first["url"] == f"{BASE}/help/gadgets.html"
-    site.pages["/help/gadgets.html"] = (200, "text/html", GADGETS.replace("$500", "$750"))
+    assert "£500" in first["content"] and first["url"] == f"{BASE}/help/gadgets.html"
+    site.pages["/help/gadgets.html"] = (200, "text/html", GADGETS.replace("£500", "£750"))
     assert (await client.post(f"/api/knowledge/sources/{created['id']}/sync", headers=H)).status_code == 202
     await jobs.drain()
     second = (await ask())["results"][0]
-    assert "$750" in second["content"] and second["url"] == f"{BASE}/help/gadgets.html"
+    assert "£750" in second["content"] and second["url"] == f"{BASE}/help/gadgets.html"
     versions = (await client.get(f"/api/agents/{agent_id}/versions", headers=H)).json()["items"]
     assert versions[0]["id"] == version["id"]  # no new version
 
@@ -254,7 +254,7 @@ async def test_sources_api(client, seeded, site):
     got = (await client.get(f"/api/knowledge/sources/{sid}", headers=H)).json()
     assert got["status"] == "ready" and got["page_count"] == 4 and len(got["pages"]) == 4 and got["next_sync_at"]
     assert all(p["url"].startswith(f"{BASE}/help/") and p["content_hash"] for p in got["pages"])
-    assert (await client.get(f"/api/knowledge/sources/{sid}", headers={"X-Tenant-Id": "evergreen-sandbox"})).status_code == 404
+    assert (await client.get(f"/api/knowledge/sources/{sid}", headers={"X-Tenant-Id": "northgate-sandbox"})).status_code == 404
     blocked = await client.post("/api/knowledge/sources", headers=H, json={"start_url": "http://intranet.test/wiki/"})
     assert blocked.status_code == 422 and blocked.json()["error"] == "blocked_address"
     assert (await client.delete(f"/api/knowledge/sources/{sid}", headers=H)).status_code == 204
@@ -290,8 +290,8 @@ async def test_drafts_never_edit_a_website_page(client, seeded, fake_llm, site):
     from tests.test_learning import _cluster, responder
 
     created = (await client.post("/api/knowledge/sources", headers=H, json={"start_url": f"{BASE}/help/newborn.html", "scope": "page"})).json()
-    site.pages["/help/newborn.html"] = (200, "text/html", page("Adding a newborn", "<h1>Adding a newborn to coverage</h1>"
-                                                               "<p>Add your baby to your health plan within 60 days of birth.</p>"))
+    site.pages["/help/newborn.html"] = (200, "text/html", page("Adding a newborn", "<h1>Adding a newborn to the policy</h1>"
+                                                               "<p>Add your baby to your health policy within 3 months of birth.</p>"))
     await jobs.drain()
     page_doc = next(iter((await _pages(created["id"])).values()))
     async with sessionmaker()() as s:
@@ -303,12 +303,12 @@ async def test_drafts_never_edit_a_website_page(client, seeded, fake_llm, site):
     def drafting_edits_the_page(role, messages, tools):  # noqa: ANN001, ANN202
         if role == "drafting" and "These are short descriptions" not in messages[-1]["content"]:
             assert page_doc.id in messages[-1]["content"]  # the page is shown to the drafter as context
-            return {"kind": "knowledge_edit", "doc_id": page_doc.id, "title": "Adding a newborn", "rationale": "60-day rule.",
-                    "article": {"title": "Adding a newborn", "content_markdown": "# Adding a newborn\nWithin 60 days of birth."}}
+            return {"kind": "knowledge_edit", "doc_id": page_doc.id, "title": "Adding a newborn", "rationale": "Three-month rule.",
+                    "article": {"title": "Adding a newborn", "content_markdown": "# Adding a newborn\nWithin 3 months of birth."}}
         return base(role, messages, tools)
 
     fake_llm(drafting_edits_the_page)
-    newborn = await _cluster(client, "Adding a newborn to coverage")
+    newborn = await _cluster(client, "Adding a newborn to the policy")
     assert (await client.post(f"/api/insights/clusters/{newborn['id']}/draft-fix", headers=H)).status_code == 200
     await jobs.drain()
     proposal = (await client.get(f"/api/insights/clusters/{newborn['id']}", headers=H)).json()["proposals"][0]

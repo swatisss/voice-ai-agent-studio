@@ -18,8 +18,8 @@ from voiceai.db import sessionmaker
 from voiceai.llm.gateway import reset_gateway
 from voiceai.models import CallEvent, TenantCredential, TenantSettings
 
-CARE = {"X-Tenant-Id": "evergreen-care"}
-SANDBOX = {"X-Tenant-Id": "evergreen-sandbox"}
+CARE = {"X-Tenant-Id": "northgate-health"}
+SANDBOX = {"X-Tenant-Id": "northgate-sandbox"}
 KEY = "sk-test-0123456789abcdefwxyz"
 
 
@@ -34,6 +34,15 @@ def secrets_key(monkeypatch):  # noqa: ANN001, ANN201
 
 def realtime(cfg: dict) -> dict:
     return {**cfg, "voice": {**cfg["voice"], "pipeline": "realtime"}}
+
+
+async def claims_on_realtime(client, seeded) -> str:  # noqa: ANN001
+    """No seeded agent uses realtime: switch Claims & Pre-authorisation to it (draft + publish) and return its id."""
+    claims = seeded["claims"]["agent_id"]
+    cfg = (await client.get(f"/api/agents/{claims}", headers=CARE)).json()["draft_config"]
+    assert (await client.put(f"/api/agents/{claims}", headers=CARE, json={"draft_config": realtime(cfg)})).status_code == 200
+    assert (await client.post(f"/api/agents/{claims}/publish", headers=CARE, json={"change_note": "realtime"})).status_code == 200
+    return claims
 
 
 async def set_allowed(tenant_id: str, allowed: list[str]) -> None:
@@ -56,7 +65,7 @@ async def test_defaults_and_seeded_settings(client, seeded):
     assert care["allowed_pipelines"] == ["cascade", "realtime"] and care["openai"]["platform_fallback"] is True
     assert care["openai"]["key_set"] is False
     async with sessionmaker()() as s:
-        assert await s.get(TenantSettings, "evergreen-sandbox") is None
+        assert await s.get(TenantSettings, "northgate-sandbox") is None
 
 
 async def test_realtime_needs_the_tenant_to_allow_it(client, seeded):
@@ -71,19 +80,20 @@ async def test_realtime_needs_the_tenant_to_allow_it(client, seeded):
 
     assert (await client.put("/api/tenant-settings", headers=SANDBOX, json={"allowed_pipelines": ["cascade", "realtime"]})).status_code == 200
     assert (await client.put(f"/api/agents/{agent['id']}", headers=SANDBOX, json={"draft_config": cfg})).status_code == 200
-    await set_allowed("evergreen-sandbox", ["cascade"])  # a draft saved earlier cannot be published once disallowed
+    await set_allowed("northgate-sandbox", ["cascade"])  # a draft saved earlier cannot be published once disallowed
     r = await client.post(f"/api/agents/{agent['id']}/publish", headers=SANDBOX, json={})
     assert r.status_code == 422 and r.json()["error"] == "pipeline_not_allowed"
-    await set_allowed("evergreen-sandbox", ["cascade", "realtime"])
+    await set_allowed("northgate-sandbox", ["cascade", "realtime"])
     assert (await client.post(f"/api/agents/{agent['id']}/publish", headers=SANDBOX, json={})).status_code == 200
 
 
 async def test_allowlist_validation_and_pipeline_in_use(client, seeded):
     """Covers: MT-07"""
+    await claims_on_realtime(client, seeded)
     for bad in ([], ["realtime"], ["cascade", "telepathy"]):
         assert (await client.put("/api/tenant-settings", headers=CARE, json={"allowed_pipelines": bad})).status_code == 422
     r = await client.put("/api/tenant-settings", headers=CARE, json={"allowed_pipelines": ["cascade"]})
-    assert r.status_code == 409 and r.json()["error"] == "pipeline_in_use" and "Insurance Claims Agent" in r.json()["detail"]
+    assert r.status_code == 409 and r.json()["error"] == "pipeline_in_use" and "Claims & Pre-authorisation" in r.json()["detail"]
     assert (await client.get("/api/tenant-settings", headers=CARE)).json()["allowed_pipelines"] == ["cascade", "realtime"]
     r = await client.put("/api/tenant-settings", headers=CARE, json={"openai_platform_fallback": False})
     assert r.status_code == 200 and r.json()["openai"]["platform_fallback"] is False
@@ -91,8 +101,8 @@ async def test_allowlist_validation_and_pipeline_in_use(client, seeded):
 
 async def test_a_disallowed_pipeline_refuses_voice_calls_but_not_text(client, seeded):
     """Covers: MT-08"""
-    claims = seeded["claims"]["agent_id"]
-    await set_allowed("evergreen-care", ["cascade"])
+    claims = await claims_on_realtime(client, seeded)
+    await set_allowed("northgate-health", ["cascade"])
     r = await client.post("/api/calls", headers=CARE, json={"agent_id": claims, "channel": "voice"})
     assert r.status_code == 409 and r.json()["error"] == "pipeline_not_allowed"
     r = await client.post("/api/calls", headers=CARE, json={"agent_id": claims, "channel": "text"})
@@ -103,14 +113,14 @@ def test_a_disallowed_pipeline_closes_the_voice_socket(phone):
     """Covers: MT-08"""
     import sqlite3
 
-    claims = phone.agents["Insurance Claims Agent"]
+    claims = phone.agents["Claims & Pre-authorisation"]
     call_id = phone.client.post("/api/calls", headers=PHONE_H, json={"agent_id": claims, "channel": "voice"}).json()["call_id"]
     con = sqlite3.connect(phone.db)
-    con.execute("update tenant_settings set allowed_pipelines=? where tenant_id='evergreen-care'", ('["cascade"]',))
+    con.execute("update tenant_settings set allowed_pipelines=? where tenant_id='northgate-health'", ('["cascade"]',))
     con.commit()
     con.close()
     with pytest.raises(WebSocketDisconnect) as exc:
-        with phone.client.websocket_connect(f"/api/voice/{call_id}?tenant=evergreen-care") as ws:
+        with phone.client.websocket_connect(f"/api/voice/{call_id}?tenant=northgate-health") as ws:
             ws.receive_text()
     assert exc.value.code == 4500 and exc.value.reason == "pipeline_not_allowed"
     before = con_count(phone)
@@ -158,25 +168,25 @@ async def test_key_storage_needs_the_secrets_key(client, seeded, monkeypatch):
     get_settings.cache_clear()
     assert (await client.get("/api/tenant-settings", headers=CARE)).json()["openai"]["key_set"] is False
     async with sessionmaker()() as s:
-        assert await ts.resolve_openai_key(s, "evergreen-care") is None  # no platform key in tests
+        assert await ts.resolve_openai_key(s, "northgate-health") is None  # no platform key in tests
     get_settings.cache_clear()
 
 
 async def test_key_resolution_per_tenant(client, seeded, secrets_key, monkeypatch):
     """Covers: MT-11"""
     async with sessionmaker()() as s:
-        assert await ts.resolve_openai_key(s, "evergreen-care") is None  # no own key, no platform key
+        assert await ts.resolve_openai_key(s, "northgate-health") is None  # no own key, no platform key
     monkeypatch.setenv("OPENAI_API_KEY", "sk-platform-000000000000000")
     get_settings.cache_clear()
     reset_gateway()
     try:
         await client.put("/api/tenant-settings/openai-key", headers=CARE, json={"api_key": KEY})
         async with sessionmaker()() as s:
-            assert await ts.resolve_openai_key(s, "evergreen-care") == (KEY, "tenant")
-            assert await ts.resolve_openai_key(s, "evergreen-sandbox") == ("sk-platform-000000000000000", "platform")
+            assert await ts.resolve_openai_key(s, "northgate-health") == (KEY, "tenant")
+            assert await ts.resolve_openai_key(s, "northgate-sandbox") == ("sk-platform-000000000000000", "platform")
         await client.put("/api/tenant-settings", headers=SANDBOX, json={"openai_platform_fallback": False})
         async with sessionmaker()() as s:
-            assert await ts.resolve_openai_key(s, "evergreen-sandbox") is None  # never tenant A's key
+            assert await ts.resolve_openai_key(s, "northgate-sandbox") is None  # never tenant A's key
     finally:
         monkeypatch.setenv("OPENAI_API_KEY", "")
         get_settings.cache_clear()
@@ -206,11 +216,11 @@ def test_each_realtime_call_uses_its_tenants_key(phone, monkeypatch):
     monkeypatch.setattr(rt, "connect_openai", fake_connect)
     monkeypatch.setattr(pipeline, "run_realtime", fake_realtime)
     c = phone.client
-    claims = phone.agents["Insurance Claims Agent"]
+    claims = phone.agents["Claims & Pre-authorisation"]
 
     def call() -> str:
         call_id = c.post("/api/calls", headers=PHONE_H, json={"agent_id": claims, "channel": "voice"}).json()["call_id"]
-        with c.websocket_connect(f"/api/voice/{call_id}?tenant=evergreen-care") as ws:
+        with c.websocket_connect(f"/api/voice/{call_id}?tenant=northgate-health") as ws:
             try:
                 ws.receive_text()
             except WebSocketDisconnect:
@@ -224,13 +234,14 @@ def test_each_realtime_call_uses_its_tenants_key(phone, monkeypatch):
 
 async def test_existing_realtime_tenants_are_grandfathered(client, seeded):
     """Covers: MT-12"""
+    await claims_on_realtime(client, seeded)
     async with sessionmaker()() as s:
-        await s.delete(await s.get(TenantSettings, "evergreen-care"))
+        await s.delete(await s.get(TenantSettings, "northgate-health"))
         await s.commit()
     async with sessionmaker()() as s:
-        assert await ts.grandfather(s) == ["evergreen-care"]
+        assert await ts.grandfather(s) == ["northgate-health"]
         await s.commit()
     async with sessionmaker()() as s:
-        assert (await s.get(TenantSettings, "evergreen-care")).allowed_pipelines == ["cascade", "realtime"]
-        assert await s.get(TenantSettings, "evergreen-sandbox") is None
+        assert (await s.get(TenantSettings, "northgate-health")).allowed_pipelines == ["cascade", "realtime"]
+        assert await s.get(TenantSettings, "northgate-sandbox") is None
         assert await ts.grandfather(s) == []

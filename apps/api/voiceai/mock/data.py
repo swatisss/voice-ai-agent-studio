@@ -1,212 +1,219 @@
-"""Synthetic business records behind the mock healthcare and insurance API.
+"""Synthetic business records behind the mock Northgate Health API (UK private medical insurance).
 
-Spec: /demo-data/members-and-claims.md, /api/mock-healthcare-api.md
+Spec: /demo-data/northgate-members.md, /api/mock-healthcare-api.md
 Dates written T±n in the spec are relative to the day the process starts (or `reset()` is called).
+Every person, number and address is fictional; phone numbers use the Ofcom drama range 07700 900xxx.
 """
 from __future__ import annotations
 
 import copy
+import re
 from datetime import date, timedelta
 from typing import Any
 
-PLANS = {
-    "Evergreen Silver PPO": {"type": "PPO", "deductible": 1500, "oop_max": 6000,
-                             "copays": {"primary_care": 30, "specialist": 35, "urgent_care": 60, "emergency_room": 250, "telehealth": 0},
-                             "referral": False},
-    "Evergreen Gold HMO": {"type": "HMO", "deductible": 500, "oop_max": 4000,
-                           "copays": {"primary_care": 20, "specialist": 40, "urgent_care": 50, "emergency_room": 200, "telehealth": 0},
-                           "referral": True},
-    "Evergreen Bronze EPO": {"type": "EPO", "deductible": 4000, "oop_max": 8500,
-                             "copays": {"primary_care": 45, "specialist": 75, "urgent_care": 90, "emergency_room": 400, "telehealth": 15},
-                             "referral": False},
-}
+BRAND = "Northgate Health"
+MEMBER_PREFIX = "NGH"
 
+# ---------------------------------------------------------------- products (/demo-data/northgate-members.md "Products")
+PRODUCTS = {
+    "complete": {"name": "Northgate Complete", "factor": 1.0,
+                 "summary": "Diagnosis and treatment: consultations, tests, scans, surgery, cancer care, mental health and therapies."},
+    "essentials": {"name": "Northgate Essentials", "factor": 0.70,
+                   "summary": "Treatment and care once you have a diagnosis (from the NHS or a self-pay consultation); no outpatient diagnostics."},
+}
+OUTPATIENT_LIMITS = {"unlimited": 1.0, "1000": 0.88, "750": 0.84, "500": 0.80}  # Complete only; Essentials has no outpatient diagnostics
+EXCESSES = {0: 1.0, 100: 0.94, 250: 0.87, 500: 0.78}
+HOSPITAL_LISTS = {
+    "essential": (0.85, "Essential list: about 200 partner hospitals outside central London"),
+    "extended": (1.0, "Extended list: about 300 hospitals across the UK, outside central London"),
+    "london_premium": (1.20, "London Premium list: every recognised hospital, including central London"),
+}
+ADD_ONS = {  # per person per month
+    "dental_optical": (11.50, "Dental and optical: one check-up a year plus a £300 dental and £150 optical allowance"),
+    "therapies_plus": (6.00, "Therapies Plus: unlimited physiotherapy, osteopathy and chiropractic sessions when clinically needed"),
+    "travel_cover": (4.50, "Worldwide emergency medical cover for trips up to 30 days"),
+}
+AGE_BASE = [  # (max age, monthly base for Complete, extended list, unlimited outpatient, £0 excess)
+    (17, 22.0), (24, 38.0), (29, 42.0), (34, 48.0), (39, 55.0), (44, 64.0), (49, 75.0), (54, 89.0), (59, 106.0), (64, 128.0), (69, 155.0), (200, 190.0),
+]
+REGION_FACTORS = [  # postcode area prefixes -> factor (first match wins)
+    (("EC", "WC", "E", "N", "NW", "SE", "SW", "W"), 1.25, "London"),
+    (("BN", "GU", "RH", "TN", "OX", "RG", "SL", "HP", "KT", "SM", "CR", "BR", "TW", "UB", "HA", "EN", "IG", "RM", "DA", "ME", "CT", "SO", "PO"), 1.10, "South East"),
+    (("EH", "G", "AB", "DD", "KY", "FK", "PA", "IV", "NE", "SR", "DH", "TS", "CF", "SA", "NP", "LL", "BT"), 0.90, "Scotland, North East, Wales and Northern Ireland"),
+]
+SMOKER_LOADING = 1.10
+MULTI_PERSON_DISCOUNT = {2: 0.05, 3: 0.10}  # couples 5%, three or more people 10%
+QUOTE_VALID_DAYS = 14
+PACKAGES = {  # the three starting packages every quote shows
+    "essentials": {"label": "Essentials", "product": "essentials", "outpatient_limit": None, "excess": 250, "hospital_list": "essential"},
+    "balanced": {"label": "Balanced", "product": "complete", "outpatient_limit": "1000", "excess": 100, "hospital_list": "extended"},
+    "complete": {"label": "Complete", "product": "complete", "outpatient_limit": "unlimited", "excess": 0, "hospital_list": "extended"},
+}
+UNDERWRITING_METHODS = {
+    "moratorium": "Moratorium: no medical questions now; conditions you had symptoms, treatment or advice for in the 5 years before cover starts are excluded until you have 2 clear years on cover.",
+    "full_medical": "Full medical underwriting: you tell us your medical history now and we list any exclusions up front.",
+    "switch": "Switch: you keep the underwriting terms of your current UK insurer if you have had at least 12 months of continuous cover with no break.",
+}
+SERIOUS_CONDITIONS = ("cancer", "heart", "stroke", "kidney failure", "multiple sclerosis", "hiv")
+HAZARD_POINTS = 10
+
+# ---------------------------------------------------------------- members (/demo-data/northgate-members.md "Members")
 MEMBERS = {
-    "EVG-482913": {"first_name": "Maria", "last_name": "Lopez", "dob": "1986-04-12", "plan": "Evergreen Silver PPO", "ded_met": 850, "oop_met": 1200, "email": "maria.lopez@example.com"},
-    "EVG-337120": {"first_name": "James", "last_name": "Carter", "dob": "1979-11-02", "plan": "Evergreen Gold HMO", "ded_met": 500, "oop_met": 1450, "email": "james.carter@example.com"},
-    "EVG-559804": {"first_name": "Priya", "last_name": "Nair", "dob": "1992-07-23", "plan": "Evergreen Silver PPO", "ded_met": 300, "oop_met": 410, "email": "priya.nair@example.com"},
-    "EVG-610277": {"first_name": "Robert", "last_name": "Chen", "dob": "1958-01-30", "plan": "Evergreen Gold HMO", "ded_met": 500, "oop_met": 2980, "email": "robert.chen@example.com"},
-    "EVG-725031": {"first_name": "Aisha", "last_name": "Okafor", "dob": "1990-09-15", "plan": "Evergreen Bronze EPO", "ded_met": 1120, "oop_met": 1120, "email": "aisha.okafor@example.com"},
-    "EVG-801456": {"first_name": "Daniel", "last_name": "Kim", "dob": "2001-03-08", "plan": "Evergreen Silver PPO", "ded_met": 0, "oop_met": 60, "email": "daniel.kim@example.com"},
+    "NGH-410237": {"first_name": "Sarah", "last_name": "Mitchell", "dob": "1984-03-14", "plan": "Northgate Complete", "email": "sarah.mitchell@example.co.uk",
+                   "mobile": "07700 900141", "address": "14 Larkfield Road, Leeds LS6 2AB"},
+    "NGH-522918": {"first_name": "David", "last_name": "Okoro", "dob": "1977-09-02", "plan": "Northgate Essentials", "email": "david.okoro@example.co.uk",
+                   "mobile": "07700 900142", "address": "3 Canal Street, Manchester M1 3HE"},
+    "NGH-638405": {"first_name": "Emma", "last_name": "Clarke", "dob": "1991-06-21", "plan": "Northgate Complete", "email": "emma.clarke@example.co.uk",
+                   "mobile": "07700 900143", "address": "27 Cotham Hill, Bristol BS6 6JY"},
+    "NGH-714560": {"first_name": "Raj", "last_name": "Patel", "dob": "1966-11-30", "plan": "Northgate Complete", "email": "raj.patel@example.co.uk",
+                   "mobile": "07700 900144", "address": "88 Fortis Green, London N2 9EY"},
+    "NGH-805193": {"first_name": "Tom", "last_name": "Harris", "dob": "2000-01-08", "plan": "Northgate Essentials", "email": "tom.harris@example.co.uk",
+                   "mobile": "07700 900145", "address": "5 Moseley Road, Birmingham B12 9AA"},
+    "NGH-917362": {"first_name": "Lucy", "last_name": "Evans", "dob": "1959-05-17", "plan": "Northgate Cash Plan Level 3", "email": "lucy.evans@example.co.uk",
+                   "mobile": "07700 900146", "address": "40 Pontcanna Street, Cardiff CF11 9HQ"},
 }
+PHONES = {"+447700900141": "NGH-410237", "+447700900142": "NGH-522918", "+447700900143": "NGH-638405"}
+PREFERRED_CONTACT = {"NGH-410237": "email", "NGH-522918": "phone, after 6pm", "NGH-638405": "SMS"}
 
-# Registered phone numbers (fictional 555-01xx) and preferred contact, used to identify callers (/architecture/caller-verification.md)
-PHONES = {"+12025550141": "EVG-482913", "+12025550142": "EVG-337120", "+12025550143": "EVG-559804"}
-PREFERRED_CONTACT = {"EVG-482913": "phone, after 5pm", "EVG-337120": "email", "EVG-559804": "SMS"}
-
+# ---------------------------------------------------------------- health claims and pre-authorisations
 CLAIMS = {
-    "C-20931": {"member": "EVG-482913", "type": "health", "service": "Office visit - dermatology", "provider": "Mission Dermatology", "service_date": "2026-09-10",
-                "billed": 220.0, "status": "paid", "plan_paid": 185.0, "member_responsibility": 35.0, "paid_date": "2026-09-28",
-                "notes": "Specialist copay applied.",
-                "timeline": [{"date": "2026-09-10", "event": "Claim received"}, {"date": "2026-09-18", "event": "Claim reviewed"}, {"date": "2026-09-28", "event": "Claim paid"}],
-                "next_step": "No action needed. Wait for the provider's bill before paying."},
-    "C-20977": {"member": "EVG-482913", "type": "health", "service": "Lab work - lipid panel", "provider": "Quest Diagnostics", "service_date": "2026-09-18",
-                "billed": 140.0, "status": "processing", "expected_decision_date_offset": 4,
-                "timeline": [{"date": "2026-09-18", "event": "Claim received"}, {"date": "2026-09-25", "event": "In review"}],
-                "next_step": "Expect a decision within a few days."},
-    "C-31544": {"member": "EVG-337120", "type": "health", "service": "Emergency appendectomy", "provider": "Lakeside Surgical Center", "service_date": "2026-08-29",
-                "billed": 18400.0, "status": "denied", "plan_paid": 0.0, "denial_reason": "Out-of-network facility",
-                "appeal_deadline": "2027-02-25",
-                "timeline": [{"date": "2026-08-29", "event": "Claim received"}, {"date": "2026-09-19", "event": "Claim denied: out-of-network facility"}],
-                "next_step": "An appeals specialist can file an appeal before February 25, 2027."},
-    "C-31602": {"member": "EVG-337120", "type": "health", "service": "Emergency room visit", "provider": "Bayview Medical Center", "service_date": "2026-08-29",
-                "billed": 2150.0, "status": "paid", "plan_paid": 1950.0, "member_responsibility": 200.0, "paid_date": "2026-09-15",
-                "notes": "Emergency room copay applied.",
-                "timeline": [{"date": "2026-08-29", "event": "Claim received"}, {"date": "2026-09-15", "event": "Claim paid"}],
-                "next_step": "No action needed."},
-    "C-40210": {"member": "EVG-559804", "type": "health", "service": "MRI lumbar spine", "provider": "Bay Imaging", "service_date": "2026-09-22",
-                "billed": 1850.0, "status": "pending information",
-                "notes": "Provider was asked to send authorization number PA-77812.",
-                "timeline": [{"date": "2026-09-22", "event": "Claim received"}, {"date": "2026-09-29", "event": "Waiting for the provider's authorization number"}],
-                "next_step": "The provider has been asked for the missing information; nothing is needed from the member."},
-    "C-41007": {"member": "EVG-610277", "type": "health", "service": "Physical therapy, 6 visits", "provider": "Harbor Physical Therapy", "service_date": "2026-09-05",
-                "billed": 900.0, "status": "paid", "plan_paid": 660.0, "member_responsibility": 240.0, "paid_date": "2026-09-25",
-                "notes": "6 x $40 specialist copay.",
-                "timeline": [{"date": "2026-09-05", "event": "Claim received"}, {"date": "2026-09-25", "event": "Claim paid"}],
-                "next_step": "No action needed."},
-    "C-52230": {"member": "EVG-725031", "type": "health", "service": "Urgent care visit", "provider": "CityCare Urgent Care", "service_date": "2026-09-30",
-                "billed": 310.0, "status": "paid", "plan_paid": 220.0, "member_responsibility": 90.0, "paid_date": "2026-10-03",
-                "notes": "Urgent care copay applied.",
-                "timeline": [{"date": "2026-09-30", "event": "Claim received"}, {"date": "2026-10-03", "event": "Claim paid"}],
-                "next_step": "No action needed."},
-    "C-60012": {"member": "EVG-337120", "type": "motor", "service": "Windscreen replacement", "provider": "Clearview Glass", "service_date": "2026-09-02",
-                "billed": 410.0, "status": "paid", "plan_paid": 410.0, "member_responsibility": 0.0, "paid_date": "2026-09-12",
-                "notes": "Glass cover, no excess.",
-                "timeline": [{"date": "2026-09-02", "event": "Claim received"}, {"date": "2026-09-05", "event": "Claim approved"}, {"date": "2026-09-12", "event": "Claim paid"}],
-                "next_step": "No action needed."},
+    "CL-70231": {"member": "NGH-410237", "policy_id": "PMI-300101", "type": "health", "service": "Knee MRI scan", "provider": "Headingley Park Imaging",
+                 "service_date": "2026-09-22", "billed": 650.0, "status": "paid", "plan_paid": 550.0, "member_responsibility": 100.0, "paid_date": "2026-10-03",
+                 "notes": "Paid directly to the hospital under pre-authorisation PA-500812; your £100 excess applied.",
+                 "timeline": [{"date": "2026-09-22", "event": "Invoice received from the hospital"}, {"date": "2026-10-03", "event": "Paid to the hospital"}],
+                 "next_step": "Nothing to do. The hospital may ask you to pay the £100 excess."},
+    "CL-70412": {"member": "NGH-522918", "policy_id": "PMI-300214", "type": "health", "service": "Consultation with an orthopaedic surgeon", "provider": "Mr Alan Price, Manchester",
+                 "service_date": "2026-10-08", "billed": 280.0, "status": "paid", "plan_paid": 220.0, "member_responsibility": 60.0, "paid_date": "2026-10-20",
+                 "notes": "The consultant charged £60 above our fee guidelines (a shortfall); he is not fee-assured.",
+                 "timeline": [{"date": "2026-10-08", "event": "Invoice received"}, {"date": "2026-10-20", "event": "Paid £220 to the consultant"}],
+                 "next_step": "The consultant may bill you the £60 shortfall."},
+    "CL-70588": {"member": "NGH-638405", "policy_id": "PMI-300377", "type": "health", "service": "Physiotherapy, 4 sessions", "provider": "Clifton Physio Centre",
+                 "service_date": "2026-10-20", "billed": 260.0, "status": "processing", "expected_decision_date_offset": 3,
+                 "timeline": [{"date": "2026-10-28", "event": "Invoice received"}, {"date": "2026-11-02", "event": "In review"}],
+                 "next_step": "We expect to pay the clinic within a few days."},
+    "CL-70640": {"member": "NGH-714560", "policy_id": "PMI-300452", "type": "health", "service": "Lumbar spine injection", "provider": "St John's Wood Clinic, London",
+                 "service_date": "2026-10-02", "billed": 2400.0, "status": "declined", "plan_paid": 0.0,
+                 "denial_reason": "Lower back conditions are excluded on this policy (full medical underwriting exclusion)",
+                 "timeline": [{"date": "2026-10-05", "event": "Invoice received"}, {"date": "2026-10-16", "event": "Declined: excluded condition"}],
+                 "next_step": "If you disagree, our customer relations team can review the decision."},
 }
-
-PRIOR_AUTHS = {
-    "PA-77812": {"member": "EVG-559804", "service": "MRI lumbar spine", "status": "approved", "decision_date": "2026-09-20", "valid_through": "2026-12-20"},
-    "PA-77930": {"member": "EVG-725031", "service": "Knee arthroscopy", "status": "pending clinical review", "expected_decision_date_offset": 3},
-    "PA-78001": {"member": "EVG-610277", "service": "CPAP device", "status": "denied", "decision_date": "2026-09-26",
-                 "notes": "Insufficient documentation; the provider may resubmit with a sleep study."},
+PRE_AUTHS = {
+    "PA-500812": {"member": "NGH-410237", "policy_id": "PMI-300101", "service": "Knee MRI scan", "condition": "knee pain", "status": "approved",
+                  "decision_date": "2026-09-15", "valid_through": "2026-12-15", "consultant": "Mr James Holloway", "hospital": "Headingley Park Hospital",
+                  "notes": "Covers the scan and one follow-up consultation."},
+    "PA-500955": {"member": "NGH-638405", "policy_id": "PMI-300377", "service": "Shoulder arthroscopy", "condition": "shoulder pain", "status": "pending",
+                  "expected_decision_date_offset": 2, "notes": "Waiting for the consultant's procedure code and fee estimate."},
+    "PA-501020": {"member": "NGH-522918", "policy_id": "PMI-300214", "service": "Knee replacement", "condition": "knee osteoarthritis", "status": "approved",
+                  "decision_date": "2026-10-25", "valid_through": "2027-01-25", "consultant": "Mr Alan Price", "hospital": "Didsbury Private Hospital",
+                  "notes": "Covers surgery, the hospital stay and 6 physiotherapy sessions afterwards."},
 }
+PRE_AUTH_BASE = 502000
 
-PROVIDERS = [
-    {"name": "Dr. Elena Ruiz", "specialty": "Dermatology", "practice": "Mission Dermatology", "address": "2400 Mission St, San Francisco, CA", "zip": "94110", "phone": "(415) 555-0110", "accepting_new_patients": True},
-    {"name": "Dr. Samuel Park", "specialty": "Dermatology", "practice": "Sunset Skin Clinic", "address": "1801 Irving St, San Francisco, CA", "zip": "94122", "phone": "(415) 555-0127", "accepting_new_patients": False},
-    {"name": "Dr. Grace Liu", "specialty": "Primary care", "practice": "Bayview Family Medicine", "address": "5000 3rd St, San Francisco, CA", "zip": "94124", "phone": "(415) 555-0133", "accepting_new_patients": True},
-    {"name": "Dr. Marcus Bell", "specialty": "Orthopedics", "practice": "Lakeside Orthopedics", "address": "2100 Webster St, San Francisco, CA", "zip": "94115", "phone": "(415) 555-0148", "accepting_new_patients": True},
-    {"name": "Harbor Mental Health Associates", "specialty": "Behavioral health", "practice": "Harbor Mental Health", "address": "1035 Market St, San Francisco, CA", "zip": "94103", "phone": "(415) 555-0156", "accepting_new_patients": True},
-    {"name": "Dr. Hannah Wright", "specialty": "Pediatrics", "practice": "Little Steps Pediatrics", "address": "3150 18th St, San Francisco, CA", "zip": "94110", "phone": "(415) 555-0161", "accepting_new_patients": True},
-    {"name": "Dr. Naomi Reyes", "specialty": "Dentistry", "practice": "Mission Family Dental", "address": "2480 Mission St, San Francisco, CA", "zip": "94110", "phone": "(415) 555-0172", "accepting_new_patients": True},
+# conditions that never need a GP referral (Direct Access, /demo-data/northgate-members.md)
+DIRECT_ACCESS = {
+    "muscles_bones_joints": ("back pain", "neck pain", "knee pain", "shoulder pain", "hip pain", "sports injury", "joint pain", "muscle", "bone", "joint"),
+    "mental_health": ("anxiety", "depression", "stress", "low mood", "mental health", "panic", "insomnia"),
+    "cancer_symptoms": ("lump", "unexplained weight loss", "cancer", "blood in"),
+    "skin": ("mole", "skin lesion"),
+}
+# condition keyword -> specialty
+SPECIALTY_FOR = {
+    "knee": "orthopaedics", "hip": "orthopaedics", "shoulder": "orthopaedics", "back": "orthopaedics", "neck": "orthopaedics", "joint": "orthopaedics", "sports": "orthopaedics",
+    "anxiety": "psychiatry", "depression": "psychiatry", "stress": "psychiatry", "mental": "psychiatry",
+    "skin": "dermatology", "mole": "dermatology", "rash": "dermatology", "eczema": "dermatology",
+    "heart": "cardiology", "chest": "cardiology", "palpitations": "cardiology",
+    "stomach": "gastroenterology", "bowel": "gastroenterology", "reflux": "gastroenterology",
+    "lump": "oncology", "cancer": "oncology", "breast": "oncology",
+    "ear": "ent", "nose": "ent", "throat": "ent", "sinus": "ent",
+    "cataract": "ophthalmology", "eye": "ophthalmology",
+}
+SPECIALISTS = [  # recognised consultants (Finder); fee_assured = billed within our limits, so no shortfall
+    {"id": "CN-101", "name": "Mr James Holloway", "specialty": "orthopaedics", "hospital": "Headingley Park Hospital", "area": "LS", "lists": ["essential", "extended", "london_premium"], "fee_assured": True, "next_available_days": 6, "remote": False},
+    {"id": "CN-102", "name": "Ms Priya Desai", "specialty": "orthopaedics", "hospital": "Roundhay Private Hospital", "area": "LS", "lists": ["extended", "london_premium"], "fee_assured": True, "next_available_days": 9, "remote": True},
+    {"id": "CN-103", "name": "Mr Alan Price", "specialty": "orthopaedics", "hospital": "Didsbury Private Hospital", "area": "M", "lists": ["extended", "london_premium"], "fee_assured": False, "next_available_days": 4, "remote": False},
+    {"id": "CN-104", "name": "Dr Fiona Grant", "specialty": "orthopaedics", "hospital": "Bath Abbey Clinic", "area": "BS", "lists": ["essential", "extended", "london_premium"], "fee_assured": True, "next_available_days": 5, "remote": True},
+    {"id": "CN-105", "name": "Mr Oliver Reed", "specialty": "orthopaedics", "hospital": "Clifton Downs Hospital", "area": "BS", "lists": ["extended", "london_premium"], "fee_assured": True, "next_available_days": 8, "remote": False},
+    {"id": "CN-106", "name": "Mr Daniel Shaw", "specialty": "orthopaedics", "hospital": "St John's Wood Hospital", "area": "NW", "lists": ["london_premium"], "fee_assured": True, "next_available_days": 3, "remote": False},
+    {"id": "CN-201", "name": "Dr Helen Moss", "specialty": "dermatology", "hospital": "Headingley Park Hospital", "area": "LS", "lists": ["essential", "extended", "london_premium"], "fee_assured": True, "next_available_days": 7, "remote": True},
+    {"id": "CN-202", "name": "Dr Kwame Asante", "specialty": "dermatology", "hospital": "Harley Court Clinic", "area": "W", "lists": ["london_premium"], "fee_assured": True, "next_available_days": 4, "remote": True},
+    {"id": "CN-301", "name": "Dr Laura Bennett", "specialty": "psychiatry", "hospital": "Redland House Hospital", "area": "BS", "lists": ["essential", "extended", "london_premium"], "fee_assured": True, "next_available_days": 5, "remote": True},
+    {"id": "CN-302", "name": "Dr Samir Haddad", "specialty": "psychiatry", "hospital": "Northgate Mind Clinic, Manchester", "area": "M", "lists": ["essential", "extended", "london_premium"], "fee_assured": True, "next_available_days": 3, "remote": True},
+    {"id": "CN-401", "name": "Dr Rachel Kim", "specialty": "cardiology", "hospital": "Roundhay Private Hospital", "area": "LS", "lists": ["extended", "london_premium"], "fee_assured": True, "next_available_days": 10, "remote": False},
+    {"id": "CN-501", "name": "Mr Thomas Wright", "specialty": "gastroenterology", "hospital": "Didsbury Private Hospital", "area": "M", "lists": ["extended", "london_premium"], "fee_assured": True, "next_available_days": 8, "remote": True},
+    {"id": "CN-601", "name": "Dr Anika Sharma", "specialty": "oncology", "hospital": "Harley Court Clinic", "area": "W", "lists": ["essential", "extended", "london_premium"], "fee_assured": True, "next_available_days": 2, "remote": False},
+    {"id": "CN-602", "name": "Dr Mark Ellis", "specialty": "oncology", "hospital": "Headingley Park Hospital", "area": "LS", "lists": ["essential", "extended", "london_premium"], "fee_assured": True, "next_available_days": 2, "remote": False},
+    {"id": "CN-701", "name": "Ms Claire Douglas", "specialty": "ent", "hospital": "Clifton Downs Hospital", "area": "BS", "lists": ["extended", "london_premium"], "fee_assured": True, "next_available_days": 9, "remote": True},
+    {"id": "CN-801", "name": "Mr Peter Lang", "specialty": "ophthalmology", "hospital": "Didsbury Private Hospital", "area": "M", "lists": ["essential", "extended", "london_premium"], "fee_assured": True, "next_available_days": 12, "remote": False},
 ]
 
-# benefit -> (covered, annual_limit, copay_percent, waiting_period_days, pre_authorization_required, notes)
-BENEFITS: dict[str, dict[str, tuple]] = {
-    "Evergreen Silver PPO": {
-        "inpatient": (True, None, 0, 0, True, "No annual limit."), "outpatient": (True, 5000, 10, 0, False, ""),
-        "maternity": (True, 10000, 0, 365, True, ""), "dental": (True, 800, 20, 90, False, ""), "optical": (True, 300, 0, 30, False, ""),
-        "mental_health": (True, 4000, 0, 0, False, ""), "physiotherapy": (True, 1200, 0, 0, False, "A referral is needed."),
-    },
-    "Evergreen Gold HMO": {
-        "inpatient": (True, None, 0, 0, True, "No annual limit."), "outpatient": (True, 8000, 0, 0, False, ""),
-        "maternity": (True, 15000, 0, 365, True, ""), "dental": (True, 1500, 10, 60, False, ""), "optical": (True, 500, 0, 30, False, ""),
-        "mental_health": (True, 6000, 0, 0, False, ""), "physiotherapy": (True, 2000, 0, 0, False, "A referral is needed."),
-    },
-    "Evergreen Bronze EPO": {
-        "inpatient": (True, None, 0, 0, True, "No annual limit."), "outpatient": (True, 2000, 20, 0, False, ""),
-        "maternity": (True, 5000, 0, 365, True, ""), "dental": (False, None, None, None, False, "Not covered on this plan."),
-        "optical": (False, None, None, None, False, "Not covered on this plan."), "mental_health": (True, 2000, 0, 0, False, ""),
-        "physiotherapy": (True, 600, 0, 0, False, "A referral is needed."),
-    },
-}
-BENEFIT_ALIASES = {
-    "dentistry": "dental", "dentist": "dental", "teeth": "dental", "eye": "optical", "eyes": "optical", "glasses": "optical", "vision": "optical",
-    "pregnancy": "maternity", "mental": "mental_health", "therapy": "mental_health", "counselling": "mental_health", "counseling": "mental_health",
-    "physio": "physiotherapy", "hospital": "inpatient", "outpatients": "outpatient",
-}
-USAGE = {
-    "EVG-482913": {"outpatient": 1850, "dental": 320, "mental_health": 600},
-    "EVG-559804": {"dental": 100, "outpatient": 410},
-    "EVG-801456": {"outpatient": 60},
-}
+# policy -> exclusions (full medical underwriting) or moratorium conditions
+EXCLUSIONS = {"PMI-300452": ["lower back conditions", "back pain"]}
+MORATORIUM_CONDITIONS = {"PMI-300377": ["migraine"]}  # Emma: symptoms in the 5 years before cover
+OUTPATIENT_USED = {"PMI-300377": 640.0}  # this policy year, against a £1,000 outpatient limit
+EXCESS_USED = {"PMI-300101": 100.0}  # the excess applies once per person per policy year
 
+# ---------------------------------------------------------------- cash plan (/demo-data/northgate-members.md "Cash plan")
+CASH_PLAN_LEVELS = {  # benefit -> yearly limit per level; percent refunded
+    "Level 1": {"dental": 200, "optical": 60, "therapies": 100, "consultations": 150, "hospital_nights": 400},
+    "Level 2": {"dental": 300, "optical": 120, "therapies": 200, "consultations": 250, "hospital_nights": 600},
+    "Level 3": {"dental": 400, "optical": 200, "therapies": 300, "consultations": 350, "hospital_nights": 800},
+}
+CASH_PLAN_REFUND_PERCENT = 100
+CASH_PLAN_CLAIMS = {
+    "CC-81204": {"member": "NGH-917362", "policy_id": "CSH-400118", "benefit": "dental", "provider": "Pontcanna Dental", "treatment_date": "2026-10-14",
+                 "amount_claimed": 145.0, "status": "paid", "amount_paid": 145.0, "paid_date": "2026-10-19", "notes": "Paid to your bank account."},
+    "CC-81377": {"member": "NGH-917362", "policy_id": "CSH-400118", "benefit": "optical", "provider": "Cardiff Bay Opticians", "treatment_date": "2026-11-03",
+                 "amount_claimed": 220.0, "status": "processing", "expected_decision_date_offset": 2,
+                 "notes": "Your optical limit is £200 a year, so we can pay up to £200 of this claim."},
+    "CC-81402": {"member": "NGH-638405", "policy_id": "CSH-400204", "benefit": "therapies", "provider": "Clifton Physio Centre", "treatment_date": "2026-11-01",
+                 "amount_claimed": 65.0, "status": "more information needed",
+                 "notes": "The receipt does not show the patient's name. Upload a receipt that shows the patient's name, the provider, the date and the cost."},
+}
+CASH_PLAN_USAGE = {"NGH-917362": {"dental": 145, "optical": 0}, "NGH-638405": {"therapies": 0}}
+
+# ---------------------------------------------------------------- documents
 DOCUMENT_TYPES = {
-    "policy_schedule": ("Policy schedule", ("health", "motor"), ("email", "download", "post")),
-    "policy_wording": ("Policy wording", ("health", "motor"), ("email", "download", "post")),
-    "membership_card": ("Membership card", ("health",), ("email", "download", "post")),
-    "certificate_of_insurance": ("Certificate of insurance", ("motor",), ("email", "download", "post")),
-    "premium_invoice": ("Premium invoice", ("health", "motor"), ("email", "download", "post")),
-    "tax_certificate": ("Annual premium statement", ("health",), ("email", "download", "post")),
-    "green_card": ("Green Card (international motor insurance certificate)", ("motor",), ("email", "download")),
+    "membership_certificate": ("Membership certificate (who is covered, your options and any exclusions)", ("health",)),
+    "policy_guide": ("Policy guide (terms and conditions)", ("health", "cash_plan")),
+    "membership_card": ("Digital membership card", ("health", "cash_plan")),
+    "premium_statement": ("Premium statement for the year", ("health", "cash_plan")),
+    "table_of_benefits": ("Cash plan table of benefits", ("cash_plan",)),
 }
-GREEN_CARD_COUNTRIES = ["Austria", "Belgium", "Denmark", "France", "Germany", "Greece", "Ireland", "Italy", "Netherlands", "Norway", "Portugal", "Spain", "Sweden", "Switzerland", "Turkey"]
-DOCUMENT_ETA = {"email": "within 15 minutes", "download": "instant", "post": "5-7 business days"}
-
-# member-facing renewal quotes: policy -> (renewal premium, reasons, options)
-QUOTES = {
-    "MP-200415": (738.70, ["Repair cost inflation", "One claim in the last 12 months"],
-                  [{"name": "Renew as is", "premium": 738.70, "notes": "Same cover and excess"},
-                   {"name": "Increase voluntary excess to $500", "premium": 689.30, "notes": "Saves $49.40 a year"}]),
-    "HP-100231": (2651.00, ["Medical cost inflation (3.2%)", "Moving into the 35-39 age band"],
-                  [{"name": "Renew as is", "premium": 2651.00, "notes": "Monthly payments continue"},
-                   {"name": "Pay annually", "premium": 2518.45, "notes": "5% discount for paying once a year"}]),
-    "HP-100790": (3214.00, ["Medical cost inflation (3.2%)"], [{"name": "Renew as is", "premium": 3214.00, "notes": "Monthly payments continue"}]),
-    "HP-100412": (3214.00, ["Medical cost inflation (3.2%)"], [{"name": "Renew as is", "premium": 3214.00, "notes": "Monthly payments continue"}]),
+DELIVERY = {"email": "within 15 minutes", "sms": "a link by text within 5 minutes", "post": "5 to 7 working days"}
+SECURE_LINK_PURPOSES = {
+    "change_bank_details": "Change the bank account for your Direct Debit",
+    "direct_debit_setup": "Set up your Direct Debit",
+    "make_payment": "Pay a missed premium by debit card",
 }
 
-ONBOARDING_STEPS = {
-    "confirm_contact_details": "Confirm contact details",
-    "communication_preferences": "Choose communication preferences",
-    "register_online_account": "Register your online account",
-    "download_membership_card": "Download your membership card",
-    "choose_primary_provider": "Choose a primary provider",
-    "review_waiting_periods": "Review your waiting periods",
-}
-COMMUNICATION_PREFERENCES = ("email", "sms", "post")
+# ---------------------------------------------------------------- Digital GP (6am-10pm weekdays, 8am-10pm weekends)
+GP_TYPES = {"gp": "GP", "nurse": "advanced nurse practitioner"}
+GP_FORMATS = ("video", "phone")
 
-AUTH_LIMITS = {
-    "claims_handler": {"inpatient": 5000, "outpatient": 2000, "dental": 1000},
-    "senior_handler": {"inpatient": 25000, "outpatient": 10000, "dental": 5000},
-    "team_leader": {"inpatient": 100000, "outpatient": 50000, "dental": 20000},
-    "claims_manager": {"inpatient": 250000, "outpatient": 100000, "dental": 50000},
+# ---------------------------------------------------------------- complaints and other contacts (fictional numbers)
+LINES = {
+    "member_services": ("0345 600 0101", "Monday to Friday 8am to 8pm, Saturday 8am to 4pm"),
+    "sales": ("0800 600 0102", "Monday to Friday 8am to 8pm, Saturday 9am to 1pm"),
+    "claims": ("0345 600 0103", "Monday to Friday 8am to 8pm, Saturday 8am to 4pm"),
+    "cash_plan": ("0345 600 0104", "Monday to Friday 8am to 6pm, Saturday 8am to 1pm"),
+    "nurse_line": ("0345 600 0105", "24 hours a day, 7 days a week"),
 }
-CONTACTS = {
-    "fraud": ("Special Investigations Unit", "4410", "Mon-Fri 8:00-18:00", "siu@evergreen.example"),
-    "complaints": ("Customer Resolution Team", "4120", "Mon-Fri 8:00-18:00", "resolution@evergreen.example"),
-    "legal": ("Legal & Compliance", "4600", "Mon-Fri 9:00-17:00", "legal@evergreen.example"),
-    "data_protection": ("Privacy Office", "4700", "Mon-Fri 9:00-17:00", "privacy@evergreen.example"),
-    "it_service_desk": ("IT Service Desk", "4000", "24/7", "servicedesk@evergreen.example"),
-    "medical_director": ("Clinical Governance", "4850", "Mon-Fri 9:00-17:00", "clinical@evergreen.example"),
-}
-
-NURSE_LINE = "1-800-555-0142"
-
-# Claim first notice (/demo-data/members-and-claims.md "Claim first notice and requirements"): type -> (policy type, documents)
-CLAIM_WHERE_TO_SEND = "Upload them in your online account or email the claims mailbox shown on your Explanation of Benefits; the claim number must be on every page."
-_BILL = {"document": "Itemized provider bill", "note": "Must show the provider, the date and each charge"}
-_PROOF = {"document": "Proof of payment", "note": "Only if you paid the provider yourself"}
-CLAIM_TYPES: dict[str, tuple[str, list[dict[str, str]]]] = {
-    "outpatient": ("health", [_BILL, _PROOF]),
-    "urgent_care": ("health", [_BILL, _PROOF]),
-    "inpatient": ("health", [
-        {"document": "Itemized hospital bill", "note": "Must show every charge for the stay"},
-        {"document": "Discharge summary", "note": "From the hospital"},
-        {"document": "Admission authorization number", "note": "Only if the stay was planned"}]),
-    "dental": ("health", [
-        {"document": "Itemized dental bill with procedure codes", "note": "From the dentist"},
-        {"document": "X-rays", "note": "Needed for crowns, bridges or implants"}]),
-    "motor_glass": ("motor", [
-        {"document": "Garage invoice", "note": "Must show the glass work and the vehicle registration"},
-        {"document": "Photos of the damage", "note": "No police report is needed for glass-only claims"}]),
-    "motor_collision": ("motor", [
-        {"document": "Repair estimate or invoice", "note": "From the garage"},
-        {"document": "Photos of all vehicles involved", "note": "Show the damage and the registrations"},
-        {"document": "The other party's details", "note": "Name, contact details and insurer"},
-        {"document": "Police report number", "note": "Only if anyone was injured or the police attended"}]),
-}
-CLAIM_DECISION_DAYS = 30
-NEW_CLAIM_IDS: list[str] = []
-CLAIM_NUMBER_BASE = 90000
 
 # ---------------------------------------------------------------- mutable, date-relative state
 POLICIES: dict[str, dict[str, Any]] = {}
-ONBOARDING: dict[str, dict[str, Any]] = {}
+PAYMENTS: dict[str, dict[str, Any]] = {}
+GP_SLOTS: list[dict[str, Any]] = []
+GP_BOOKINGS: list[dict[str, Any]] = []
 DOCUMENT_REQUESTS: list[dict[str, Any]] = []
-RENEWAL_DECISIONS: list[dict[str, Any]] = []
-_counters = {"doc": 0, "renewal": 0, "claim": 0}
+SECURE_LINKS: list[dict[str, Any]] = []
+CONTACT_CHANGES: list[dict[str, Any]] = []
+QUOTES: dict[str, dict[str, Any]] = {}
+UNDERWRITING: dict[str, dict[str, Any]] = {}
+APPLICATIONS: dict[str, dict[str, Any]] = {}
+NEW_IDS: dict[str, list[str]] = {"pre_auth": [], "member": [], "claim": []}
+_counters = {"doc": 0, "link": 0, "gp": 0, "quote": 0, "uw": 0, "policy": 0, "member": 0, "pre_auth": 0, "retry": 0, "change": 0}
+
+_BASE_MEMBERS = copy.deepcopy(MEMBERS)
 
 
 def today() -> date:
@@ -219,35 +226,74 @@ def rel(days: int) -> str:
 
 def reset() -> None:
     """Rebuild the date-relative and mutable records (process start, tests, `seed --reset`)."""
-    def pol(member, ptype, product, status, start, end, premium, freq, pay, nxt, overdue=0.0, grace=None, **extra):  # noqa: ANN001, ANN003
-        return {"member": member, "type": ptype, "product": product, "status": status, "start_date": rel(start), "end_date": rel(end),
-                "renewal_date": rel(end), "annual_premium": premium, "payment_frequency": freq, "payment_status": pay,
-                "next_payment_date": rel(nxt) if nxt is not None else None, "overdue_amount": overdue,
-                "grace_period_ends": rel(grace) if grace is not None else None, "cover_level": product, "renewal_status": "pending", **extra}
+    def pol(member, kind, product, start, monthly, *, excess=None, outpatient=None, hospital_list=None, underwriting=None,  # noqa: ANN001
+            insured=None, add_ons=None, level=None, status="active"):
+        out = {"member": member, "type": kind, "product": product, "status": status, "start_date": rel(start),
+               "renewal_date": rel(start + 365 if start + 365 > 0 else start + 730), "monthly_premium": monthly, "payment_method": "Direct Debit",
+               "insured_persons": insured or [f"{MEMBERS[member]['first_name']} {MEMBERS[member]['last_name']}"]}
+        if kind == "health":
+            out.update(excess=excess, outpatient_limit=outpatient, hospital_list=hospital_list, underwriting=underwriting, add_ons=add_ons or [])
+        else:
+            out.update(level=level)
+        return out
 
+    MEMBERS.clear()
+    MEMBERS.update(copy.deepcopy(_BASE_MEMBERS))
     POLICIES.clear()
     POLICIES.update({
-        "HP-100231": pol("EVG-482913", "health", "Evergreen Silver PPO", "active", -340, 25, 2548.80, "monthly", "up_to_date", 9),
-        "HP-100412": pol("EVG-337120", "health", "Evergreen Gold HMO", "active", -280, 85, 3120.00, "monthly", "up_to_date", 12),
-        "MP-200415": pol("EVG-337120", "motor", "Evergreen Motor Comprehensive", "active", -352, 13, 684.00, "annual", "up_to_date", None,
-                         vehicle="Toyota Corolla 2020, reg DEMO-4821", voluntary_excess=250),
-        "HP-100655": pol("EVG-559804", "health", "Evergreen Silver PPO", "active", -200, 165, 2548.80, "monthly", "up_to_date", 20),
-        "HP-100790": pol("EVG-610277", "health", "Evergreen Gold HMO", "active", -300, 55, 3120.00, "monthly", "overdue", -7, overdue=212.40, grace=7),
-        "HP-100877": pol("EVG-725031", "health", "Evergreen Bronze EPO", "active", -7, 358, 1980.00, "monthly", "up_to_date", 23),
-        "HP-100901": pol("EVG-801456", "health", "Evergreen Silver PPO", "active", -21, 344, 2548.80, "monthly", "up_to_date", 9),
+        "PMI-300101": pol("NGH-410237", "health", "Northgate Complete", -320, 187.40, excess=100, outpatient="unlimited", hospital_list="extended",
+                          underwriting="moratorium", insured=["Sarah Mitchell", "Ben Mitchell", "Isla Mitchell"], add_ons=["dental_optical"]),
+        "PMI-300214": pol("NGH-522918", "health", "Northgate Essentials", -400, 61.20, excess=250, outpatient=None, hospital_list="essential",
+                          underwriting="full_medical"),
+        "PMI-300377": pol("NGH-638405", "health", "Northgate Complete", -150, 52.80, excess=100, outpatient="1000", hospital_list="extended",
+                          underwriting="moratorium", add_ons=["therapies_plus"]),
+        "PMI-300452": pol("NGH-714560", "health", "Northgate Complete", -500, 168.90, excess=0, outpatient="unlimited", hospital_list="london_premium",
+                          underwriting="full_medical"),
+        "PMI-300519": pol("NGH-805193", "health", "Northgate Essentials", -10, 29.60, excess=250, outpatient=None, hospital_list="essential",
+                          underwriting="moratorium"),
+        "CSH-400118": pol("NGH-917362", "cash_plan", "Northgate Cash Plan Level 3", -220, 23.30, level="Level 3"),
+        "CSH-400204": pol("NGH-638405", "cash_plan", "Northgate Cash Plan Level 2", -90, 13.50, level="Level 2"),
     })
-    ONBOARDING.clear()
-    ONBOARDING.update({
-        "EVG-725031": {"policy_id": "HP-100877", "steps": {**{s: "pending" for s in ONBOARDING_STEPS}, "confirm_contact_details": "done"}, "preferences": None},
-        "EVG-801456": {"policy_id": "HP-100901", "steps": {**{s: "pending" for s in ONBOARDING_STEPS},
-                                                           "confirm_contact_details": "done", "register_online_account": "done", "download_membership_card": "done"}, "preferences": None},
-    })
-    DOCUMENT_REQUESTS.clear()
-    RENEWAL_DECISIONS.clear()
-    for cid in NEW_CLAIM_IDS:  # claims created by first notices live only until the next reset
-        CLAIMS.pop(cid, None)
-    NEW_CLAIM_IDS.clear()
-    _counters.update(doc=0, renewal=0, claim=0)
+    POLICIES["PMI-300519"]["cooling_off_ends"] = rel(11)  # 21 days from the start date
+    POLICIES["PMI-300214"]["status"] = "payment_missed"
+    PAYMENTS.clear()
+    for pid, p in POLICIES.items():
+        PAYMENTS[pid] = {"collection_day": 1, "status": "up_to_date", "next_collection_date": _next_first(), "amount": p["monthly_premium"],
+                         "bank_account": "account ending 4821", "history": [{"date": _first_of_month(-k), "amount": p["monthly_premium"], "status": "collected"} for k in (1, 2, 3)],
+                         "missed_amount": 0.0, "reinstate_by": None}
+    PAYMENTS["PMI-300214"].update(status="missed", missed_amount=61.20, reinstate_by=rel(19), bank_account="account ending 0937",
+                                  history=[{"date": _first_of_month(0), "amount": 61.20, "status": "failed: insufficient funds"},
+                                           {"date": _first_of_month(-1), "amount": 61.20, "status": "collected"}])
+    PAYMENTS["PMI-300519"].update(history=[], next_collection_date=_next_first())
+    GP_SLOTS.clear()
+    for day in range(1, 4):
+        for hour, kind, fmt in ((9, "gp", "video"), (12, "nurse", "phone"), (18, "gp", "phone"), (20, "gp", "video")):
+            GP_SLOTS.append({"slot_id": f"GP-{day}{hour:02d}", "date": rel(day), "time": f"{hour:02d}:00", "clinician": GP_TYPES[kind], "type": kind,
+                             "format": fmt, "booked": False})
+    for collection in (GP_BOOKINGS, DOCUMENT_REQUESTS, SECURE_LINKS, CONTACT_CHANGES):
+        collection.clear()
+    for d in (QUOTES, UNDERWRITING, APPLICATIONS):
+        d.clear()
+    for pid in NEW_IDS["pre_auth"]:
+        PRE_AUTHS.pop(pid, None)
+    for k in NEW_IDS:
+        NEW_IDS[k].clear()
+    for k in _counters:
+        _counters[k] = 0
+
+
+def _first_of_month(months_offset: int) -> str:
+    t = today().replace(day=1)
+    y, m = t.year, t.month + months_offset
+    while m < 1:
+        y, m = y - 1, m + 12
+    while m > 12:
+        y, m = y + 1, m - 12
+    return date(y, m, 1).isoformat()
+
+
+def _next_first() -> str:
+    return _first_of_month(1)
 
 
 def next_id(kind: str) -> int:
@@ -255,8 +301,29 @@ def next_id(kind: str) -> int:
     return _counters[kind]
 
 
+def region_area(postcode: str) -> str:
+    """The postcode area: the leading letters of the outward code (SW1A 1AA -> SW, LS6 2AB -> LS)."""
+    return re.match(r"[A-Z]*", postcode.strip().upper().split(" ")[0]).group(0)
+
+
+def region_of(postcode: str) -> tuple[float, str]:
+    area = region_area(postcode)
+    for prefixes, factor, name in REGION_FACTORS:
+        if area in prefixes:
+            return factor, name
+    return 1.0, "Rest of England"
+
+
+def age_on(dob: date, on: date) -> int:
+    return on.year - dob.year - ((on.month, on.day) < (dob.month, dob.day))
+
+
+def base_for_age(age: int) -> float:
+    return next(price for top, price in AGE_BASE if age <= top)
+
+
 def snapshot() -> dict[str, Any]:  # for tests
-    return copy.deepcopy({"policies": POLICIES, "onboarding": ONBOARDING})
+    return copy.deepcopy({"policies": POLICIES, "payments": PAYMENTS, "applications": APPLICATIONS})
 
 
 reset()

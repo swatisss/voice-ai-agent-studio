@@ -14,7 +14,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
   "persona": {
     "name": "Ava",
     "voice": "aura-2-thalia-en",
-    "greeting": "Thanks for calling Evergreen Health member services, this is Ava.",
+    "greeting": "Thanks for calling Northgate Health member services, this is Ava.",
     "disclosure": "I'm a virtual assistant, and this call may be recorded for quality.",
     "style": "Warm, calm and concise. One question at a time. Plain language, no jargon."
   },
@@ -144,12 +144,12 @@ A config without `learning` gets the defaults on save. Nothing in this block let
 ```json
 {
   "name": "get_claim_status",
-  "description": "Look up one claim of the verified member by claim number (e.g. C-20931).",
+  "description": "Look up one claim of the verified member by claim number (e.g. CL-70231).",
   "method": "GET",
   "url": "/mock/healthcare/claims/{claim_id}",
   "parameters": {
     "type": "object",
-    "properties": { "claim_id": { "type": "string", "description": "Claim number like C-20931" } },
+    "properties": { "claim_id": { "type": "string", "description": "Claim number like CL-70231" } },
     "required": ["claim_id"]
   },
   "requires_verification": true,

@@ -7,11 +7,13 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import io
+import json
 import re
 import signal
 import sys
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -220,6 +222,10 @@ def test_demo_kits_reuse_a_running_mock(monkeypatch):
     server, port, _ = kits.dental_mock.serve(0)
     try:
         assert kits.mock_running(port)
+        # every dental tool, the claim documents too, is served by this mock (the platform's claim-requirements mock is retired)
+        assert all(t["url"].startswith("{mock}/dental/") for t in kits.KITS["dental"].tools)
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/dental/claim-documents?claim_type=dental", timeout=5) as resp:
+            assert json.loads(resp.read())["documents"]
         seen: list[str] = []
 
         class Runner:  # records the mock base the kit would give its tools

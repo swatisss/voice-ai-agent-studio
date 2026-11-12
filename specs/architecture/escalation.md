@@ -51,10 +51,10 @@ Evaluation (simulated) calls also create an escalation row so judging can see th
 ```json
 {
   "summary": "2–3 sentences a human can read in 10 seconds",
-  "intent": "snake_case intent, e.g. claim_appeal",
-  "entities": { "claim_id": "C-31544", "member_ref": "EVG-337120" },
-  "already_tried": ["Verified identity (member ID + DOB)", "Looked up claim C-31544: denied, out-of-network facility"],
-  "escalation_reason": { "category": "policy_required", "detail": "Caller wants to appeal a denied claim" },
+  "intent": "snake_case intent, e.g. claim_dispute",
+  "entities": { "claim_id": "CL-70640", "member_ref": "NGH-714560" },
+  "already_tried": ["Verified identity (member ID + DOB)", "Looked up claim CL-70640: declined, lower back conditions excluded"],
+  "escalation_reason": { "category": "policy_required", "detail": "Caller disputes a declined claim" },
   "sentiment": { "start": "neutral", "end": "frustrated", "trend": "declining" },
   "suggested_next_action": "One sentence for the human",
   "caller_verified": true

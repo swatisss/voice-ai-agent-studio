@@ -17,11 +17,11 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Escalation engine with deterministic triggers and LLM judgment; groundwork packet; human agent console with accept/resolve and disposition.
 * Fleet learning: per-call analysis, gap clustering, impact estimate, fix drafting (knowledge article or skill + tool), evaluation by simulated replay with a judge, approval → new agent version.
 * Dashboard: calls, containment rate, escalated to human, response time, containment trend, escalations by root cause.
-* The seven *Customer Support & Channels* use cases ([/product/use-cases.md](/product/use-cases.md)) with five agents in three call modes: inbound, **outbound** (the agent places the call, simulated in the browser) and internal (staff assistant).
-* Seeded demo data: members, policies, claims, coverage, documents and Green Card, renewals, onboarding, providers, internal reference data, knowledge articles, ~120 historical calls.
+* The fourteen *Member & Sales Services* use cases of the fictional UK insurer Northgate Health ([/product/use-cases.md](/product/use-cases.md)), served by three inbound agents (Customer Care, Health Cover Sales, Claims & Pre-authorisation) behind a seeded front desk. Three call modes are available to any agent built in the Studio: inbound, **outbound** (the agent places the call, simulated in the browser) and internal (staff assistant).
+* Seeded demo data ([/demo-data/northgate-health.md](/demo-data/northgate-health.md), [/demo-data/northgate-members.md](/demo-data/northgate-members.md)): members, policies and payments, documents, Digital GP slots, cash plans, health claims, pre-authorisations, specialists, a quote rating table and underwriting rules, knowledge articles, 123 historical calls. The Oakhaven Dental kit installs into the same business unit on demand.
 * Mock healthcare and insurance business API served by the platform itself.
 * **Inbound phone calls** through Twilio Media Streams to a published agent (one number per agent, IVR context, optional redirect of the live call to a person on hand-off), verifiable locally through a tunnel or a no-account simulator ([/architecture/telephony.md](/architecture/telephony.md)).
-* An **optional realtime speech-to-speech voice pipeline** (OpenAI Realtime) chosen per agent; the Insurance Claims Agent uses it, all other agents keep the Deepgram cascade ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)).
+* An **optional realtime speech-to-speech voice pipeline** (OpenAI Realtime) chosen per agent in the Studio; the seeded Northgate agents use the Deepgram cascade ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)).
 * A **public, key-authenticated API** per tenant (`/v1`) for tenant backends: text, voice over WebSocket, a Twilio-format media stream for any carrier, and WebRTC; per-key rate limits; signed webhooks ([/api/public-api.md](/api/public-api.md)).
 * **Supervisor routing**: a front desk and a supervisor pick the agent from an automatically synced capability catalog; agents transfer conversations to each other ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)).
 * **Studio sign-in with two roles**: an admin and a reviewer (the human in the loop); only an admin can change what callers hear ([/architecture/studio-auth.md](/architecture/studio-auth.md)).
@@ -37,11 +37,12 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Audio recording storage and playback.
 * PHI redaction pipeline, BAAs, audit log export, data retention policies.
 * Languages other than English and Hindi; Hindi on the cascade pipeline; Hindi knowledge articles and Studio UI.
+* Real payments or bank details (secure links are mocked), real underwriting rules or prices of any insurer, business and corporate cover.
 * Real outbound dialing (phone calls placed by the platform): dialer, caller ID, consent and do-not-call management, voicemail detection (v1 simulates outbound calls in the browser). SMS and chat widgets for end customers.
 * Horizontal scaling (v1 runs as a single instance; see [/decisions/adr-0005-single-service.md](/decisions/adr-0005-single-service.md)).
 
 # Non-goals
 
 * Automatically deploying fixes without human approval.
-* Optimizing away escalations that policy requires (appeals, safety, explicit human requests).
+* Optimizing away escalations that policy requires (complaints, disputes, cancellations, bereavement, safety, explicit human requests).
 * Giving medical advice.

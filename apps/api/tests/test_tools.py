@@ -20,7 +20,7 @@ async def _echo(path: str, request: Request):  # noqa: ANN201
 
         return JSONResponse({"error": "nope"}, status_code=404)
     if path == "verify":
-        return {"verified": True, "member_ref": "EVG-482913"}
+        return {"verified": True, "member_ref": "NGH-410237"}
     return {"ok": True}
 
 
@@ -31,8 +31,8 @@ def _ex(state: CallState, tools: list[dict]) -> ToolExecutor:
 
 async def test_verification_gate_blocks_without_request():
     """Covers: TS-01"""
-    ex = _ex(CallState(), [{"name": "get_benefits", "url": "/benefits", "requires_verification": True}])
-    result, ok = await ex.execute("get_benefits", "{}")
+    ex = _ex(CallState(), [{"name": "get_member_policies", "url": "/policies", "requires_verification": True}])
+    result, ok = await ex.execute("get_member_policies", "{}")
     assert result["error"] == "identity_not_verified" and ok and SEEN == []
 
 
@@ -40,23 +40,23 @@ async def test_verification_tool_sets_state_and_member_header():
     """Covers: TS-02, TS-08"""
     state = CallState()
     ex = _ex(state, [{"name": "verify_member", "method": "POST", "url": "/verify", "is_verification": True},
-                     {"name": "get_benefits", "url": "/benefits", "requires_verification": True}])
-    await ex.execute("get_benefits", "{}")
+                     {"name": "get_member_policies", "url": "/policies", "requires_verification": True}])
+    await ex.execute("get_member_policies", "{}")
     assert SEEN == []
-    await ex.execute("verify_member", json.dumps({"member_id": "482913", "date_of_birth": "1986-04-12"}))
+    await ex.execute("verify_member", json.dumps({"member_id": "410237", "date_of_birth": "1984-03-14"}))
     assert "x-member-ref" not in SEEN[-1]["headers"]
-    assert state.verified and state.verified_member_ref == "EVG-482913"
-    await ex.execute("get_benefits", "{}")
-    assert SEEN[-1]["headers"]["x-member-ref"] == "EVG-482913"
+    assert state.verified and state.verified_member_ref == "NGH-410237"
+    await ex.execute("get_member_policies", "{}")
+    assert SEEN[-1]["headers"]["x-member-ref"] == "NGH-410237"
 
 
 async def test_url_rendering_and_query():
     """Covers: TS-03"""
-    assert render_url("/mock/healthcare/claims/{claim_id}", {"claim_id": "C-20931", "include": "lines"}) == (
-        "/mock/healthcare/claims/C-20931", {"include": "lines"})
+    assert render_url("/mock/healthcare/claims/{claim_id}", {"claim_id": "CL-70231", "include": "lines"}) == (
+        "/mock/healthcare/claims/CL-70231", {"include": "lines"})
     ex = _ex(CallState(), [{"name": "get_claim_status", "url": "/mock/healthcare/claims/{claim_id}"}])
-    await ex.execute("get_claim_status", json.dumps({"claim_id": "C-20931", "include": "lines"}))
-    assert SEEN[-1]["path"] == "/mock/healthcare/claims/C-20931" and SEEN[-1]["query"] == "include=lines"
+    await ex.execute("get_claim_status", json.dumps({"claim_id": "CL-70231", "include": "lines"}))
+    assert SEEN[-1]["path"] == "/mock/healthcare/claims/CL-70231" and SEEN[-1]["query"] == "include=lines"
 
 
 async def test_http_error_counts_as_tool_error():
@@ -81,7 +81,7 @@ async def test_gate_without_a_verification_tool_offers_a_specialist():
     """Covers: TS-11"""
     from voiceai.runtime.tools import VERIFY_FIRST, VERIFY_UNAVAILABLE
 
-    lookup = {"name": "get_claim_documents", "url": "/benefits", "requires_verification": True}
+    lookup = {"name": "get_claim_documents", "url": "/policies", "requires_verification": True}
     result, ok = await _ex(CallState(), [lookup]).execute("get_claim_documents", "{}")
     assert result == {"error": "identity_not_verified", "say": VERIFY_UNAVAILABLE} and ok and SEEN == []
     assert VERIFY_UNAVAILABLE == "I can't access account details on this line. I can connect you with a specialist who can."

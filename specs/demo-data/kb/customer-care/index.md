@@ -1,18 +1,17 @@
 # Customer care articles
 
-Knowledge for the Customer Care Agent (use cases 1, 2, 3 and 7). Deliberately nothing on adding a newborn or dependent.
+Knowledge for the Customer Care agent. Deliberately nothing on adding a newborn to a policy (the knowledge gap the learning loop finds).
 
-* [Policy types and status](policy-types-and-status.md) - Policy types, statuses, grace period and renewal notices
-* [Premiums and payments](premiums-and-payments.md) - Payment frequency, methods, discounts and late payments
-* [Claim statuses](claim-statuses.md) - What each claim status means and typical timelines
-* [Appeals and grievances](appeals-and-grievances.md) - How appeals work and who files them
-* [Document center](document-center.md) - Documents, delivery options and timing
-* [Green Card](green-card.md) - International motor insurance certificate: rules, countries, validity
-* [Coverage benefits overview](coverage-benefits-overview.md) - Benefits, limits by plan, co-pays, pre-authorization
-* [Waiting periods and exclusions](waiting-periods-and-exclusions.md) - Waiting periods, pre-existing conditions, exclusions
-* [Deductibles and out-of-pocket maximums](deductibles-and-out-of-pocket.md) - How deductibles, coinsurance and the out-of-pocket maximum work
-* [Copays by plan](copays-by-plan.md) - Copays for each Evergreen plan
-* [Finding in-network providers](finding-providers.md) - Networks, referrals and the provider directory
-* [Prior authorization](prior-authorization.md) - What needs prior authorization and how it works
-* [Member ID cards](member-id-cards.md) - Digital and replacement membership cards
-* [Nurse line and telehealth](nurse-line-and-telehealth.md) - 24/7 nurse line, telehealth visits and emergencies
+* [Contact lines and opening hours](contact-lines-and-hours.md) - Northgate Health phone lines for members, new customers, claims, cash plans and the 24-hour nurse line, with opening hours.
+* [Your health insurance policy explained](your-policy-explained.md) - What the parts of a Northgate health policy mean: product, excess, outpatient limit, hospital list, underwriting, add-ons and who is covered.
+* [Premiums and Direct Debit](payments-and-direct-debit.md) - How premiums are collected by monthly Direct Debit, collection dates, changing the collection day or bank account, and premium statements.
+* [Missed or failed payments](missed-payments.md) - What happens to cover when a Direct Debit fails, how to pay the missed amount and the 30-day window before cancellation.
+* [Changing your details](changing-your-details.md) - How members change their address, email or mobile, who can make changes, and changes that need a person (adding people, change of name, cover changes).
+* [Documents and membership card](documents-and-membership-card.md) - Documents members can request (membership certificate, policy guide, membership card, premium statement, cash plan table of benefits) and delivery times.
+* [Digital GP and the 24-hour nurse line](digital-gp-and-nurse-line.md) - Booking video or phone appointments with a GP or advanced nurse practitioner, opening times, who can use it, and the 24-hour nurse line.
+* [Cash plan explained](cash-plan-explained.md) - What the Northgate cash plan pays back for everyday healthcare: levels, yearly limits for dental, optical, therapies, consultations and hospital nights.
+* [Making a cash plan claim](cash-plan-claims.md) - How to claim on a cash plan: online form, receipts needed, time limits, payment times and common reasons for delays.
+* [Renewal, cooling-off and cancellation](renewal-and-cancellation.md) - How automatic renewal works, why prices change, the 21-day cooling-off period and how to cancel.
+* [Making a complaint](complaints.md) - How Northgate handles complaints, timescales and the Financial Ombudsman Service.
+* [When a member dies](bereavement.md) - What to do when a Northgate member dies: telling us, what happens to the policy and others on it, and refunds.
+* [Accessibility and extra support](accessibility-and-support-needs.md) - Support for members who need extra help: support needs notes, third-party authority, text relay and alternative formats.

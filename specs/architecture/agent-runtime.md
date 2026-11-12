@@ -89,7 +89,7 @@ Agent tools (HTTP) come from the version snapshot; see [/architecture/tools-and-
 |---|---|
 | `turns` | caller turns so far |
 | `verified` | identity verified in this call |
-| `verified_member_ref` | e.g. `EVG-482913` (stored on `calls.caller_ref`) |
+| `verified_member_ref` | e.g. `NGH-410237` (stored on `calls.caller_ref`) |
 | `verification_level` | `unknown`, `identified`, `attested` or `verified` ([/architecture/caller-verification.md](/architecture/caller-verification.md)) |
 | `identified_member_ref`, `identified_first_name` | set when the calling number is registered to a member; never shown to the model except the first name |
 | `verification_attempts` | failed verification results in this call; the third escalates with `verification_failed` |

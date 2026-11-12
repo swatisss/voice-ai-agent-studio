@@ -33,13 +33,13 @@ def sync_client(app, tmp_path, monkeypatch):  # noqa: ANN001, ANN201
 def test_websocket_close_codes(sync_client, monkeypatch):
     """Covers: VO-04, VO-05, ADM-02"""
     with pytest.raises(WebSocketDisconnect) as exc:
-        with sync_client.websocket_connect("/api/voice/doesnotexist?tenant=evergreen-care") as ws:
+        with sync_client.websocket_connect("/api/voice/doesnotexist?tenant=northgate-health") as ws:
             ws.receive_text()
     assert exc.value.code == 4404
     from voiceai.config import get_settings
 
-    agent_id = sync_client.get("/api/agents", headers={"X-Tenant-Id": "evergreen-care"}).json()["items"][0]["id"]
-    start = lambda: sync_client.post("/api/calls", headers={"X-Tenant-Id": "evergreen-care"}, json={"agent_id": agent_id, "channel": "voice"})  # noqa: E731
+    agent_id = sync_client.get("/api/agents", headers={"X-Tenant-Id": "northgate-health"}).json()["items"][0]["id"]
+    start = lambda: sync_client.post("/api/calls", headers={"X-Tenant-Id": "northgate-health"}, json={"agent_id": agent_id, "channel": "voice"})  # noqa: E731
     refused = start()
     assert refused.status_code == 409 and refused.json()["error"] == "voice_unavailable"  # ADM-02: no Deepgram key
     monkeypatch.setenv("DEEPGRAM_API_KEY", "dg-test")
@@ -48,7 +48,7 @@ def test_websocket_close_codes(sync_client, monkeypatch):
     monkeypatch.setenv("DEEPGRAM_API_KEY", "")  # the key goes away before the socket opens (VO-05)
     get_settings.cache_clear()
     with pytest.raises(WebSocketDisconnect) as exc:
-        with sync_client.websocket_connect(f"/api/voice/{call_id}?tenant=evergreen-care") as ws:
+        with sync_client.websocket_connect(f"/api/voice/{call_id}?tenant=northgate-health") as ws:
             ws.receive_text()
     assert exc.value.code == 4500
     assert sync_client.get("/healthz").json()["status"] == "ok"

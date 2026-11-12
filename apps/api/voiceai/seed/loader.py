@@ -1,6 +1,6 @@
 """Seeder: builds the demo database from the demo-data specs.
 
-Spec: /demo-data/index.md, /demo-data/evergreen-health.md, /demo-data/claims-agent.md, /demo-data/call-history.md
+Spec: /demo-data/index.md, /demo-data/northgate-health.md, /demo-data/call-history.md
 """
 from __future__ import annotations
 
@@ -35,10 +35,11 @@ log = logging.getLogger("voiceai.seed")
 
 
 HANDOFF_INTROS = {
-    "care": "You're now with our member care team.",
-    "claims": "You're now with our claims team.",
-    "internal": "You're now with the internal knowledge assistant.",
+    "care": "You're now with our member services team.",
+    "sales": "You're now with our health insurance team.",
+    "claims": "You're now with our claims and treatment team.",
 }
+FRONT_DESK_PERSONA = "Olivia"
 
 async def seed(reset: bool = False) -> dict[str, Any]:
     if reset:
@@ -55,7 +56,8 @@ async def seed(reset: bool = False) -> dict[str, Any]:
         for t in catalog.TENANTS:
             s.add(Tenant(**t))
         await s.flush()
-        s.add(TenantSettings(tenant_id=care, allowed_pipelines=["cascade", "realtime"], openai_platform_fallback=True))  # UC-06
+        settings_row = TenantSettings(tenant_id=care, allowed_pipelines=["cascade", "realtime"], openai_platform_fallback=True)  # UC-06
+        s.add(settings_row)
 
         tools = {t["name"]: Tool(tenant_id=care, **t) for t in catalog.TOOLS}
         personas = {p["name"]: Persona(tenant_id=care, **p) for p in catalog.PERSONAS}
@@ -95,10 +97,12 @@ async def seed(reset: bool = False) -> dict[str, Any]:
         summary["sandbox_docs"] = len(sandbox_docs)
 
         care_agent = agents["care"]
-        for sc in catalog.SCENARIOS:
-            s.add(EvalScenario(tenant_id=care, agent_id=care_agent.id, **sc))
-        for sc in catalog.CLAIMS_SCENARIOS:
-            s.add(EvalScenario(tenant_id=care, agent_id=agents["claims"].id, **sc))
+        # the front desk answers routed calls as Olivia and falls back to Customer Care (/demo-data/northgate-health.md "Front desk")
+        settings_row.front_desk = {"persona_id": personas[FRONT_DESK_PERSONA].id, "default_agents": {"member": care_agent.id, "staff": None},
+                                   "connecting_message": "One moment while I connect you to the right team."}
+        for key, scenarios in (("care", catalog.SCENARIOS), ("claims", catalog.CLAIMS_SCENARIOS), ("sales", catalog.SALES_SCENARIOS)):
+            for sc in scenarios:
+                s.add(EvalScenario(tenant_id=care, agent_id=agents[key].id, **sc))
         for i, uc in enumerate(catalog.USE_CASES, 1):
             s.add(UseCase(
                 tenant_id=care, agent_id=agents[uc["agent"]].id, category=catalog.CATEGORY, title=uc["title"], summary=uc["summary"],

@@ -11,7 +11,7 @@ from voiceai.llm.gateway import FakeReply
 from voiceai.models import Escalation
 from voiceai.runtime.escalation import wait_packets
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 ESC = ("escalate_to_human", {"reason_category": "policy_required", "reason_detail": "Caller wants to appeal"})
 
 
@@ -22,7 +22,7 @@ async def _escalated_call(client, seeded, fake_llm, packet_reply) -> tuple[str, 
         return packet_reply()
 
     fake_llm(responder)
-    sub = bus.subscribe("evergreen-care", {"console"})
+    sub = bus.subscribe("northgate-health", {"console"})
     r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})
     call_id = r.json()["call_id"]
     await client.post(f"/api/calls/{call_id}/messages", headers=H, json={"text": "I want to appeal my denied claim"})

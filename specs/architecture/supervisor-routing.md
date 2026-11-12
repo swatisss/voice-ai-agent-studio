@@ -91,7 +91,7 @@ Each decision in `conversations.routing`: `{at, trigger: start|clarified|transfe
 
 # Acceptance
 
-- **RTE-01** — Given the seeded member scope and the utterance "I need to report a new claim", when a conversation is routed, then Stage A chooses the Insurance Claims Agent without a Stage B request and the decision records `method: embedding` with candidates and scores.
+- **RTE-01** — Given the seeded member scope and the utterance "I need to get treatment for my knee approved", when a conversation is routed, then Stage A chooses Claims & Pre-authorisation without a Stage B request and the decision records `method: embedding` with candidates and scores.
 - **RTE-02** — Given `routing_mode: decision_model` and a configured decision model, when a request is routed, then the model receives the shortlisted agents' summaries and a `none` option (with `Authorization: Bearer` when a key is set and the configured `model` name), and an answer at or above the threshold routes with `method: decision` even when Stage A has a clear winner.
 - **RTE-03** — Given `routing_mode: decision_model` and a decision model that times out, answers 503, names no listed option or answers `none`, then the embedding decides (its clear win routes with `method: embedding`, else the request is unsure) and the record lists the fallback with its reason.
 - **RTE-04** — Given `PHI_MODE=1` and a hosted decision model, then no request reaches it and routing records `fallbacks: phi_mode`; given `DECISION_MODEL_HOSTED=0`, the model is called.

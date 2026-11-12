@@ -17,11 +17,11 @@ from voiceai.llm.gateway import FakeReply
 from voiceai.models import Agent, AgentVersion, Call, CallAnalysis, CallEvent, Cluster, EvalResult, Job, KnowledgeDoc
 from voiceai.schemas import AnalysisOut, JudgeOut
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 ARTICLE = {
-    "kind": "knowledge_article", "title": "Adding a newborn to your coverage", "rationale": "Specialists consistently explained the 60-day rule.",
-    "article": {"title": "Adding a newborn to your coverage",
-                "content_markdown": "# Adding a newborn\nAdd your baby within 60 days of birth.\n## How\nMember portal > Coverage > Life events > Add a dependent.\n## Documents\nBirth certificate or hospital birth record within 30 days."},
+    "kind": "knowledge_article", "title": "Adding a newborn to your policy", "rationale": "Specialists consistently explained the three-month rule.",
+    "article": {"title": "Adding a newborn to your policy",
+                "content_markdown": "# Adding a newborn\nAdd your baby within 3 months of birth with no medical questions.\n## How\nCall member services and we add the baby to your policy.\n## Cover\nCover starts from the date you tell us; normal childbirth is not covered."},
 }
 
 
@@ -37,7 +37,7 @@ def responder(judge_fail_case: str | None = None, simulator_line: str | None = N
                 return simulator_line
             return "[HANGUP]" if "Agent: Okay" in prompt else "Hi, I have a question."
         if role == "judge":
-            answered = "Adding a newborn to your coverage" in prompt  # the drafted article: only the candidate arm can find it
+            answered = "Adding a newborn to your policy" in prompt  # the drafted article: only the candidate arm can find it
             fail = bool(judge_fail_case and judge_fail_case in prompt and answered)  # a candidate-only failure
             expected_escalated = "Expected outcome: escalated" in prompt
             outcome = "escalated" if expected_escalated and not fail else "resolved"
@@ -47,11 +47,11 @@ def responder(judge_fail_case: str | None = None, simulator_line: str | None = N
             checks["outcome.goal_met"] = {"verdict": "pass" if answered and not fail else "fail", "reason": "graded"}
             return {"outcome": outcome, "goal_met": not fail, "grounded": True, "policy_violations": [], "notes": "graded", "checks": checks}
         if role == "analysis":
-            return {"outcome": "resolved", "intent": "claim_status", "root_cause": "none", "gap_summary": "", "caller_goal": "Check a claim.",
-                    "resolution_summary": "Explained claim.", "sentiment_start": "neutral", "sentiment_end": "positive"}
+            return {"outcome": "resolved", "intent": "payment_question", "root_cause": "none", "gap_summary": "", "caller_goal": "Check a payment.",
+                    "resolution_summary": "Explained the payment.", "sentiment_start": "neutral", "sentiment_end": "positive"}
         if role == "drafting":
             if "These are short descriptions" in prompt:
-                return {"name": "Address change after moving", "description": "Callers need to update their mailing address."}
+                return {"name": "Address change after moving", "description": "Callers need to update their postal address."}
             return ARTICLE
         raise AssertionError(role)
 
@@ -68,7 +68,7 @@ async def test_analyze_call_job(client, seeded, fake_llm):
     fake_llm(responder())
     r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})
     call_id = r.json()["call_id"]
-    await client.post(f"/api/calls/{call_id}/messages", headers=H, json={"text": "claim status?"})
+    await client.post(f"/api/calls/{call_id}/messages", headers=H, json={"text": "when is my premium taken?"})
     await client.post(f"/api/calls/{call_id}/end", headers=H)
     await jobs.drain()
     async with sessionmaker()() as s:
@@ -81,10 +81,10 @@ async def test_clustering_join_and_new(client, seeded, fake_llm):
     fake_llm(responder())
     agent_id = seeded["care"]["agent_id"]
     async with sessionmaker()() as s:
-        newborn = await s.scalar(select(Cluster).where(Cluster.name == "Adding a newborn to coverage"))
+        newborn = await s.scalar(select(Cluster).where(Cluster.name == "Adding a newborn to the policy"))
         before = newborn.escalation_count
-        for gap in ("How to add a newborn to an existing plan", "Updating my mailing address after a move"):
-            call = Call(tenant_id="evergreen-care", agent_id=agent_id, agent_version_id=seeded["care"]["version_id"], channel="text")
+        for gap in ("How to add a newborn baby to an existing policy", "Updating my postal address after a move"):
+            call = Call(tenant_id="northgate-health", agent_id=agent_id, agent_version_id=seeded["care"]["version_id"], channel="text")
             s.add(call)
             await s.flush()
             a = await save_analysis(s, call, AnalysisOut(outcome="escalated", intent="x", root_cause="missing_knowledge", gap_summary=gap), "llm")
@@ -99,15 +99,15 @@ async def test_clustering_join_and_new(client, seeded, fake_llm):
 
 async def test_policy_cluster_not_fixable(client, seeded):
     """Covers: FL-04"""
-    appeals = await _cluster(client, "Claim denial appeals")
-    assert appeals["fixable"] is False and appeals["label"] == "correct_escalation"
-    newborn = await _cluster(client, "Adding a newborn to coverage")
+    complaints = await _cluster(client, "Complaints")
+    assert complaints["fixable"] is False and complaints["label"] == "correct_escalation"
+    newborn = await _cluster(client, "Adding a newborn to the policy")
     assert newborn["ready_for_fix"] is True
 
 
 async def _draft(client, fake_llm, judge_fail_case=None) -> str:  # noqa: ANN001
     fake_llm(responder(judge_fail_case))
-    newborn = await _cluster(client, "Adding a newborn to coverage")
+    newborn = await _cluster(client, "Adding a newborn to the policy")
     assert (await client.post(f"/api/insights/clusters/{newborn['id']}/draft-fix", headers=H)).status_code == 200
     await jobs.drain()
     detail = (await client.get(f"/api/insights/clusters/{newborn['id']}", headers=H)).json()
@@ -124,7 +124,7 @@ async def test_draft_fix_creates_draft_article(client, seeded, fake_llm):
 async def test_eval_then_approve(client, seeded, fake_llm):
     """Covers: EV-01, EV-02, EV-03, EV-06, FL-07, API-04"""
     pid = await _draft(client, fake_llm)
-    sub = bus.subscribe("evergreen-care", {"insights"})
+    sub = bus.subscribe("northgate-health", {"insights"})
     agent_id = seeded["care"]["agent_id"]
     async with sessionmaker()() as s:
         versions_before = await s.scalar(select(func.count()).select_from(AgentVersion).where(AgentVersion.agent_id == agent_id))
@@ -160,17 +160,17 @@ async def test_eval_then_approve(client, seeded, fake_llm):
         version = await s.get(AgentVersion, agent.published_version_id)
         assert p["draft_doc_id"] in version.config["knowledge_doc_ids"] and version.source_proposal_id == pid
         assert (await s.get(KnowledgeDoc, p["draft_doc_id"])).status == "active"
-        assert (await s.scalar(select(Cluster).where(Cluster.name == "Adding a newborn to coverage"))).status == "fixed"
+        assert (await s.scalar(select(Cluster).where(Cluster.name == "Adding a newborn to the policy"))).status == "fixed"
 
 
 async def test_regression_failure_blocks_approval(client, seeded, fake_llm):
     """Covers: FL-06, SL-10"""
-    pid = await _draft(client, fake_llm, judge_fail_case="surgery claim C-31544")  # the appeal scenario fails on the candidate only
+    pid = await _draft(client, fake_llm, judge_fail_case="make a formal complaint")  # the complaint scenario fails on the candidate only
     await client.post(f"/api/proposals/{pid}/evaluate", headers=H)
     await jobs.drain()
     r = await client.post(f"/api/proposals/{pid}/approve", headers=H, json={"decided_by": "Reviewer"})
     assert r.status_code == 409 and r.json()["error"] == "evaluation_gate"
-    assert "Appeal denied claim 3/3 → 0/3" in r.json()["detail"]
+    assert "Complaint 3/3 → 0/3" in r.json()["detail"]
     forced = await client.post(f"/api/proposals/{pid}/approve", headers=H, json={"decided_by": "Reviewer", "force": True, "note": "Known flake"})
     assert forced.status_code == 200
 

@@ -53,7 +53,7 @@ async def test_guard_needs_a_session_but_not_for_health_phone_or_v1(client, seed
     await _login(client, "admin")
     key = (await client.post("/api/api-keys", headers=H, json={"name": "auth-test", "scope": "member"})).json()["key"]
     client.cookies.clear()
-    r = await client.get("/v1/tenants/evergreen-care/agents", headers={"Authorization": f"Bearer {key}"})
+    r = await client.get("/v1/tenants/northgate-health/agents", headers={"Authorization": f"Bearer {key}"})
     assert r.status_code == 200, r.text
 
 
@@ -99,7 +99,7 @@ async def test_reviewer_cannot_change_what_callers_hear(client, seeded, signin):
         await client.put(f"/api/agents/{agent_id}", headers=H, json={"draft_config": draft}),
         await client.post("/api/knowledge/text", headers=H, json={"title": "T", "content": "Body"}),
         await client.put("/api/tenant-settings", headers=H, json={"allowed_pipelines": ["cascade"]}),
-        await client.post("/api/members/EVG-482913/memory/erase", headers=H, json={}),
+        await client.post("/api/members/NGH-410237/memory/erase", headers=H, json={}),
     ]
     assert [r.status_code for r in refused] == [403] * len(refused)
     assert all(r.json()["error"] == "admin_required" for r in refused)
@@ -125,7 +125,7 @@ async def test_reviewer_does_the_human_in_the_loop_work(client, seeded, fake_llm
     async with sessionmaker()() as s:
         _, card = await _scored(s, agent_id, version_id, [_check("knowledge.grounded", "fail", "judge")])
         cluster = await _new_cluster(s, agent_id, version_id, "Extending cover abroad", 3)
-        action = LearningAction(tenant_id="evergreen-care", agent_id=agent_id, kind="answer_needed", key=f"answer_needed:{cluster.id}",
+        action = LearningAction(tenant_id="northgate-health", agent_id=agent_id, kind="answer_needed", key=f"answer_needed:{cluster.id}",
                                 severity="high", title="Answer needed", evidence={"cluster_id": cluster.id})
         s.add(action)
         await s.commit()

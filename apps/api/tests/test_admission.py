@@ -17,7 +17,7 @@ from voiceai.db import sessionmaker
 from voiceai.llm.gateway import reset_gateway
 from voiceai.models import TenantSettings
 
-TENANT = "evergreen-care"
+TENANT = "northgate-health"
 OWN_KEY = "sk-tenant-0123456789abcdef"
 
 
@@ -109,7 +109,7 @@ def socket_code(client, call_id: str) -> tuple[int, str]:  # noqa: ANN001
 def test_every_path_refuses_alike(phone, reason):
     """Covers: ADM-03"""
     c = phone.client
-    claims = phone.agents["Insurance Claims Agent"]
+    claims = phone.agents["Claims & Pre-authorisation"]
     earlier = c.post("/api/calls", headers=H, json={"agent_id": claims, "channel": "voice"}).json()["call_id"]  # admitted now
     if reason == "pipeline_not_allowed":
         sql(phone, "update tenant_settings set allowed_pipelines=? where tenant_id=?", '["cascade"]', TENANT)
@@ -135,7 +135,7 @@ def test_a_planned_tenant_key_never_falls_back(phone, monkeypatch):
     monkeypatch.setattr(rt, "connect_openai", fake_connect)
     c = phone.client
     assert c.put("/api/tenant-settings/openai-key", headers=H, json={"api_key": OWN_KEY}).status_code == 200
-    call_id = c.post("/api/calls", headers=H, json={"agent_id": phone.agents["Insurance Claims Agent"], "channel": "voice"}).json()["call_id"]
+    call_id = c.post("/api/calls", headers=H, json={"agent_id": phone.agents["Claims & Pre-authorisation"], "channel": "voice"}).json()["call_id"]
     assert c.get(f"/api/calls/{call_id}", headers=H).json()["settings"]["openai_key_source"] == "tenant"
     assert c.delete("/api/tenant-settings/openai-key", headers=H).status_code == 204  # platform fallback is on
     assert socket_code(c, call_id) == (4500, "voice_unavailable") and attempts == []

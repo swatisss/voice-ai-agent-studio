@@ -25,10 +25,10 @@ from voiceai.schemas import FixDraft, SkillDef, ToolDef
 
 # Endpoints of the tenant's business API that exist but are not tools yet (fix drafting may target them).
 TOOL_CATALOG: dict[str, list[dict[str, Any]]] = {
-    "evergreen-care": [
+    "northgate-health": [
         {"method": "GET", "url": "/mock/healthcare/prior-auths/{auth_id}",
-         "description": "Status of a prior authorization by number (e.g. PA-77930) for the verified member.",
-         "parameters": {"type": "object", "properties": {"auth_id": {"type": "string", "description": "Authorization number like PA-77930"}}, "required": ["auth_id"]}},
+         "description": "Status of a pre-authorisation by code (e.g. PA-500955) for the verified member.",
+         "parameters": {"type": "object", "properties": {"auth_id": {"type": "string", "description": "Pre-authorisation code like PA-500955"}}, "required": ["auth_id"]}},
     ],
 }
 

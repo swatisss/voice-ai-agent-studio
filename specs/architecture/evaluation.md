@@ -16,7 +16,7 @@ An eval run is either a **proposal** run (`kind: proposal`, this page) or a **su
 * **Cluster cases** — up to `EV_MAX_CLUSTER_CASES` (default 6) member calls of the proposal's cluster, newest first, from the drafting evidence.
 * **Held-out cases** — up to 4 other member calls of the cluster, not in the drafting evidence ([/architecture/self-learning.md](/architecture/self-learning.md), Gate).
 * **Derived cases** — the proposal's derived scenarios. Each case: `caller_goal` (from analysis), caller profile (member ID + DOB if the original call was verified), `expected: resolved`.
-* **Regression scenarios** — all enabled `eval_scenarios` for the agent, the same scenarios as its [test suite](/architecture/test-suites.md) ([/demo-data/evergreen-health.md](/demo-data/evergreen-health.md) seeds 8), each played once with its own persona and memory. Each has its own `expected` (`resolved` or `escalated`).
+* **Regression scenarios** — all enabled `eval_scenarios` for the agent, the same scenarios as its [test suite](/architecture/test-suites.md) ([/demo-data/northgate-health.md](/demo-data/northgate-health.md) seeds 8 for Customer Care), each played once with its own persona and memory. Each has its own `expected` (`resolved` or `escalated`).
 
 ## Arms
 

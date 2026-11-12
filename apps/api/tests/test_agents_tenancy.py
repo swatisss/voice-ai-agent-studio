@@ -10,8 +10,8 @@ from voiceai.db import engine, sessionmaker
 from voiceai.knowledge.ingest import create_doc
 from voiceai.models import AgentVersion, KnowledgeChunk, KnowledgeDoc
 
-M = {"X-Tenant-Id": "evergreen-care"}
-P = {"X-Tenant-Id": "evergreen-sandbox"}
+M = {"X-Tenant-Id": "northgate-health"}
+P = {"X-Tenant-Id": "northgate-sandbox"}
 
 
 async def test_all_tables_exist(database):
@@ -26,14 +26,14 @@ async def test_versions_and_snapshots(client, seeded):
     """Covers: DM-02, DM-05"""
     agent_id = seeded["care"]["agent_id"]
     tools = (await client.get("/api/tools", headers=M)).json()["items"]
-    tool = next(t for t in tools if t["name"] == "find_providers")
+    tool = next(t for t in tools if t["name"] == "get_gp_slots")
     r = await client.post(f"/api/agents/{agent_id}/publish", headers=M, json={"change_note": "second"})
     assert r.json()["version"] == 2
     await client.put(f"/api/tools/{tool['id']}", headers=M, json={**{k: tool[k] for k in ("name", "method", "url", "parameters")}, "description": "CHANGED"})
     async with sessionmaker()() as s:
         versions = (await s.scalars(select(AgentVersion).where(AgentVersion.agent_id == agent_id).order_by(AgentVersion.version))).all()
         assert [v.version for v in versions] == [1, 2]
-        snap = next(t for t in versions[1].config["tools"] if t["name"] == "find_providers")
+        snap = next(t for t in versions[1].config["tools"] if t["name"] == "get_gp_slots")
         assert snap["description"] != "CHANGED"
 
 

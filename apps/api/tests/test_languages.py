@@ -19,7 +19,7 @@ from voiceai.models import AgentVersion, CallEvent, Escalation
 from voiceai.runtime import escalation, language
 from voiceai.seed.catalog import SANDBOX_TENANT
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 SANDBOX = {"X-Tenant-Id": SANDBOX_TENANT}
 CHEST_PAIN_HI = "मुझे सीने में दर्द हो रहा है"
 
@@ -59,8 +59,9 @@ async def _events(call_id: str) -> list[CallEvent]:
 
 async def test_languages_setting_is_validated_and_versioned(client, seeded):
     """Covers: LANG-01"""
-    agent_id = seeded["claims"]["agent_id"]  # already on the realtime pipeline
+    agent_id = seeded["claims"]["agent_id"]
     cfg = await _draft(client, agent_id)
+    cfg["voice"]["pipeline"] = "realtime"  # Hindi needs the realtime pipeline to publish (LANG-02)
     assert cfg.get("languages", ["en"]) == ["en"]  # absent in the seeded draft means English only
     for bad in (["hi"], ["en", "fr"], []):
         r = await client.put(f"/api/agents/{agent_id}", headers=H, json={"draft_config": {**cfg, "languages": bad}})
@@ -97,13 +98,13 @@ async def test_language_block_only_for_bilingual_agents(client, seeded, fake_llm
 
     block = prompts.fragment("agent-system-prompt", "Language block (bilingual agents):")
     assert block.startswith("# Language") and "search_knowledge queries in English" in block
-    english = {"persona": {"name": "Ava", "style": "Warm."}, "policy": {}, "skills": []}
+    english = {"persona": {"name": "Olivia", "style": "Warm."}, "policy": {}, "skills": []}
     from datetime import datetime
 
     now = datetime(2026, 11, 12)
-    plain = system_prompt(english, "Evergreen", None, now)
+    plain = system_prompt(english, "Northgate Health", None, now)
     assert "# Language" not in plain and "{{" not in plain
-    bilingual = system_prompt({**english, "languages": ["en", "hi"]}, "Evergreen", None, now)
+    bilingual = system_prompt({**english, "languages": ["en", "hi"]}, "Northgate Health", None, now)
     assert block in bilingual
     assert " ".join(bilingual.replace(block, "").split()) == " ".join(plain.split())  # otherwise the same (blank lines aside)
 
@@ -122,7 +123,7 @@ def test_turn_language():
     """Covers: LANG-05"""
     assert language.turn_language("मेरा claim status बताइए") == "hi"
     assert language.turn_language("mera claim status batao") == "en"
-    assert language.turn_language("What is my deductible?") == "en"
+    assert language.turn_language("What is my excess?") == "en"
 
 
 async def test_user_events_carry_the_language_on_bilingual_calls(client, seeded, fake_llm):
@@ -137,12 +138,12 @@ async def test_user_events_carry_the_language_on_bilingual_calls(client, seeded,
 
 async def test_identifiers_in_devanagari_are_normalised_before_tools(client, seeded, fake_llm):
     """Covers: LANG-06"""
-    assert language.normalise_text("१४ मार्च १९८६") == "14 March 1986"
+    assert language.normalise_text("१४ मार्च १९८४") == "14 March 1984"
     assert language.normalise_text("१ फ़रवरी") == "1 February" and language.normalise_text("३ सितम्बर") == "3 September"
-    args = {"member_id": "४८२९१३", "date_of_birth": "१९८६-०४-१२"}  # the seeded member 482913, 1986-04-12
+    args = {"member_id": "NGH-४१०२३७", "date_of_birth": "१९८४-०३-१४"}  # the seeded member NGH-410237, 1984-03-14
     fake_llm(script(FakeReply(tool_calls=[("verify_member", args)]), FakeReply(text="धन्यवाद, आप verified हैं।")))
     call_id = await _call(client, await _bilingual(client, seeded))
-    await _say(client, call_id, "मेरा member ID ४८२९१३ है")
+    await _say(client, call_id, "मेरा membership number NGH-४१०२३७ है")
     result = next(e for e in await _events(call_id) if e.kind == "tool_result" and e.data["name"] == "verify_member")
     assert result.data["result"].get("verified") is True
 
@@ -168,7 +169,7 @@ async def test_hindi_safety_phrases_on_every_agent(client, seeded, fake_llm):
     hi = await _say(client, cid := await _call(client, english_agent), CHEST_PAIN_HI)
     assert hi["escalated"] and hi["reply"].startswith(escalation.SAFETY_MESSAGE_HI[:20])
     latin = await _say(client, cid2 := await _call(client, english_agent), "mujhe seene mein dard hai")
-    assert latin["escalated"] and "call 911" in latin["reply"]
+    assert latin["escalated"] and "call 999" in latin["reply"]
     async with sessionmaker()() as s:
         for c in (cid, cid2):
             assert (await s.scalar(select(Escalation).where(Escalation.call_id == c))).reason_category == "safety"
@@ -181,7 +182,7 @@ async def test_hindi_safety_on_the_realtime_turn_policy(client, seeded):
     from voiceai.runtime.session import AgentSession
 
     agent_id = await _bilingual(client, seeded)
-    session = await AgentSession.open(await _call(client, agent_id), "evergreen-care")
+    session = await AgentSession.open(await _call(client, agent_id), "northgate-health")
     decision = await session.caller_turn(CHEST_PAIN_HI)
     assert decision.say == escalation.SAFETY_MESSAGE_HI and not decision.model_turn
     await session.commit(decision)
@@ -197,7 +198,7 @@ async def test_realtime_transcription_has_no_language(client, seeded):
     from voiceai.runtime.session import AgentSession
     from voiceai.voice.turn_detection import TurnSettings
 
-    session = await AgentSession.open(await _call(client, await _bilingual(client, seeded)), "evergreen-care")
+    session = await AgentSession.open(await _call(client, await _bilingual(client, seeded)), "northgate-health")
     update = session_update(session, TurnSettings())
     assert "language" not in (update["session"]["audio"]["input"].get("transcription") or {})
     assert "# Language" in update["session"]["instructions"]
@@ -206,7 +207,7 @@ async def test_realtime_transcription_has_no_language(client, seeded):
 async def test_scenario_language_reaches_the_simulator(client, seeded, fake_llm):
     """Covers: LANG-10"""
     seen: list[str] = []
-    script_lines = ["नमस्ते, मुझे claim के बारे में पूछना है।", "Okay, and what about my deductible?", "धन्यवाद।"]
+    script_lines = ["नमस्ते, मुझे claim के बारे में पूछना है।", "Okay, and what about my excess?", "धन्यवाद।"]
     lines = iter(script_lines)
 
     def responder(role, messages, tools):  # noqa: ANN001, ANN202

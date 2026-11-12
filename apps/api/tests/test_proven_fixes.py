@@ -24,7 +24,7 @@ async def test_approval_publishes_the_gated_config_and_keeps_the_draft(client, s
     draft["policy"]["rules"] = [*draft["policy"].get("rules", []), "Say the weather."]  # an unpublished builder edit
     assert (await client.put(f"/api/agents/{agent_id}", headers=H, json={"draft_config": draft})).status_code == 200
     async with sessionmaker()() as s:
-        doc = await create_doc(s, "evergreen-care", "Newborns", "# Newborns\nAdd your baby within 60 days.", "proposal", "cluster:x", status="draft")
+        doc = await create_doc(s, "northgate-health", "Newborns", "# Newborns\nAdd your baby within 3 months of birth.", "proposal", "cluster:x", status="draft")
         await s.commit()
         doc_id = doc.id
     pid = await _ready_proposal(seeded, "knowledge_article", {"article": {"title": "Newborns", "content_markdown": "x"}}, doc_id)
@@ -52,12 +52,12 @@ async def test_small_cluster_keeps_a_held_out_case_and_cases_repeat(client, seed
     fake_llm(fake())
     await _learning(seeded, case_repeats=2)
     async with sessionmaker()() as s:
-        cluster = await s.scalar(select(Cluster).where(Cluster.name == "Adding a newborn to coverage"))
+        cluster = await s.scalar(select(Cluster).where(Cluster.name == "Adding a newborn to the policy"))
         members = (await s.scalars(select(CallAnalysis).where(CallAnalysis.cluster_id == cluster.id))).all()
         for a in members[5:]:  # leave five member calls
             a.cluster_id = None
         await refresh_stats(s, cluster)
-        p = await propose.draft(s, "evergreen-care", cluster)
+        p = await propose.draft(s, "northgate-health", cluster)
         await s.commit()
         pid = p.id
     assert len(p.payload["evidence_call_ids"]) == 4 == propose.shown_count(5)

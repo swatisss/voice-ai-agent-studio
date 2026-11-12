@@ -42,7 +42,7 @@ External: Groq, OpenRouter, OpenAI (LLM) · Deepgram (STT/TTS)
 | Fleet learning | Analysis, clustering, impact, fix drafting, approval → new version. | [/architecture/fleet-learning.md](/architecture/fleet-learning.md) |
 | Evaluation | Simulator + judge replays; baseline vs candidate; regressions. | [/architecture/evaluation.md](/architecture/evaluation.md) |
 | Jobs & events | DB-backed job queue; in-process pub/sub streamed as SSE. | [/architecture/jobs-and-events.md](/architecture/jobs-and-events.md) |
-| Mock insurance API | Members, policies, coverage, claims, documents and Green Card, renewals, onboarding, outreach lists, internal reference data. | [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md) |
+| Mock insurance API | Northgate Health's synthetic business systems: members, policies and payments, documents, Digital GP, cash plan, cover check, specialists, pre-authorisations, claims, quotes, underwriting, applications and renewal outreach. | [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md) |
 | Web app | All UI pages. | [/ui/](/ui/) |
 
 # Flow 1 — Resolve

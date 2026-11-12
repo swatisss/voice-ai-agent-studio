@@ -15,10 +15,10 @@ Oakhaven Dental Care is fictional; every patient and record is synthetic. Files:
    If replies time out on this network: `python scripts/stack.py start --llm openai:gpt-4.1-mini` instead.
 2. Terminal 2, build the agent (about 2 seconds), and **leave it running**: it serves the practice's booking and insurance system that the tools call:
    ```
-   python scripts/demo_kits.py dental --tenant evergreen-care
+   python scripts/demo_kits.py dental
    ```
    Expect `5 passed, 0 failed` and `agent published: Oakhaven Dental Assistant v1 … voice: realtime`, then `Serving the mock patient system … Press Ctrl+C to stop`.
-3. Open **http://localhost:3000** in Chrome, sign in as the admin if asked; business unit **Evergreen Health · Customer Support & Channels**.
+3. Open **http://localhost:3000** in Chrome, sign in as the admin if asked; business unit **Northgate Health · Member & Sales Services**.
 4. Open `scripts/demo/dental/paste-home-visits.md` in an editor, ready to copy.
 5. Headset plugged in; allow the microphone for localhost when Chrome asks.
 6. **Rehearse once, then reset**: run the step 2 command again (Ctrl+C the old one first). It puts the agent back to its three files and publishes a new version, so the home-visits gap is back.

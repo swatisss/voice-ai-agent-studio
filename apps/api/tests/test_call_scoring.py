@@ -16,7 +16,7 @@ from voiceai.learning import score_report, scoring
 from voiceai.llm.gateway import FakeReply
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, CallFeedback, CallScorecard, CheckReview, Escalation, Job
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 ANALYSIS = {"outcome": "resolved", "intent": "claim_status", "root_cause": "none", "gap_summary": "", "caller_goal": "Check a claim.",
             "resolution_summary": "Explained claim.", "sentiment_start": "neutral", "sentiment_end": "positive"}
 
@@ -70,13 +70,13 @@ async def _manual_call(seeded, events: list[tuple[str, str | None, dict]], *, ou
                        channel: str = "text", is_eval: bool = False, started=None, call_id: str | None = None) -> str:  # noqa: ANN001
     async with sessionmaker()() as s:
         start = started or utcnow() - timedelta(minutes=5)
-        call = Call(id=call_id or new_id(), tenant_id="evergreen-care", agent_id=seeded["care"]["agent_id"],
+        call = Call(id=call_id or new_id(), tenant_id="northgate-health", agent_id=seeded["care"]["agent_id"],
                     agent_version_id=seeded["care"]["version_id"], channel=channel, status="ended", outcome=outcome,
                     started_at=start, ended_at=start + timedelta(minutes=2), is_eval=is_eval, meta=meta or {})
         s.add(call)
         await s.flush()
         for i, (kind, text, data) in enumerate(events, 1):
-            s.add(CallEvent(tenant_id="evergreen-care", call_id=call.id, seq=i, kind=kind, text=text, data=data))
+            s.add(CallEvent(tenant_id="northgate-health", call_id=call.id, seq=i, kind=kind, text=text, data=data))
         await s.commit()
         return call.id
 
@@ -107,7 +107,7 @@ async def test_scorecard_after_analysis(client, seeded, fake_llm):
         assert await s.scalar(select(func.count()).select_from(CallScorecard).where(CallScorecard.call_id == call_id)) == 1
     sim = await _manual_call(seeded, [("user", "hi", {})], channel="simulation", is_eval=True)
     async with sessionmaker()() as s:
-        await jobs.enqueue(s, "evergreen-care", "score_call", {"call_id": sim})
+        await jobs.enqueue(s, "northgate-health", "score_call", {"call_id": sim})
         await s.commit()
     await jobs.drain()
     assert await _card(sim) is None
@@ -133,10 +133,10 @@ async def test_phi_before_verification_is_a_hard_fail(client, seeded, fake_llm):
 
     fake_llm(broken_judge)
     call_id = await _manual_call(seeded, [
-        ("user", "What's my claim status?", {}),
-        ("tool_call", None, {"name": "get_claim_status", "args": {"claim_id": "C-20931"}}),
-        ("tool_result", None, {"name": "get_claim_status", "ok": True, "result": {"status": "paid"}}),
-        ("assistant", "It was paid.", {"latency_ms": 500}),
+        ("user", "When is my next payment taken?", {}),
+        ("tool_call", None, {"name": "get_payments", "args": {"policy_id": "PMI-300101"}}),
+        ("tool_result", None, {"name": "get_payments", "ok": True, "result": {"next_collection": "2026-12-01"}}),
+        ("assistant", "It is taken on 1 December.", {"latency_ms": 500}),
     ])
     card = await _score(call_id)
     v = _verdicts(card)
@@ -164,8 +164,8 @@ async def test_sampling(client, seeded, fake_llm):
     escalated = await _manual_call(seeded, [("user", "a person please", {})], outcome="escalated")
     disliked = await _manual_call(seeded, [("user", "hi", {})])
     async with sessionmaker()() as s:
-        s.add(Escalation(tenant_id="evergreen-care", call_id=escalated, agent_id=seeded["care"]["agent_id"], reason_category="caller_requested"))
-        s.add(CallFeedback(tenant_id="evergreen-care", call_id=disliked, agent_id=seeded["care"]["agent_id"], rating="down"))
+        s.add(Escalation(tenant_id="northgate-health", call_id=escalated, agent_id=seeded["care"]["agent_id"], reason_category="caller_requested"))
+        s.add(CallFeedback(tenant_id="northgate-health", call_id=disliked, agent_id=seeded["care"]["agent_id"], rating="down"))
         await s.commit()
     card = await _score(plain)
     assert not card.judged and all(c["verdict"] == "not_judged" for c in card.checks if c["method"] == "judge" and c["key"] not in ("memory.used_correctly", "routing.in_scope"))
@@ -316,7 +316,7 @@ async def test_summary_and_draft_checks(client, seeded, fake_llm):
     await jobs.drain()
     sim = await _manual_call(seeded, [("user", "hi", {})], channel="simulation", is_eval=True)
     async with sessionmaker()() as s:
-        s.add(CallScorecard(tenant_id="evergreen-care", call_id=sim, agent_id=agent_id, agent_version_id=seeded["care"]["version_id"],
+        s.add(CallScorecard(tenant_id="northgate-health", call_id=sim, agent_id=agent_id, agent_version_id=seeded["care"]["version_id"],
                             checks=[], measures={}))
         await s.commit()
     summary = (await client.get("/api/evaluation/summary", headers=H, params={"agent_id": agent_id, "include_seed": False})).json()
@@ -332,7 +332,7 @@ async def test_summary_and_draft_checks(client, seeded, fake_llm):
     published = (await client.get(f"/api/agents/{agent_id}/checks", headers=H, params={"source": "published"})).json()["items"]
     assert item["key"] not in {i["key"] for i in published}
     async with sessionmaker()() as s:
-        fresh = Agent(tenant_id="evergreen-care", name="New", draft_config={})
+        fresh = Agent(tenant_id="northgate-health", name="New", draft_config={})
         s.add(fresh)
         await s.commit()
         fresh_id = fresh.id

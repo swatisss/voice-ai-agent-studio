@@ -9,7 +9,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 | Term | Meaning |
 |---|---|
-| **Tenant** | A business unit using the platform (e.g. *Evergreen Health · Customer Support & Channels*). All data is scoped to one tenant. |
+| **Tenant** | A business unit using the platform (e.g. *Northgate Health · Member & Sales Services*). All data is scoped to one tenant. |
 | **Agent** | A configured AI agent: persona + policy + knowledge + tools + skills + model choice. Has an editable **draft** and published **versions**. |
 | **Agent version** | Immutable snapshot of an agent's config. Every call records the version that handled it. |
 | **Persona** | Name, voice, greeting, speaking style and disclosure line. |
@@ -42,10 +42,23 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | **Eval run** | Simulated replay of a cluster's cases plus regression scenarios against the current version (baseline) and the proposal (candidate), graded by a judge. |
 | **Regression scenario** | A saved caller goal the agent already handles; must keep passing. |
 | **Role (LLM)** | A job the LLM does: `realtime`, `analysis`, `drafting`, `simulator`, `judge`. Each maps to a provider + model. |
-| **Use case** | A named support scenario (for example *Document Center & Green Card*) linked to an agent, with sample utterances and demo callers ([/product/use-cases.md](/product/use-cases.md)). |
+| **Use case** | A named support scenario (for example *Payments & Direct Debit*) linked to an agent, with sample utterances and demo callers ([/product/use-cases.md](/product/use-cases.md)). |
 | **Call mode** | `inbound` (customer calls in), `outbound` (the agent places the call) or `internal` (staff-facing assistant) ([/architecture/call-modes.md](/architecture/call-modes.md)). |
 | **Call context** | Facts about whom an outbound call is to (first name, policy, renewal details); never marks the callee as verified. |
-| **Green Card** | The international motor insurance certificate proving motor cover when driving abroad. |
+| **Membership number** | A Northgate member's reference (`NGH-410237`); with the date of birth it verifies a caller. |
+| **Excess** | The amount a member pays towards treatment before the insurer pays, once per person per policy year (for example £100). |
+| **Shortfall** | The part of a specialist's or hospital's bill above the insurer's fee guidelines, which the member pays; a fee-assured specialist never leaves one. |
+| **Fee-assured** | A specialist who has agreed to charge within the insurer's fee guidelines, so the member has no shortfall. |
+| **Pre-authorisation** | The insurer's approval of a treatment before it happens, identified by a code (`PA-500955`) that lets the hospital bill the insurer directly. Surgery stays *pending* until the procedure code and fee estimate arrive. |
+| **Open referral** | A GP referral to a type of specialist rather than a named one, so the insurer can suggest a specialist on the member's hospital list. |
+| **Direct Access** | Getting treatment approved without seeing a GP first, for muscles, bones and joints, mental health, cancer symptoms and moles or skin lesions. |
+| **Moratorium** | Underwriting without medical questions: conditions the member had in the 5 years before cover started are excluded until they have had 2 clear years. |
+| **Full medical underwriting** | Underwriting where everyone answers medical questions up front; declared conditions become named personal exclusions; 5% cheaper in the demo. |
+| **Switch** | Underwriting that keeps the terms of another UK insurer after at least 12 months of continuous cover. |
+| **Hospital list** | The hospitals a policy can use (Essential, Extended, London Premium). |
+| **Cash plan** | A separate low-cost plan that refunds everyday costs (dental, optical, therapies, consultations, hospital nights) up to yearly limits, claimed with a receipt. |
+| **Cooling-off** | The 21 days after a new policy starts in which it can be cancelled with a full refund. |
+| **Digital GP** | Video or phone appointments with a GP or nurse, included for anyone named on a health policy. |
 | **Turn detection** | How the voice pipeline decides the caller has finished speaking: normal (silence) or semantic ([/architecture/turn-detection.md](/architecture/turn-detection.md)). |
 | **Live controls** | Persona and turn-detection settings changed while a test call is running. |
 | **OKF** | Open Knowledge Format — Markdown + YAML frontmatter bundle format used for these specs and importable as knowledge. |

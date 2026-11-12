@@ -60,7 +60,7 @@ For each active voice call a `LiveControls` object (in-memory registry keyed by 
 # Acceptance
 
 - **TD-01** — Given `vad` mode with `min_silence_ms: 700`, when two final transcripts arrive and the caller then stays silent, then exactly one turn containing both texts in order is dispatched after the silence threshold.
-- **TD-02** — Given `semantic` mode and the caller says "I would like to check on my claim and", when the silence threshold passes, then the turn is not dispatched; a continuation "it is C-20931." arriving within `max_extra_wait_ms` is merged and dispatched as one turn.
+- **TD-02** — Given `semantic` mode and the caller says "I would like to check on my claim and", when the silence threshold passes, then the turn is not dispatched; a continuation "it is CL-70231." arriving within `max_extra_wait_ms` is merged and dispatched as one turn.
 - **TD-03** — Given `semantic` mode and the agent last asked for a member ID, when the caller says "four eight two", then the turn waits; when they continue "nine one three", then the turn completes. A date of birth without a year waits; with a year completes.
 - **TD-04** — Given `semantic` mode and an unfinished utterance, when `max_extra_wait_ms` elapses with no new speech, then the turn is dispatched anyway; with `max_extra_wait_ms: 0` it is dispatched at the silence threshold.
 - **TD-05** — Given evaluator `llm` and the model call raising an error or returning invalid JSON, then the heuristic verdict is used and the turn still completes.

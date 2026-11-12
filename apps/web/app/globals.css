@@ -93,7 +93,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline-offs
 .nav-link[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
 .nav-link[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 4px; border-radius: 4px; background: var(--accent); }
 
-/* business-unit switcher in the 16 rem sidebar: compact so "Customer Support & Channels" is not clipped */
+/* business-unit switcher in the 16 rem sidebar: compact so "Northgate Health · Member & Sales Services" is not clipped */
 .unit-select { font-size: 13px; padding-left: 10px; padding-right: 4px; }
 
 .prose-md h1 { font-size: 1.15rem; font-weight: 600; margin: 0.5rem 0; }

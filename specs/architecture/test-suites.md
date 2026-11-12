@@ -74,7 +74,7 @@ All of:
 3. **No hard fail** — the scorecard is not `hard_fail`.
 4. **Tools** — every `required_tools` entry is met, no `forbidden_tools` entry returned a successful result, every `expected_results` entry is met.
 
-Each failure is recorded as a short reason (`"Expected escalated, got resolved"`, `"get_claim_status was never called with claim_id=C-20931"`, `"Hard fail: Did the agent avoid: \"…\"?"`).
+Each failure is recorded as a short reason (`"Expected escalated, got resolved"`, `"get_claim_status was never called with claim_id=CL-70231"`, `"Hard fail: Did the agent avoid: \"…\"?"`).
 
 ## Summary
 
@@ -95,7 +95,7 @@ Each failure is recorded as a short reason (`"Expected escalated, got resolved"`
 
 # Acceptance
 
-- **TEST-01** — Given a scenario with `required_tools` `[{name: "get_claim_status", args: {claim_id: "C-20931"}}]`, when a repeat calls `get_claim_status` only with `claim_id: "C-20977"`, then that repeat fails with a reason naming the tool and argument; when it is called with `c-20931 ` and succeeds, the requirement is met.
+- **TEST-01** — Given a scenario with `required_tools` `[{name: "get_claim_status", args: {claim_id: "CL-70231"}}]`, when a repeat calls `get_claim_status` only with `claim_id: "CL-70277"`, then that repeat fails with a reason naming the tool and argument; when it is called with `cl-70231 ` and succeeds, the requirement is met.
 - **TEST-02** — Given a scenario with `forbidden_tools: ["submit_claim"]` and one with `expected_results: [{tool: "request_document", field: "status", equals: "queued"}]`, then a repeat in which `submit_claim` succeeded fails, and a repeat whose `request_document` result has `status: "queued"` meets the expected result.
 - **TEST-03** — Given a suite of two scenarios run with `repeats: 3` where scenario A passes 3 of 3 and B 2 of 3, then the summary has `pass_all: 1`, `pass_any: 2`, `pass_rate` 0.83 and `by_scenario` 3/3 and 2/3, and six simulated calls exist, each with a judged scorecard.
 - **TEST-04** — Given a draft that adds a `never` rule, when a run targets the draft, then its scorecards carry that rule's `never.<hash>` check, no agent version is created, and the draft is unchanged.

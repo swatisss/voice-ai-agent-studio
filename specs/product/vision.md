@@ -9,7 +9,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Problem
 
-Business units that want phone-based support either overload human agents with repetitive, low-complexity calls, or spend months building a one-off voice bot that never improves after launch. A human-handled support interaction costs roughly **$7–12**; an AI-resolved voice interaction costs **under $1.20**. Teams lack a scalable, safe way to capture that gap without hurting customer experience.
+Business units that want phone-based support either overload human agents with repetitive, low-complexity calls, or spend months building a one-off voice bot that never improves after launch. A human-handled support interaction costs roughly **$7–12** (about £5.50–9.50); an AI-resolved voice interaction costs **under $1.20**. Teams lack a scalable, safe way to capture that gap without hurting customer experience.
 
 # Product
 
@@ -27,7 +27,13 @@ It instantly gets a voice agent that:
 
 # Demo domain
 
-**Evergreen Health**, a fictional health and motor insurer. The business unit *Customer Support & Channels* runs eight use cases: Policy Inquiry & Status, Claims Status Tracking, Document Center & Green Card, Outbound Renewal Calls, Policyholder Onboarding, an Internal Knowledge Assistant for staff, Coverage Information Support, and Claims First Notice & Status (answered by phone on a realtime voice pipeline) ([/product/use-cases.md](/product/use-cases.md)). A second, empty *sandbox* business unit shows isolation. All data is synthetic. See [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md).
+**Northgate Health**, a fictional UK private medical insurer. A traditional insurer's help-and-support site and phone line make people click or press through topic menus ("Speak to us → choose a topic", one number per team). Here one **front desk** understands what the caller says and routes them to the right agent of the business unit *Member & Sales Services*, which runs fourteen use cases across the whole health insurance journey ([/product/use-cases.md](/product/use-cases.md)):
+
+* **Customer Care** — policy and cover, payments and Direct Debit, contact details, documents, Digital GP booking, cash plan, and renewal, cancellation, complaints and bereavement (handed to a person with a groundwork packet).
+* **Health Cover Sales** — a quote by phone, choosing and customising cover, the underwriting questions and joining, with key facts, declaration and a secure Direct Debit link; facts, never advice.
+* **Claims & Pre-authorisation** — checking cover, Direct Access or open referral, finding a fee-assured specialist and issuing a pre-authorisation code so treatment is billed directly; claim status, excess and shortfalls.
+
+A second, empty *sandbox* business unit shows isolation. All data is synthetic. See [/demo-data/northgate-health.md](/demo-data/northgate-health.md).
 
 # Business impact
 

@@ -20,9 +20,9 @@ from voiceai.models import (
     KnowledgeDoc, LearningRun, Tool,
 )
 
-H = {"X-Tenant-Id": "evergreen-care"}
-ARTICLE = {"kind": "knowledge_article", "title": "Adding a newborn to your coverage", "rationale": "Specialists explained the 60-day rule.",
-           "article": {"title": "Adding a newborn to your coverage", "content_markdown": "# Adding a newborn\nAdd your baby within 60 days of birth."}}
+H = {"X-Tenant-Id": "northgate-health"}
+ARTICLE = {"kind": "knowledge_article", "title": "Adding a newborn to your policy", "rationale": "Specialists explained the three-month rule.",
+           "article": {"title": "Adding a newborn to your policy", "content_markdown": "# Adding a newborn\nAdd your baby within 3 months of birth."}}
 
 
 def fake(*, search: str | None = None, seen: dict[str, list[str]] | None = None):  # noqa: ANN201
@@ -60,7 +60,7 @@ async def _learning(seeded, **settings: Any) -> None:  # noqa: ANN001
         v.config = {**v.config, "learning": {"nightly": True, "max_proposals_per_night": 3, "regression_repeats": 1, "snooze_days": 7, **settings}}
         for sc in (await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == seeded["care"]["agent_id"]))).all():
             sc.enabled = False
-        for other in (await s.scalars(select(Agent).where(Agent.tenant_id == "evergreen-care", Agent.id != seeded["care"]["agent_id"]))).all():
+        for other in (await s.scalars(select(Agent).where(Agent.tenant_id == "northgate-health", Agent.id != seeded["care"]["agent_id"]))).all():
             ov = await s.get(AgentVersion, other.published_version_id)
             ov.config = {**ov.config, "learning": {"nightly": False}}
         await s.commit()
@@ -98,7 +98,7 @@ async def test_signals_reanalyse_a_resolved_call(client, seeded, fake_llm):
     async with sessionmaker()() as s:
         before = await s.scalar(select(CallAnalysis).where(CallAnalysis.call_id == call_id))
         assert before.root_cause == "none" and before.cluster_id is None
-    sub = bus.subscribe("evergreen-care", {"insights"})
+    sub = bus.subscribe("northgate-health", {"insights"})
     run = await _run_now(client)
     async with sessionmaker()() as s:
         after = await s.scalar(select(CallAnalysis).where(CallAnalysis.call_id == call_id))
@@ -126,15 +126,15 @@ async def test_only_calibrated_judge_failures_count(client, seeded, fake_llm):
         events = list((await s.scalars(select(CallEvent).where(CallEvent.call_id == call_id))).all())
         assert nightly.signals_of(events, card, False, False, set()) == []
         for i in range(20):  # 20 reviews that agree with the judge, each on its own scored call
-            other = Call(tenant_id="evergreen-care", agent_id=seeded["care"]["agent_id"], agent_version_id=seeded["care"]["version_id"],
+            other = Call(tenant_id="northgate-health", agent_id=seeded["care"]["agent_id"], agent_version_id=seeded["care"]["version_id"],
                          channel="text", status="ended")
             s.add(other)
             await s.flush()
-            sc = CallScorecard(tenant_id="evergreen-care", call_id=other.id, agent_id=seeded["care"]["agent_id"],
+            sc = CallScorecard(tenant_id="northgate-health", call_id=other.id, agent_id=seeded["care"]["agent_id"],
                                agent_version_id=seeded["care"]["version_id"], checks=[], measures={})
             s.add(sc)
             await s.flush()
-            s.add(CheckReview(tenant_id="evergreen-care", scorecard_id=sc.id, call_id=other.id, agent_id=seeded["care"]["agent_id"],
+            s.add(CheckReview(tenant_id="northgate-health", scorecard_id=sc.id, call_id=other.id, agent_id=seeded["care"]["agent_id"],
                               check_key="knowledge.grounded", judge_verdict="fail", verdict="fail", reviewer="r"))
         await s.flush()
         calibrated = await nightly.calibrated_keys(s, seeded["care"]["agent_id"])
@@ -153,11 +153,11 @@ async def test_cap_picks_costliest_and_never_changes_the_agent(client, seeded, f
         draft = (await s.get(Agent, agent_id)).draft_config
     run = await _run_now(client)
     agent = run["summary"]["agents"][agent_id]
-    assert agent["ready_clusters"] == 2 and agent["drafted"] == 1  # newborn (14 escalations) before prior auth (9)
+    assert agent["ready_clusters"] == 2 and agent["drafted"] == 1  # newborn (14 escalations) before pre-authorisation status (9)
     async with sessionmaker()() as s:
         proposals = (await s.scalars(select(FixProposal).where(FixProposal.agent_id == agent_id))).all()
         assert len(proposals) == 1 and proposals[0].origin == "nightly" and proposals[0].status == "ready"
-        assert (await s.get(Cluster, proposals[0].cluster_id)).name == "Adding a newborn to coverage"
+        assert (await s.get(Cluster, proposals[0].cluster_id)).name == "Adding a newborn to the policy"
         assert await s.scalar(select(func.count()).select_from(AgentVersion).where(AgentVersion.agent_id == agent_id)) == versions
         assert (await s.get(Agent, agent_id)).draft_config == draft
         assert await s.scalar(select(func.count()).select_from(FixProposal).where(FixProposal.status == "approved")) == 0
@@ -191,12 +191,12 @@ async def test_rejected_cluster_is_snoozed(client, seeded, fake_llm):
 
 async def _ready_proposal(seeded, kind: str, payload: dict, draft_doc_id: str | None = None) -> str:  # noqa: ANN001
     async with sessionmaker()() as s:
-        cluster = await s.scalar(select(Cluster).where(Cluster.name == "Adding a newborn to coverage"))
-        run = EvalRun(tenant_id="evergreen-care", agent_id=seeded["care"]["agent_id"], proposal_id="x",
+        cluster = await s.scalar(select(Cluster).where(Cluster.name == "Adding a newborn to the policy"))
+        run = EvalRun(tenant_id="northgate-health", agent_id=seeded["care"]["agent_id"], proposal_id="x",
                       baseline_version_id=seeded["care"]["version_id"], status="done", summary={"gate": {"passed": True, "reasons": []}})
         s.add(run)
         await s.flush()
-        p = FixProposal(tenant_id="evergreen-care", agent_id=seeded["care"]["agent_id"], cluster_id=cluster.id, kind=kind, title="t",
+        p = FixProposal(tenant_id="northgate-health", agent_id=seeded["care"]["agent_id"], cluster_id=cluster.id, kind=kind, title="t",
                         payload=payload, draft_doc_id=draft_doc_id, status="ready", latest_eval_run_id=run.id)
         s.add(p)
         await s.commit()
@@ -210,7 +210,7 @@ async def test_knowledge_edit_replaces_the_article(client, seeded):
     async with sessionmaker()() as s:
         version = await s.get(AgentVersion, seeded["care"]["version_id"])
         old_id = version.config["knowledge_doc_ids"][0]
-        new = await create_doc(s, "evergreen-care", "Revised", "# Revised\nThe new answer.", "proposal", "cluster:x", status="draft")
+        new = await create_doc(s, "northgate-health", "Revised", "# Revised\nThe new answer.", "proposal", "cluster:x", status="draft")
         await s.commit()
         new_id = new.id
     pid = await _ready_proposal(seeded, "knowledge_edit", {"doc_id": old_id, "article": {"title": "Revised", "content_markdown": "x"}}, new_id)
@@ -227,7 +227,7 @@ async def test_tool_attach(client, seeded):
     async with sessionmaker()() as s:
         tools_before = await s.scalar(select(func.count()).select_from(Tool))
         owned = {t["name"] for t in (await s.get(AgentVersion, seeded["care"]["version_id"])).config["tools"]}
-        spare = await s.scalar(select(Tool).where(Tool.tenant_id == "evergreen-care", Tool.name.not_in(owned)).limit(1))
+        spare = await s.scalar(select(Tool).where(Tool.tenant_id == "northgate-health", Tool.name.not_in(owned)).limit(1))
     pid = await _ready_proposal(seeded, "tool_attach", {"tool_name": spare.name})
     r = await client.post(f"/api/proposals/{pid}/approve", headers=H, json={"decided_by": "Dana"})
     assert r.status_code == 200, r.text

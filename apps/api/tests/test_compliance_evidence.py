@@ -70,8 +70,8 @@ async def test_call_shows_who_published_its_version(client, seeded):
     version_id = r.json()["version"]["id"]
     agent_id = seeded["care"]["agent_id"]
     async with sessionmaker()() as s:
-        fixed = Call(tenant_id="evergreen-care", agent_id=agent_id, agent_version_id=version_id, channel="text", status="ended")
-        built = Call(tenant_id="evergreen-care", agent_id=agent_id, agent_version_id=seeded["care"]["version_id"], channel="text", status="ended")
+        fixed = Call(tenant_id="northgate-health", agent_id=agent_id, agent_version_id=version_id, channel="text", status="ended")
+        built = Call(tenant_id="northgate-health", agent_id=agent_id, agent_version_id=seeded["care"]["version_id"], channel="text", status="ended")
         s.add_all([fixed, built])
         await s.commit()
         fixed_id, built_id = fixed.id, built.id

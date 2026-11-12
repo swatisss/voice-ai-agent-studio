@@ -1,6 +1,6 @@
 ---
 type: Knowledge Article
-title: Welcome to the sandbox
+title: "Welcome to the sandbox"
 description: "This business unit is empty on purpose: how to create your first persona, knowledge, tools and agent."
 status: stable
 tags: [sandbox]

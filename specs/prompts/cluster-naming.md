@@ -26,6 +26,6 @@ These are short descriptions of why several phone calls to a health insurer's AI
 Root causes: {{root_causes}}
 
 Return JSON with:
-- name: a 3-6 word sentence-case label for the shared topic (for example "Adding a newborn to coverage").
+- name: a 3-6 word sentence-case label for the shared topic (for example "Adding a newborn to the policy").
 - description: one sentence describing what callers need that the assistant could not provide.
 ```

@@ -1,10 +1,8 @@
 # Knowledge base
 
-Seed knowledge articles, imported per agent as OKF bundles by the seeder. Agents search only their own articles.
+Seed knowledge articles, imported per agent as OKF bundles by the seeder. Agents search only their own articles. All content is synthetic and modelled on public UK private medical insurance help pages.
 
-* [Customer care](customer-care/) - Customer Care Agent: policies, claims, documents, Green Card, coverage (deliberately nothing on adding a newborn)
-* [Renewals](renewals/) - Renewal Outreach Agent: renewal process, price changes, payment options
-* [Onboarding](onboarding/) - Welcome & Onboarding Agent: welcome guide, digital account, card, first 30 days
-* [Claims](claims/) - Insurance Claims Agent: filing a claim, required documents, timelines and payment
-* [Internal](internal/) - Internal Knowledge Assistant: staff procedures, limits, escalation, fraud, data protection
+* [Customer care](customer-care/) - Customer Care: contact lines, policy explained, payments, missed payments, details, documents, Digital GP, cash plan, renewal, complaints, bereavement, accessibility (deliberately nothing on adding a newborn)
+* [Sales](sales/) - Health Cover Sales: products, options and add-ons, pricing, underwriting, joining and cooling-off, eligibility
+* [Claims](claims/) - Claims & Pre-authorisation: getting treatment, Direct Access, open referrals, pre-authorisation codes, specialists, excess and shortfalls, invoices, exclusions
 * [Sandbox](sandbox/) - the empty sandbox business unit

@@ -31,7 +31,7 @@ Decided in the design session of 2026-10-28 (questions Q1–Q26), with research 
 * [/prompts/agent-system-prompt.md](/prompts/agent-system-prompt.md) - verification instruction per flow, change requests go to a human, the member profile and memory block.
 * [/architecture/tools-and-skills.md](/architecture/tools-and-skills.md) - `X-Identified-Ref`, uniform failure result (TS-09).
 * [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md) - identify, date-of-birth-only verify, member profile (MOCK-15…17).
-* [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md) - registered numbers, seeded memory.
+* [/demo-data/members-and-claims.md](/demo-data/northgate-members.md) - registered numbers, seeded memory.
 * [/data/data-model.md](/data/data-model.md) - `member_memories`, `memory_events`, `meta.identification`; DM-01 now 25 tables.
 * [/data/agent-config.md](/data/agent-config.md) - `memory` and `verification` settings (DM-07).
 * [/architecture/escalation.md](/architecture/escalation.md) - category `verification_failed` (ES-09).

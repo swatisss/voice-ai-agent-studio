@@ -33,7 +33,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 - **MT-01** — Given an agent of tenant A, when tenant B requests it by id, then the response is 404.
 - **MT-02** — Given a request without `X-Tenant-Id` to `/api/agents`, then the response is 400 `tenant_required`.
 - **MT-03** — Given tenant B's doc id in tenant A's agent config, when publishing, then publish fails with 422.
-- **MT-13** — Given member memory for EVG-482913 in tenant A, when tenant B (or another agent of tenant A) handles a verified call for a member with the same reference, then none of it is loaded, listed or exported.
+- **MT-13** — Given member memory for NGH-410237 in tenant A, when tenant B (or another agent of tenant A) handles a verified call for a member with the same reference, then none of it is loaded, listed or exported.
 - **MT-04** — Given calls in both tenants, when tenant A loads the dashboard, then only tenant A's calls are counted.
 - **MT-14** — Given a valid key of tenant A, when it calls `/v1/tenants/{tenant B}/conversations` (or any `/v1` path of B), then the response is 404 `tenant_not_found` with the same body as for an unknown tenant, and an `X-Tenant-Id: B` header sent with the request changes nothing.
 - **MT-15** — Given conversations in tenants A and B, when tenant A's key or Studio lists or fetches conversations, routing cases or webhook deliveries, then none of tenant B's appear and B's ids return 404; tenant A's supervisor never considers B's agents.

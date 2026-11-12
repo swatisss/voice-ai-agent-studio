@@ -22,7 +22,7 @@ from voiceai.live import LiveControls
 from voiceai.voice.processors import BrainProcessor, TurnAggregator, UserTurnFrame
 from voiceai.voice.turn_detection import TurnSettings
 
-WELCOME = "Thanks for calling Evergreen Health member services, this is Ava. I'm a virtual assistant."
+WELCOME = "Thanks for calling Northgate Health, this is Olivia. I'm a virtual assistant."
 
 
 class _Brain(BrainProcessor):
@@ -72,7 +72,7 @@ async def test_welcome_is_not_interrupted_and_echo_is_not_answered():
     await brain.greet()
     brain.floor.bot_started()  # the welcome is playing
     await brain.on_user_started()  # microphone picks up sound (an echo of the speakers, or the caller)
-    await brain.on_user_turn("Thanks for calling Evergreen Health")  # what STT made of it
+    await brain.on_user_turn("Thanks for calling Northgate Health")  # what STT made of it
     assert brain.interrupted == 0
     assert brain.replies == [] and brain._held == []
     await brain.floor.stop()
@@ -92,7 +92,7 @@ async def test_aggregator_ignores_speech_while_welcoming():
     agg.push_frame = capture  # type: ignore[method-assign]
     await agg.handle(VADUserStartedSpeakingFrame())
     await agg.handle(VADUserStoppedSpeakingFrame())
-    assert await agg.handle(TranscriptionFrame("this is Ava", "u", "t")) is True  # consumed and dropped
+    assert await agg.handle(TranscriptionFrame("this is Olivia", "u", "t")) is True  # consumed and dropped
     welcoming[0] = False
     await asyncio.sleep(0.5)
     assert turns == [] and agg.buffer == []  # nothing left over to fire as a turn after the welcome

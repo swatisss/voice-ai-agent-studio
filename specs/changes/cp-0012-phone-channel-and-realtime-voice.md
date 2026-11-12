@@ -22,7 +22,7 @@ The deployment target is GCP (Cloud Run, already specified), which supports WebS
 2. **IVR in front.** An IVR (or any caller) reaches the agent by forwarding to the Twilio number or its SIP URI. Context the IVR passes (`ivr_*` parameters) is copied into the call context and shown to the agent, and never counts as identity verification.
 3. **Hand-off to a person on the phone.** When a phone call is escalated, the agent speaks the hand-off message and, if the agent has a `telephony.transfer_to` number, the platform asks Twilio to redirect the live call there. Without one, the call ends as today and the escalation waits in the console.
 4. **Optional realtime pipeline.** A new agent setting `voice.pipeline` (`cascade` default, or `realtime`). A realtime agent's voice calls, on the browser and on the phone, run through the OpenAI Realtime speech-to-speech service. The system prompt, tools, skills, knowledge, verification gate, escalation, call state, events and fleet learning are the **same shared runtime** as in the cascade; only the audio-in to audio-out part is replaced. Details and trade-offs: [/architecture/realtime-voice.md](/architecture/realtime-voice.md). Every existing agent stays on `cascade`; the Deepgram pipeline is not modified.
-5. **New agent: Insurance Claims Agent** (Evergreen Health, inbound, realtime pipeline). It reports claim status, takes a first notice of a new claim, explains required documents and escalates disputes. It brings two new mock-API tools, a three-article knowledge base, a persona, skills, regression scenarios and an eighth use case. Details: [/demo-data/claims-agent.md](/demo-data/claims-agent.md).
+5. **New agent: Insurance Claims Agent** (Evergreen Health, inbound, realtime pipeline). It reports claim status, takes a first notice of a new claim, explains required documents and escalates disputes. It brings two new mock-API tools, a three-article knowledge base, a persona, skills, regression scenarios and an eighth use case. Details: [/demo-data/claims-agent.md](/demo-data/northgate-health.md).
 6. **Run it locally first.** A new runbook ([/build/runbook-phone.md](/build/runbook-phone.md)) covers a Twilio trial number, an ngrok or cloudflared tunnel, `PUBLIC_BASE_URL`, the number-to-agent mapping and a test call from a real phone; plus `scripts/fake_twilio.py`, which replays a Twilio call from a WAV file so the path can be checked with no Twilio account at all.
 7. **Deploy on GCP.** Cloud Run settings already fit (3600 s timeout, one instance, CPU always on, session affinity). Added: `PUBLIC_BASE_URL`, optional secrets `TWILIO_AUTH_TOKEN` and `TWILIO_ACCOUNT_SID`, `OPENAI_API_KEY` needed for realtime agents, and `/healthz` reports `providers.twilio`.
 
@@ -34,7 +34,7 @@ New:
 * [/architecture/realtime-voice.md](/architecture/realtime-voice.md) - the optional speech-to-speech pipeline, streaming and latency, how shared runtime pieces are reused, evaluation trade-offs, RV-01…RV-14.
 * [/decisions/adr-0008-telephony-and-realtime-voice.md](/decisions/adr-0008-telephony-and-realtime-voice.md) - why Twilio Media Streams, why OpenAI Realtime as an optional mode.
 * [/build/runbook-phone.md](/build/runbook-phone.md) - local and Cloud Run phone setup and test runbook.
-* [/demo-data/claims-agent.md](/demo-data/claims-agent.md) and [/demo-data/kb/claims/](/demo-data/kb/claims/) - the Insurance Claims Agent, CLM-01…CLM-03.
+* [/demo-data/claims-agent.md](/demo-data/northgate-health.md) and [/demo-data/kb/claims/](/demo-data/kb/claims/) - the Insurance Claims Agent, CLM-01…CLM-03.
 * [/prompts/realtime-addendum.md](/prompts/realtime-addendum.md) - extra instructions appended to the system prompt in realtime mode.
 
 Changed:
@@ -53,13 +53,13 @@ Changed:
 * [/data/agent-config.md](/data/agent-config.md) - `voice.pipeline`, `voice.realtime`, `telephony.transfer_to`, `models.speech`.
 * [/api/rest-api.md](/api/rest-api.md) - phone-number endpoints and the telephony routes.
 * [/api/mock-healthcare-api.md](/api/mock-healthcare-api.md) - claim first notice and required documents, MOCK-13, MOCK-14.
-* [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md), [/demo-data/members-and-claims.md](/demo-data/members-and-claims.md), [/product/use-cases.md](/product/use-cases.md), [/product/vision.md](/product/vision.md) - fifth agent, 18 tools, eighth use case (UC-01, UC-02 reworded).
+* [/demo-data/evergreen-health.md](/demo-data/northgate-health.md), [/demo-data/members-and-claims.md](/demo-data/northgate-members.md), [/product/use-cases.md](/product/use-cases.md), [/product/vision.md](/product/vision.md) - fifth agent, 18 tools, eighth use case (UC-01, UC-02 reworded).
 * [/ui/agent-builder.md](/ui/agent-builder.md) - voice pipeline choice and transfer number, UI-38; [/ui/calls.md](/ui/calls.md) - phone badge, UI-39.
 * [/process/conventions.md](/process/conventions.md) - new acceptance prefixes `TEL`, `RV`, `CLM`.
 
 # Acceptance criteria
 
-New, defined in the specs above: TEL-01…TEL-11 ([/architecture/telephony.md](/architecture/telephony.md)), RV-01…RV-14 ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)), CLM-01…CLM-03 ([/demo-data/claims-agent.md](/demo-data/claims-agent.md)), MOCK-13, MOCK-14, LG-12, LG-13, RT-10, DEP-04, UI-38, UI-39.
+New, defined in the specs above: TEL-01…TEL-11 ([/architecture/telephony.md](/architecture/telephony.md)), RV-01…RV-14 ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)), CLM-01…CLM-03 ([/demo-data/claims-agent.md](/demo-data/northgate-health.md)), MOCK-13, MOCK-14, LG-12, LG-13, RT-10, DEP-04, UI-38, UI-39.
 Reworded: DM-01 (21 tables), UC-01 (five agents, 18 tools), UC-02 (eight use cases).
 
 # Tasks

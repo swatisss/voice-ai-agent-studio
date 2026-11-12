@@ -56,7 +56,7 @@ Base: `/v1/tenants/{tenant_id}`. JSON in and out, `snake_case`, ISO 8601 UTC.
 ```json
 { "channel": "text", "message": "I want to check on a claim", "agent_id": null,
   "transport": null, "audio_format": null,
-  "caller": { "number": "+15555550142" }, "context": { "ivr_menu": "claims" },
+  "caller": { "number": "+447700900142" }, "context": { "ivr_menu": "claims" },
   "metadata": { "crm_case": "48213" }, "external_id": "case-48213" }
 ```
 
@@ -76,10 +76,10 @@ Text result (201):
 
 ```json
 { "conversation_id": "…", "status": "active", "channel": "text",
-  "agent": { "id": "…", "name": "Insurance Claims Agent" },
+  "agent": { "id": "…", "name": "Claims & Pre-authorisation" },
   "routing": { "method": "embedding", "confidence": 0.91, "reason": "…" },
-  "messages": [ { "speaker": "front_desk", "text": "Thanks for contacting Evergreen Health… I'm a virtual assistant…" },
-                { "speaker": "agent", "agent_id": "…", "text": "You're now with our claims team. I can help with that…" } ] }
+  "messages": [ { "speaker": "front_desk", "text": "Thanks for calling Northgate Health, this is Olivia. I'm a virtual assistant…" },
+                { "speaker": "agent", "agent_id": "…", "text": "You're now with our claims and treatment team. I can help with that…" } ] }
 ```
 
 * Without `message` (and without `agent_id`) only the front-desk greeting and disclosure come back; `agent` and `routing` are `null` until the first message is routed.
@@ -113,7 +113,7 @@ Voice result (201): `{conversation_id, status, channel: "voice", transport, conn
 - **PUB-02** — Given a key of tenant A, when it calls `/v1/tenants/{tenant B}/agents`, then the response is 404 `tenant_not_found` with the same body as for a tenant that does not exist; given no key, a malformed, unknown or revoked key, then the response is 401 `invalid_key`.
 - **PUB-03** — Given a `member` key, then `GET /agents` lists only published routable inbound agents, and creating a conversation with an internal or outbound agent's `agent_id` is 404 `agent_not_found`; given a `staff` key, only internal agents are listed and reachable.
 - **PUB-04** — Given a key with `rate_limit_per_min: 10`, when an 11th request arrives within 60 s, then it is answered 429 `rate_limited` with a `Retry-After` header; given `max_concurrent_voice: 1` and one active voice conversation, then creating another is 429 `voice_capacity`.
-- **PUB-05** — Given a text conversation created with `message` "I want to check on a claim" on the seeded tenant, then the response has `status: active`, the claims agent as `agent`, a `routing` object, and messages from the front desk (greeting with disclosure) and the agent; `POST /messages` continues with the same agent; `POST /end` returns the outcome and a second `POST /end` returns the same.
+- **PUB-05** — Given a text conversation created with `message` "I want to check on a claim" on the seeded tenant, then the response has `status: active`, Claims & Pre-authorisation as `agent`, a `routing` object, and messages from the front desk (greeting with disclosure) and the agent; `POST /messages` continues with the same agent; `POST /end` returns the outcome and a second `POST /end` returns the same.
 - **PUB-06** — Given `POST /messages` with `Accept: text/event-stream`, then the response streams `message.delta` events and ends with one `turn.done` whose payload equals the JSON turn result of the same turn.
 - **PUB-07** — Given a voice conversation, then the result carries `connect.url` on `PUBLIC_BASE_URL`'s host, a token and `expires_at` 120 s ahead; the socket accepts the token in the `Authorization` header or as subprotocol `vai-token.<token>`; a second use, an expired token, a token of another conversation or a token in the query string closes with 4401 before any pipeline starts.
 - **PUB-08** — Given a `media-stream` voice conversation and a client sending Twilio Media Streams events with μ-law audio, then the conversation runs like a phone call (welcome spoken after `start`, agent audio returned as `media` events with the `streamSid`, `stop` ends it with reason `hangup`); with `audio_format: pcm_16k`, the payloads are PCM 16 kHz.

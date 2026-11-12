@@ -11,7 +11,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-28T00:00:00Z" }
 
 | Level | How it is reached | What the agent may do |
 |---|---|---|
-| **Unknown** | Start of every call | General information only (how deductibles work, how to add a newborn) |
+| **Unknown** | Start of every call | General information only (how the excess works, how to add a newborn) |
 | **Identified** | The calling number is registered on a member's record | Address the caller by first name and ask only for the date of birth. No member data, no profile, no memory. |
 | **Verified** | Registered number + date of birth (flow A), or member ID + date of birth (flow B) | Member-specific tools, the member profile and member memory ([/architecture/agent-memory.md](/architecture/agent-memory.md)) |
 
@@ -55,8 +55,8 @@ Verification belongs to the conversation: a transfer carries `verified`, `verifi
 
 # Acceptance
 
-- **IDV-01** — Given a signed Twilio webhook with `From` equal to Maria Lopez's registered number, when the call is created, then `meta.identification` holds `EVG-482913`, `Maria`, method `caller_id` and the `StirVerstat` value, the call is not verified, and no full caller number is stored anywhere.
-- **IDV-02** — Given an identified call, when the caller gives the correct date of birth, then the verification tool is called with only the date of birth, the request carries `X-Identified-Ref: EVG-482913`, and the call becomes verified with `verified_member_ref` `EVG-482913`.
+- **IDV-01** — Given a signed Twilio webhook with `From` equal to Sarah Mitchell's registered number, when the call is created, then `meta.identification` holds `NGH-410237`, `Sarah`, method `caller_id` and the `StirVerstat` value, the call is not verified, and no full caller number is stored anywhere.
+- **IDV-02** — Given an identified call, when the caller gives the correct date of birth, then the verification tool is called with only the date of birth, the request carries `X-Identified-Ref: NGH-410237`, and the call becomes verified with `verified_member_ref` `NGH-410237`.
 - **IDV-03** — Given a call from an unregistered or withheld number, then it is not identified and verification asks for member ID and date of birth.
 - **IDV-04** — Given three failed verification attempts in one call, then the call is escalated with category `verification_failed`, the hand-off message is the last agent line, and each failure message is identical.
 - **IDV-05** — Given an identified call with attestation `TN-Validation-Passed-A` on an agent with `trust_attested_caller_id: true`, then a `GET` tool marked `requires_verification` runs and a `POST` one returns `identity_not_verified` until the date of birth is confirmed; with the setting off, both are blocked until verification.

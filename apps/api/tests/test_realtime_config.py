@@ -14,7 +14,7 @@ from voiceai.llm.gateway import FakeReply, Gateway, Usage, reset_gateway
 from voiceai.models import Agent, AgentVersion, Call, CallEvent
 from voiceai.runtime.session import AgentSession, create_call
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 
 
 async def _draft(client, agent_id: str) -> dict:  # noqa: ANN001
@@ -40,8 +40,8 @@ async def test_pipeline_value_defaults_and_is_versioned(client, seeded):
     async with sessionmaker()() as s:
         agent = await s.get(Agent, care)
         assert (await s.get(AgentVersion, agent.published_version_id)).config["voice"]["pipeline"] == "realtime"
-        claims_agent = await s.get(Agent, claims)
-        assert (await s.get(AgentVersion, claims_agent.published_version_id)).config["voice"]["pipeline"] == "realtime"
+        claims_agent = await s.get(Agent, claims)  # an agent that was not republished keeps its own pipeline
+        assert (await s.get(AgentVersion, claims_agent.published_version_id)).config["voice"]["pipeline"] == "cascade"
 
 
 async def test_transfer_voice_and_speech_model_validation(client, seeded):
@@ -104,9 +104,9 @@ async def test_healthz_reports_twilio_from_dotenv_settings(client, monkeypatch):
 
 async def _session(seeded, agent_key: str = "care") -> AgentSession:
     async with sessionmaker()() as s:
-        call = await create_call(s, "evergreen-care", seeded[agent_key]["agent_id"], "voice")
+        call = await create_call(s, "northgate-health", seeded[agent_key]["agent_id"], "voice")
         await s.commit()
-    return await AgentSession.open(call.id, "evergreen-care")
+    return await AgentSession.open(call.id, "northgate-health")
 
 
 async def test_realtime_agent_is_evaluated_on_the_text_brain(client, seeded, fake_llm):
@@ -126,7 +126,7 @@ async def test_realtime_agent_is_evaluated_on_the_text_brain(client, seeded, fak
     cfg["voice"]["pipeline"] = "realtime"
     assert (await _save(client, agent, cfg)).status_code == 200
     assert (await client.post(f"/api/agents/{agent}/publish", headers=H, json={"change_note": "realtime"})).status_code == 200
-    newborn = await _cluster(client, "Adding a newborn to coverage")
+    newborn = await _cluster(client, "Adding a newborn to the policy")
     await client.post(f"/api/insights/clusters/{newborn['id']}/draft-fix", headers=H)
     await jobs.drain()
     pid = (await client.get(f"/api/insights/clusters/{newborn['id']}", headers=H)).json()["proposals"][0]["id"]
@@ -146,7 +146,12 @@ async def test_live_changes_are_refused_on_realtime_calls(client, seeded, monkey
     monkeypatch.setenv("DEEPGRAM_API_KEY", "dg-test")
     get_settings.cache_clear()
     reset_gateway()
-    r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["claims"]["agent_id"], "channel": "voice"})
+    claims = seeded["claims"]["agent_id"]  # no seeded agent is realtime: switch the claims agent
+    cfg = await _draft(client, claims)
+    cfg["voice"]["pipeline"] = "realtime"
+    assert (await _save(client, claims, cfg)).status_code == 200
+    assert (await client.post(f"/api/agents/{claims}/publish", headers=H, json={"change_note": "realtime"})).status_code == 200
+    r = await client.post("/api/calls", headers=H, json={"agent_id": claims, "channel": "voice"})
     call_id = r.json()["call_id"]
     patch = await client.patch(f"/api/calls/{call_id}/live", headers=H, json={"turn_detection": {"mode": "vad"}})
     assert patch.status_code == 409 and patch.json()["error"] == "realtime_pipeline"

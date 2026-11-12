@@ -14,8 +14,8 @@ from voiceai.llm.gateway import FakeReply, LLMError
 from voiceai.models import Agent, Call, CallEvent, Escalation, Job
 from voiceai.runtime.session import AgentSession
 
-H = {"X-Tenant-Id": "evergreen-care"}
-VERIFY = ("verify_member", {"member_id": "482913", "date_of_birth": "1986-04-12"})
+H = {"X-Tenant-Id": "northgate-health"}
+VERIFY = ("verify_member", {"member_id": "410237", "date_of_birth": "1984-03-14"})
 
 
 async def _start(client, seeded, channel: str = "text") -> str:  # noqa: ANN001
@@ -38,7 +38,7 @@ async def _say(client, call_id: str, text: str) -> dict[str, Any]:  # noqa: ANN0
 async def test_greeting_then_disclosure(client, seeded):
     """Covers: RT-01"""
     r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})
-    assert r.json()["greeting"].startswith("Thanks for calling Evergreen Health member services, this is Ava. I'm a virtual assistant")
+    assert r.json()["greeting"].startswith("Thanks for calling Northgate Health, this is Olivia. I'm a virtual assistant")
 
 
 async def test_tool_round_trip_and_usage(client, seeded, fake_llm):
@@ -49,25 +49,25 @@ async def test_tool_round_trip_and_usage(client, seeded, fake_llm):
         seen.append(messages)
         if len(seen) == 1:
             return FakeReply(tool_calls=[VERIFY])
-        return FakeReply(text="Thanks Maria, you're verified.")
+        return FakeReply(text="Thanks Sarah, you're verified.")
 
     fake_llm(responder)
     call_id = await _start(client, seeded)
-    out = await _say(client, call_id, "My ID is 482913, April 12 1986")
-    assert out["reply"] == "Thanks Maria, you're verified."
+    out = await _say(client, call_id, "My membership number is 410237, 14 March 1984")
+    assert out["reply"] == "Thanks Sarah, you're verified."
     kinds = [e.kind for e in await _events(call_id)]
     assert kinds == ["assistant", "user", "tool_call", "tool_result", "system", "assistant"]  # "Memory loaded" on verification (MEM-05)
     assert any(m["role"] == "tool" and '"verified": true' in m["content"] for m in seen[1])
     async with sessionmaker()() as s:
         call = await s.get(Call, call_id)
-        assert call.tokens_in == 200 and call.llm_cost_usd > 0 and call.caller_ref == "EVG-482913"
+        assert call.tokens_in == 200 and call.llm_cost_usd > 0 and call.caller_ref == "NGH-410237"
 
 
 async def test_max_tool_rounds(client, seeded, fake_llm):
     """Covers: RT-04"""
-    fake_llm(lambda role, m, t: FakeReply(tool_calls=[("find_providers", {"specialty": "derm"})]))
+    fake_llm(lambda role, m, t: FakeReply(tool_calls=[("get_gp_slots", {"date": "tomorrow"})]))
     call_id = await _start(client, seeded)
-    out = await _say(client, call_id, "find me a dermatologist")
+    out = await _say(client, call_id, "I need a GP appointment")
     assert "wasn't able" in out["reply"]
     assert sum(1 for e in await _events(call_id) if e.kind == "tool_call") == 4
 
@@ -102,7 +102,7 @@ async def test_open_escalated_session_holds(client, seeded, fake_llm):
     """Covers: RT-02"""
     fake_llm(lambda *a: (_ for _ in ()).throw(AssertionError("LLM must not be called")))
     call_id = await _start(client, seeded)
-    session = await AgentSession.open(call_id, "evergreen-care")
+    session = await AgentSession.open(call_id, "northgate-health")
     await session.escalate("other", "a session that is escalated yet still open (simulation, race)")
     held = await session.reply("are you there?")
     assert held.startswith("A specialist will be with you shortly")
@@ -113,7 +113,7 @@ async def test_safety_screen(client, seeded, fake_llm):
     fake_llm(lambda *a: (_ for _ in ()).throw(AssertionError("LLM must not be called")))
     call_id = await _start(client, seeded)
     out = await _say(client, call_id, "I have chest pain right now")
-    assert "call 911" in out["reply"] and out["escalated"]
+    assert "call 999" in out["reply"] and out["escalated"]
     async with sessionmaker()() as s:
         assert (await s.scalar(select(Escalation).where(Escalation.call_id == call_id))).reason_category == "safety"
 
@@ -121,12 +121,12 @@ async def test_safety_screen(client, seeded, fake_llm):
 async def test_no_answer_streak_escalates(client, seeded, fake_llm):
     """Covers: ES-02"""
     fake_llm(script(
-        FakeReply(tool_calls=[("search_knowledge", {"query": "quantum lattice gauge"})]),
+        FakeReply(tool_calls=[("search_knowledge", {"query": "zebra xylophone quark"})]),
         FakeReply(tool_calls=[("search_knowledge", {"query": "chromodynamics boson"})]),
         FakeReply(text="I don't have approved information on that."),
     ))
     call_id = await _start(client, seeded)
-    out = await _say(client, call_id, "Tell me about quantum lattice gauge coverage")
+    out = await _say(client, call_id, "Tell me about zebra xylophone quark coverage")
     assert out["escalated"]
     async with sessionmaker()() as s:
         assert (await s.scalar(select(Escalation).where(Escalation.call_id == call_id))).reason_category == "knowledge_gap"
@@ -136,12 +136,12 @@ async def test_tool_error_streak_escalates(client, seeded, fake_llm):
     """Covers: ES-03"""
     fake_llm(script(
         FakeReply(tool_calls=[VERIFY]),
-        FakeReply(tool_calls=[("get_claim_status", {"claim_id": "C-99999"})]),
-        FakeReply(tool_calls=[("get_claim_status", {"claim_id": "C-99998"})]),
+        FakeReply(tool_calls=[("get_cash_plan_claim", {"claim_id": "CC-99999"})]),
+        FakeReply(tool_calls=[("get_cash_plan_claim", {"claim_id": "CC-99998"})]),
         FakeReply(text="I couldn't find that claim."),
     ))
     call_id = await _start(client, seeded)
-    out = await _say(client, call_id, "claim status please, 482913 april 12 1986")
+    out = await _say(client, call_id, "cash plan claim status please, 410237 14 march 1984")
     assert out["escalated"]
     async with sessionmaker()() as s:
         assert (await s.scalar(select(Escalation).where(Escalation.call_id == call_id))).reason_category == "tool_failure"
@@ -153,7 +153,7 @@ async def test_double_escalate_single_row(client, seeded, fake_llm):
     fake_llm(script(FakeReply(tool_calls=[esc, esc])))
     call_id = await _start(client, seeded)
     out = await _say(client, call_id, "Let me talk to a person")
-    assert out["reply"].startswith("I'm connecting you with a specialist")
+    assert out["reply"].startswith("I'm connecting you with a colleague")
     async with sessionmaker()() as s:
         assert await s.scalar(select(func.count()).select_from(Escalation).where(Escalation.call_id == call_id)) == 1
 
@@ -165,16 +165,16 @@ async def test_text_and_simulation_behave_identically(client, seeded, fake_llm):
 
     fake_llm(make())
     text_id = await _start(client, seeded)
-    await _say(client, text_id, "482913 April 12 1986")
+    await _say(client, text_id, "410237 14 March 1984")
     fake_llm(make())
     async with sessionmaker()() as s:
-        call = Call(tenant_id="evergreen-care", agent_id=seeded["care"]["agent_id"],
+        call = Call(tenant_id="northgate-health", agent_id=seeded["care"]["agent_id"],
                     agent_version_id=seeded["care"]["version_id"], channel="simulation", is_eval=True)
         s.add(call)
         await s.commit()
-    sim = await AgentSession.open(call.id, "evergreen-care")
+    sim = await AgentSession.open(call.id, "northgate-health")
     await sim.start()
-    await sim.reply("482913 April 12 1986")
+    await sim.reply("410237 14 March 1984")
     real_only = lambda e: "memory_used" in (e.data or {})  # noqa: E731  simulations never read member memory (MEM-10)
     strip = lambda evs: [(e.kind, e.text, e.data.get("name")) for e in evs if not real_only(e)]  # noqa: E731
     assert strip(await _events(text_id)) == strip(await _events(call.id))
@@ -187,7 +187,7 @@ async def test_unpublished_agent_and_wrong_channel(client, seeded, monkeypatch):
     monkeypatch.setenv("DEEPGRAM_API_KEY", "dg-test")  # a voice call needs a usable key to be admitted (ADM-02)
     get_settings.cache_clear()
     async with sessionmaker()() as s:
-        a = Agent(tenant_id="evergreen-care", name="Draft only", draft_config={})
+        a = Agent(tenant_id="northgate-health", name="Draft only", draft_config={})
         s.add(a)
         await s.commit()
     r = await client.post("/api/calls", headers=H, json={"agent_id": a.id, "channel": "text"})

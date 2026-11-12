@@ -9,7 +9,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Explorer (`/calls/`)
 
-Filters: agent, outcome, channel, direction, feedback (Any · Not helpful · Helpful · No answer), "Include seeded history" (default on). Table: started, channel (a **Phone** badge when the call came in through Twilio), direction badge, agent version, caller (masked, e.g. `EVG-•••913`), intent, outcome badge, **feedback badge** ("Helpful" or "Not helpful" with a thumb icon, empty when the caller gave none), root cause, turns, LLM cost. Row click → detail. Calls that are segments of a conversation show a **Routed** badge (or **Transferred** for segment 2 and later) and the segment number; filter **Conversation** (any / routed only).
+Filters: agent, outcome, channel, direction, feedback (Any · Not helpful · Helpful · No answer), "Include seeded history" (default on). Table: started, channel (a **Phone** badge when the call came in through Twilio), direction badge, agent version, caller (masked, e.g. `NGH-•••237`), intent, outcome badge, **feedback badge** ("Helpful" or "Not helpful" with a thumb icon, empty when the caller gave none), root cause, turns, LLM cost. Row click → detail. Calls that are segments of a conversation show a **Routed** badge (or **Transferred** for segment 2 and later) and the segment number; filter **Conversation** (any / routed only).
 
 # Detail (`/calls/detail/?id=…`)
 

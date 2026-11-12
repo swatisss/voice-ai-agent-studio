@@ -15,7 +15,7 @@ An agent has a `mode` in its config ([/data/agent-config.md](/data/agent-config.
 |---|---|---|---|
 | `inbound` (default) | the agent, with the persona's greeting and disclosure | a customer who called in | caller verifies with member ID + date of birth before account detail |
 | `outbound` | the agent, with the persona's **opening** | a customer the agent is calling | the agent knows whom it is calling, but the callee must still confirm their date of birth before any account detail |
-| `internal` | the agent, with the persona's greeting and disclosure | Evergreen staff (assumed authenticated by the surrounding channel) | no member verification; the agent never discloses member data |
+| `internal` | the agent, with the persona's greeting and disclosure | Northgate Health staff (assumed authenticated by the surrounding channel) | no member verification; the agent never discloses member data |
 
 "Speaks first" holds for every channel: in a text chat the first utterance is shown on start; in a voice call it is **spoken** as soon as the pipeline is ready, without the caller saying anything ([/architecture/voice-pipeline.md](/architecture/voice-pipeline.md), VO-07).
 

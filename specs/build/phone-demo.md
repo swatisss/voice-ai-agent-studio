@@ -21,10 +21,11 @@ Windows without a `python` command: `py -3 scripts/phone_demo.py`. Stdlib only (
 | `.env` key | Required | Meaning |
 |---|---|---|
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | yes | Your Twilio credentials (used for webhook validation, the transfer and to set the number's webhook) |
-| `TWILIO_PHONE_NUMBER` | yes | The Twilio number to answer, international format, e.g. `+15551234567` |
-| `OPENAI_API_KEY` | yes, for the default agent | The Insurance Claims Agent runs on the realtime pipeline |
+| `TWILIO_PHONE_NUMBER` | yes | The Twilio number to answer, international format, e.g. `+441632960001` |
+| `DEEPGRAM_API_KEY` | yes, for the default agent | Customer Care runs on the cascade pipeline (Deepgram speech-to-text and voice) |
+| `GROQ_API_KEY` or `OPENAI_API_KEY` | yes, at least one | The agent's language model (the `realtime` role; OpenAI is its fallback). A realtime agent named in `DEMO_AGENT` needs only `OPENAI_API_KEY` and no Deepgram key |
 | `NGROK_AUTHTOKEN` | no | Needed by ngrok itself; the script passes it through |
-| `DEMO_AGENT` | no | Agent to answer the number (default `Insurance Claims Agent`) |
+| `DEMO_AGENT` | no | Agent to answer the number (default `Customer Care`) |
 | `DEMO_TRANSFER_TO` | no | A phone number (or `sip:` URI) the call is redirected to on a hand-off; set on the agent and published when it differs |
 
 | Flag | Meaning |
@@ -46,8 +47,8 @@ Windows without a `python` command: `py -3 scripts/phone_demo.py`. Stdlib only (
 
 # Acceptance
 
-- **DEV-07** — Given a `.env` without `TWILIO_AUTH_TOKEN` and `OPENAI_API_KEY`, or with a `TWILIO_PHONE_NUMBER` that is not in international format, or with neither `ngrok` nor `cloudflared` on the path, when pre-flight runs, then each problem is reported with its fix and no value of a key is printed; with everything present it reports none, and `--check` starts no process and makes no network call.
+- **DEV-07** — Given a `.env` without `TWILIO_AUTH_TOKEN` and `DEEPGRAM_API_KEY`, or with no LLM key (`GROQ_API_KEY` or `OPENAI_API_KEY`), or with a `TWILIO_PHONE_NUMBER` that is not in international format, or with neither `ngrok` nor `cloudflared` on the path, when pre-flight runs, then each problem is reported with its fix and no value of a key is printed; with everything present it reports none, and `--check` starts no process and makes no network call.
 - **DEV-08** — Given ngrok's tunnel listing, then the `https` public URL is picked; given a cloudflared output line, then its `trycloudflare.com` URL is picked; given `--public-url`, then no tunnel is started; a `PUBLIC_BASE_URL` in `.env` is ignored and the API receives the tunnel's URL.
 - **DEV-09** — Given a Twilio account that owns the number, when the webhook step runs, then the number's voice URL becomes `<public URL>/api/telephony/twilio/voice` with method POST and the previous voice URL is returned for restoring; given a number the account does not own, then the step fails with a message naming the number; restoring puts the previous URL back.
 - **DEV-10** — Given the API with the seeded agents, when the mapping step runs, then the number is mapped to the named agent; run again it changes nothing; run with the number mapped to another agent it is re-mapped; with a transfer number set it is saved on the agent and published once, and not again when already equal; an unknown agent name fails naming the agent.
-- **DEV-11** — Given real Twilio and OpenAI credentials, a tunnel tool and a phone, when `python scripts/phone_demo.py` runs and the number is called, then the agent answers and the call appears in the printed feed and on the Calls page; Ctrl+C restores the webhook and leaves no process running (by hand).
+- **DEV-11** — Given real Twilio, Deepgram and LLM credentials, a tunnel tool and a phone, when `python scripts/phone_demo.py` runs and the number is called, then the agent answers and the call appears in the printed feed and on the Calls page; Ctrl+C restores the webhook and leaves no process running (by hand).

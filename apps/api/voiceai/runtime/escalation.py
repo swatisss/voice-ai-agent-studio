@@ -28,8 +28,8 @@ SAFETY_PHRASES = (
     "can't breathe", "cannot breathe", "stroke", "unconscious", "severe bleeding", "heart attack",
 )
 SAFETY_MESSAGE = (
-    "If this is a medical emergency, please hang up and call 911. If you are thinking about harming yourself, "
-    "you can call or text 988 at any time. I'm connecting you with a nurse right now."
+    "If this is a medical emergency, please hang up and call 999. If you are thinking about harming yourself, "
+    "you can call Samaritans free on 116 123 at any time. I'm connecting you with a nurse right now."
 )
 
 # Hindi phrases, Devanagari and Latin letters, matched on every agent (/architecture/languages.md, Safety screen; LANG-08)
@@ -42,8 +42,8 @@ SAFETY_PHRASES_HI = (
 )
 # /product/healthcare-compliance.md rule 6, the Hindi message for a turn in Devanagari
 SAFETY_MESSAGE_HI = (
-    "अगर यह मेडिकल इमरजेंसी है, तो कृपया फ़ोन रखें और 911 पर कॉल करें। अगर आप खुद को नुकसान पहुँचाने के बारे में सोच रहे हैं, "
-    "तो आप कभी भी 988 पर कॉल या मैसेज कर सकते हैं। अब आपको एक नर्स से जोड़ा जा रहा है।"
+    "अगर यह मेडिकल इमरजेंसी है, तो कृपया फ़ोन रखें और 999 पर कॉल करें। अगर आप खुद को नुकसान पहुँचाने के बारे में सोच रहे हैं, "
+    "तो आप कभी भी Samaritans को 116 123 पर मुफ़्त कॉल कर सकते हैं। अब आपको एक नर्स से जोड़ा जा रहा है।"
 )
 
 _packet_tasks: set[asyncio.Task[None]] = set()

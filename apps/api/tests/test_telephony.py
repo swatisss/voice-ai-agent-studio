@@ -20,7 +20,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from voiceai import telephony
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 TOKEN = "twilio-test-token"
 BASE = "https://abc123.ngrok.test"
 NUMBER = "+15550001111"
@@ -30,7 +30,7 @@ VOICE = "/api/telephony/twilio/voice"
 
 @pytest.fixture
 def phone(app, tmp_path, monkeypatch):  # noqa: ANN001, ANN201
-    """A running app with a seeded temp database, Twilio credentials, an OpenAI key and the claims agent mapped to NUMBER."""
+    """A running app with a seeded temp database, Twilio credentials, an OpenAI key and the claims agent (switched to the realtime pipeline) mapped to NUMBER."""
     db_path = tmp_path / "phone.db"
     for key, value in {
         "DATABASE_URL": f"sqlite+aiosqlite:///{db_path.as_posix()}", "AUTO_SEED": "1", "TWILIO_AUTH_TOKEN": TOKEN,
@@ -44,7 +44,11 @@ def phone(app, tmp_path, monkeypatch):  # noqa: ANN001, ANN201
     reset_gateway()
     with TestClient(app) as client:
         agents = {a["name"]: a["id"] for a in client.get("/api/agents", headers=H).json()["items"]}
-        r = client.post("/api/phone-numbers", headers=H, json={"e164": NUMBER, "agent_id": agents["Insurance Claims Agent"]})
+        claims = agents["Claims & Pre-authorisation"]
+        cfg = client.get(f"/api/agents/{claims}", headers=H).json()["draft_config"]  # no seeded agent is realtime: switch the claims line
+        assert client.put(f"/api/agents/{claims}", headers=H, json={"draft_config": {**cfg, "voice": {**cfg["voice"], "pipeline": "realtime"}}}).status_code == 200
+        assert client.post(f"/api/agents/{claims}/publish", headers=H, json={"change_note": "realtime phone line"}).status_code == 200
+        r = client.post("/api/phone-numbers", headers=H, json={"e164": NUMBER, "agent_id": claims})
         assert r.status_code == 200, r.text
         yield SimpleNamespace(client=client, agents=agents, db=db_path, number_id=r.json()["id"])
     get_settings.cache_clear()
@@ -121,7 +125,9 @@ def test_unroutable_calls_hear_not_in_service(phone, monkeypatch):
     count = lambda: rows(phone, "select count(*) from calls")[0][0]  # noqa: E731
     before = count()
     assert not_in_service(signed_post(phone.client, call_params(to="+15559990000")))  # unmapped
-    outbound = phone.agents["Renewal Outreach Agent"]
+    outbound = phone.client.post("/api/agents", headers=H, json={"name": "Renewal Calls", "draft_config": {
+        "mode": "outbound", "outbound": {"targets_url": "/mock/insurance/outreach/renewals"}, "voice": {"pipeline": "cascade"}}}).json()["id"]
+    assert phone.client.post(f"/api/agents/{outbound}/publish", headers=H, json={}).status_code == 200
     phone.client.post("/api/phone-numbers", headers=H, json={"e164": "+15550002222", "agent_id": outbound})
     assert not_in_service(signed_post(phone.client, call_params(to="+15550002222")))  # outbound agents do not answer
     draft = phone.client.post("/api/agents", headers=H, json={"name": "Unpublished", "description": ""}).json()["id"]
@@ -317,15 +323,15 @@ def test_phone_number_api(phone):
     """Covers: TEL-08"""
     c = phone.client
     listed = c.get("/api/phone-numbers", headers=H).json()["items"]
-    assert [(n["e164"], n["agent_name"]) for n in listed] == [(NUMBER, "Insurance Claims Agent")]
-    assert c.post("/api/phone-numbers", headers=H, json={"e164": NUMBER, "agent_id": phone.agents["Customer Care Agent"]}).json()["error"] == "number_in_use"
+    assert [(n["e164"], n["agent_name"]) for n in listed] == [(NUMBER, "Claims & Pre-authorisation")]
+    assert c.post("/api/phone-numbers", headers=H, json={"e164": NUMBER, "agent_id": phone.agents["Customer Care"]}).json()["error"] == "number_in_use"
     for bad in ("5551234", "+0123456789", "+1 555 123 4567", "+1"):
-        assert c.post("/api/phone-numbers", headers=H, json={"e164": bad, "agent_id": phone.agents["Customer Care Agent"]}).status_code == 422, bad
+        assert c.post("/api/phone-numbers", headers=H, json={"e164": bad, "agent_id": phone.agents["Customer Care"]}).status_code == 422, bad
     assert c.post("/api/phone-numbers", headers=H, json={"e164": "+15550004444", "agent_id": "nope"}).status_code == 422
-    sandbox = {"X-Tenant-Id": "evergreen-sandbox"}
+    sandbox = {"X-Tenant-Id": "northgate-sandbox"}
     assert c.get("/api/phone-numbers", headers=sandbox).json()["items"] == []
     assert c.delete(f"/api/phone-numbers/{phone.number_id}", headers=sandbox).status_code == 404
-    assert c.post("/api/phone-numbers", headers=sandbox, json={"e164": "+15550005555", "agent_id": phone.agents["Customer Care Agent"]}).status_code == 422  # other tenant's agent
+    assert c.post("/api/phone-numbers", headers=sandbox, json={"e164": "+15550005555", "agent_id": phone.agents["Customer Care"]}).status_code == 422  # other tenant's agent
     assert signed_post(c, call_params()).text.count("<Connect>") == 1
     assert c.delete(f"/api/phone-numbers/{phone.number_id}", headers=H).status_code == 204
     assert not_in_service(signed_post(c, call_params()))
@@ -474,7 +480,7 @@ def test_phone_call_runs_end_to_end_through_the_pipeline(provider, phone):
     kinds = [e["type"] for e in provider.log]
     assert kinds[0] == "session.update" and kinds.count("response.create") >= 1  # configured, welcome requested
     welcome = next(e for e in provider.log if e["type"] == "response.create")
-    assert "Thank you for calling Evergreen Health claims, this is Nora." in welcome["response"]["instructions"]
+    assert "Thank you for calling Northgate Health claims, this is Hannah." in welcome["response"]["instructions"]
     assert any("ivr_menu: claims" in e["session"]["instructions"] for e in provider.log if e["type"] == "session.update")
     detail = phone.client.get(f"/api/calls/{call_id}", headers=H).json()
     assert detail["transport"] == "phone" and detail["end_reason"] == "hangup" and detail["status"] == "ended"

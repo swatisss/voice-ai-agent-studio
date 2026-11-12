@@ -6,7 +6,8 @@ Spec: /build/phone-demo.md, /architecture/telephony.md
     python scripts/phone_demo.py             # tunnel + API + number mapping + Twilio webhook, then call the number
     python scripts/phone_demo.py --check     # pre-flight only: what is configured, what is missing
 
-Needs in apps/api/.env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, OPENAI_API_KEY; and `ngrok` or `cloudflared`
+Needs in apps/api/.env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, DEEPGRAM_API_KEY (the default agent, Customer
+Care, runs on the cascade pipeline) and an LLM key (GROQ_API_KEY or OPENAI_API_KEY); and `ngrok` or `cloudflared`
 installed. Optional: DEMO_AGENT, DEMO_TRANSFER_TO, NGROK_AUTHTOKEN. Ctrl+C restores the number's previous webhook and stops everything.
 Stdlib only (Python 3.9+).
 """
@@ -33,11 +34,12 @@ import dev  # noqa: E402  (scripts/dev.py: dotenv reader, process helpers)
 
 ROOT = dev.ROOT
 API_DIR = dev.API_DIR
-REQUIRED = ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "OPENAI_API_KEY")
+REQUIRED = ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "DEEPGRAM_API_KEY")
+LLM_KEYS = ("GROQ_API_KEY", "OPENAI_API_KEY")  # at least one: the `realtime` role
 E164 = re.compile(r"\+[1-9][0-9]{6,14}")
 SIP = re.compile(r"sip:[^\s@]+@\S+")
-TENANT = "evergreen-care"
-DEFAULT_AGENT = "Insurance Claims Agent"
+TENANT = "northgate-health"
+DEFAULT_AGENT = "Customer Care"
 WEBHOOK_PATH = "/api/telephony/twilio/voice"
 CLOUDFLARED_URL = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
 
@@ -59,6 +61,8 @@ def preflight(cfg: dict[str, str], args: argparse.Namespace, which: Callable[[st
     """Problems with their fixes; never includes a value of a key (DEV-07)."""
     which = which or shutil.which
     problems = [f"{k} is missing: add it to apps/api/.env" for k in REQUIRED if not cfg.get(k)]
+    if not any(cfg.get(k) for k in LLM_KEYS):
+        problems.append("no LLM key: add GROQ_API_KEY or OPENAI_API_KEY to apps/api/.env")
     number = cfg.get("TWILIO_PHONE_NUMBER")
     if number and not E164.fullmatch(number):
         problems.append("TWILIO_PHONE_NUMBER must be in international format, for example +15551234567")
@@ -269,6 +273,8 @@ def main(argv: list[str] | None = None) -> int:
     print("Phone demo pre-flight")
     for key in REQUIRED:
         print(f"  {'ok     ' if cfg.get(key) else 'MISSING'} {key}")
+    found = [k for k in LLM_KEYS if cfg.get(k)]
+    print(f"  {'ok     ' if found else 'MISSING'} LLM key ({' or '.join(found or LLM_KEYS)})")
     print(f"  tunnel   {'--public-url' if args.public_url else ('ngrok' if shutil.which('ngrok') else ('cloudflared' if shutil.which('cloudflared') else 'MISSING'))}")
     for problem in problems:
         print(f"  problem: {problem}")

@@ -397,6 +397,15 @@ class DentalSystem:
                            for k, c in self.claims.items() if c["patient"] == member]}
 
 
+# what a dental insurance claim needs; the same answer the platform's retired claim-requirements mock gave (MOCK-14)
+CLAIM_DOCUMENTS = {
+    "claim_type": "dental",
+    "documents": [{"document": "Itemised dental bill with procedure codes", "note": "From the dentist"},
+                  {"document": "X-rays", "note": "Needed for crowns, bridges or implants"}],
+    "where_to_send": "Upload them in your online account or email the claims team; the claim number must be on every page.",
+}
+
+
 # ------------------------------------------------------------------ HTTP
 ROUTES: list[tuple[str, str, str]] = [
     ("POST", r"/dental/verify", "verify"), ("POST", r"/dental/patients", "register"),
@@ -405,6 +414,7 @@ ROUTES: list[tuple[str, str, str]] = [
     ("POST", r"/dental/appointments/(?P<ref>[^/]+)/reschedule", "reschedule"),
     ("GET", r"/dental/cover", "cover"), ("GET", r"/dental/estimate", "estimate"),
     ("GET", r"/dental/claims", "claims_of"), ("GET", r"/dental/claims/(?P<claim_id>[^/]+)", "claim"), ("GET", r"/dental/health", "health"),
+    ("GET", r"/dental/claim-documents", "claim_documents"),
 ]
 
 
@@ -417,6 +427,8 @@ def dispatch(system: DentalSystem, method: str, path: str, query: dict[str, str]
         try:
             if name == "health":
                 return 200, {"ok": True, "today": system.today.isoformat()}
+            if name == "claim_documents":  # no patient needed: general information
+                return 200, CLAIM_DOCUMENTS
             if name == "verify":
                 return 200, system.verify(body)
             if name == "register":

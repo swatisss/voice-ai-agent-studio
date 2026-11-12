@@ -1,5 +1,6 @@
 # Change proposals
 
+* [CP-0039 Northgate Health](cp-0039-northgate-health.md) - Replaces the Evergreen demo and the SafeTrip kit with a fictional UK insurer: a front desk and three agents (Customer Care, Health Cover Sales, Claims & Pre-authorisation) plus the dental kit
 * [CP-0038 One start for the stack, the dental mock and a Docker run](cp-0038-one-start-for-demo-mock-and-docker.md) - dev.py serves the dental demo mock, demo_kits.py reuses it, and scripts/docker_stack.py runs app and mock in one container where voice works on locked-down Windows
 * [CP-0037 Hindi and English, switching mid-call](cp-0037-hindi-english-switching.md) - Bilingual agents on the realtime pipeline reply in the caller's language and follow a switch at any turn; Hindi safety screen on every agent; identifiers and knowledge queries normalised to English
 * [CP-0036 Carrier adapters](cp-0036-carrier-adapters.md) - Telephony behind one carrier-adapter interface and registry, carrier-named routes; Twilio stays the only adapter, any carrier or SIP source plugs in as one module

@@ -24,10 +24,10 @@ const MODE_KEY = "test-call-mode";  // UI-60: Single agent | Full flow, remember
 /** UI-43: who the playground call comes from; sent as caller_number, never shown on screen. */
 const CALL_FROM: { id: string; label: string; number?: string }[] = [
   { id: "none", label: "No number" },
-  { id: "maria", label: "Maria Lopez — registered number", number: "+12025550141" },
-  { id: "james", label: "James Carter — registered number", number: "+12025550142" },
-  { id: "priya", label: "Priya Nair — registered number", number: "+12025550143" },
-  { id: "unknown", label: "An unknown number", number: "+12025550199" },
+  { id: "sarah", label: "Sarah Mitchell — registered number", number: "+447700900141" },
+  { id: "david", label: "David Okoro — registered number", number: "+447700900142" },
+  { id: "emma", label: "Emma Clarke — registered number", number: "+447700900143" },
+  { id: "unknown", label: "An unknown number", number: "+447700900199" },
 ];
 
 export default function Page() {

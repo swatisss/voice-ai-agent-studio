@@ -104,7 +104,7 @@ async def client(app, database) -> AsyncIterator[httpx.AsyncClient]:  # noqa: AN
 
 @pytest.fixture
 def members_headers() -> dict[str, str]:
-    return {"X-Tenant-Id": "evergreen-care"}
+    return {"X-Tenant-Id": "northgate-health"}
 
 
 Responder = Callable[[str, list[dict[str, Any]], Any], Any]

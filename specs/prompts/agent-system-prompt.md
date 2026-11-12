@@ -17,7 +17,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `policy_rules`, `escalate_when_list`, `never_list` | `config.policy` lists rendered as `- item` lines (empty → `- (none)`) |
 | `skills` | skills rendered per [/architecture/tools-and-skills.md](/architecture/tools-and-skills.md) |
 | `today` | call date, e.g. `Tuesday, October 6, 2026` |
-| `verified` | `yes (member EVG-482913)` or `no` |
+| `verified` | `yes (member NGH-410237)` or `no` |
 | `verification_instruction` | agent with no attached `is_verification` tool (any caller): "This line cannot verify callers. Never ask for a member ID, policy number or date of birth. Answer general questions from knowledge; if the caller needs details of their own account, say you can't access accounts on this line and offer to connect them with a specialist." ([CP-0030](/changes/cp-0030-knowledge-judge-verification-fixes.md)); otherwise, identified call: "The calling number is on {first_name}'s record: greet them by first name, ask only for their date of birth and call the verification tool with it. If they say they are someone else, ask for member ID and date of birth instead."; otherwise: "Ask for member ID and date of birth, then call the verification tool." ([/architecture/caller-verification.md](/architecture/caller-verification.md)) |
 | `member_profile` | after verification: the profile from the business API as `- key: value` lines (first name, plan, policies, open claims, preferred contact); before: `- (not verified yet)` |
 | `member_memory` | after verification, when memory is enabled: `Facts:` and `Earlier calls:` lines ([/architecture/agent-memory.md](/architecture/agent-memory.md)); otherwise `- (none)` |

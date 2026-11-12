@@ -21,9 +21,9 @@ from voiceai.llm.gateway import FakeReply
 from voiceai.models import ApiKey, Call, Conversation
 from voiceai.public import auth, tokens
 
-H = {"X-Tenant-Id": "evergreen-care"}
-SANDBOX = {"X-Tenant-Id": "evergreen-sandbox"}
-MARIA_PHONE = "+12025550141"
+H = {"X-Tenant-Id": "northgate-health"}
+SANDBOX = {"X-Tenant-Id": "northgate-sandbox"}
+SARAH_PHONE = "+447700900141"
 
 
 @pytest.fixture(autouse=True)
@@ -55,14 +55,14 @@ async def test_key_shown_once_and_stored_hashed(client, seeded):
         row = await s.get(ApiKey, key["id"])
         assert row.key_hash == hashlib.sha256(raw.encode()).hexdigest() and raw not in json.dumps(row.__dict__, default=str)
         assert row.last_used_at is None
-    r = await client.get("/v1/tenants/evergreen-care/agents", headers=bearer(key))
+    r = await client.get("/v1/tenants/northgate-health/agents", headers=bearer(key))
     assert r.status_code == 200
     async with sessionmaker()() as s:
         assert (await s.get(ApiKey, key["id"])).last_used_at is not None
     # the scope cannot change; revoking ends access; a 21st active key is refused
     assert (await client.put(f"/api/api-keys/{key['id']}", headers=H, json={"scope": "staff"})).status_code == 422
     assert (await client.delete(f"/api/api-keys/{key['id']}", headers=H)).status_code == 204
-    assert (await client.get("/v1/tenants/evergreen-care/agents", headers=bearer(key))).status_code == 401
+    assert (await client.get("/v1/tenants/northgate-health/agents", headers=bearer(key))).status_code == 401
     for i in range(20):
         assert (await client.post("/api/api-keys", headers=H, json={"name": f"k{i}", "scope": "member"})).status_code == 201
     r = await client.post("/api/api-keys", headers=H, json={"name": "k21", "scope": "member"})
@@ -72,26 +72,34 @@ async def test_key_shown_once_and_stored_hashed(client, seeded):
 async def test_tenant_bound_to_key(client, seeded):
     """Covers: PUB-02, MT-14"""
     key = await new_key(client)
-    other = await client.get("/v1/tenants/evergreen-sandbox/agents", headers={**bearer(key), "X-Tenant-Id": "evergreen-sandbox"})
+    other = await client.get("/v1/tenants/northgate-sandbox/agents", headers={**bearer(key), "X-Tenant-Id": "northgate-sandbox"})
     unknown = await client.get("/v1/tenants/no-such-tenant/agents", headers=bearer(key))
     assert other.status_code == unknown.status_code == 404
     assert other.json()["error"] == "tenant_not_found"
-    assert other.json()["detail"].replace("evergreen-sandbox", "X") == unknown.json()["detail"].replace("no-such-tenant", "X")
+    assert other.json()["detail"].replace("northgate-sandbox", "X") == unknown.json()["detail"].replace("no-such-tenant", "X")
     for headers in ({}, {"Authorization": "Bearer nope"}, {"Authorization": "Bearer vak_" + "a" * 40}, {"Authorization": key["key"]}):
-        r = await client.get("/v1/tenants/evergreen-care/agents", headers=headers)
+        r = await client.get("/v1/tenants/northgate-health/agents", headers=headers)
         assert r.status_code == 401 and r.json()["error"] == "invalid_key" and r.headers["www-authenticate"] == "Bearer"
 
 
 async def test_scope_limits_reachable_agents(client, seeded):
     """Covers: PUB-03"""
+    # the seed has only inbound agents: add a published internal and a published outbound agent for this test
+    extra = {}
+    for key, name, cfg in (("internal", "Staff Helpdesk", {"mode": "internal"}),
+                           ("outbound", "Renewal Calls", {"mode": "outbound", "outbound": {"targets_url": "/mock/insurance/outreach/renewals"}})):
+        r = await client.post("/api/agents", headers=H, json={"name": name, "draft_config": {**cfg, "voice": {"pipeline": "cascade"}}})
+        assert r.status_code == 200, r.text
+        extra[key] = r.json()["id"]
+        assert (await client.post(f"/api/agents/{extra[key]}/publish", headers=H, json={})).status_code == 200
     member, staff = await new_key(client, "member"), await new_key(client, "staff")
-    names = {a["name"] for a in (await client.get("/v1/tenants/evergreen-care/agents", headers=bearer(member))).json()["items"]}
-    assert names == {"Customer Care Agent", "Insurance Claims Agent"}
-    staff_names = {a["name"] for a in (await client.get("/v1/tenants/evergreen-care/agents", headers=bearer(staff))).json()["items"]}
-    assert staff_names == {"Internal Knowledge Assistant"}
-    for key, agent in ((member, "internal"), (member, "renewals"), (staff, "care")):
-        r = await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key),
-                              json={"channel": "text", "agent_id": seeded[agent]["agent_id"]})
+    names = {a["name"] for a in (await client.get("/v1/tenants/northgate-health/agents", headers=bearer(member))).json()["items"]}
+    assert names == {"Customer Care", "Health Cover Sales", "Claims & Pre-authorisation"}
+    staff_names = {a["name"] for a in (await client.get("/v1/tenants/northgate-health/agents", headers=bearer(staff))).json()["items"]}
+    assert staff_names == {"Staff Helpdesk"}
+    for key, agent_id in ((member, extra["internal"]), (member, extra["outbound"]), (staff, seeded["care"]["agent_id"])):
+        r = await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(key),
+                              json={"channel": "text", "agent_id": agent_id})
         assert r.status_code == 404 and r.json()["error"] == "agent_not_found"
 
 
@@ -99,8 +107,8 @@ async def test_rate_limits(client, seeded, monkeypatch):
     """Covers: PUB-04"""
     key = await new_key(client, rate_limit_per_min=10)
     for _ in range(10):
-        assert (await client.get("/v1/tenants/evergreen-care/agents", headers=bearer(key))).status_code == 200
-    r = await client.get("/v1/tenants/evergreen-care/agents", headers=bearer(key))
+        assert (await client.get("/v1/tenants/northgate-health/agents", headers=bearer(key))).status_code == 200
+    r = await client.get("/v1/tenants/northgate-health/agents", headers=bearer(key))
     assert r.status_code == 429 and r.json()["error"] == "rate_limited" and int(r.headers["retry-after"]) >= 1
     assert r.headers["x-ratelimit-remaining"] == "0"
     # concurrent voice: one active voice conversation blocks the next
@@ -112,8 +120,8 @@ async def test_rate_limits(client, seeded, monkeypatch):
     try:
         voice_key = await new_key(client, max_concurrent_voice=1)
         body = {"channel": "voice", "agent_id": seeded["care"]["agent_id"]}
-        assert (await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(voice_key), json=body)).status_code == 201
-        r = await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(voice_key), json=body)
+        assert (await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(voice_key), json=body)).status_code == 201
+        r = await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(voice_key), json=body)
         assert r.status_code == 429 and r.json()["error"] == "voice_capacity"
     finally:
         get_settings.cache_clear()
@@ -123,19 +131,19 @@ async def test_text_conversation(client, seeded, fake_llm):
     """Covers: PUB-05"""
     key = await new_key(client)
     fake_llm(script(FakeReply(text="Sure, I can help with a claim."), FakeReply(text="Your claim is being processed.")))
-    r = await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key),
+    r = await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(key),
                           json={"channel": "text", "agent_id": seeded["claims"]["agent_id"], "message": "I want to check on a claim"})
     assert r.status_code == 201, r.text
     body = r.json()
-    assert body["status"] == "active" and body["agent"]["name"] == "Insurance Claims Agent" and body["routing"]["method"] == "explicit"
+    assert body["status"] == "active" and body["agent"]["name"] == "Claims & Pre-authorisation" and body["routing"]["method"] == "explicit"
     assert [m["speaker"] for m in body["messages"]] == ["agent", "agent"]
     assert "virtual assistant" in body["messages"][0]["text"].lower() and body["messages"][1]["text"] == "Sure, I can help with a claim."
     cid = body["conversation_id"]
-    turn = (await client.post(f"/v1/tenants/evergreen-care/conversations/{cid}/messages", headers=bearer(key), json={"text": "C-20931"})).json()
-    assert turn["agent"]["name"] == "Insurance Claims Agent" and turn["messages"][0]["text"] == "Your claim is being processed."
+    turn = (await client.post(f"/v1/tenants/northgate-health/conversations/{cid}/messages", headers=bearer(key), json={"text": "C-20931"})).json()
+    assert turn["agent"]["name"] == "Claims & Pre-authorisation" and turn["messages"][0]["text"] == "Your claim is being processed."
     assert turn["transferred"] is False and turn["ended"] is False
-    first = (await client.post(f"/v1/tenants/evergreen-care/conversations/{cid}/end", headers=bearer(key))).json()
-    second = (await client.post(f"/v1/tenants/evergreen-care/conversations/{cid}/end", headers=bearer(key))).json()
+    first = (await client.post(f"/v1/tenants/northgate-health/conversations/{cid}/end", headers=bearer(key))).json()
+    second = (await client.post(f"/v1/tenants/northgate-health/conversations/{cid}/end", headers=bearer(key))).json()
     assert first == second and first["status"] == "ended"
 
 
@@ -144,10 +152,10 @@ async def test_streamed_turn_equals_json_turn(client, seeded, fake_llm):
     key = await new_key(client)
     fake_llm(script(FakeReply(text="Hello there."), FakeReply(text="Hello there.")))
     create = {"channel": "text", "agent_id": seeded["care"]["agent_id"]}
-    a = (await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key), json=create)).json()["conversation_id"]
-    b = (await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key), json=create)).json()["conversation_id"]
-    plain = (await client.post(f"/v1/tenants/evergreen-care/conversations/{a}/messages", headers=bearer(key), json={"text": "hi"})).json()
-    r = await client.post(f"/v1/tenants/evergreen-care/conversations/{b}/messages", headers={**bearer(key), "Accept": "text/event-stream"}, json={"text": "hi"})
+    a = (await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(key), json=create)).json()["conversation_id"]
+    b = (await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(key), json=create)).json()["conversation_id"]
+    plain = (await client.post(f"/v1/tenants/northgate-health/conversations/{a}/messages", headers=bearer(key), json={"text": "hi"})).json()
+    r = await client.post(f"/v1/tenants/northgate-health/conversations/{b}/messages", headers={**bearer(key), "Accept": "text/event-stream"}, json={"text": "hi"})
     assert r.headers["content-type"].startswith("text/event-stream")
     events = [(blk.split("\n")[0][7:], json.loads(blk.split("\n")[1][6:])) for blk in r.text.strip().split("\n\n")]
     assert events[0][0] == "message.delta" and events[-1][0] == "turn.done" and sum(1 for e in events if e[0] == "turn.done") == 1
@@ -172,7 +180,7 @@ def live(app, tmp_path, monkeypatch):  # noqa: ANN001, ANN201
 
 
 def _voice(c, key, agent_id: str, **extra) -> dict:  # noqa: ANN001
-    r = c.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key), json={"channel": "voice", "agent_id": agent_id, **extra})
+    r = c.post("/v1/tenants/northgate-health/conversations", headers=bearer(key), json={"channel": "voice", "agent_id": agent_id, **extra})
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -190,7 +198,7 @@ def test_voice_connect_tokens(live, monkeypatch):
     from voiceai import voice_calls
 
     monkeypatch.setattr(voice_calls, "serve_conversation", fake_serve)
-    v = _voice(c, key, agents["Customer Care Agent"])
+    v = _voice(c, key, agents["Customer Care"])
     conn = v["connect"]
     assert conn["url"] == f"wss://voice.example.test/v1/voice/{v['conversation_id']}"
     path = f"/v1/voice/{v['conversation_id']}"
@@ -201,16 +209,16 @@ def test_voice_connect_tokens(live, monkeypatch):
         assert exc.value.code == 4401
 
     closes_4401(p=path + f"?token={conn['token']}")              # query strings are refused
-    other = _voice(c, key, agents["Customer Care Agent"])
+    other = _voice(c, key, agents["Customer Care"])
     closes_4401(headers={"Authorization": f"Bearer {other['connect']['token']}"})  # another conversation's token
     with c.websocket_connect(path, headers={"Authorization": f"Bearer {conn['token']}"}) as ws:
         assert json.loads(ws.receive_text()) == {"type": "ready"}
     closes_4401(headers={"Authorization": f"Bearer {conn['token']}"})  # used once
-    third = _voice(c, key, agents["Customer Care Agent"])
+    third = _voice(c, key, agents["Customer Care"])
     with c.websocket_connect(f"/v1/voice/{third['conversation_id']}", subprotocols=["vai.voice.v1", f"vai-token.{third['connect']['token']}"]) as ws:
         assert ws.accepted_subprotocol == "vai.voice.v1"
         ws.receive_text()
-    expired, _ = tokens.mint("evergreen-care", other["conversation_id"], "websocket", now=0)
+    expired, _ = tokens.mint("northgate-health", other["conversation_id"], "websocket", now=0)
     closes_4401(p=f"/v1/voice/{other['conversation_id']}", headers={"Authorization": f"Bearer {expired}"})
     assert len(served) == 2
 
@@ -228,7 +236,7 @@ def test_media_stream_transport(live, monkeypatch):
     monkeypatch.setattr(voice_calls, "serve_conversation", fake_serve)
     for fmt in ("mulaw_8k", "pcm_16k"):
         extra = {"transport": "media-stream"} | ({"audio_format": fmt} if fmt == "pcm_16k" else {})
-        v = _voice(c, key, agents["Customer Care Agent"], **extra)
+        v = _voice(c, key, agents["Customer Care"], **extra)
         assert v["connect"]["url"].endswith(f"/v1/media-stream/{v['conversation_id']}")
         with c.websocket_connect(f"/v1/media-stream/{v['conversation_id']}", headers={"Authorization": f"Bearer {v['connect']['token']}"}) as ws:
             ws.send_text(json.dumps({"event": "connected"}))
@@ -260,18 +268,18 @@ async def test_caller_number_context_and_metadata(client, seeded, fake_llm):
     """Covers: PUB-09"""
     key = await new_key(client)
     fake_llm(script())
-    r = await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key), json={
-        "channel": "text", "agent_id": seeded["care"]["agent_id"], "caller": {"number": MARIA_PHONE},
+    r = await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(key), json={
+        "channel": "text", "agent_id": seeded["care"]["agent_id"], "caller": {"number": SARAH_PHONE},
         "context": {"ivr_menu": "claims"}, "metadata": {"crm_case": "48213"}, "external_id": "case-48213"})
-    assert r.status_code == 201 and MARIA_PHONE not in r.text
+    assert r.status_code == 201 and SARAH_PHONE not in r.text
     cid = r.json()["conversation_id"]
     async with sessionmaker()() as s:
         call = await s.scalar(select(Call).where(Call.conversation_id == cid))
-        assert call.meta["identification"]["first_name"] == "Maria" and call.meta["context"]["ivr_menu"] == "claims"
-        assert MARIA_PHONE not in json.dumps(call.meta) and MARIA_PHONE not in json.dumps((await s.get(Conversation, cid)).__dict__, default=str)
-    view = (await client.get(f"/v1/tenants/evergreen-care/conversations/{cid}", headers=bearer(key))).json()
+        assert call.meta["identification"]["first_name"] == "Sarah" and call.meta["context"]["ivr_menu"] == "claims"
+        assert SARAH_PHONE not in json.dumps(call.meta) and SARAH_PHONE not in json.dumps((await s.get(Conversation, cid)).__dict__, default=str)
+    view = (await client.get(f"/v1/tenants/northgate-health/conversations/{cid}", headers=bearer(key))).json()
     assert view["metadata"] == {"crm_case": "48213"} and view["external_id"] == "case-48213"
-    bad = await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key),
+    bad = await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(key),
                             json={"channel": "text", "agent_id": seeded["care"]["agent_id"], "context": {"Bad-Key": "x"}})
     assert bad.status_code == 422
 
@@ -279,22 +287,22 @@ async def test_caller_number_context_and_metadata(client, seeded, fake_llm):
 async def test_conversation_view_and_transcript(client, seeded, fake_llm):
     """Covers: PUB-10"""
     key = await new_key(client)
-    fake_llm(script(FakeReply(text="Let me look that up.", tool_calls=[("search_knowledge", {"query": "copay"})]), FakeReply(text="Your copay is $25.")))
-    cid = (await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key),
-                             json={"channel": "text", "agent_id": seeded["care"]["agent_id"], "message": "What is my copay?"})).json()["conversation_id"]
-    view = (await client.get(f"/v1/tenants/evergreen-care/conversations/{cid}?include=transcript", headers=bearer(key))).json()
+    fake_llm(script(FakeReply(text="Let me look that up.", tool_calls=[("search_knowledge", {"query": "excess"})]), FakeReply(text="Your excess is £100.")))
+    cid = (await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(key),
+                             json={"channel": "text", "agent_id": seeded["care"]["agent_id"], "message": "What is my excess?"})).json()["conversation_id"]
+    view = (await client.get(f"/v1/tenants/northgate-health/conversations/{cid}?include=transcript", headers=bearer(key))).json()
     assert [s["segment"] for s in view["segments"]] == [1] and view["segments"][0]["routed_by"] == "explicit"
     speakers = [(line["segment"], line["speaker"]) for line in view["transcript"]]
     assert speakers[0] == (1, "agent") and (1, "caller") in speakers
-    assert all(line["speaker"] in ("caller", "agent", "front_desk") for line in view["transcript"]) and "copay" in view["transcript"][-1]["text"]
-    assert "transcript" not in (await client.get(f"/v1/tenants/evergreen-care/conversations/{cid}", headers=bearer(key))).json()
+    assert all(line["speaker"] in ("caller", "agent", "front_desk") for line in view["transcript"]) and "excess" in view["transcript"][-1]["text"]
+    assert "transcript" not in (await client.get(f"/v1/tenants/northgate-health/conversations/{cid}", headers=bearer(key))).json()
 
 
 async def test_conversations_isolated_and_studio_listing(client, seeded, fake_llm):
     """Covers: MT-15, API-12"""
     fake_llm(script())
     key = await new_key(client)
-    api_cid = (await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key),
+    api_cid = (await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(key),
                                  json={"channel": "text", "agent_id": seeded["care"]["agent_id"]})).json()["conversation_id"]
     r = await client.post("/api/conversations", headers=H, json={"scope": "member", "channel": "text", "agent_id": seeded["care"]["agent_id"]})
     assert r.status_code == 201
@@ -307,9 +315,9 @@ async def test_conversations_isolated_and_studio_listing(client, seeded, fake_ll
     assert (await client.get(f"/api/conversations/{play}", headers=SANDBOX)).status_code == 404
     assert (await client.get("/api/conversations", headers=SANDBOX)).json()["items"] == []
     sandbox_key = await new_key(client, headers=SANDBOX)
-    assert (await client.get(f"/v1/tenants/evergreen-sandbox/conversations/{api_cid}", headers=bearer(sandbox_key))).status_code == 404
+    assert (await client.get(f"/v1/tenants/northgate-sandbox/conversations/{api_cid}", headers=bearer(sandbox_key))).status_code == 404
     # a key never sees playground conversations
-    assert (await client.get(f"/v1/tenants/evergreen-care/conversations/{play}", headers=bearer(key))).status_code == 404
+    assert (await client.get(f"/v1/tenants/northgate-health/conversations/{play}", headers=bearer(key))).status_code == 404
 
 
 async def test_unconnected_voice_conversation_is_abandoned(client, seeded, monkeypatch):
@@ -322,13 +330,13 @@ async def test_unconnected_voice_conversation_is_abandoned(client, seeded, monke
     get_settings.cache_clear()
     try:
         key = await new_key(client)
-        cid = (await client.post("/v1/tenants/evergreen-care/conversations", headers=bearer(key),
+        cid = (await client.post("/v1/tenants/northgate-health/conversations", headers=bearer(key),
                                  json={"channel": "voice", "agent_id": seeded["care"]["agent_id"]})).json()["conversation_id"]
         async with sessionmaker()() as s:
             await s.execute(update(Conversation).where(Conversation.id == cid).values(started_at=utcnow() - timedelta(minutes=5)))
             await s.commit()
         assert await conversations.expire_unconnected() == 1
-        view = (await client.get(f"/v1/tenants/evergreen-care/conversations/{cid}", headers=bearer(key))).json()
+        view = (await client.get(f"/v1/tenants/northgate-health/conversations/{cid}", headers=bearer(key))).json()
         assert view["status"] == "ended" and view["end_reason"] == "idle" and view["outcome"] == "abandoned"
     finally:
         get_settings.cache_clear()

@@ -575,7 +575,7 @@ function KnowledgeTab({ draft, update }: TabProps) {
         </ul>
       </Card>
       <Card title="Test search">
-        <div className="flex gap-2"><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="How do I get a Green Card?" onKeyDown={(e) => e.key === "Enter" && test()} /><Button onClick={test}>Search</Button></div>
+        <div className="flex gap-2"><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="What happens if I miss a payment?" onKeyDown={(e) => e.key === "Enter" && test()} /><Button onClick={test}>Search</Button></div>
         {result && (result.no_answer
           ? <div className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">No answer — the agent would offer a specialist</div>
           : <ul className="mt-3 space-y-2">{result.results.map((r: any, i: number) => (

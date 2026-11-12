@@ -15,11 +15,11 @@ from voiceai.llm.gateway import FakeReply
 from voiceai.models import AgentVersion, CallEvent
 from voiceai.voice.turn_detection import TurnSettings
 
-M = {"X-Tenant-Id": "evergreen-care"}
-P = {"X-Tenant-Id": "evergreen-sandbox"}
+M = {"X-Tenant-Id": "northgate-health"}
+P = {"X-Tenant-Id": "northgate-sandbox"}
 NEW = {
     "name": "Mira", "description": "Calm and clear", "voice": "aura-2-andromeda-en", "speed": 0.9,
-    "greeting": "Hello, this is Mira at Evergreen.", "disclosure": "I'm a virtual assistant and calls may be recorded.",
+    "greeting": "Hello, this is Mira at Northgate.", "disclosure": "I'm a virtual assistant and calls may be recorded.",
     "opening": "Hi {first_name}, it's Mira.", "style": "Calm, clear and unhurried.",
 }
 
@@ -33,7 +33,7 @@ async def _persona(client, headers=M, **over) -> dict[str, Any]:  # noqa: ANN001
 async def test_persona_crud_and_validation(client, seeded):
     """Covers: PER-01"""
     seeded_names = {p["name"] for p in (await client.get("/api/personas", headers=M)).json()["items"]}
-    assert {"Ava", "Grace", "Leo"} <= seeded_names
+    assert {"Olivia", "James", "Hannah"} == seeded_names
     p = await _persona(client)
     assert p["speed"] == 0.9 and p["voice"] == "aura-2-andromeda-en" and p["used_by"] == []
     r = await client.put(f"/api/personas/{p['id']}", headers=M, json={**NEW, "name": "Mira B", "speed": 1.2})
@@ -64,7 +64,7 @@ async def test_call_start_override_uses_persona_greeting(client, seeded):
     p = await _persona(client)
     r = await client.post("/api/calls", headers=M, json={"agent_id": seeded["care"]["agent_id"], "channel": "text", "persona_id": p["id"]})
     out = r.json()
-    assert out["greeting"].startswith("Hello, this is Mira at Evergreen.")
+    assert out["greeting"].startswith("Hello, this is Mira at Northgate.")
     assert out["settings"]["persona"]["name"] == "Mira" and out["settings"]["persona"]["voice"] == "aura-2-andromeda-en"
     r = await client.post("/api/calls", headers=M, json={"agent_id": seeded["care"]["agent_id"], "channel": "text", "turn_detection": {"mode": "semantic", "min_silence_ms": 900}})
     td = r.json()["settings"]["turn_detection"]
@@ -80,23 +80,23 @@ async def test_live_persona_switch_changes_next_turn_only(client, seeded, fake_l
         return FakeReply(text="Sure thing.")
 
     fake_llm(responder)
-    grace = next(p for p in (await client.get("/api/personas", headers=M)).json()["items"] if p["name"] == "Grace")
+    hannah = next(p for p in (await client.get("/api/personas", headers=M)).json()["items"] if p["name"] == "Hannah")
     call = (await client.post("/api/calls", headers=M, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})).json()
     cid = call["call_id"]
     await client.post(f"/api/calls/{cid}/messages", headers=M, json={"text": "hello"})
-    assert "You are Ava" in prompts[0]
-    r = await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": grace["id"]})
-    assert r.status_code == 200 and r.json()["settings"]["persona"]["name"] == "Grace"
+    assert "You are Olivia" in prompts[0]
+    r = await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": hannah["id"]})
+    assert r.status_code == 200 and r.json()["settings"]["persona"]["name"] == "Hannah"
     await client.post(f"/api/calls/{cid}/messages", headers=M, json={"text": "and another thing"})
-    assert "You are Grace" in prompts[1]
+    assert "You are Hannah" in prompts[1]
     async with sessionmaker()() as s:
         events = (await s.scalars(select(CallEvent).where(CallEvent.call_id == cid).order_by(CallEvent.seq))).all()
-    assert any(e.kind == "system" and e.text == "Persona switched to Grace" for e in events)
+    assert any(e.kind == "system" and e.text == "Persona switched to Hannah" for e in events)
     assert sum(1 for e in events if e.data.get("greeting")) == 1  # no second greeting
     r = await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": ""})  # back to the agent's persona
-    assert r.json()["settings"]["persona"]["name"] == "Ava"
+    assert r.json()["settings"]["persona"]["name"] == "Olivia"
     detail = (await client.get(f"/api/calls/{cid}", headers=M)).json()
-    assert detail["settings"]["persona"]["name"] == "Ava"
+    assert detail["settings"]["persona"]["name"] == "Olivia"
 
 
 async def test_live_turn_detection_and_voice_callback(client, seeded):
@@ -109,13 +109,13 @@ async def test_live_turn_detection_and_voice_callback(client, seeded):
         heard.append((voice, speed))
 
     controls = LiveControls(turn=TurnSettings(mode="vad"), on_voice=on_voice)  # as the voice pipeline builds it ...
-    unfollow = follow(await AgentSession.open(cid, "evergreen-care"), controls)  # ... and follows its session (TD-09)
+    unfollow = follow(await AgentSession.open(cid, "northgate-health"), controls)  # ... and follows its session (TD-09)
     r = await client.patch(f"/api/calls/{cid}/live", headers=M, json={"turn_detection": {"mode": "vad", "min_silence_ms": 400, "allow_interruptions": False}})
     assert r.json()["settings"]["turn_detection"]["min_silence_ms"] == 400
     assert controls.turn.min_silence_ms == 400 and controls.turn.allow_interruptions is False and controls.turn.mode == "vad"
-    leo = next(p for p in (await client.get("/api/personas", headers=M)).json()["items"] if p["name"] == "Leo")
-    await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": leo["id"]})
-    assert heard == [("aura-2-apollo-en", 1.05)]
+    james = next(p for p in (await client.get("/api/personas", headers=M)).json()["items"] if p["name"] == "James")
+    await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": james["id"]})
+    assert heard == [("aura-2-draco-en", 1.0)]
     unfollow()
     await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": ""})
     assert len(heard) == 1  # unsubscribed: nothing more arrives
@@ -133,7 +133,7 @@ async def test_delete_blocked_while_in_use(client, seeded):
     default_id = cfg["persona_id"]
     await client.put(f"/api/agents/{agent_id}", headers=M, json={"draft_config": {**cfg, "persona_id": p["id"]}})
     r = await client.delete(f"/api/personas/{p['id']}", headers=M)
-    assert r.status_code == 409 and r.json()["error"] == "persona_in_use" and "Customer Care Agent" in r.json()["detail"]
+    assert r.status_code == 409 and r.json()["error"] == "persona_in_use" and "Customer Care" in r.json()["detail"]
     await client.put(f"/api/agents/{agent_id}", headers=M, json={"draft_config": {**cfg, "persona_id": default_id}})
     assert (await client.delete(f"/api/personas/{p['id']}", headers=M)).status_code == 204
 

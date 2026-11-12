@@ -16,10 +16,11 @@ from sqlalchemy import select
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from voiceai.agents import publish
 from voiceai.db import sessionmaker
 from voiceai.live import LiveControls
 from voiceai.llm.gateway import gateway, reset_gateway
-from voiceai.models import CallEvent, Escalation
+from voiceai.models import Agent, CallEvent, Escalation
 from voiceai.runtime import endings, escalation
 from voiceai.runtime.prompt import system_prompt
 from voiceai.runtime.session import AgentSession, create_call
@@ -27,7 +28,7 @@ from voiceai.runtime.tools import all_schemas
 from voiceai.voice import realtime as rt
 from voiceai.voice.turn_detection import TurnSettings
 
-H = {"X-Tenant-Id": "evergreen-care"}
+H = {"X-Tenant-Id": "northgate-health"}
 AUDIO = base64.b64encode(b"\x01\x02" * 480).decode()
 
 
@@ -119,11 +120,22 @@ async def pump(bridge: Bridge, rounds: int = 3) -> None:
         await bridge.settle()
 
 
-async def build(seeded, agent: str = "claims", turn: dict | None = None):  # noqa: ANN001, ANN202
+async def use_realtime(agent_id: str) -> None:
+    """No seeded agent uses the realtime pipeline: switch this one to it (draft + publish)."""
     async with sessionmaker()() as s:
-        call = await create_call(s, "evergreen-care", seeded[agent]["agent_id"], "voice")
+        agent = await s.get(Agent, agent_id)
+        if (agent.draft_config or {}).get("voice", {}).get("pipeline") != "realtime":
+            agent.draft_config = {**agent.draft_config, "voice": {**agent.draft_config["voice"], "pipeline": "realtime"}}
+            await publish(s, agent, "realtime")
+            await s.commit()
+
+
+async def build(seeded, agent: str = "claims", turn: dict | None = None):  # noqa: ANN001, ANN202
+    await use_realtime(seeded[agent]["agent_id"])
+    async with sessionmaker()() as s:
+        call = await create_call(s, "northgate-health", seeded[agent]["agent_id"], "voice")
         await s.commit()
-    session = await AgentSession.open(call.id, "evergreen-care")
+    session = await AgentSession.open(call.id, "northgate-health")
     if turn:
         session.live["turn_detection"] = turn
     conn = FakeConn()
@@ -170,7 +182,7 @@ async def test_session_carries_the_shared_prompt_and_tools(client, seeded):
     expected = all_schemas(session.config["tools"])
     assert [t["name"] for t in payload["tools"]] == [e["function"]["name"] for e in expected]
     assert [t["parameters"] for t in payload["tools"]] == [e["function"]["parameters"] for e in expected]
-    assert {"search_knowledge", "escalate_to_human", "end_call", "start_claim", "get_claim_requirements"} <= {t["name"] for t in payload["tools"]}
+    assert {"search_knowledge", "escalate_to_human", "end_call", "check_treatment_cover", "get_pre_authorisation"} <= {t["name"] for t in payload["tools"]}
     assert payload["tool_choice"] == "auto" and payload["output_modalities"] == ["audio"]
     audio = payload["audio"]
     assert audio["input"]["format"] == {"type": "audio/pcm", "rate": 24000} and audio["output"]["voice"] == gateway().speech_voices()[0]
@@ -186,21 +198,21 @@ async def test_function_calls_go_through_the_verification_gate(client, seeded):
     def call(n: int, name: str, args: dict) -> None:
         conn.feed({"type": "response.function_call_arguments.done", "response_id": "rc", "call_id": f"c{n}", "name": name, "arguments": json.dumps(args)})
 
-    call(1, "get_claim_status", {"claim_id": "C-20931"})
+    call(1, "get_claim_status", {"claim_id": "CL-70231"})
     await pump(bridge)
     outputs = {e["item"]["call_id"]: json.loads(e["item"]["output"]) for e in conn.of("conversation.item.create")}
     assert "identity_not_verified" in json.dumps(outputs["c1"])
     updates_before = len(conn.of("session.update"))
-    call(2, "verify_member", {"member_id": "482913", "date_of_birth": "1986-04-12"})
+    call(2, "verify_member", {"member_id": "410237", "date_of_birth": "1984-03-14"})
     await pump(bridge)
-    assert session.state.verified_member_ref == "EVG-482913" and len(conn.of("session.update")) == updates_before + 1  # prompt refreshed
-    assert "EVG-482913" in conn.of("session.update")[-1]["session"]["instructions"]
-    call(3, "get_claim_status", {"claim_id": "C-20931"})
+    assert session.state.verified_member_ref == "NGH-410237" and len(conn.of("session.update")) == updates_before + 1  # prompt refreshed
+    assert "NGH-410237" in conn.of("session.update")[-1]["session"]["instructions"]
+    call(3, "get_claim_status", {"claim_id": "CL-70231"})
     call(4, "get_member_claims", {})
     call(5, "get_member_policies", {})
     await pump(bridge)
     outputs = {e["item"]["call_id"]: json.loads(e["item"]["output"]) for e in conn.of("conversation.item.create")}
-    assert outputs["c3"]["claim_id"] == "C-20931" and outputs["c4"]["claims"] and outputs["c5"] == {"error": "tool_round_limit"}
+    assert outputs["c3"]["claim_id"] == "CL-70231" and outputs["c4"]["claims"] and outputs["c5"] == {"error": "tool_round_limit"}
     kinds = [(e.kind, (e.data or {}).get("name")) for e in await events(session) if e.kind in ("tool_call", "tool_result")]
     assert kinds[:4] == [("tool_call", "get_claim_status"), ("tool_result", "get_claim_status"), ("tool_call", "verify_member"), ("tool_result", "verify_member")]
     conn.finish("rc", "completed", output=[{"type": "function_call", "call_id": "c1"}])  # the turn's tools are done: the model answers
@@ -214,16 +226,16 @@ async def test_transcripts_and_replies_are_stored_in_order(client, seeded):
     """Covers: RV-06, RV-12"""
     bridge, conn, session, _ = await build(seeded)
     await finish_welcome(bridge, conn)
-    conn.reply = "Claim C-20931 was paid."
+    conn.reply = "Claim CL-70231 was paid."
     conn.reply_usage = {"input_tokens": 1000, "output_tokens": 500, "input_token_details": {"audio_tokens": 800}, "output_token_details": {"audio_tokens": 400}}
     user_says(conn, "What happened with my claim?")
     await pump(bridge)
     # the caller's turn makes the service reply by itself (server turn detection); simulate its reply
-    conn.speak("Claim C-20931 was paid.")
+    conn.speak("Claim CL-70231 was paid.")
     await pump(bridge)
     evs = [e for e in await events(session) if e.kind in ("user", "assistant")]
     assert [e.kind for e in evs][-2:] == ["user", "assistant"]
-    assert evs[-2].text == "What happened with my claim?" and evs[-1].text == "Claim C-20931 was paid."
+    assert evs[-2].text == "What happened with my claim?" and evs[-1].text == "Claim CL-70231 was paid."
     assert evs[-1].data["latency_ms"] is not None and session.state.turns == 1
     price = gateway().models[gateway().speech_ref()]
     expected = (200 * price["input"] + 100 * price["output"] + 800 * price["audio_input"] + 400 * price["audio_output"]) / 1e6
@@ -412,6 +424,10 @@ def voice_app(app, tmp_path, monkeypatch):  # noqa: ANN001, ANN201
     keys()
     with TestClient(app) as c:
         agents = {a["name"]: a["id"] for a in c.get("/api/agents", headers=H).json()["items"]}
+        claims = agents["Claims & Pre-authorisation"]  # no seeded agent is realtime: switch the claims agent to it
+        cfg = c.get(f"/api/agents/{claims}", headers=H).json()["draft_config"]
+        assert c.put(f"/api/agents/{claims}", headers=H, json={"draft_config": {**cfg, "voice": {**cfg["voice"], "pipeline": "realtime"}}}).status_code == 200
+        assert c.post(f"/api/agents/{claims}/publish", headers=H, json={"change_note": "realtime"}).status_code == 200
         yield SimpleNamespace(client=c, agents=agents, keys=keys)
     get_settings.cache_clear()
     reset_gateway()
@@ -425,7 +441,7 @@ def start_voice(vapp, agent: str) -> str:  # noqa: ANN001
 
 def connect(vapp, call_id: str) -> int | None:  # noqa: ANN001
     try:
-        with vapp.client.websocket_connect(f"/api/voice/{call_id}?tenant=evergreen-care") as ws:
+        with vapp.client.websocket_connect(f"/api/voice/{call_id}?tenant=northgate-health") as ws:
             ws.receive_text()
     except WebSocketDisconnect as exc:
         return exc.code
@@ -449,13 +465,13 @@ def test_the_call_picks_its_pipeline_and_its_key(voice_app, monkeypatch):
     monkeypatch.setattr(pipeline, "run_realtime", fake_realtime)
     monkeypatch.setattr(pipeline, "run", fake_cascade)
     voice_app.keys(openai="sk-test")  # OpenAI only: the realtime agent connects without any Deepgram key
-    assert connect(voice_app, start_voice(voice_app, "Insurance Claims Agent")) == 1000 and ran == ["realtime"]
-    assert start_voice(voice_app, "Customer Care Agent") == "voice_unavailable"  # the cascade still needs Deepgram (ADM-02)
+    assert connect(voice_app, start_voice(voice_app, "Claims & Pre-authorisation")) == 1000 and ran == ["realtime"]
+    assert start_voice(voice_app, "Customer Care") == "voice_unavailable"  # the cascade still needs Deepgram (ADM-02)
     voice_app.keys(deepgram="dg-test")
-    assert connect(voice_app, start_voice(voice_app, "Customer Care Agent")) == 1000 and ran == ["realtime", "cascade"]
-    assert start_voice(voice_app, "Insurance Claims Agent") == "voice_unavailable"  # no OpenAI key: refused up front
+    assert connect(voice_app, start_voice(voice_app, "Customer Care")) == 1000 and ran == ["realtime", "cascade"]
+    assert start_voice(voice_app, "Claims & Pre-authorisation") == "voice_unavailable"  # no OpenAI key: refused up front
     voice_app.keys(openai="sk-test", deepgram="dg-test")
-    planned = start_voice(voice_app, "Insurance Claims Agent")
+    planned = start_voice(voice_app, "Claims & Pre-authorisation")
     voice_app.keys(deepgram="dg-test")  # RV-03: the OpenAI key is gone when the socket opens
     assert connect(voice_app, planned) == 4500
     assert voice_app.client.get("/healthz").json()["status"] == "ok"
@@ -465,7 +481,7 @@ def test_the_call_picks_its_pipeline_and_its_key(voice_app, monkeypatch):
 
     monkeypatch.setattr(pipeline, "run_realtime", unavailable)
     voice_app.keys(openai="sk-test")
-    assert connect(voice_app, start_voice(voice_app, "Insurance Claims Agent")) == 4500  # RV-13: the provider socket cannot be opened
+    assert connect(voice_app, start_voice(voice_app, "Claims & Pre-authorisation")) == 4500  # RV-13: the provider socket cannot be opened
 
 
 def test_realtime_pipeline_has_no_deepgram_services(monkeypatch):

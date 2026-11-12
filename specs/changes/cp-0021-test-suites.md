@@ -33,7 +33,7 @@ Part 1b of [ADR-0011](/decisions/adr-0011-evaluation-and-self-learning.md); the 
 * [/api/rest-api.md](/api/rest-api.md) - scenario CRUD, test runs.
 * [/prompts/caller-simulator.md](/prompts/caller-simulator.md) - `caller_style` (text below; applied with the implementation because prompts load verbatim).
 * [/ui/evaluation.md](/ui/evaluation.md) (UI-51, UI-52), [/ui/agent-builder.md](/ui/agent-builder.md) (UI-53), [/ui/calls.md](/ui/calls.md).
-* [/demo-data/evergreen-health.md](/demo-data/evergreen-health.md) - eight scenarios with expectations (UC-04 reworded).
+* [/demo-data/evergreen-health.md](/demo-data/northgate-health.md) - eight scenarios with expectations (UC-04 reworded).
 * [/product/glossary.md](/product/glossary.md), [/process/conventions.md](/process/conventions.md) (prefix `TEST`), ADR-0011, index files.
 
 # Acceptance criteria

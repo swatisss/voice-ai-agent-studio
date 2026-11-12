@@ -97,7 +97,7 @@ def main() -> int:
     ap.add_argument("--file", required=True, type=Path, help="the use-cases Markdown file")
     ap.add_argument("--agent", help="agent name (as shown in the Agents list) or id")
     ap.add_argument("--api", default="http://127.0.0.1:8000", help="API base URL (default http://127.0.0.1:8000; on Windows \"localhost\" tries IPv6 first and costs ~2 s a request)")
-    ap.add_argument("--tenant", default="evergreen-care", help="business unit of the agent (default evergreen-care)")
+    ap.add_argument("--tenant", default="northgate-health", help="business unit of the agent (default northgate-health)")
     ap.add_argument("--replace", action="store_true", help="also delete the agent's use cases that are not in the file")
     ap.add_argument("--dry-run", action="store_true", help="parse and print, change nothing")
     args = ap.parse_args()

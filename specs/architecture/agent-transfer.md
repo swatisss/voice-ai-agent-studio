@@ -53,7 +53,7 @@ Each segment keeps its own events, escalation, feedback, analysis, scorecard and
 
 # Acceptance
 
-- **XFR-01** — Given a verified conversation on the claims agent and a caller asking what their plan covers for dental, when the agent calls `transfer_to_agent`, then the claims segment ends with `end_reason: transfer` and `outcome: transferred`, a second segment starts on the coverage agent (Customer Care) with `routed_by: transfer`, the caller is not asked to verify again, and the next agent line is its intro followed by an answer about dental coverage.
+- **XFR-01** — Given a verified conversation on Claims & Pre-authorisation and a caller asking what their policy's dental and optical add-on covers, when the agent calls `transfer_to_agent`, then the claims segment ends with `end_reason: transfer` and `outcome: transferred`, a second segment starts on the coverage agent (Customer Care) with `routed_by: transfer`, the caller is not asked to verify again, and the next agent line is its intro followed by an answer about dental coverage.
 - **XFR-02** — Given a transfer, then the receiving agent's system prompt contains the `reason` and `summary`, its history contains the last 6 lines, its member memory is its own (never the transferring agent's), and the call context is carried.
 - **XFR-03** — Given a direct Studio call or a phone call to an agent number, then the tool list offered to the model does not contain `transfer_to_agent`.
 - **XFR-04** — Given a conversation that has transferred 3 times, when an agent requests a fourth transfer, then the segment escalates with category `transfer_failed` and the hand-off message; given a transfer where no candidate remains, the same happens.

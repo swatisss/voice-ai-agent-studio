@@ -11,7 +11,7 @@ export const ago = (iso: string) => {
   if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
   return `${Math.floor(s / 3600)}h`;
 };
-export const maskRef = (ref: string | null | undefined) => (ref ? ref.replace(/^(EVG-)(\d+)(\d{3})$/, (_, p, mid, end) => `${p}${"•".repeat(mid.length)}${end}`) : "—");
+export const maskRef = (ref: string | null | undefined) => (ref ? ref.replace(/^(NGH-)(\d+)(\d{3})$/, (_, p, mid, end) => `${p}${"•".repeat(mid.length)}${end}`) : "—");
 
 export const ROOT_CAUSE: Record<string, string> = {
   none: "None", missing_knowledge: "Missing knowledge", missing_skill: "Missing skill", policy_required: "Policy required",

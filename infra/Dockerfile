@@ -23,6 +23,8 @@ RUN uv sync --frozen --no-dev
 # specs are read at runtime (prompts, demo knowledge base)
 COPY specs/ /app/specs/
 COPY --from=web /app/apps/web/out /app/apps/web/out
+# the dental demo mock for local Docker runs (scripts/docker_stack.py); stdlib only, never started on Cloud Run
+COPY scripts/demo/dental_mock.py /app/scripts/demo/dental_mock.py
 # bake the embedding model so the first request needs no download
 RUN uv run python -c "from voiceai.knowledge.embeddings import FastEmbedder; FastEmbedder().embed(['warm up'])"
 EXPOSE 8080

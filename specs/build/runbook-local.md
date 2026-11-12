@@ -94,5 +94,7 @@ cd apps/web && npm run build
 * **Mic blocked** — use `http://localhost` (not an IP) or HTTPS.
 * **Echo / agent interrupts itself** — use a headset.
 * **Voice closes with 4500** — `DEEPGRAM_API_KEY` missing; use Type mode.
+* **Talk connects and drops at once, the call has no events** — the voice pipeline could not load. On Windows with Application Control the API log shows `DLL load failed while importing sentencex: An Application Control policy has blocked this file`. Ask IT to allow `apps/api/.venv`, or run the stack in Docker: `python scripts/docker_stack.py start`, then open `http://localhost:8080` ([/build/docker-stack.md](/build/docker-stack.md)). Stop `dev.py` first: both use `apps/api/data/voiceai.db`.
+* **Dental tools return `connection_error`** — the dental demo mock is not running. `dev.py` and `docker_stack.py` start it on 8766 unless `--no-mock`; a `[dev]` warning says when the port is held by something else.
 * **Groq 429** (`tokens per minute (TPM): Limit 8000`) — the free-tier cap is per model and one tool-calling turn can exceed it, and packets and analysis share the quota. Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` (the fallback then answers), move the background roles to `groq:openai/gpt-oss-20b`, switch the roles to OpenAI (lines above), or enable Groq billing.
 * **First knowledge search slow** — fastembed downloads its model once (~70 MB).

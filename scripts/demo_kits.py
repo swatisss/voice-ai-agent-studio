@@ -260,16 +260,29 @@ class Runner:
                 print(f"    as {c['name']} (ID {c['member_id']}, born {c['date_of_birth']}): {c['try']}")
 
 
+def mock_running(port: int) -> bool:
+    """True when the dental mock already answers on the port (/build/dev-launcher.md, DEV-14)."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/dental/health", timeout=1) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def run_kits(args: argparse.Namespace, keys: list[str]) -> int:
     mock_server = None
     mock_base = ""
     if any(KITS[k].mock for k in keys):
-        try:
-            mock_server, port, _ = dental_mock.serve(args.mock_port)
-        except OSError:
-            mock_server, port, _ = dental_mock.serve(0)
+        if mock_running(args.mock_port):  # DEV-14: dev.py (or docker_stack.py) already serves it; keep the tools on its port
+            port = args.mock_port
+            print(f"Mock Oakhaven patient system already running on http://127.0.0.1:{port}/dental/; reusing it", flush=True)
+        else:
+            try:
+                mock_server, port, _ = dental_mock.serve(args.mock_port)
+            except OSError:
+                mock_server, port, _ = dental_mock.serve(0)
+            print(f"Mock Oakhaven patient system on http://127.0.0.1:{port}/dental/ (the dental tools call it)", flush=True)
         mock_base = f"http://127.0.0.1:{port}"
-        print(f"Mock Oakhaven patient system on {mock_base}/dental/ (the dental tools call it)", flush=True)
     runners, ok = [], True
     try:
         for k in keys:

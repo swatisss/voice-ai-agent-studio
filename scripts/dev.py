@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start the whole stack (web frontend + API) from one terminal with prefixed, live logs.
+"""Start the whole stack (web frontend + API + dental demo mock) from one terminal with prefixed, live logs.
 
 Spec: /build/dev-launcher.md
 
@@ -7,6 +7,7 @@ Spec: /build/dev-launcher.md
     python scripts/dev.py --single-origin    # build the web export, serve everything from the API on :8000
     python scripts/dev.py --fake             # no LLM keys: scripted fake LLM, hash embeddings, separate database
     python scripts/dev.py --check            # pre-flight checks only
+    python scripts/dev.py --no-mock          # without the dental demo mock (scripts/demo/dental_mock.py on :8766)
 
 Ctrl+C stops everything. Stdlib only (Python 3.9+). On Windows without a `python` command: py -3 scripts/dev.py
 """
@@ -30,7 +31,9 @@ ROOT = Path(__file__).resolve().parent.parent
 API_DIR = ROOT / "apps" / "api"
 WEB_DIR = ROOT / "apps" / "web"
 KEYS = ("GROQ_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY", "DEEPGRAM_API_KEY")
-COLORS = {"dev": "33", "api": "36", "web": "35"}  # yellow, cyan, magenta
+COLORS = {"dev": "33", "api": "36", "web": "35", "mock": "32"}  # yellow, cyan, magenta, green
+MOCK_SCRIPT = ROOT / "scripts" / "demo" / "dental_mock.py"
+MOCK_PORT = 8766
 GRACE_SECONDS = 5.0
 
 
@@ -67,7 +70,39 @@ def uv_command() -> list[str] | None:
     return None
 
 
-def make_plan(args: argparse.Namespace, uv: list[str], npm: str, environ: dict[str, str] | None = None) -> Plan:
+def mock_port(args: argparse.Namespace) -> int:
+    return int(getattr(args, "mock_port", MOCK_PORT) or MOCK_PORT)
+
+
+def mock_service(args: argparse.Namespace) -> Service:
+    """DEV-12: the dental demo mock the dental kit's tools call (stdlib; runs on the launcher's own Python)."""
+    return Service("mock", [sys.executable, str(MOCK_SCRIPT), "--port", str(mock_port(args))], ROOT, {})
+
+
+def mock_health(port: int) -> bool:
+    """True when the dental demo mock already answers on the port."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/dental/health", timeout=1) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def mock_decision(args: argparse.Namespace, in_use: Callable[[int], bool], health: Callable[[int], bool]) -> tuple[bool, str | None]:
+    """DEV-13: (start the mock?, warning). A busy mock port is never an error: a running mock is reused."""
+    if getattr(args, "no_mock", False):
+        return False, None
+    port = mock_port(args)
+    if not in_use(port):
+        return True, None
+    if health(port):
+        return False, None
+    return False, (f"port {port} is held by something other than the dental demo mock: the dental agent's tools will fail. "
+                   f"Free it, or pass --mock-port (the kit's tools call {port}), or --no-mock")
+
+
+def make_plan(args: argparse.Namespace, uv: list[str], npm: str, environ: dict[str, str] | None = None,
+              start_mock: bool | None = None) -> Plan:
     environ = os.environ if environ is None else environ
     api_env = {"PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     if args.fake:  # DEV-06: fake mode never touches the real database
@@ -82,7 +117,8 @@ def make_plan(args: argparse.Namespace, uv: list[str], npm: str, environ: dict[s
         if not args.skip_build:
             pre.append(Service("web", [npm, "run", "build"], WEB_DIR, {"NEXT_PUBLIC_API_BASE": "", "NEXT_TELEMETRY_DISABLED": "1"}))
         api = Service("api", serve, API_DIR, api_env)
-        return Plan(pre, [api], {"api": f"{api_url}/healthz"}, api_url)
+        plan = Plan(pre, [api], {"api": f"{api_url}/healthz"}, api_url)
+        return with_mock(plan, args, start_mock)
 
     if not args.no_reload:
         serve.append("--reload")
@@ -91,7 +127,16 @@ def make_plan(args: argparse.Namespace, uv: list[str], npm: str, environ: dict[s
     web = Service("web", [npm, "run", "dev", "--", "-p", str(args.web_port)], WEB_DIR,
                   {"NEXT_PUBLIC_API_BASE": api_url, "NEXT_TELEMETRY_DISABLED": "1"})
     web_url = f"http://localhost:{args.web_port}"
-    return Plan([], [api, web], {"api": f"{api_url}/healthz", "web": f"{web_url}/"}, web_url)
+    return with_mock(Plan([], [api, web], {"api": f"{api_url}/healthz", "web": f"{web_url}/"}, web_url), args, start_mock)
+
+
+def with_mock(plan: Plan, args: argparse.Namespace, start_mock: bool | None) -> Plan:
+    if start_mock is None:
+        start_mock = not getattr(args, "no_mock", False)
+    if start_mock:
+        plan.services.append(mock_service(args))
+        plan.ready["mock"] = f"http://127.0.0.1:{mock_port(args)}/dental/health"
+    return plan
 
 
 # ------------------------------------------------------------------ pre-flight
@@ -116,7 +161,7 @@ def port_in_use(port: int) -> bool:
 
 def preflight(
     args: argparse.Namespace, uv: list[str] | None, npm: str | None, environ: dict[str, str] | None = None,
-    root: Path | None = None, in_use: Callable[[int], bool] | None = None,
+    root: Path | None = None, in_use: Callable[[int], bool] | None = None, health: Callable[[int], bool] | None = None,
 ) -> tuple[list[str], list[str], dict[str, bool]]:
     """Returns (errors, warnings, key_status). Never exposes key values (DEV-05, DEV-06)."""
     environ = os.environ if environ is None else environ
@@ -143,6 +188,10 @@ def preflight(
         flag = "--api-port" if port == args.api_port else "--web-port"
         if in_use(port):
             errors.append(f"port {port} is already in use (another dev server running?). Stop it or pass {flag} <free port>")
+
+    _, mock_warning = mock_decision(args, in_use, health or mock_health)  # DEV-13: never an error
+    if mock_warning:
+        warnings.append(mock_warning)
 
     dotenv_path = api_dir / ".env"
     merged = {**read_dotenv(dotenv_path), **{k: v for k, v in environ.items() if v != ""}}
@@ -296,6 +345,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--skip-build", action="store_true", help="with --single-origin: reuse an existing apps/web/out")
     ap.add_argument("--api-port", type=int, default=8000)
     ap.add_argument("--web-port", type=int, default=3000)
+    ap.add_argument("--mock-port", type=int, default=MOCK_PORT, help="port of the dental demo mock (default 8766, where the kit's tools call it)")
+    ap.add_argument("--no-mock", action="store_true", help="do not start the dental demo mock")
     ap.add_argument("--no-reload", action="store_true", help="run the API without auto-reload")
     ap.add_argument("--fake", action="store_true", help="no LLM keys: fake LLM, hash embeddings, separate database (apps/api/data/fake.db)")
     ap.add_argument("--install", action="store_true", help="run scripts/setup.py --install first")
@@ -326,7 +377,10 @@ def main(argv: list[str] | None = None) -> int:
         printer.line("dev", f"error: {e}")
     if errors:
         return 1
-    plan = make_plan(args, uv, npm)  # type: ignore[arg-type]
+    start_mock, _ = mock_decision(args, port_in_use, mock_health)
+    if not start_mock and not args.no_mock and mock_health(mock_port(args)):
+        printer.line("dev", f"dental demo mock already running on :{mock_port(args)}; reusing it")
+    plan = make_plan(args, uv, npm, start_mock=start_mock)  # type: ignore[arg-type]
     if args.check:
         printer.line("dev", "pre-flight ok. Would run: " + "; ".join(shown(s.cmd) for s in [*plan.pre, *plan.services]))
         return 0

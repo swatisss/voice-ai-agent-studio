@@ -2,7 +2,8 @@
 
 * [Task plan](task-plan.md) - Ordered implementation tasks T01–T22 with specs, acceptance IDs and status
 * [Definition of done](definition-of-done.md) - Checklist every task and change must satisfy
-* [Dev launcher](dev-launcher.md) - scripts/dev.py: start web + API from one terminal with prefixed logs
+* [Dev launcher](dev-launcher.md) - scripts/dev.py: start web + API + dental demo mock from one terminal with prefixed logs
+* [Docker stack](docker-stack.md) - scripts/docker_stack.py: the whole app and the dental mock in one local container, for machines that block the voice pipeline
 * [Local runbook](runbook-local.md) - Install, configure, run, seed and test on a developer machine
 * [Phone demo launcher](phone-demo.md) - scripts/phone_demo.py: tunnel, API, number mapping and Twilio webhook in one command
 * [Phone runbook](runbook-phone.md) - Answer a real call: local Twilio + tunnel setup, no-Twilio check, Cloud Run setup, IVR, troubleshooting

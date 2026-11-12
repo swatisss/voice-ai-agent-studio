@@ -18,7 +18,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # GCP (Cloud Run)
 
-One container image (multi-stage `infra/Dockerfile`): stage 1 builds the web export with Node 22; stage 2 is Python 3.12 slim with uv, the `voiceai` package, the web `out/` folder, and the fastembed model pre-downloaded at build time.
+One container image (multi-stage `infra/Dockerfile`): stage 1 builds the web export with Node 22; stage 2 is Python 3.12 slim with uv, the `voiceai` package, the web `out/` folder, and the fastembed model pre-downloaded at build time. The image also holds `scripts/demo/dental_mock.py` for local Docker runs ([/build/docker-stack.md](/build/docker-stack.md)); Cloud Run never starts it.
 
 | Setting | Value | Why |
 |---|---|---|

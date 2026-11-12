@@ -1,6 +1,6 @@
 """scripts/dev.py: plan building, pre-flight, prefixed output and process-tree shutdown.
 
-Covers: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06
+Covers: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-12, DEV-13, DEV-14
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def _repo(tmp: Path, venv: bool = True, node_modules: bool = True, out: bool = F
 def test_dev_mode_plan_wires_cors_and_api_base():
     """Covers: DEV-01"""
     plan = dev.make_plan(ns(web_port=3100, api_port=8123), ["uv"], "npm", environ={})
-    api, web = plan.services
+    api, web = plan.services[:2]
     assert api.name == "api" and web.name == "web" and plan.pre == []
     assert api.cmd == ["uv", "run", "voiceai", "serve", "--port", "8123", "--reload"]
     assert "http://localhost:3100" in api.env["CORS_ORIGINS"]
@@ -65,7 +65,7 @@ def test_single_origin_plan_builds_then_serves_api_only():
     plan = dev.make_plan(ns(single_origin=True), ["uv"], "npm", environ={})
     assert [s.name for s in plan.pre] == ["web"] and plan.pre[0].cmd == ["npm", "run", "build"]
     assert plan.pre[0].env["NEXT_PUBLIC_API_BASE"] == ""
-    assert [s.name for s in plan.services] == ["api"] and "--reload" not in plan.services[0].cmd
+    assert [s.name for s in plan.services] == ["api", "mock"] and "--reload" not in plan.services[0].cmd
     assert plan.open_url == "http://localhost:8000"
     assert dev.make_plan(ns(single_origin=True, skip_build=True), ["uv"], "npm", environ={}).pre == []
 
@@ -180,3 +180,63 @@ def test_fake_mode_uses_separate_database():
     assert env["LLM_FAKE"] == "1" and env["EMBEDDINGS_PROVIDER"] == "hash" and env["DATABASE_URL"].endswith("/data/fake.db")
     kept = dev.make_plan(ns(fake=True), ["uv"], "npm", environ={"DATABASE_URL": "sqlite+aiosqlite:///x.db"}).services[0].env
     assert "DATABASE_URL" not in kept  # an explicit DATABASE_URL is left alone
+
+
+# ---------------------------------------------------------------- dental demo mock (CP-0038)
+def test_plan_starts_the_dental_mock():
+    """Covers: DEV-12"""
+    for args in (ns(), ns(single_origin=True)):
+        mock = next(s for s in dev.make_plan(args, ["uv"], "npm", environ={}).services if s.name == "mock")
+        assert mock.cmd[0] == sys.executable and mock.cmd[1].endswith(str(Path("scripts", "demo", "dental_mock.py")))
+        assert mock.cmd[2:] == ["--port", "8766"]
+    plan = dev.make_plan(ns(mock_port=9001), ["uv"], "npm", environ={})
+    assert plan.services[-1].cmd[-1] == "9001" and plan.ready["mock"] == "http://127.0.0.1:9001/dental/health"
+    assert all(s.name != "mock" for s in dev.make_plan(ns(no_mock=True), ["uv"], "npm", environ={}).services)
+
+
+def test_busy_mock_port_is_never_an_error(tmp_path):
+    """Covers: DEV-13"""
+    root = _repo(tmp_path)
+    busy = lambda p: p == 8766  # noqa: E731
+    errors, warnings, _ = dev.preflight(ns(), ["uv"], "npm", environ={}, root=root, in_use=busy, health=lambda p: True)
+    assert errors == [] and not any("8766" in w for w in warnings)
+    assert dev.mock_decision(ns(), busy, lambda p: True) == (False, None)  # reused: the plan gets no mock
+    errors, warnings, _ = dev.preflight(ns(), ["uv"], "npm", environ={}, root=root, in_use=busy, health=lambda p: False)
+    assert errors == [] and any("8766" in w and "dental" in w for w in warnings)
+    start, _ = dev.mock_decision(ns(), busy, lambda p: False)
+    assert start is False
+    assert all(s.name != "mock" for s in dev.make_plan(ns(), ["uv"], "npm", environ={}, start_mock=start).services)
+    assert dev.mock_decision(ns(), lambda p: False, lambda p: False) == (True, None)
+
+
+def test_demo_kits_reuse_a_running_mock(monkeypatch):
+    """Covers: DEV-14"""
+    sys.path.insert(0, str(REPO / "scripts"))
+    sys.path.insert(0, str(REPO / "scripts" / "demo"))
+    spec = importlib.util.spec_from_file_location("demo_kits_under_test", REPO / "scripts" / "demo_kits.py")
+    kits = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = kits
+    spec.loader.exec_module(kits)  # type: ignore[union-attr]
+    server, port, _ = kits.dental_mock.serve(0)
+    try:
+        assert kits.mock_running(port)
+        seen: list[str] = []
+
+        class Runner:  # records the mock base the kit would give its tools
+            def __init__(self, args, kit, mock_base):  # noqa: ANN001
+                seen.append(mock_base)
+                self.kit, self.agent_id, self.results = kit, None, []
+
+            def build(self) -> bool:
+                return False
+
+        def no_second_mock(_port: int):  # noqa: ANN202
+            raise AssertionError("a running mock must be reused")
+
+        monkeypatch.setattr(kits, "Runner", Runner)
+        monkeypatch.setattr(kits.dental_mock, "serve", no_second_mock)
+        kits.run_kits(argparse.Namespace(mock_port=port, check=True), ["dental"])
+        assert seen == [f"http://127.0.0.1:{port}"]
+    finally:
+        server.shutdown()
+

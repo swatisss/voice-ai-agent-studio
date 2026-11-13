@@ -301,11 +301,13 @@ SALES_SKILLS: list[dict[str, Any]] = [
      "required_tools": ["create_policy"], "escalate_when": "The caller is unsure, seems to be under pressure, or does not understand the key facts."},
 ]
 
-# ---- persona library
+# ---- persona library (UC-12: Eva replaced Olivia, CP-0041)
+RENAMED_PERSONAS = {"Olivia": "Eva"}
 PERSONAS: list[dict[str, Any]] = [
-    {"name": "Olivia", "description": "Warm, calm and concise; member services and the front desk.", "voice": "aura-2-pandora-en", "speed": 1.0,
-     "greeting": "Thanks for calling Northgate Health, this is Olivia.", "disclosure": f"{DISCLOSURE} How can I help you today?", "opening": "",
-     "style": "Warm, calm and concise. British English. One question at a time. Plain language, no insurance jargon unless the caller uses it."},
+    {"name": "Eva", "description": "Warm, upbeat and happy; member services and the front desk.", "voice": "aura-2-pandora-en", "speed": 1.05,
+     "greeting": "Hi, thanks for calling Northgate Health, this is Eva.", "disclosure": f"{DISCLOSURE} What can I help you with today?", "opening": "",
+     "style": ("Warm, upbeat and happy, with a smile in your voice, like someone who enjoys helping. British English. Short sentences, one "
+               "question at a time. Plain language, no insurance jargon unless the caller uses it.")},
     {"name": "James", "description": "Clear and friendly; new customers and quotes. Never pushy.", "voice": "aura-2-draco-en", "speed": 1.0,
      "greeting": "Thanks for calling Northgate Health, this is James from the health insurance team.", "disclosure": f"{DISCLOSURE} Are you looking for a quote today?", "opening": "",
      "style": "Clear, friendly and patient. British English. Explains options as facts, never pushes, says prices slowly and checks understanding."},
@@ -320,7 +322,7 @@ _TD = {"mode": "semantic", "min_silence_ms": 700, "max_extra_wait_ms": 1500, "ev
 
 AGENTS: list[dict[str, Any]] = [
     {
-        "key": "care", "name": "Customer Care", "mode": "inbound", "persona": "Olivia", "kb": "customer-care",
+        "key": "care", "name": "Customer Care", "mode": "inbound", "persona": "Eva", "kb": "customer-care",
         "description": "Member help and support for Northgate Health: policy and cover questions, payments and Direct Debit, contact details, documents, "
                        "Digital GP appointments, cash plan limits and claims, renewal, cancellation, complaints and bereavement.",
         "turn_detection": _TD,

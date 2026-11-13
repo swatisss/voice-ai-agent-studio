@@ -217,3 +217,34 @@ async def test_text_reply_is_the_recorded_text(client, seeded, fake_llm, monkeyp
     reply = await session.reply("How much for lost baggage?")
     spoken = [e.text for e in await stored(session) if e.kind == "assistant"][1:]  # after the greeting
     assert reply == "up to $1,500 total Anything else?" and spoken == [reply]
+
+
+async def _filler_turn(seeded, fake_llm, monkeypatch, delay: float):  # noqa: ANN001, ANN202
+    import asyncio
+
+    from voiceai.runtime import session as session_mod
+
+    fake_llm(script(FakeReply(tool_calls=[VERIFY]), FakeReply(text="Thank you, Sarah. What can I do for you?")))
+    monkeypatch.setattr(session_mod, "FILLER_AFTER_S", 0.05)
+    voice = await open_session(seeded, channel="voice")
+    original = voice._run_tool
+
+    async def slow(*args):  # noqa: ANN002, ANN202
+        await asyncio.sleep(delay)
+        return await original(*args)
+
+    monkeypatch.setattr(voice, "_run_tool", slow)
+    chunks = [c async for c in voice.respond("My member ID is 410237, born 14 March 1984")]
+    replies = [e.text for e in await stored(voice) if e.kind == "assistant"][1:]  # after the welcome
+    return chunks, replies
+
+
+async def test_filler_only_while_waiting(client, seeded, fake_llm, monkeypatch):
+    """Covers: RT-18"""
+    from voiceai.runtime.session import FILLER
+
+    chunks, replies = await _filler_turn(seeded, fake_llm, monkeypatch, delay=0.0)
+    assert FILLER not in chunks and replies == ["Thank you, Sarah. What can I do for you?"]
+    chunks, replies = await _filler_turn(seeded, fake_llm, monkeypatch, delay=0.3)
+    assert chunks.count(FILLER) == 1 and replies == [FILLER, "Thank you, Sarah. What can I do for you?"]
+    assert not replies[1].startswith(FILLER)

@@ -5,6 +5,7 @@ Spec: /architecture/supervisor-routing.md (Decision, Routing mode, Routing recor
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -72,6 +73,14 @@ def clear_winner(ranked: list[dict[str, Any]], fd: front_desk.FrontDesk) -> dict
     return top if top["score"] >= fd.clear_win and top["score"] - second >= fd.clear_margin else None
 
 
+NEGATIVE = re.compile(r"^\W*(no|nope|nah|neither|none of (those|them|these)|something else|not really|not that)\b", re.I)
+
+
+def is_negative(answer: str | None) -> bool:
+    """A plain "no" to a clarifying question (CP-0041, RTE-19): the leading agent is not confirmed."""
+    return bool(answer and NEGATIVE.search(answer.strip()))
+
+
 def shortlist_of(ranked: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [r for r in ranked if r["score"] >= FLOOR][:SHORTLIST] or ranked[:SHORTLIST]
 
@@ -92,9 +101,10 @@ async def ask_model(text: str, reason: str | None, ranked: list[dict[str, Any]],
 
 async def route(tenant_id: str, scope: str, text: str, *, channel: str, trigger: str = "start", exclude: set[str] | None = None,
                 reason: str | None = None, clarifications_used: int = 0, allow_clarify: bool = True,
-                mode: str | None = None) -> dict[str, Any]:
+                mode: str | None = None, prior_leader: str | None = None, answer: str | None = None) -> dict[str, Any]:
     """One routing decision record (/architecture/supervisor-routing.md, Decision and Routing mode). `agent_id` None with
-    `clarification` set means: ask the caller, then route again; `agent_id` None without it means no candidate at all."""
+    `clarification` set means: ask the caller, then route again; `agent_id` None without it means no candidate at all.
+    `prior_leader` is Stage A's leader before a clarifying question and `answer` the caller's answer to it (RTE-18, RTE-19)."""
     started = time.perf_counter()
     async with sessionmaker()() as s:
         fd = await front_desk.load(s, tenant_id)
@@ -137,6 +147,11 @@ async def route(tenant_id: str, scope: str, text: str, *, channel: str, trigger:
             profiles = [pool[r["agent_id"]] for r in shortlist_of(ranked)[:3]]
             record.update(method="clarify", reason="Not sure which area this is",
                           clarification=await clarifying_question(text, profiles, channel))
+            return record
+        if prior_leader and top and top["agent_id"] == prior_leader and not is_negative(answer):  # RTE-18: the leader still leads
+            record.update(method="clarified", decided_by="leader", agent_id=prior_leader, confidence=top["score"],
+                          reason="Still the closest match after the clarifying question")
+            record["ms"] = int((time.perf_counter() - started) * 1000)
             return record
         fallback = default or (top["agent_id"] if top else next(iter(pool)))
         record.update(method="default", agent_id=fallback, confidence=top["score"] if top else None,

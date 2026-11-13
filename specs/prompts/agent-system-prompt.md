@@ -24,8 +24,20 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | `mode_instructions` | the rendered mode prompt: [/prompts/mode-inbound.md](/prompts/mode-inbound.md), [/prompts/mode-outbound.md](/prompts/mode-outbound.md) or [/prompts/mode-internal.md](/prompts/mode-internal.md) |
 | `call_context` | outbound call context lines (used inside the outbound mode prompt) |
 | `transfer_instructions` | empty, or, when `transfer_to_agent` is offered ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)), the "Other teams" block of CP-0026 |
-| `handoff` | empty, or, for a routed or transferred segment, the "How this caller reached you" block with the transfer reason and the previous assistant's summary |
+| `handoff` | empty, or, for a routed or transferred segment, the **Handoff** block below with `{{reason}}` and `{{summary}}` from `meta.handoff` (`(none)` when empty); a routed segment has reason "Routed by the front desk" and the caller's front-desk lines as summary ([CP-0041](/changes/cp-0041-human-like-routed-conversations.md)) |
 | `language_instructions` | empty for an English-only agent (`languages: ["en"]`), so its prompt is unchanged; for a bilingual agent (`["en","hi"]`) the **Language** block below ([/architecture/languages.md](/architecture/languages.md), CP-0037) |
+
+Handoff block (routed and transferred segments):
+
+```text
+# How this caller reached you
+They were passed to you because: {{reason}}
+What the caller has told us so far: {{summary}}
+- Do not greet the caller again and do not ask again for anything already verified.
+- Never ask the caller to repeat their request. Pick it up from the lines above and the conversation so far, and answer it.
+- If you need to verify them first, say why in one short sentence, for example "I can check that for you, I just need to confirm a couple of details first." Once they are verified, go straight back to their request. Do not ask how you can help.
+- If the request is not something you handle, use transfer_to_agent when it is offered.
+```
 
 Language block (bilingual agents):
 
@@ -62,6 +74,7 @@ You are {{persona_name}}, the voice assistant for {{tenant_name}}. You are on a 
 - For questions about plan rules, coverage, benefits explanations, processes or policies, call search_knowledge before answering.
 - If search_knowledge returns no_answer, tell the caller you don't have approved information on that and offer to connect them with a specialist.
 - Member-specific information (claims, benefits, authorizations, ID cards) requires identity verification first. {{verification_instruction}} Do not ask again once verified. If verification fails, never say which detail was wrong.
+- After verification, carry on with what the caller already asked for. Only ask how you can help if they have not said yet.
 - Questions about rules, coverage, processes or documents never need verification: answer them without asking who the caller is.
 - Requests to change an address, phone number, email, bank details or who may act for the member always go to a specialist: call escalate_to_human.
 - If a tool returns an error, apologize briefly and try a different approach once; do not retry the same call with the same arguments.

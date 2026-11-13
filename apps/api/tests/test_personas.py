@@ -33,7 +33,7 @@ async def _persona(client, headers=M, **over) -> dict[str, Any]:  # noqa: ANN001
 async def test_persona_crud_and_validation(client, seeded):
     """Covers: PER-01"""
     seeded_names = {p["name"] for p in (await client.get("/api/personas", headers=M)).json()["items"]}
-    assert {"Olivia", "James", "Hannah"} == seeded_names
+    assert {"Eva", "James", "Hannah"} == seeded_names
     p = await _persona(client)
     assert p["speed"] == 0.9 and p["voice"] == "aura-2-andromeda-en" and p["used_by"] == []
     r = await client.put(f"/api/personas/{p['id']}", headers=M, json={**NEW, "name": "Mira B", "speed": 1.2})
@@ -84,7 +84,7 @@ async def test_live_persona_switch_changes_next_turn_only(client, seeded, fake_l
     call = (await client.post("/api/calls", headers=M, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})).json()
     cid = call["call_id"]
     await client.post(f"/api/calls/{cid}/messages", headers=M, json={"text": "hello"})
-    assert "You are Olivia" in prompts[0]
+    assert "You are Eva" in prompts[0]
     r = await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": hannah["id"]})
     assert r.status_code == 200 and r.json()["settings"]["persona"]["name"] == "Hannah"
     await client.post(f"/api/calls/{cid}/messages", headers=M, json={"text": "and another thing"})
@@ -94,9 +94,9 @@ async def test_live_persona_switch_changes_next_turn_only(client, seeded, fake_l
     assert any(e.kind == "system" and e.text == "Persona switched to Hannah" for e in events)
     assert sum(1 for e in events if e.data.get("greeting")) == 1  # no second greeting
     r = await client.patch(f"/api/calls/{cid}/live", headers=M, json={"persona_id": ""})  # back to the agent's persona
-    assert r.json()["settings"]["persona"]["name"] == "Olivia"
+    assert r.json()["settings"]["persona"]["name"] == "Eva"
     detail = (await client.get(f"/api/calls/{cid}", headers=M)).json()
-    assert detail["settings"]["persona"]["name"] == "Olivia"
+    assert detail["settings"]["persona"]["name"] == "Eva"
 
 
 async def test_live_turn_detection_and_voice_callback(client, seeded):

@@ -42,12 +42,12 @@ In-process async pub/sub. Each event: `{id, topic, type, tenant_id, at, data}`.
 
 | Topic | Events |
 |---|---|
-| `call:{id}` | `call.event` (each stored call event), `call.escalated`, `call.ended` |
+| `call:{id}` | `call.event` (each stored call event), `call.partial` (interim caller text, not stored), `call.escalated`, `call.ended` |
 | `console` | `escalation.created`, `escalation.updated` |
 | `insights` | `analysis.created`, `cluster.updated`, `proposal.updated`, `eval.progress`, `proposal.approved`, `learning.run.finished`, `action.updated` |
 | `dashboard` | `call.ended`, `agent.published` |
 | `evaluation` | `scorecard.updated`, `test_run.progress`, `test_run.finished`, `catalog.updated`, `routing_run.finished` |
-| `conversation:{id}` | `routing.decision`, `conversation.transferred`, `conversation.segment` (a new segment's call id), `conversation.ended` ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)) |
+| `conversation:{id}` | `call.partial` (interim caller text, not stored), `routing.decision`, `conversation.transferred`, `conversation.segment` (a new segment's call id), `conversation.ended` ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)) |
 
 `GET /api/events?topics=console,call:abc` streams matching events for the caller's tenant as SSE ([/api/events.md](/api/events.md)). Subscribers get a bounded queue (500); if full, the oldest events are dropped. A `ping` comment is sent every 15 s.
 

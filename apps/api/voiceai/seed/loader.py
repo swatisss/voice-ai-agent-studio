@@ -39,7 +39,29 @@ HANDOFF_INTROS = {
     "sales": "You're now with our health insurance team.",
     "claims": "You're now with our claims and treatment team.",
 }
-FRONT_DESK_PERSONA = "Olivia"
+FRONT_DESK_PERSONA = "Eva"
+
+async def rename_personas(s) -> int:  # noqa: ANN001
+    """UC-12: an existing database keeps its persona ids; a renamed demo persona (Olivia → Eva) takes the catalog's new
+    name, greeting, disclosure, voice, speed and style in place, and so do the persona copies in agent configs."""
+    wanted = {p["name"]: p for p in catalog.PERSONAS}
+    count = 0
+    for old, new in catalog.RENAMED_PERSONAS.items():
+        rows = (await s.scalars(select(Persona).where(Persona.tenant_id == catalog.CARE_TENANT, Persona.name == old))).all()
+        for row in rows:
+            for k, v in wanted[new].items():
+                setattr(row, k, v)
+            await s.flush()
+            snapshot = {k: v for k, v in persona_dict(row).items() if k != "id"}
+            for agent in (await s.scalars(select(Agent).where(Agent.tenant_id == row.tenant_id))).all():
+                if (agent.draft_config or {}).get("persona_id") == row.id:
+                    agent.draft_config = {**agent.draft_config, "persona": snapshot}
+            for version in (await s.scalars(select(AgentVersion).where(AgentVersion.tenant_id == row.tenant_id))).all():
+                if (version.config or {}).get("persona_id") == row.id:
+                    version.config = {**version.config, "persona": snapshot}
+            count += 1
+    return count
+
 
 async def seed(reset: bool = False) -> dict[str, Any]:
     if reset:
@@ -52,7 +74,9 @@ async def seed(reset: bool = False) -> dict[str, Any]:
     care = catalog.CARE_TENANT
     async with sessionmaker()() as s:
         if await s.scalar(select(Tenant.id).limit(1)):
-            return {"skipped": "database already has tenants"}
+            renamed = await rename_personas(s)
+            await s.commit()
+            return {"skipped": "database already has tenants", **({"personas_renamed": renamed} if renamed else {})}
         for t in catalog.TENANTS:
             s.add(Tenant(**t))
         await s.flush()
@@ -97,7 +121,7 @@ async def seed(reset: bool = False) -> dict[str, Any]:
         summary["sandbox_docs"] = len(sandbox_docs)
 
         care_agent = agents["care"]
-        # the front desk answers routed calls as Olivia and falls back to Customer Care (/demo-data/northgate-health.md "Front desk")
+        # the front desk answers routed calls as Eva and falls back to Customer Care (/demo-data/northgate-health.md "Front desk")
         settings_row.front_desk = {"persona_id": personas[FRONT_DESK_PERSONA].id, "default_agents": {"member": care_agent.id, "staff": None},
                                    "connecting_message": "One moment while I connect you to the right team."}
         for key, scenarios in (("care", catalog.SCENARIOS), ("claims", catalog.CLAIMS_SCENARIOS), ("sales", catalog.SALES_SCENARIOS)):

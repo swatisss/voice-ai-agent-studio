@@ -37,6 +37,7 @@ from pipecat.frames.frames import (
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 from voiceai import prompts
+from voiceai.events import caller_partial
 from voiceai.live import LiveControls
 from voiceai.llm.gateway import Usage, gateway
 from voiceai.runtime.call_floor import CallFloor
@@ -212,6 +213,7 @@ class RealtimeBridge(FrameProcessor):
         self._idle.set()
         self._user_recorded = asyncio.Event()
         self._user_recorded.set()
+        self._partial = ""  # RV-17: the caller's words so far, for the transcript only
         self._bot_stopped = asyncio.Event()
         self._bot_stopped.set()
         self._exact_queue: list[str] = []  # lines asked for verbatim, in order (fallback when the service does not echo metadata)
@@ -362,6 +364,10 @@ class RealtimeBridge(FrameProcessor):
             await self._on_speech_started()
         elif kind == "input_audio_buffer.speech_stopped":
             await self._on_speech_stopped()
+        elif kind == "conversation.item.input_audio_transcription.delta":
+            if not self.floor.welcoming:  # RV-17
+                self._partial += evt.get("delta", "")
+                caller_partial(self.session, self._partial.strip())
         elif kind == "conversation.item.input_audio_transcription.completed":
             await self._on_user_transcript(evt.get("transcript", ""))
         elif kind == "conversation.item.input_audio_transcription.failed":
@@ -403,6 +409,9 @@ class RealtimeBridge(FrameProcessor):
         await self.push_frame(TTSAudioRawFrame(audio=audio, sample_rate=RATE, num_channels=1))
 
     async def _on_speech_started(self) -> None:
+        if not self.floor.welcoming:  # RV-17: show the caller is speaking before any text arrives
+            self._partial = ""
+            caller_partial(self.session, "", listening=True)
         self.floor.caller_started()
         self._user_recorded.clear()
         if not self.floor.may_interrupt(self.controls.turn.allow_interruptions):

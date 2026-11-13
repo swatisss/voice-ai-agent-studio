@@ -502,3 +502,28 @@ def test_realtime_pipeline_has_no_deepgram_services(monkeypatch):
     controls = LiveControls(turn=TurnSettings())
     task, transport, bridge, serializer = build_realtime(FakeWS(), session, controls, FakeConn())  # type: ignore[arg-type]
     assert task is not None and isinstance(bridge, rt.RealtimeBridge) and serializer.end_reason == "hangup"
+
+
+async def test_caller_partials_while_speaking(client, seeded):
+    """Covers: RV-17"""
+    from voiceai.events import bus
+
+    bridge, conn, session, _ = await build(seeded)
+    await finish_welcome(bridge, conn)
+    sub = bus.subscribe("northgate-health", {f"call:{session.call_id}"})
+    try:
+        conn.reply = None
+        conn.feed({"type": "input_audio_buffer.speech_started"})
+        conn.feed({"type": "conversation.item.input_audio_transcription.delta", "item_id": "u1", "delta": "Has my shoulder"})
+        conn.feed({"type": "conversation.item.input_audio_transcription.delta", "item_id": "u1", "delta": " operation been approved?"})
+        await pump(bridge)
+        got = []
+        while not sub.queue.empty():
+            e = sub.queue.get_nowait()
+            if e["type"] == "call.partial":
+                got.append(e["data"])
+        assert got[0] == {"call_id": session.call_id, "text": "", "listening": True}
+        assert [g["text"] for g in got[1:]] == ["Has my shoulder", "Has my shoulder operation been approved?"]
+        assert not [e for e in await events(session) if e.kind == "user"]  # nothing stored before the final transcript
+    finally:
+        bus.unsubscribe(sub)

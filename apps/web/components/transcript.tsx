@@ -1,7 +1,8 @@
-// Spec: /ui/test-call.md (Layout), /ui/calls.md (Detail)
+// Spec: /ui/test-call.md (Layout, UI-75), /ui/calls.md (Detail)
 "use client";
 
 import { CheckCircle2, Search, Wrench, XCircle } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CallEvent } from "@/lib/api";
 import { Badge, cx, JsonView } from "./ui";
 
@@ -79,5 +80,28 @@ export function ActivityList({ events }: { events: CallEvent[] }) {
         );
       })}
     </ol>
+  );
+}
+
+/** UI-75: what the caller is saying right now (from `call.partial`); cleared by the final caller line or after 3 s of nothing. */
+export function usePartial(): [string | null, (data: { text?: string } | null) => void] {
+  const [partial, setPartial] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const update = useCallback((data: { text?: string } | null) => {
+    if (timer.current) clearTimeout(timer.current);
+    if (data === null) { setPartial(null); return; }
+    setPartial(data.text ?? "");
+    timer.current = setTimeout(() => setPartial(null), 3000);
+  }, []);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  return [partial, update];
+}
+
+export function PartialBubble({ text }: { text: string | null }) {
+  if (text === null) return null;
+  return (
+    <div className="flex justify-end" aria-live="polite">
+      <div className="max-w-[75%] rounded-2xl rounded-br-sm border border-dashed border-accent px-3 py-2 text-sm italic text-muted">{text || "…"}</div>
+    </div>
   );
 }

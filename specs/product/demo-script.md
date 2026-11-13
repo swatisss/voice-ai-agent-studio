@@ -22,7 +22,7 @@ Northgate Health is a fictional UK private medical insurer ([/demo-data/northgat
 
 # Act 1 — Resolve (≈2 min): Customer Care
 
-**Customer Care** (persona Olivia), caller **Sarah Mitchell**, membership number `NGH-410237`, born **14 March 1984**. Use cases *Policy & Cover Questions* and *Book a Digital GP Appointment*.
+**Customer Care** (persona Eva), caller **Sarah Mitchell**, membership number `NGH-410237`, born **14 March 1984**. Use cases *Policy & Cover Questions* and *Book a Digital GP Appointment*.
 
 | Caller says | Agent does | Visible |
 |---|---|---|
@@ -40,7 +40,7 @@ Switch Test call to **Full flow**, audience *Members*, **Type**. Caller **Emma C
 
 | Caller says | What happens |
 |---|---|
-| — | Olivia's front-desk greeting and disclosure |
+| — | Eva's front-desk greeting and disclosure |
 | "I'm waiting to hear if my shoulder operation has been approved." | "One moment while I connect you to the right team." → notice **Routed to Claims & Pre-authorisation**; the Routing card shows the candidates and scores |
 | "638405, 21st of June 1991." | Hannah verifies → `get_pre_authorisation` `PA-500955`: **pending**, waiting for the consultant's procedure code and fee estimate, decision in about two days |
 | "While I have you, can I move my Direct Debit to the 15th?" | `transfer_to_agent` → notice **Transferred to Customer Care** → "You're now with our member services team." → `change_collection_day` without asking her to verify again |
@@ -104,7 +104,7 @@ On the **Agent console** the escalation appears at once; the groundwork packet f
 
 # Dynamic controls (≈1 min)
 
-On any voice call open **Live controls**: switch the persona from Olivia to Hannah mid-call (voice and style change on the next reply), and flip **Normal ↔ Semantic** turn detection to compare how the agent handles a dictated number.
+On any voice call open **Live controls**: switch the persona from Eva to Hannah mid-call (voice and style change on the next reply), and flip **Normal ↔ Semantic** turn detection to compare how the agent handles a dictated number.
 
 # Fallbacks
 

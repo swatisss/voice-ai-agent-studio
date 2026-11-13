@@ -38,7 +38,7 @@ async def _say(client, call_id: str, text: str) -> dict[str, Any]:  # noqa: ANN0
 async def test_greeting_then_disclosure(client, seeded):
     """Covers: RT-01"""
     r = await client.post("/api/calls", headers=H, json={"agent_id": seeded["care"]["agent_id"], "channel": "text"})
-    assert r.json()["greeting"].startswith("Thanks for calling Northgate Health, this is Olivia. I'm a virtual assistant")
+    assert r.json()["greeting"].startswith("Hi, thanks for calling Northgate Health, this is Eva. I'm a virtual assistant")
 
 
 async def test_tool_round_trip_and_usage(client, seeded, fake_llm):

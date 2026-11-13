@@ -335,6 +335,13 @@ def intro_line(config: dict[str, Any], agent_name: str) -> str:
 
 
 NO_ROUTE_LINE = "I'm sorry, nobody can take this request right now. Please try again later."
+ROUTED_REASON = "Routed by the front desk"
+SUMMARY_MAX = 500
+
+
+def routed_summary(lines: list[str]) -> str:
+    """RTE-20: the caller's front-desk lines in order, joined with " / ", at most 500 chars."""
+    return " / ".join(t.strip() for t in lines if t and t.strip())[:SUMMARY_MAX]
 
 
 async def front_desk_turn(conv_id: str, tenant_id: str, text: str, app: Any) -> dict[str, Any]:
@@ -347,8 +354,11 @@ async def front_desk_turn(conv_id: str, tenant_id: str, text: str, app: Any) -> 
         conv = await get(s, tenant_id, conv_id)
         earlier = [e["text"] for e in (conv.settings or {}).get("front_desk_events", []) if e["kind"] == "user"]
         clarified, scope, channel = conv.clarifications, conv.scope, conv.channel
+        asked = [r for r in (conv.routing or []) if r.get("method") == "clarify"]
     request = " ".join([*earlier, text]) if clarified else text
-    record = await supervisor.route(tenant_id, scope, request, channel=channel, clarifications_used=clarified)
+    leader = ((asked[-1].get("candidates") or [{}])[0].get("agent_id")) if clarified and asked else None
+    record = await supervisor.route(tenant_id, scope, request, channel=channel, clarifications_used=clarified,
+                                    prior_leader=leader, answer=text if clarified else None)
     topic = f"conversation:{conv_id}"
     async with sessionmaker()() as s:
         conv = await get(s, tenant_id, conv_id)
@@ -370,9 +380,12 @@ async def front_desk_turn(conv_id: str, tenant_id: str, text: str, app: Any) -> 
             record = {**record, "decided_by": record["method"], "method": "clarified"}
         conv.routing = [*(conv.routing or []), record]
         fd = settings.get("front_desk") or {}
+        # RTE-20: the agent knows what the caller asked at the front desk, and its model sees that exchange as history
         meta: dict[str, Any] = {"routing": {"method": record["method"], "confidence": record["confidence"]},
                                 "conversation": {"pipeline": fd.get("pipeline")},
-                                "handoff": {"reason": "", "summary": "", "routed": True}}
+                                "handoff": {"reason": ROUTED_REASON, "summary": routed_summary([*earlier, text]), "routed": True},
+                                "history": [{"role": e["kind"], "content": e["text"]} for e in events
+                                            if e["kind"] in ("user", "assistant") and e.get("text")]}
         if fd.get("persona_id"):
             meta["live"] = {"persona_id": fd["persona_id"]}  # one voice for the whole conversation
         for key in ("admission", "telephony"):

@@ -25,6 +25,7 @@ A `: ping` comment every 15 s keeps proxies open. Topics and the bus semantics a
 | Type | Payload |
 |---|---|
 | `call.event` | `{call_id, seq, kind, text, data}` — one stored call event |
+| `call.partial` | `{call_id, text, listening?}` — what the caller is saying right now, from interim speech-to-text, on `call:{id}` and, in a routed conversation, also on `conversation:{id}` (with `conversation_id`); transient, never stored, superseded by the turn's `user` `call.event` ([CP-0041](/changes/cp-0041-human-like-routed-conversations.md)) |
 | `call.escalated` | `{call_id, escalation_id, reason_category}` |
 | `call.ended` | `{call_id, status, outcome, end_reason}` |
 | `escalation.created` | escalation summary `{id, call_id, status, reason_category, reason_detail, packet_status, created_at}` |

@@ -18,25 +18,25 @@ Northgate Health is fictional. Its help-and-support topics, products and process
 
 # Front desk
 
-Routed calls (Test call **Full flow**, phone numbers that target the front desk, the public API without `agent_id`) open with persona **Olivia**, then the supervisor picks the agent from the use cases ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)). Default member agent: **Customer Care**. Connecting message: "One moment while I connect you to the right team." Each agent's hand-off intro: Customer Care "You're now with our member services team.", Health Cover Sales "You're now with our health insurance team.", Claims & Pre-authorisation "You're now with our claims and treatment team."
+Routed calls (Test call **Full flow**, phone numbers that target the front desk, the public API without `agent_id`) open with persona **Eva**, then the supervisor picks the agent from the use cases ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)). Default member agent: **Customer Care**. Connecting message: "One moment while I connect you to the right team." Each agent's hand-off intro: Customer Care "You're now with our member services team.", Health Cover Sales "You're now with our health insurance team.", Claims & Pre-authorisation "You're now with our claims and treatment team."
 
 # Persona library (`northgate-health`)
 
 | Persona | Voice | Speed | Greeting | Style |
 |---|---|---|---|---|
-| **Olivia** | aura-2-pandora-en (British) | 1.0 | "Thanks for calling Northgate Health, this is Olivia." | warm, calm, concise; British English; plain language |
+| **Eva** | aura-2-pandora-en (British) | 1.05 | "Hi, thanks for calling Northgate Health, this is Eva." | warm, upbeat and happy, with a smile in the voice; British English; short sentences, one question at a time; plain language ([CP-0041](/changes/cp-0041-human-like-routed-conversations.md)) |
 | **James** | aura-2-draco-en (British) | 1.0 | "Thanks for calling Northgate Health, this is James from the health insurance team." | clear, friendly, patient; never pushy; prices said slowly |
 | **Hannah** | aura-2-pandora-en (British) | 0.95 | "Thank you for calling Northgate Health claims, this is Hannah." | calm, precise, reassuring; reads codes, dates and amounts slowly |
 
 All three agents also have the built-in contact tools `send_email`, `send_sms` and `place_call` ([CP-0040](/changes/cp-0040-contact-tools.md)).
 
-Every persona's disclosure starts "I'm a virtual assistant, and this call may be recorded for quality and training." and ends with a closing question: Olivia "How can I help you today?", James "Are you looking for a quote today?", Hannah "How can I help with your treatment?".
+Every persona's disclosure starts "I'm a virtual assistant, and this call may be recorded for quality and training." and ends with a closing question: Eva "What can I help you with today?", James "Are you looking for a quote today?", Hannah "How can I help with your treatment?".
 
 # Agents (all published as v1, inbound, voice pipeline `cascade`)
 
 | Agent | Persona | Knowledge | Use cases | Max turns |
 |---|---|---|---|---|
-| **Customer Care** | Olivia | `customer-care/` (13) | 1–7 | 18 |
+| **Customer Care** | Eva | `customer-care/` (13) | 1–7 | 18 |
 | **Health Cover Sales** | James | `sales/` (6) | 8–10 | 30 |
 | **Claims & Pre-authorisation** | Hannah | `claims/` (8) | 11–14 | 20 |
 
@@ -134,7 +134,8 @@ Fourteen rows in `use_cases` for `northgate-health`, category *Member & Sales Se
 - **UC-04** — Given the seeded Customer Care agent, then it has the eight test scenarios above with their personas and expectations, seven expected `resolved` and one `escalated`, all enabled.
 - **UC-08** — Given a fresh database, when the seeder runs, then tenant `northgate-health` has the three agents Customer Care, Health Cover Sales and Claims & Pre-authorisation, all inbound, on the `cascade` pipeline and published as v1 with the personas, tools, skills and documents listed above, 25 tools in total; tenant `northgate-sandbox` has one document and no agents.
 - **UC-09** — Given the three agents, when each searches knowledge, then their document sets are disjoint and come from their own folders: "what is moratorium underwriting" finds the underwriting article for Health Cover Sales and nothing from the sales folder for Customer Care; "what is a shortfall" finds *Excess and shortfalls* for Claims & Pre-authorisation only.
-- **UC-10** — Given a fresh database, then the front desk of `northgate-health` uses persona Olivia with Customer Care as the default member agent and the connecting message above; Health Cover Sales has the three sales scenarios (two `resolved`, one `escalated`) and Claims & Pre-authorisation the four claims scenarios (three `resolved`, one `escalated`); no Health Cover Sales tool requires verification.
+- **UC-10** — Given a fresh database, then the front desk of `northgate-health` uses persona Eva with Customer Care as the default member agent and the connecting message above; Health Cover Sales has the three sales scenarios (two `resolved`, one `escalated`) and Claims & Pre-authorisation the four claims scenarios (three `resolved`, one `escalated`); no Health Cover Sales tool requires verification.
+- **UC-12** — Given a fresh database, then the `northgate-health` persona library has **Eva** (aura-2-pandora-en, speed 1.05, greeting "Hi, thanks for calling Northgate Health, this is Eva.", disclosure ending "What can I help you with today?", warm, upbeat and happy style), used by the front desk and Customer Care, and no persona named Olivia; given an existing database with persona Olivia, the seeder renames it to Eva in place (same id) ([CP-0041](/changes/cp-0041-human-like-routed-conversations.md)).
 - **~~CLM-01~~** — Retired by CP-0039: the realtime Insurance Claims Agent (Nora) is replaced by Claims & Pre-authorisation (CLM-04).
 - **~~CLM-02~~** — Retired by CP-0039: replaced by UC-09.
 - **~~CLM-03~~** — Retired by CP-0039: replaced by CLM-05.

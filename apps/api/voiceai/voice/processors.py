@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from collections.abc import Awaitable, Callable
 
 from pipecat.frames.frames import (
@@ -35,6 +36,7 @@ from voiceai.runtime.session import AgentSession
 from voiceai.voice.turn_detection import VAD_STOP_MS, TurnEvaluator
 
 log = logging.getLogger("voiceai.voice")
+PARTIAL_EVERY_S = 0.15  # VO-09: throttle of interim caller text
 
 
 class UserTurnFrame(Frame):
@@ -54,10 +56,13 @@ class TurnAggregator(FrameProcessor):
     def __init__(
         self, controls: LiveControls, evaluator: TurnEvaluator | None = None,
         last_agent_text: Callable[[], str | None] | None = None, vad_stop_ms: int = VAD_STOP_MS,
-        welcoming: Callable[[], bool] | None = None, **kwargs,  # noqa: ANN003
+        welcoming: Callable[[], bool] | None = None, on_partial: Callable[[str], None] | None = None, **kwargs,  # noqa: ANN003
     ) -> None:
         super().__init__(**kwargs)
         self.controls = controls
+        self.on_partial = on_partial  # VO-09: interim caller text for the transcript, never a turn
+        self._partial = ""
+        self._partial_at = 0.0
         self.welcoming = welcoming or (lambda: False)  # the call floor's welcome protection (VO-08)
         self.evaluator = evaluator or TurnEvaluator()
         self.last_agent_text = last_agent_text or (lambda: None)
@@ -85,6 +90,8 @@ class TurnAggregator(FrameProcessor):
         """Timer 1 ("first") may extend the wait in semantic mode; timer 2 ("extra") always dispatches."""
         text = " ".join(t.strip() for t in self.buffer if t.strip())
         if not text:
+            if self._partial:  # VO-09: the speech gave no turn (noise): clear the provisional bubble
+                self._publish_partial("", force=True)
             return
         turn = self.controls.turn
         if turn.mode != "semantic" or stage == "extra":
@@ -97,9 +104,20 @@ class TurnAggregator(FrameProcessor):
         else:
             self._schedule(turn.max_extra_wait_ms / 1000, "extra")
 
+    def _publish_partial(self, text: str, force: bool = False) -> None:
+        """VO-09: each changed interim, at most one per 150 ms (an empty clear is always sent)."""
+        if self.on_partial is None or text == self._partial:
+            return
+        now = time.monotonic()
+        if not force and text and now - self._partial_at < PARTIAL_EVERY_S:
+            return
+        self._partial, self._partial_at = text, now
+        self.on_partial(text)
+
     async def flush(self) -> None:
         text = " ".join(t.strip() for t in self.buffer if t.strip())
         self.buffer = []
+        self._partial = ""  # the final caller turn replaces the provisional bubble
         if text:
             await self.push_frame(UserTurnFrame(text))
 
@@ -120,6 +138,8 @@ class TurnAggregator(FrameProcessor):
                 self._schedule(self.controls.turn.first_delay_s(self.vad_stop_ms), "first")
             return True
         elif isinstance(frame, InterimTranscriptionFrame):
+            if not self.welcoming():
+                self._publish_partial(" ".join(t.strip() for t in [*self.buffer, frame.text] if t and t.strip()))
             return True
         elif isinstance(frame, (EndFrame, CancelFrame)):
             self._cancel_timer()

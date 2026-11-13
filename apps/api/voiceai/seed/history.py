@@ -11,8 +11,8 @@ from typing import Any
 
 from voiceai.mock import data as mock
 
-GREETING = ("Thanks for calling Northgate Health, this is Olivia. I'm a virtual assistant, and this call may be recorded for quality and training. "
-            "How can I help you today?")
+GREETING = ("Hi, thanks for calling Northgate Health, this is Eva. I'm a virtual assistant, and this call may be recorded for quality and training. "
+            "What can I help you with today?")
 HANDOFF = "I'm connecting you with a colleague who will have all the details, so you won't need to repeat yourself."
 ASSIGNEES = ["Priya (Member Services)", "Callum (Member Services)", "Joanne (Customer Relations)"]
 

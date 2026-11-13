@@ -37,6 +37,7 @@ log = logging.getLogger("voiceai.runtime")
 MAX_TOOL_ROUNDS = 4
 HISTORY_LIMIT = 30
 FILLER = "One moment while I check that."
+FILLER_AFTER_S = 0.7  # RT-18: tools that answer sooner need no filler
 APOLOGY_OUTAGE = "I'm sorry, I'm having trouble right now. Let me connect you with someone who can help."
 APOLOGY_TOOLS = "I'm sorry, I wasn't able to finish looking that up."
 GOODBYE = endings.GOODBYE
@@ -565,15 +566,18 @@ class AgentSession:
                     yield APOLOGY_TOOLS
                 break
             rounds += 1
-            if self.channel == "voice" and policy.get("voice_filler", True) and not filler_done and not round_text.strip():
-                filler_done = True
-                yield FILLER
-                spoken += FILLER + " "
             self.history.append({
                 "role": "assistant", "content": round_text or None,
                 "tool_calls": [{"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": tc.arguments or "{}"}} for tc in result.tool_calls],
             })
-            outputs = await asyncio.gather(*(self._run_tool(tc.id, tc.name, tc.arguments) for tc in result.tool_calls))
+            tools = asyncio.ensure_future(asyncio.gather(*(self._run_tool(tc.id, tc.name, tc.arguments) for tc in result.tool_calls)))
+            if self.channel == "voice" and policy.get("voice_filler", True) and not filler_done and not round_text.strip():
+                filler_done = True  # RT-18: only a wait gets the filler, and it is its own transcript line
+                done, _ = await asyncio.wait({tools}, timeout=FILLER_AFTER_S)
+                if not done:
+                    yield FILLER
+                    await self._event("assistant", FILLER, {"filler": True})
+            outputs = await tools
             for tc, output in zip(result.tool_calls, outputs):
                 self.history.append({"role": "tool", "tool_call_id": tc.id, "content": output})
             if self.state.transfer_requested and not self.state.escalated:  # transfer_to_agent: the next segment answers

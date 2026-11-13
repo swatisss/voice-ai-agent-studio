@@ -197,3 +197,57 @@ def test_settings_roundtrip_ignores_unknown_keys():
     s = TurnSettings.from_dict({"mode": "semantic", "bogus": 1, "min_silence_ms": None})
     assert s.mode == "semantic" and s.min_silence_ms == 700
     assert s.first_delay_s() == pytest.approx(0.5)
+
+
+async def test_interims_publish_caller_partials(monkeypatch):
+    """Covers: VO-09"""
+    from pipecat.frames.frames import InterimTranscriptionFrame
+
+    from voiceai.voice import processors
+
+    monkeypatch.setattr(processors, "PARTIAL_EVERY_S", 0.0)
+    agg, _ = make_aggregator(**FAST)
+    seen: list[str] = []
+    agg.on_partial = seen.append
+    welcoming = [True]
+    agg.welcoming = lambda: welcoming[0]
+    await agg.handle(InterimTranscriptionFrame("hello there", "u", "t"))  # during the welcome: nothing
+    welcoming[0] = False
+    await agg.handle(VADUserStartedSpeakingFrame())
+    await agg.handle(InterimTranscriptionFrame("I'm waiting", "u", "t"))
+    await agg.handle(InterimTranscriptionFrame("I'm waiting", "u", "t"))  # unchanged: not sent again
+    await agg.handle(say("I'm waiting to hear"))
+    await agg.handle(InterimTranscriptionFrame("about my shoulder", "u", "t"))
+    assert seen == ["I'm waiting", "I'm waiting to hear about my shoulder"]
+    await agg.handle(VADUserStoppedSpeakingFrame())
+    await agg.handle(say("about my shoulder."))
+    await asyncio.sleep(0.4)
+    assert agg.turns == ["I'm waiting to hear about my shoulder."]  # the final turn is unchanged (VO-02)
+    # throttled: a burst inside 150 ms sends only the first
+    monkeypatch.setattr(processors, "PARTIAL_EVERY_S", 10.0)
+    seen.clear()
+    agg._partial_at = 0.0
+    await agg.handle(InterimTranscriptionFrame("one", "u", "t"))
+    await agg.handle(InterimTranscriptionFrame("one two", "u", "t"))
+    assert seen == ["one"]
+    agg.buffer = []
+    await agg.decide("first")  # noise: no turn, the bubble is cleared
+    assert seen == ["one", ""]
+
+
+def test_caller_partial_topics():
+    """Covers: VO-09"""
+    from voiceai.events import bus, caller_partial
+
+    sub = bus.subscribe("t1", {"call:c1", "conversation:v1"})
+    try:
+        caller_partial(SimpleNamespace(tenant_id="t1", call_id="c1", conversation_id="v1"), "hi")
+        caller_partial(SimpleNamespace(tenant_id="t1", call_id="v1", conversation_id="v1"), "front desk")  # no call yet
+        got = []
+        while not sub.queue.empty():
+            e = sub.queue.get_nowait()
+            got.append((e["topic"], e["type"], e["data"]["text"]))
+        assert got == [("call:c1", "call.partial", "hi"), ("conversation:v1", "call.partial", "hi"),
+                       ("conversation:v1", "call.partial", "front desk")]
+    finally:
+        bus.unsubscribe(sub)

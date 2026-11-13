@@ -24,6 +24,7 @@ from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPI
 
 from voiceai import telephony
 from voiceai.config import get_settings
+from voiceai.events import caller_partial
 from voiceai.live import LiveControls
 from voiceai.runtime.session import AgentSession
 from voiceai.voice.phone import PhoneSerializer, PhoneStream, serializer_for
@@ -138,6 +139,7 @@ def build(
     turns = TurnAggregator(
         controls, TurnEvaluator(), last_agent_text=lambda: last_agent_message(session),
         vad_stop_ms=int(settings.voice_vad_stop_secs * 1000), welcoming=lambda: brain.floor.welcoming,
+        on_partial=lambda text: caller_partial(session, text),  # VO-09
     )
 
     async def apply_voice(voice: str, speed: float) -> None:  # live persona switch: next sentence uses the new voice

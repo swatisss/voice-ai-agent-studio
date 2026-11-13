@@ -38,7 +38,7 @@ The [hackathon demo script](/product/demo-script.md) is the short pitch. This wa
 | **Customer Care → Knowledge** → **Test search** `what happens if I miss a payment` | *Missed payments* first, with its score | "We can check retrieval before any call." |
 | **Policy** tab | Rules (verify first, never take bank details, read new details back), escalate-when (complaints, cancellation, bereavement), never-items | "Plain-English guardrails. Each one becomes a check on every call." |
 | **Tools** and **Skills** | 15 tools on the mock member systems; skills such as *Payments and Direct Debit* | "A skill is a procedure in plain English that uses tools." |
-| **Persona** | Olivia: British voice, greeting, disclosure | "The disclosure is required." |
+| **Persona** | Eva: British voice, greeting, disclosure | "The disclosure is required." |
 
 **Test call** → Customer Care, **Type** (or **Talk** with a headset), **Technical details** on, **Call from** *No number*.
 
@@ -57,7 +57,7 @@ Second call, **David Okoro** (`522918`, 2 September 1977): "My Direct Debit boun
 
 | Caller types | Expect | Say |
 |---|---|---|
-| (start) | Olivia greets for Northgate Health with the disclosure | "One number for everything." |
+| (start) | Eva greets for Northgate Health with the disclosure | "One number for everything." |
 | "I'm waiting to hear if my shoulder operation has been approved." | "One moment while I connect you to the right team."; notice **Routed to Claims & Pre-authorisation**; the **Routing** card shows candidates, scores and the method | "The supervisor picked the team from the use cases." |
 | "638405, 21 June 1991." (Emma Clarke) | Hannah verifies; `get_pre_authorisation` `PA-500955`: pending, waiting for the procedure code and fee estimate, decision in about two days | |
 | "Can I also move my Direct Debit to the 15th?" | `transfer_to_agent`; notice **Transferred to Customer Care**; "You're now with our member services team."; `change_collection_day` without verifying again ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)) | "She never repeats herself." |

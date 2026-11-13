@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FeedbackPrompt } from "@/components/feedback";
 import { Badge, Button, Card, cx, Input, Select, useToast } from "@/components/ui";
 import { api, ApiError, useApi, useEvents } from "@/lib/api";
+import { PartialBubble, usePartial } from "./transcript";
 import { VoiceClient } from "@/lib/voice";
 
 type Mode = "talk" | "type";
@@ -99,7 +100,13 @@ export function FullFlow({ tenant, technical }: { tenant: string; technical: boo
     if (v.status === "ended") setStatus("ended");
   }, []);
 
-  useEvents(convId ? [`conversation:${convId}`] : [], () => { if (convId) refresh(convId); }, tenant);
+  const [partial, setPartial] = usePartial();
+  useEvents(convId ? [`conversation:${convId}`] : [], (e) => {
+    if (e.type === "call.partial") { setPartial(e.data); return; }  // UI-75: no refetch for interim text
+    if (convId) refresh(convId);
+  }, tenant);
+  const callerLines = lines.filter((l) => l.speaker === "caller").length;
+  useEffect(() => { setPartial(null); }, [callerLines, setPartial]);  // the final caller line replaces the bubble
   useEffect(() => {  // voice transcripts arrive as the call goes: refresh while it runs
     if (!convId || mode !== "talk" || status !== "active") return;
     const t = setInterval(() => refresh(convId), 1500);
@@ -223,6 +230,7 @@ export function FullFlow({ tenant, technical }: { tenant: string; technical: boo
                   </div>
                 );
               })}
+              {mode === "talk" && status === "active" && <PartialBubble text={partial} />}
               {waiting && <div className="text-sm text-muted">Working…</div>}
             </div>
             {status === "ended" && (

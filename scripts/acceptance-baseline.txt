@@ -150,3 +150,8 @@ UI-72
 # CP-0040 Messages sent card on the call detail: there are no browser tests; not yet clicked through.
 # The API behind it is covered by API-16. Approval and a browser check requested from the owner.
 UI-74
+
+# CP-0041 provisional caller bubble on Test call (Single agent and Full flow): there are no browser tests and it needs a
+# microphone; not yet checked by hand. What feeds it is tested: VO-09 (cascade interims, throttle, clear, topics) and RV-17
+# (realtime deltas and speech start). Approval and a hand check on a voice call requested from the owner.
+UI-75

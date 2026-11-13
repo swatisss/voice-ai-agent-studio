@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useTenant } from "@/components/shell";
-import { ActivityList, Transcript } from "@/components/transcript";
+import { ActivityList, PartialBubble, Transcript, usePartial } from "@/components/transcript";
 import { Badge, Button, Card, cx, EmptyState, Input, Select, Spinner, useToast } from "@/components/ui";
 import { api, ApiError, type CallEvent, useApi, useEvents } from "@/lib/api";
 import { MODE_LABEL, MODE_TONE, money, secs } from "@/lib/format";
@@ -138,8 +138,10 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
     if (d.ended_at) setStatus("ended");
   }, [merge]);
 
+  const [partial, setPartial] = usePartial();
   useEvents(callId ? [`call:${callId}`] : [], (e) => {
-    if (e.type === "call.event") merge([e.data]);
+    if (e.type === "call.partial") { setPartial(e.data); return; }  // UI-75
+    if (e.type === "call.event") { merge([e.data]); if (e.data?.kind === "user") setPartial(null); }
     if (e.type === "call.escalated") setEscalated(true);
     if (e.type === "call.ended" && callId) { setStatus("ended"); sync(callId); }
   }, tenant);
@@ -282,6 +284,7 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
             <div className="flex-1 space-y-2 overflow-y-auto pr-1">
               {status === "idle" && !events.length && <div className="pt-10 text-center text-sm text-muted">{outbound ? "Place the call: the agent opens the conversation, then you answer as the callee." : mode === "talk" ? "Start a call: the agent welcomes you first, then speak into your microphone (a headset works best)." : "Start a chat and type as the caller."}</div>}
               <Transcript events={events} />
+              {mode === "talk" && status === "active" && <PartialBubble text={partial} />}
               {waiting && <div className="text-sm text-muted">Agent is typing…</div>}
               <div ref={bottom} />
             </div>

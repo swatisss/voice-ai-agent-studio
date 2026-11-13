@@ -1,5 +1,6 @@
 # Change proposals
 
+* [CP-0041 Human-like routed conversations](cp-0041-human-like-routed-conversations.md) - A clarified call goes to the agent that led, the caller's request is handed over and survives verification, the filler only fills a wait, the caller sees their words while speaking, and Eva (warm, upbeat) replaces Olivia at the front desk
 * [CP-0040 Contact tools - email, SMS and message calls](cp-0040-contact-tools.md) - Every agent can send the caller details by email (Brevo), SMS or an automated message call (Twilio), to the registered contact or a confirmed address; outbox by default, never from simulations
 * [CP-0039 Northgate Health](cp-0039-northgate-health.md) - Replaces the Evergreen demo and the SafeTrip kit with a fictional UK insurer: a front desk and three agents (Customer Care, Health Cover Sales, Claims & Pre-authorisation) plus the dental kit
 * [CP-0038 One start for the stack, the dental mock and a Docker run](cp-0038-one-start-for-demo-mock-and-docker.md) - dev.py serves the dental demo mock, demo_kits.py reuses it, and scripts/docker_stack.py runs app and mock in one container where voice works on locked-down Windows

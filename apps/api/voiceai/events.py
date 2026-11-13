@@ -49,3 +49,20 @@ class EventBus:
 
 
 bus = EventBus()
+
+
+def caller_partial(session: Any, text: str, listening: bool = False) -> None:  # noqa: ANN401
+    """VO-09, RV-17: what the caller is saying right now, never stored. Published on the call's topic and, for a routed
+    conversation (where the front desk has no call yet), on the conversation's topic too."""
+    tenant_id = getattr(session, "tenant_id", None)
+    if not tenant_id:
+        return
+    call_id = getattr(session, "call_id", None)
+    conversation_id = getattr(session, "conversation_id", None)
+    data: dict[str, Any] = {"call_id": call_id, "text": text}
+    if listening:
+        data["listening"] = True
+    if call_id and call_id != conversation_id:
+        bus.publish(tenant_id, f"call:{call_id}", "call.partial", data)
+    if conversation_id:
+        bus.publish(tenant_id, f"conversation:{conversation_id}", "call.partial", {**data, "conversation_id": conversation_id})

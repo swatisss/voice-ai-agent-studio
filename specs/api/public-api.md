@@ -78,7 +78,7 @@ Text result (201):
 { "conversation_id": "…", "status": "active", "channel": "text",
   "agent": { "id": "…", "name": "Claims & Pre-authorisation" },
   "routing": { "method": "embedding", "confidence": 0.91, "reason": "…" },
-  "messages": [ { "speaker": "front_desk", "text": "Thanks for calling Northgate Health, this is Olivia. I'm a virtual assistant…" },
+  "messages": [ { "speaker": "front_desk", "text": "Hi, thanks for calling Northgate Health, this is Eva. I'm a virtual assistant…" },
                 { "speaker": "agent", "agent_id": "…", "text": "You're now with our claims and treatment team. I can help with that…" } ] }
 ```
 

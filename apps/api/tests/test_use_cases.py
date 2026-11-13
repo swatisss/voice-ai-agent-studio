@@ -39,9 +39,9 @@ async def test_seeded_business_units(client, seeded):
         assert await s.scalar(select(func.count()).select_from(Tool).where(Tool.tenant_id == "northgate-health")) == 25
         names = {p.name for p in (await s.scalars(select(Persona).where(Persona.tenant_id == "northgate-health"))).all()}
         versions = (await s.scalars(select(AgentVersion).where(AgentVersion.tenant_id == "northgate-health"))).all()
-    assert names == {"Olivia", "James", "Hannah"}
+    assert names == {"Eva", "James", "Hannah"}
     assert len(versions) == 3 and all(v.config["voice"].get("pipeline", "cascade") == "cascade" for v in versions)
-    expected = {"Customer Care": ("Olivia", 15, 9), "Health Cover Sales": ("James", 4, 4), "Claims & Pre-authorisation": ("Hannah", 8, 5)}
+    expected = {"Customer Care": ("Eva", 15, 9), "Health Cover Sales": ("James", 4, 4), "Claims & Pre-authorisation": ("Hannah", 8, 5)}
     for name, (persona, tools, skills) in expected.items():
         detail = (await client.get(f"/api/agents/{by_name[name]['id']}/versions", headers=H)).json()["items"][0]
         assert detail["version"] == 1
@@ -145,12 +145,12 @@ async def test_front_desk_and_other_scenarios(client, seeded):
     by_name = await _agents(client)
     async with sessionmaker()() as s:
         fd = (await s.get(TenantSettings, "northgate-health")).front_desk
-        olivia = (await s.scalars(select(Persona).where(Persona.tenant_id == "northgate-health", Persona.name == "Olivia"))).one()
+        eva = (await s.scalars(select(Persona).where(Persona.tenant_id == "northgate-health", Persona.name == "Eva"))).one()
         sales = (await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == by_name["Health Cover Sales"]["id"]))).all()
         claims = (await s.scalars(select(EvalScenario).where(EvalScenario.agent_id == by_name["Claims & Pre-authorisation"]["id"]))).all()
         sales_agent = await s.get(Agent, by_name["Health Cover Sales"]["id"])
         sales_tools = (await s.scalars(select(Tool).where(Tool.id.in_(sales_agent.draft_config["tool_ids"])))).all()
-    assert fd["persona_id"] == olivia.id and fd["default_agents"]["member"] == by_name["Customer Care"]["id"]
+    assert fd["persona_id"] == eva.id and fd["default_agents"]["member"] == by_name["Customer Care"]["id"]
     assert fd["connecting_message"] == "One moment while I connect you to the right team."
     assert sorted(sc.expected for sc in sales) == ["escalated", "resolved", "resolved"]
     assert {sc.name for sc in sales} == {"Couple quote and join", "Smoker asks the price", "Asks for advice"}
@@ -188,3 +188,34 @@ async def test_claims_and_sales_use_cases(client, seeded):
     assert [u["title"] for u in items[7:10]] == SALES_TITLES
     assert all(u["agent_id"] == agents["Health Cover Sales"]["id"] for u in items[7:10])
     assert all(len(u["sample_utterances"]) >= 3 for u in items[7:14])
+
+
+async def test_eva_and_the_in_place_rename(client, seeded):
+    """Covers: UC-12"""
+    from voiceai.models import AgentVersion
+    from voiceai.seed.loader import seed
+
+    by_name = await _agents(client)
+    async with sessionmaker()() as s:
+        names = {p.name for p in (await s.scalars(select(Persona).where(Persona.tenant_id == "northgate-health"))).all()}
+        eva = (await s.scalars(select(Persona).where(Persona.tenant_id == "northgate-health", Persona.name == "Eva"))).one()
+        fd = (await s.get(TenantSettings, "northgate-health")).front_desk
+        care = await s.get(Agent, by_name["Customer Care"]["id"])
+    assert "Olivia" not in names and fd["persona_id"] == eva.id and care.draft_config["persona_id"] == eva.id
+    assert (eva.voice, eva.speed, eva.greeting) == ("aura-2-pandora-en", 1.05, "Hi, thanks for calling Northgate Health, this is Eva.")
+    assert eva.disclosure.endswith("What can I help you with today?") and "upbeat and happy" in eva.style
+    # an older database: Olivia, with her copy in Customer Care's configs, becomes Eva in place
+    async with sessionmaker()() as s:
+        row = await s.get(Persona, eva.id)
+        row.name, row.greeting, row.speed = "Olivia", "Thanks for calling Northgate Health, this is Olivia.", 1.0
+        agent = await s.get(Agent, care.id)
+        agent.draft_config = {**agent.draft_config, "persona": {**agent.draft_config["persona"], "name": "Olivia"}}
+        await s.commit()
+    out = await seed()
+    assert out.get("personas_renamed") == 1
+    async with sessionmaker()() as s:
+        row = await s.get(Persona, eva.id)
+        agent = await s.get(Agent, care.id)
+        versions = (await s.scalars(select(AgentVersion).where(AgentVersion.agent_id == care.id))).all()
+    assert (row.name, row.speed) == ("Eva", 1.05) and agent.draft_config["persona"]["name"] == "Eva"
+    assert all(v.config["persona"]["name"] == "Eva" for v in versions)

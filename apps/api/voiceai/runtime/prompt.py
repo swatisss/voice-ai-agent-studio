@@ -5,6 +5,7 @@ Spec: /prompts/agent-system-prompt.md, /architecture/tools-and-skills.md (Skill 
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -71,14 +72,13 @@ TRANSFER_INSTRUCTIONS = (
 
 
 def handoff_block(handoff: dict[str, Any] | None) -> str:
-    """CP-0026: how a routed or transferred caller reached this agent; empty for a call that started here."""
+    """CP-0026, CP-0041 (XFR-09): how a routed or transferred caller reached this agent, the Handoff block of
+    /prompts/agent-system-prompt.md verbatim; empty for a call that started here."""
     if not handoff:
         return ""
-    reason = (handoff.get("reason") or "").strip()
-    line = f"The previous assistant passed the caller on because: {reason}" if reason else "The front desk routed the caller to you."
-    return ("# How this caller reached you\n" + line + "\n"
-            f"Summary from the previous assistant: {(handoff.get('summary') or '(none)').strip()}\n"
-            "Do not greet the caller again and do not ask again for anything already verified. Answer their last request.")
+    values = {"reason": (handoff.get("reason") or "").strip() or "(none)", "summary": (handoff.get("summary") or "").strip() or "(none)"}
+    block = prompts.fragment("agent-system-prompt", "Handoff block (routed and transferred segments):")
+    return re.sub(r"\{\{\s*(reason|summary)\s*\}\}", lambda m: values[m.group(1)], block)
 
 
 def system_prompt(

@@ -90,6 +90,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
             log.info("empty database: seeding demo data")
             await seed(reset=False)
+        else:  # UC-12: a renamed demo persona (Olivia -> Eva) is renamed in place on an existing database
+            from voiceai.seed.loader import rename_personas
+
+            async with db.sessionmaker()() as s:
+                if renamed := await rename_personas(s):
+                    log.info("renamed %d demo persona(s)", renamed)
+                await s.commit()
     if settings.jobs_enabled:
         await worker.start()
     yield

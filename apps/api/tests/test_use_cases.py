@@ -190,10 +190,11 @@ async def test_claims_and_sales_use_cases(client, seeded):
     assert all(len(u["sample_utterances"]) >= 3 for u in items[7:14])
 
 
-async def test_eva_and_the_in_place_rename(client, seeded):
+async def test_eva_and_the_in_place_rename(client, seeded, app, tmp_path, monkeypatch):
     """Covers: UC-12"""
     from voiceai.models import AgentVersion
-    from voiceai.seed.loader import seed
+    from voiceai.config import get_settings
+    from voiceai.main import lifespan
 
     by_name = await _agents(client)
     async with sessionmaker()() as s:
@@ -211,8 +212,13 @@ async def test_eva_and_the_in_place_rename(client, seeded):
         agent = await s.get(Agent, care.id)
         agent.draft_config = {**agent.draft_config, "persona": {**agent.draft_config["persona"], "name": "Olivia"}}
         await s.commit()
-    out = await seed()
-    assert out.get("personas_renamed") == 1
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{(tmp_path / 'db.sqlite').as_posix()}")  # the test's database
+    monkeypatch.setenv("AUTO_SEED", "1")
+    monkeypatch.setenv("JOBS_ENABLED", "0")
+    get_settings.cache_clear()
+    async with lifespan(app):  # the app's startup on a database that already has tenants
+        pass
+    get_settings.cache_clear()
     async with sessionmaker()() as s:
         row = await s.get(Persona, eva.id)
         agent = await s.get(Agent, care.id)

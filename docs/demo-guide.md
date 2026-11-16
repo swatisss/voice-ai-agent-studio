@@ -23,7 +23,7 @@ The agent you build in Act 2 is new, so it has no history yet. Acts 6 and 7 ther
 Do these the evening before, then again 30 minutes before you present.
 
 - [ ] **Keys in `apps/api/.env`:** `OPENAI_API_KEY` (or `OPENROUTER_API_KEY` alone) and `DEEPGRAM_API_KEY` for voice. Without Deepgram, use the **Type** tab everywhere; every act still works.
-- [ ] **Fresh demo data:** `cd apps/api && uv run voiceai seed --reset`. This gives four weeks of history (123 calls), five agents, the problem clusters and the test scenarios.
+- [ ] **Fresh demo data:** `cd apps/api && uv run voiceai seed --reset`. This gives four weeks of history (20 calls), five agents, the problem clusters and the test scenarios.
 - [ ] **Start the stack:** `python scripts/dev.py` from the repo root. Web at http://localhost:3000, API at http://localhost:8000. Use `localhost`, not an IP, or the browser blocks the microphone.
 - [ ] **Pick the business unit:** bottom of the sidebar → *Customer Support & Channels*.
 - [ ] **Speed up the learning check:** open the Customer Care Agent → **Evaluation** tab → *Learning* card → set *Test repeats when checking a proposal* to **1** → **Save draft** → **Publish**. A proposal check then needs about 30 simulated calls instead of about 70.
@@ -46,9 +46,9 @@ Do these the evening before, then again 30 minutes before you present.
 
 Open with the **Dashboard**: one place shows how every agent of this business unit is doing.
 
-1. Point at the four tiles: **Calls** (123), **Containment rate** (about 68%), **Escalated to human**, **Response time**.
+1. Point at the four tiles: **Calls** (20), **Containment rate** (50%), **Escalated to human**, **Response time**.
 2. Show **Containment by week** and **Escalations by root cause**: most hand-offs come from a few missing answers and missing lookups.
-3. Show **Top clusters**: *Adding a newborn to coverage* and *Prior authorization status* are marked **Ready for fix**.
+3. Show **Top clusters**: *Adding a newborn to coverage* is marked **Ready for fix**; *Prior authorization status* is still *Watching (3 of 5)*.
 4. Scroll to the **Self-learning** card: "Runs every night at 02:00 UTC", last night's numbers, and proposals waiting for review. Say you will come back to it.
 5. Walk the sidebar in one sentence each:
     - **Agents** — build and version agents.
@@ -187,7 +187,7 @@ Two questions: how is each agent doing with real callers (**Scorecards**), and w
 **Scorecards — the seeded Customer Care Agent**
 
 1. **Evaluation** → agent *Customer Care Agent*, period *Last 90 days*, *Include seeded history* on.
-2. Tiles for the published version: Goal met, Containment, Grounded, Hard fails, p95 response time, Helpful. The **Grounded** tile carries a **Drift** badge: "Lower than in this version's first week".
+2. Tiles for the published version: Goal met, Containment, Grounded, Hard fails, p95 response time, Helpful. There is no **Drift** badge on the seeded history (drift needs 20 scored calls in each window); it appears once real calls pile up.
 3. **Trend**: goal met, containment and grounded per day, hard fails as bars.
 4. **Checks**: every check with its pass rate. Judge checks show reviews, agreement and **Uncalibrated** until 20 human reviews agree at least 85% of the time; only calibrated checks will ever count as learning signals.
 5. Click the **Grounded** row: the call list filters to the 5 calls that failed it. Open one to show the judge's reason.
@@ -218,7 +218,7 @@ Every night the platform reviews each agent's calls, drafts fixes and checks the
 2. Press **Run learning now** to show the trigger. The button reads **Learning…** and the card updates when it finishes. Clusters that already have a proposal are skipped, so this second run is quick.
 3. Click **Review proposals** → **Insights**. At the top: the **Last night** strip and **Waiting for review** — one card per proposal with a *Nightly* badge, its kind, title, rationale and a **Passed** or **Failed** badge.
 4. Open *Adding a newborn to your coverage* (**Open**). Show:
-    - **Evidence**: 14 escalated calls, each with what the human specialist actually told the caller.
+    - **Evidence**: 5 escalated calls, each with what the human specialist actually told the caller.
     - **Proposed fix**: a knowledge article written from those notes (60-day window, member portal steps, birth record). The drafter never adds member data or medical advice.
     - **Derived test scenarios**: built from real calls, added to the test suite on approval.
     - **Evaluation**: the current version against the fix on the cluster's calls, on calls **held out** from the drafter, on the derived scenarios and on the whole test suite. Summary such as "Baseline 0/6 → Candidate 5/6 · Held out 3/4 · No regressions", and **Check passed**.

@@ -16,13 +16,12 @@ GREETING = ("Hi, thanks for calling Northgate Health, this is Eva. I'm a virtual
 HANDOFF = "I'm connecting you with a colleague who will have all the details, so you won't need to repeat yourself."
 ASSIGNEES = ["Priya (Member Services)", "Callum (Member Services)", "Joanne (Customer Relations)"]
 
-MIX = [  # (intent, count)
-    ("policy_status", 14), ("payment_question", 26), ("document_request", 16), ("coverage_question", 20), ("gp_booking", 6),
-    ("add_dependent_newborn", 14), ("prior_auth_status", 9), ("complaint", 8), ("cancellation", 3),
-    ("speak_to_person", 4), ("abandoned", 3),
+MIX = [  # (intent, count): 20 calls, CP-0045
+    ("policy_status", 2), ("payment_question", 3), ("document_request", 2), ("coverage_question", 2), ("gp_booking", 1),
+    ("add_dependent_newborn", 5), ("prior_auth_status", 3), ("complaint", 1), ("abandoned", 1),
 ]
-WEEKLY = [27, 30, 32, 34]
-NEWBORN_WEEKLY = [3, 3, 4, 4]
+WEEKLY = [4, 5, 5, 6]
+NEWBORN_WEEKLY = [1, 1, 1, 2]
 
 ESCALATED = {
     "add_dependent_newborn": ("knowledge_gap", "missing_knowledge", "newborn"),
@@ -290,7 +289,7 @@ def _build(intent: str, when: datetime, rng: random.Random, counters: dict[str, 
 
 
 def generate(today: date | None = None) -> list[SeedCall]:
-    """123 calls over the 4 weeks ending yesterday; deterministic for a given `today`."""
+    """20 calls over the 4 weeks ending yesterday; deterministic for a given `today`."""
     rng = random.Random(42)
     today = today or datetime.now(timezone.utc).date()
     start = today - timedelta(days=28)
@@ -303,7 +302,7 @@ def generate(today: date | None = None) -> list[SeedCall]:
         intents += [pool.pop() for _ in range(total - NEWBORN_WEEKLY[week])]
         rng.shuffle(intents)
         for intent in intents:
-            day = start + timedelta(days=week * 7 + rng.randrange(7))
+            day = start + timedelta(days=week * 7 + (rng.randrange(1, 7) if week == 0 else rng.randrange(7)))  # never the first day: it can fall outside the 28-day window
             when = datetime(day.year, day.month, day.day, rng.randrange(8, 18), rng.randrange(60), rng.randrange(60), tzinfo=timezone.utc)
             call = _build(intent, when, rng, counters)
             call.cost = round(rng.uniform(0.004, 0.012), 4)

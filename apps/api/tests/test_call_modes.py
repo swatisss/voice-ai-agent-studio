@@ -182,7 +182,7 @@ async def test_calls_carry_direction(client, seeded):
     internal = (await client.get("/api/calls", headers=H, params={"direction": "internal"})).json()["items"]
     assert [c["id"] for c in internal] == [made["internal"]]
     inbound = (await client.get("/api/calls", headers=H, params={"direction": "inbound"})).json()["items"]
-    assert made["care"] in {c["id"] for c in inbound} and len(inbound) == 124 and {c["direction"] for c in inbound} == {"inbound"}
+    assert made["care"] in {c["id"] for c in inbound} and len(inbound) == 21 and {c["direction"] for c in inbound} == {"inbound"}
 
 
 async def test_outbound_agent_config_needs_targets_url(client, seeded):

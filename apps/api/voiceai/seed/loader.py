@@ -162,7 +162,7 @@ async def _seed_history(s, agent: Agent) -> int:  # noqa: ANN001
     calls = generate(today)
     version_id = agent.published_version_id
     config = (await s.get(AgentVersion, version_id)).config
-    ungrounded = _ungrounded(calls, today)
+    ungrounded = _ungrounded(calls)
     analyses_by_key: dict[str, list[CallAnalysis]] = defaultdict(list)
     for sc in calls:
         turns = sum(1 for k, _, _ in sc.events if k == "user")
@@ -222,15 +222,10 @@ async def _seed_history(s, agent: Agent) -> int:  # noqa: ANN001
     return len(calls)
 
 
-def _ungrounded(calls: list[SeedCall], today) -> list[SeedCall]:  # noqa: ANN001
-    """The 5 resolved coverage calls the seeded judge marks not grounded: one in each of weeks 2 and 3, three in week 4."""
-    start = today - timedelta(days=28)
-    picked: list[SeedCall] = []
-    for week, n in ((1, 1), (2, 1), (3, 3)):
-        pool = [c for c in calls if c.intent == "coverage_question" and c.outcome == "resolved"
-                and (c.started_at.date() - start).days // 7 == week]
-        picked += pool[-n:]  # the latest of the week, so week 4's fall inside the last 7 days
-    return picked
+def _ungrounded(calls: list[SeedCall]) -> list[SeedCall]:
+    """The latest resolved coverage call, which the seeded judge marks not grounded."""
+    pool = [c for c in calls if c.intent == "coverage_question" and c.outcome == "resolved"]
+    return pool[-1:]
 
 
 async def _seed_scorecard(s, call: Call, events: list[CallEvent], esc: Escalation | None, config: dict[str, Any],  # noqa: ANN001

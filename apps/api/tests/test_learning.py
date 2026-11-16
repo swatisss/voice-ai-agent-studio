@@ -152,7 +152,7 @@ async def test_eval_then_approve(client, seeded, fake_llm):
         assert (await s.get(KnowledgeDoc, p["draft_doc_id"])).status == "draft"
     calls = (await client.get("/api/calls", headers=H)).json()["items"]
     assert all(c["channel"] != "simulation" for c in calls)  # EV-03
-    assert (await client.get("/api/dashboard/summary", headers=H)).json()["totals"]["calls"] == 123
+    assert (await client.get("/api/dashboard/summary", headers=H)).json()["totals"]["calls"] == 20
     r = await client.post(f"/api/proposals/{pid}/approve", headers=H, json={"decided_by": "Reviewer"})
     assert r.status_code == 200, r.text
     async with sessionmaker()() as s:

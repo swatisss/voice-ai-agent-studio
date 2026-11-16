@@ -42,5 +42,5 @@ def test_next_segment_mapping():
 async def test_containment_rate(client, seeded):
     """Covers: UI-03"""
     t = (await client.get("/api/dashboard/summary", headers={"X-Tenant-Id": "northgate-health"})).json()["totals"]
-    assert t["calls"] == 123 and t["resolved"] == 82 and t["escalated"] == 38 and t["abandoned"] == 3
-    assert t["containment_rate"] == round(82 / 120, 4)
+    assert t["calls"] == 20 and t["resolved"] == 10 and t["escalated"] == 9 and t["abandoned"] == 1
+    assert t["containment_rate"] == round(10 / 19, 4)

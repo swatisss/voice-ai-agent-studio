@@ -77,7 +77,7 @@ async def test_dashboard_is_tenant_scoped(client, seeded):
     """Covers: MT-04"""
     members = (await client.get("/api/dashboard/summary", headers=M)).json()["totals"]["calls"]
     sandbox = (await client.get("/api/dashboard/summary", headers=P)).json()["totals"]["calls"]
-    assert members == 123 and sandbox == 0
+    assert members == 20 and sandbox == 0
 
 
 async def test_publish_requires_skill_tools(client, seeded):

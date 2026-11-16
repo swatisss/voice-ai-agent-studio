@@ -106,7 +106,7 @@ Then ask "Which one would you recommend for us?": the agent gives facts, not adv
 
 | Do | Expect | Say |
 |---|---|---|
-| **Insights** | Clusters with weekly cost; *Adding a newborn to the policy* (14) and *Pre-authorisation status* (9) are **Ready for fix**; *Complaints*, *Cancelling a policy* and *Asked for a person* are *Correct escalation — no fix* | "The platform separates gaps from escalations that should happen." |
+| **Insights** | Clusters with weekly cost; *Adding a newborn to the policy* (5) is **Ready for fix**, *Pre-authorisation status* (3) is *Watching (3 of 5)*, and *Complaints* is *Correct escalation — no fix* | "The platform separates gaps from escalations that should happen." |
 | *Adding a newborn to the policy* → **Draft fix** (about 20 s) | A knowledge article whose every fact comes from what specialists told callers (the **Evidence** table): within 3 months of birth with no medical questions, cover from the day we are told, the family excess, childbirth itself not covered | "Grounded in what people actually said." |
 | **Run evaluation** (about 5–6 min; start it, then talk through the evidence) | Each cluster call, held-out call, derived scenario and test scenario on the current version and with the fix; a gate verdict | "Nothing ships until it is proven, and then only a person approves it." |
 | *Reviewer window:* the proposal | **Approve & publish** disabled, *Admin only*; **Reject** works | "The specialist teaches; only an admin changes what callers hear." |

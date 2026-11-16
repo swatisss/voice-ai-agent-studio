@@ -129,15 +129,15 @@ async def test_customer_care_regression_scenarios(client, seeded):
 async def test_seeded_history_and_clusters(client, seeded):
     """Covers: UC-05"""
     t = (await client.get("/api/dashboard/summary", headers=H)).json()["totals"]
-    assert (t["calls"], t["resolved"], t["escalated"], t["abandoned"]) == (123, 82, 38, 3)
+    assert (t["calls"], t["resolved"], t["escalated"], t["abandoned"]) == (20, 10, 9, 1)
     clusters = {c["name"]: c for c in (await client.get("/api/insights/clusters", headers=H)).json()["items"]}
-    assert clusters["Adding a newborn to the policy"]["escalation_count"] == 14 and clusters["Adding a newborn to the policy"]["ready_for_fix"] is True
-    assert clusters["Pre-authorisation status"]["escalation_count"] == 9 and clusters["Pre-authorisation status"]["ready_for_fix"] is True
+    assert clusters["Adding a newborn to the policy"]["escalation_count"] == 5 and clusters["Adding a newborn to the policy"]["ready_for_fix"] is True
+    assert clusters["Pre-authorisation status"]["escalation_count"] == 3 and clusters["Pre-authorisation status"]["ready_for_fix"] is False
     assert clusters["Complaints"]["fixable"] is False and clusters["Complaints"]["label"] == "correct_escalation"
     calls = (await client.get("/api/calls", headers=H)).json()["items"]
     intents = [c["intent"] for c in calls if c["outcome"] == "resolved"]
     counts = {i: intents.count(i) for i in set(intents)}
-    assert counts == {"policy_status": 14, "payment_question": 26, "document_request": 16, "coverage_question": 20, "gp_booking": 6}
+    assert counts == {"policy_status": 2, "payment_question": 3, "document_request": 2, "coverage_question": 2, "gp_booking": 1}
 
 
 async def test_front_desk_and_other_scenarios(client, seeded):

@@ -153,7 +153,7 @@ async def test_cap_picks_costliest_and_never_changes_the_agent(client, seeded, f
         draft = (await s.get(Agent, agent_id)).draft_config
     run = await _run_now(client)
     agent = run["summary"]["agents"][agent_id]
-    assert agent["ready_clusters"] == 2 and agent["drafted"] == 1  # newborn (14 escalations) before pre-authorisation status (9)
+    assert agent["ready_clusters"] == 1 and agent["drafted"] == 1  # only newborn (5 escalations) is ready; pre-authorisation (3) is still watching
     async with sessionmaker()() as s:
         proposals = (await s.scalars(select(FixProposal).where(FixProposal.agent_id == agent_id))).all()
         assert len(proposals) == 1 and proposals[0].origin == "nightly" and proposals[0].status == "ready"
@@ -265,7 +265,7 @@ async def test_held_out_and_derived(client, seeded, fake_llm):
         by_case.setdefault(r.case_key, set()).add(r.arm)
     assert all(arms == {"baseline", "candidate"} for arms in by_case.values())
     assert any(k.startswith("held-out") for k in by_case)
-    assert len(evidence) == 10  # the drafter saw ten member calls; the cluster has 14
+    assert len(evidence) == 4 and len(held) == 1  # four newborn calls go to the drafter, one is held out
     # the fake judge passes everything, so the derived scenarios pass on the baseline and are dropped (SL-09)
     assert summary["derived_dropped"] == 2 and summary["derived_kept"] == 0 and p.payload["scenarios"] == []
 

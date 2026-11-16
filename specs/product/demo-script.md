@@ -16,7 +16,7 @@ Northgate Health is a fictional UK private medical insurer ([/demo-data/northgat
 * App running (`python scripts/dev.py` or Cloud Run), business unit **Northgate Health · Member & Sales Services** selected, database freshly seeded (`cd apps/api && uv run voiceai seed --reset`).
 * Two browser windows: **Test call** (presenter) and **Agent console** (a teammate playing the specialist).
 * Headset microphone. **Type** is a full fallback for any audio problem: same agents, same flow.
-* Dashboard open in a third tab: 123 historical calls, containment about 68%.
+* Dashboard open in a third tab: 20 historical calls, containment 50%.
 * On Test call, the agent select picks the agent; its "Handles" line names its use cases and the **Test script** card shows a starting phrase for each. Callers' membership numbers and dates of birth are not on screen; use [/demo-data/northgate-members.md](/demo-data/northgate-members.md) and the callers named below. Switch **Technical details** on to show tool chips and costs.
 * In Talk mode the agent opens with its spoken welcome after **Start call**; wait for it, then answer.
 
@@ -85,7 +85,7 @@ On the **Agent console** the escalation appears at once; the groundwork packet f
 
 # Act 6 — Learn (≈3 min): "Adding a newborn to the policy"
 
-1. **Insights** shows clusters from the last four weeks. Top fixable cluster: **Adding a newborn to the policy**, 14 escalations, root cause `missing_knowledge`, estimated weekly cost. Also: *Pre-authorisation status* (`missing_skill`: Customer Care has no lookup tool) and *Complaints* marked **correct escalation — no fix**.
+1. **Insights** shows clusters from the last four weeks. Top fixable cluster: **Adding a newborn to the policy**, 5 escalations (ready for a fix), root cause `missing_knowledge`, estimated weekly cost. Also: *Pre-authorisation status* (`missing_skill`: Customer Care has no lookup tool; 3 of 5 signals, still watching) and *Complaints* marked **correct escalation — no fix**.
 2. **Draft fix** → a knowledge article *Adding a newborn to your policy* drafted from what specialists told those callers (add the baby within 3 months of birth with no medical questions; cover starts from the day we are told; the baby shares the family excess; normal childbirth is not covered; a new membership certificate within 5 working days).
 3. **Run evaluation** → simulated callers replay the cluster's cases against v1 (baseline) and v1 + article (candidate), plus Customer Care's eight regression scenarios. Expected: baseline about 0 of 6 cluster cases resolved, candidate at least 5 of 6, no regression.
 4. **Approve** → Customer Care **v2** published; the dashboard shows the projected lift.

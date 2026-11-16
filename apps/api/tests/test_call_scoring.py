@@ -268,8 +268,8 @@ async def test_seeded_history_scores(client, seeded):
     agent_id = seeded["care"]["agent_id"]
     summary = (await client.get("/api/evaluation/summary", headers=H, params={"agent_id": agent_id, "days": 90})).json()
     v1 = next(v for v in summary["versions"] if v["version"] == 1)
-    assert v1["scored"] == 123 and "grounded" in v1["drift"]
-    for key, n in (("outcome.goal_met", 3), ("knowledge.grounded", 5)):
+    assert v1["scored"] == 20 and v1["drift"] == []
+    for key, n in (("outcome.goal_met", 1), ("knowledge.grounded", 1)):
         items = (await client.get("/api/evaluation/scorecards", headers=H,
                                   params={"agent_id": agent_id, "days": 90, "check": key, "verdict": "fail"})).json()["items"]
         assert len(items) == n

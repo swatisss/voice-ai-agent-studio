@@ -2,7 +2,7 @@
 type: UI Spec
 title: Agent console
 description: The human specialist's view - live escalation queue, groundwork packet, transcript, accept and resolve with disposition.
-status: stable
+status: draft
 tags: [ui, console, escalation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -23,3 +23,4 @@ The page of the **Agent Desk** specialist ([/ui/agent-desk.md](/ui/agent-desk.md
 - **UI-12** — Given the console is open, when an escalation is created, then it appears in Waiting within 2 seconds without reload, and its packet fills in when ready.
 - **UI-13** — Given an accepted escalation, when Resolve is clicked with a 5-character note, then the form shows the validation error and nothing is sent.
 - **UI-14** — Given a safety escalation, then it is pinned to the top of Waiting with a red "Safety" badge.
+- **UI-86** — Given an accepted escalation whose conversation is an API text conversation, then the detail shows a **Conversation** panel with the customer's, the AI's and the specialist's lines in order, a composer and **Send**; a customer line sent from the chat app appears within 3 seconds without reload; sending a reply shows it in the thread and in the customer's chat; before accept the composer is disabled with "Accept to reply"; after resolve the panel is read-only; for a voice or Studio call the panel is not shown.

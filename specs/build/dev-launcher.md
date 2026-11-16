@@ -2,7 +2,7 @@
 type: Tool Spec
 title: Dev launcher
 description: scripts/dev.py - starts the web frontend, the API and the dental demo mock together from one terminal with prefixed logs, pre-flight checks, readiness messages and clean shutdown.
-status: stable
+status: draft
 tags: [build, tooling, dx]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -24,6 +24,7 @@ Windows without a `python` command: `py -3 scripts/dev.py`. Stdlib only (Python 
 | `--skip-build` | With `--single-origin`: reuse an existing `apps/web/out`. |
 | `--api-port N`, `--web-port N` | Default 8000 and 3000. |
 | `--mock-port N` | Port of the dental demo mock, default 8766 (the dental kit's tools call `http://127.0.0.1:8766`). |
+| `--chat` | Also start the external chat app on :3100 (`--chat-port N`) with `VOICEAI_API_URL`; on first run, once the API answers, create a `member` key named `chat-app` through the Studio API and write it to `apps/chat/.env.local` ([CP-0049](/changes/cp-0049-external-chat-app.md)). |
 | `--no-mock` | Do not start the dental demo mock ([CP-0038](/changes/cp-0038-one-start-for-demo-mock-and-docker.md)). |
 | `--no-reload` | Run the API without auto-reload. |
 | `--fake` | `LLM_FAKE=1`, `EMBEDDINGS_PROVIDER=hash`, and `DATABASE_URL` defaulting to `apps/api/data/fake.db` so hash embeddings never mix with the real database. |
@@ -58,3 +59,4 @@ Windows without a `python` command: `py -3 scripts/dev.py`. Stdlib only (Python 
 - **DEV-13** — Given the mock port already answers `GET /dental/health`, when pre-flight runs, then there is no error and the plan has no `mock` service (the running one is reused); given the port is held by something else, then pre-flight warns that the dental tools will fail and the plan has no `mock` service; neither case exits 1.
 - **DEV-14** — Given a mock already answering on the mock port, when `demo_kits.py dental` builds the kit, then it starts no mock of its own and the dental tools' URLs use that port.
 - **DEV-06** — Given keys in `.env` and the environment, when pre-flight runs, then the key status lists OpenRouter, OpenAI and Deepgram, key warnings follow the rules above (either key alone raises no LLM warning and no `LLM_ROLE_*` advice) and no key value is ever printed; given `--fake`, the LLM warning is skipped and `DATABASE_URL` defaults to `fake.db` unless already set.
+- **DEV-18** — Given `--chat`, when the plan is built, then it has a `chat` service running `npm run dev` in `apps/chat` on port 3100 (or `--chat-port`) in parallel with web :3000 and the API :8000, pre-flight reports a busy chat port, and an existing `apps/chat/.env.local` key is never overwritten; without `--chat` the plan is unchanged.

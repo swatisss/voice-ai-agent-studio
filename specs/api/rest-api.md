@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -172,7 +172,8 @@ The specialist role reaches only the requests listed in [/architecture/agent-des
 | GET | `/api/escalations` | query `status?` → `{items: [escalation + call summary]}` |
 | GET | `/api/escalations/{id}` | escalation + call events |
 | POST | `/api/escalations/{id}/accept` | `{assignee}` → escalation; 409 unless `waiting` |
-| POST | `/api/escalations/{id}/resolve` | `{disposition, resolution_note}` → escalation; 409 unless `accepted` |
+| POST | `/api/escalations/{id}/resolve` | `{disposition, resolution_note}` → escalation; 409 unless `accepted`; also ends an API text conversation (`human_resolved`) |
+| POST | `/api/escalations/{id}/messages` | `{text}` (1–2000) → `{seq, speaker: "human", text, at}` (201); 409 `not_accepted`, `wrong_channel` or `conversation_ended` ([/architecture/human-message-channel.md](/architecture/human-message-channel.md)) |
 
 ## Insights
 | Method | Path | Body → Result |
@@ -239,3 +240,4 @@ The specialist role reaches only the requests listed in [/architecture/agent-des
 - **API-15** — Given an open `check_failing` action, when `POST /api/actions/{id}/dismiss` is sent, then it is `dismissed` with `closed_by` and `closed_at`, a second dismiss returns 409 `invalid_state`, `GET /api/insights/actions` no longer lists it and `?status=all` does; `POST /api/actions/{id}/answer` on it returns 409; another tenant gets 404.
 - **API-14** — Given `POST /api/knowledge/sources` for the fixture site, then the response is 202 with `status: indexing` and exactly one `sync_knowledge_source` job is queued; `GET /api/knowledge/sources/{id}` shows `page_count` rising until `ready`; a second `POST …/sync` while the first runs answers 409 `sync_in_progress`; another tenant gets 404.
 - **API-13** — Given `PUT /api/tenant-settings/front-desk` with a default member agent that is internal, a pipeline the tenant does not allow, or `max_clarifications: 3`, then the response is 422 and nothing changes; `GET` on a tenant without settings returns the defaults.
+- **API-17** — Given an accepted escalation of an API text conversation, when `POST /api/escalations/{id}/messages` is sent with `{text}`, then the response is 201 with the stored line, the line appears in `GET /api/escalations/{id}` events as a `human` event, and the same call before accept is 409 `not_accepted` (HMC-03, HMC-04).

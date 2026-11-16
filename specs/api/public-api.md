@@ -2,7 +2,7 @@
 type: API Contract
 title: Public API (v1)
 description: The server-to-server API a tenant's backend uses to start and run conversations with its agents - API keys and scopes, conversations over text and voice, connect tokens, transports, streaming, rate limits and errors.
-status: stable
+status: draft
 tags: [api, public, security, voice]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---
@@ -50,6 +50,7 @@ Base: `/v1/tenants/{tenant_id}`. JSON in and out, `snake_case`, ISO 8601 UTC.
 | POST | `/conversations/{id}/messages` | `{text}` (1–2000 chars) → turn result (below); text conversations only, else 409 `wrong_channel` |
 | POST | `/conversations/{id}/end` | → `{status, outcome}`; idempotent |
 | GET | `/conversations/{id}` | query `include=transcript` → conversation view (below) |
+| GET | `/conversations/{id}/messages` | query `cursor?` → the visible thread with the escalation state, for a text conversation that may continue with a human ([/architecture/human-message-channel.md](/architecture/human-message-channel.md)) |
 
 ## Create a conversation
 
@@ -92,6 +93,8 @@ Voice result (201): `{conversation_id, status, channel: "voice", transport, conn
 
 `{conversation_id, status, agent, routing, messages, transferred, escalation, ended}`: `messages` lists what was said since the caller's message (a transfer adds the receiving agent's intro line); `routing` is present when this turn routed or re-routed; `transferred` is a boolean; `escalation` is `{id, status}` once the conversation is escalated; `status` is `active`, `escalated` or `ended`.
 
+**After an escalation** a text conversation stays open for a person ([CP-0049](/changes/cp-0049-external-chat-app.md)): `POST /messages` stores the line for the specialist, runs no model and returns `messages: []`, `status: escalated` and `escalation`; after the conversation ended it is 409 `conversation_ended`.
+
 **Streaming.** With `Accept: text/event-stream` the same request streams server-sent events `message.delta` (`{speaker, agent_id, text}`), `routing.decision`, `conversation.transferred` and a final `turn.done` carrying the turn result.
 
 ## Conversation view
@@ -119,3 +122,5 @@ Voice result (201): `{conversation_id, status, channel: "voice", transport, conn
 - **PUB-08** — Given a `media-stream` voice conversation and a client sending Twilio Media Streams events with μ-law audio, then the conversation runs like a phone call (welcome spoken after `start`, agent audio returned as `media` events with the `streamSid`, `stop` ends it with reason `hangup`); with `audio_format: pcm_16k`, the payloads are PCM 16 kHz.
 - **PUB-09** — Given `caller.number` set to a registered demo number and `context` with `ivr_menu`, then the first segment's call is identified by first name only, its call context lists `ivr_menu`, and no response or stored row contains the full number; `metadata` and `external_id` are echoed by `GET /conversations/{id}`.
 - **PUB-10** — Given `GET /conversations/{id}?include=transcript` after a transfer, then `segments` lists both calls in order with `routed_by`, and the transcript lists front-desk, caller and agent lines with their segment numbers and no tool calls.
+- **PUB-11** — Given an escalated API text conversation, when `POST /messages` is sent, then the turn result has `status: escalated`, `messages: []` and an `escalation`, and no model is called; after the conversation ended the same call is 409 `conversation_ended` ([/architecture/human-message-channel.md](/architecture/human-message-channel.md), HMC-01, HMC-05).
+- **PUB-12** — Given a conversation of the key, then `GET /conversations/{id}/messages` returns `status`, `escalation`, ordered `items` (caller, front desk, agent, human; no tool calls) and a `cursor`; with the cursor it returns only later items; another key's conversation is 404 and a malformed cursor is 422 `invalid_cursor` (HMC-02, HMC-08).

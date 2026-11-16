@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent Desk role
 description: A third sign-in role for call-centre specialists - the console, escalated calls with masked details, escalation patterns they can comment on (feeding the learning loop), and read-only knowledge, agent settings and member memory; everything else is refused by the API; identifiers are masked in what they see and in application logs.
-status: stable
+status: draft
 tags: [architecture, auth, roles, console, learning, privacy]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---
@@ -28,7 +28,7 @@ The API is **deny by default** for a specialist: a request not in this table is 
 | Area | Allowed |
 |---|---|
 | Session | `/api/auth/*`, `GET /api/tenants` (answers only the account's unit) |
-| Console | `GET /api/escalations`, `GET /api/escalations/{id}`, `POST /api/escalations/{id}/accept`, `POST /api/escalations/{id}/resolve`; the event stream with topic `console` only |
+| Console | `GET /api/escalations`, `GET /api/escalations/{id}`, `POST /api/escalations/{id}/accept`, `POST /api/escalations/{id}/resolve`, `POST /api/escalations/{id}/messages` (a typed reply to a text conversation, [/architecture/human-message-channel.md](/architecture/human-message-channel.md)); the event stream with topic `console` only |
 | Calls | `GET /api/calls` and `GET /api/calls/{id}` **for escalated calls only** (the list is forced to calls with an escalation; any other call is 404 `call_not_found`) |
 | Patterns | `GET /api/insights/clusters`, `GET /api/insights/clusters/{id}`, `GET /api/insights/clusters/{id}/comments`, `POST /api/insights/clusters/{id}/comments` |
 | Knowledge | `GET /api/knowledge`, `GET /api/knowledge/{id}`, `GET /api/knowledge/sources`, `GET /api/knowledge/sources/{id}`, `POST /api/knowledge/search` |
@@ -66,7 +66,7 @@ A specialist (or admin or reviewer) can add a comment to any cluster of the acco
 # Acceptance
 
 - **DESK-01** — Given sign-in on and `STUDIO_SPECIALIST_PASSWORD` set, when the specialist signs in with the right password, then `GET /api/auth/me` returns Sam Specialist with role `specialist` and `tenant_id: "northgate-health"`; with a wrong password 401 `bad_credentials`; with only `STUDIO_ADMIN_PASSWORD` set the specialist cannot sign in.
-- **DESK-02** — Given a signed-in specialist, when they send `GET /api/dashboard/summary`, `GET /api/insights/inbox`, `GET /api/evaluation/...`, `PUT /api/agents/{id}`, `POST /api/knowledge/text`, `GET /api/tenant-settings`, `GET /api/members/{ref}/memory/export` or `POST /api/calls`, then each is 403 `role_forbidden` and nothing changes; an allowed request (`GET /api/escalations`, `GET /api/agents`, `GET /api/knowledge`, `POST /api/knowledge/search`) succeeds.
+- **DESK-02** — Given a signed-in specialist, when they send `GET /api/dashboard/summary`, `GET /api/insights/inbox`, `GET /api/evaluation/...`, `PUT /api/agents/{id}`, `POST /api/knowledge/text`, `GET /api/tenant-settings`, `GET /api/members/{ref}/memory/export` or `POST /api/calls`, then each is 403 `role_forbidden` and nothing changes; an allowed request (`GET /api/escalations`, `GET /api/agents`, `GET /api/knowledge`, `POST /api/knowledge/search`, `POST /api/escalations/{id}/messages` on an accepted text escalation) succeeds.
 - **DESK-03** — Given a specialist and a request with `X-Tenant-Id` of another business unit, then 403 `tenant_forbidden`; `GET /api/tenants` lists only the account's unit.
 - **DESK-04** — Given escalated and non-escalated calls, when the specialist lists calls, then only escalated calls are returned; `GET /api/calls/{id}` of a call without an escalation is 404; an administrator sees both.
 - **DESK-05** — Given a call whose transcript says "my number is NGH-410237, email meera@example.com, phone 07700900123", when the specialist reads the call and its escalation packet, then the identifiers are `NGH-•••237`, `m***@example.com` and `•••0123` everywhere in the response; the same call read by the admin is unchanged.

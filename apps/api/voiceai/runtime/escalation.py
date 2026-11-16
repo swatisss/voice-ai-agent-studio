@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import unicodedata
 from typing import Any
 
@@ -49,10 +50,22 @@ SAFETY_MESSAGE_HI = (
 _packet_tasks: set[asyncio.Task[None]] = set()
 _PHRASES = tuple(unicodedata.normalize("NFC", p) for p in (*SAFETY_PHRASES, *SAFETY_PHRASES_HI))
 
+# CP-0042 (ES-11): a medical condition told as history is not an emergency. Only these three phrases relax; a
+# present-tense cue in the same line restores the match. Self-harm phrases and the Hindi phrases never relax.
+HISTORY_PHRASES = ("chest pain", "heart attack", "stroke")
+HISTORY_MARKERS = re.compile(
+    r"\b(last year|last month|years ago|months ago|weeks ago|history of|when i was|previously|in the past|in (?:19|20)\d\d)\b")
+PRESENT_CUES = re.compile(r"\b(right now|at the moment|having a|i'm having|i am having)\b")
+
 
 def safety_match(text: str) -> bool:
     t = unicodedata.normalize("NFC", text).lower().replace("’", "'")
-    return any(p in t for p in _PHRASES)
+    hits = [p for p in _PHRASES if p in t]
+    if not hits:
+        return False
+    if all(p in HISTORY_PHRASES for p in hits) and HISTORY_MARKERS.search(t) and not PRESENT_CUES.search(t):
+        return False
+    return True
 
 
 def safety_message(text: str) -> str:

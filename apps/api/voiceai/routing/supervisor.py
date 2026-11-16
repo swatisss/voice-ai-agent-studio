@@ -160,6 +160,32 @@ async def route(tenant_id: str, scope: str, text: str, *, channel: str, trigger:
         return record
 
 
+async def safety_route(tenant_id: str, scope: str, text: str, *, channel: str) -> dict[str, Any]:
+    """RTE-21 (CP-0042): a caller line with emergency or self-harm language is never routed. The scope's default agent,
+    or the Stage A leader without one, takes the segment and its own safety rule speaks the fixed line. No decision model."""
+    started = time.perf_counter()
+    async with sessionmaker()() as s:
+        fd = await front_desk.load(s, tenant_id)
+        pool = await candidates(s, tenant_id, scope)
+        default = await front_desk.default_agent(s, tenant_id, fd, scope)
+        record: dict[str, Any] = {"at": utcnow().isoformat(), "trigger": "start", "input": text, "scope": scope, "mode": fd.routing_mode,
+                                  "excluded": [], "candidates": [], "stage_a_ms": 0, "stage_b": None, "fallbacks": [],
+                                  "method": None, "agent_id": None, "confidence": None, "reason": "", "clarification": None, "unsure": False}
+        if not pool:
+            record.update(method="none", reason="No agent can take this request")
+            return record
+        chosen = default if default in pool else None
+        if chosen is None:
+            t0 = time.perf_counter()
+            ranked = await catalog.stage_a(s, tenant_id, scope, text, set(pool))
+            record["stage_a_ms"] = int((time.perf_counter() - t0) * 1000)
+            record["candidates"] = ranked[:SHORTLIST]
+            chosen = ranked[0]["agent_id"] if ranked else next(iter(pool))
+        record.update(method="safety", agent_id=chosen, confidence=1.0, reason="Emergency or self-harm language")
+        record["ms"] = int((time.perf_counter() - started) * 1000)
+        return record
+
+
 async def decide_for_suite(tenant_id: str, scope: str, text: str, mode: str | None = None) -> dict[str, Any]:
     """The routing suite: the live decision, text timeouts, no clarification (CAT-07)."""
     started = time.perf_counter()

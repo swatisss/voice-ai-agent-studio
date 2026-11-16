@@ -294,7 +294,8 @@ async def create(s: AsyncSession, tenant_id: str, body: CreateBody, *, source: s
     messages = [{"speaker": "front_desk", "text": greeting}]
     if body.message and body.message.strip():
         turn = await routed_text_turn(conv.id, tenant_id, body.message, app)
-        return {**result, "status": turn["status"], "agent": turn["agent"], "routing": turn["routing"], "messages": messages + turn["messages"]}
+        return {**result, "status": turn["status"], "agent": turn["agent"], "routing": turn["routing"], "messages": messages + turn["messages"],
+                "transferred": turn.get("transferred", False)}
     return {**result, "agent": None, "routing": None, "messages": messages}
 
 
@@ -349,6 +350,7 @@ async def front_desk_turn(conv_id: str, tenant_id: str, text: str, app: Any) -> 
     """One caller turn before an agent is chosen: ask a clarifying question, or start the first segment (RTE-05, RTE-07)."""
     from voiceai.events import bus
     from voiceai.routing import supervisor
+    from voiceai.runtime import escalation
     from voiceai.runtime.session import AgentSession
 
     async with sessionmaker()() as s:
@@ -358,8 +360,11 @@ async def front_desk_turn(conv_id: str, tenant_id: str, text: str, app: Any) -> 
         asked = [r for r in (conv.routing or []) if r.get("method") == "clarify"]
     request = " ".join([*earlier, text]) if clarified else text
     leader = ((asked[-1].get("candidates") or [{}])[0].get("agent_id")) if clarified and asked else None
-    record = await supervisor.route(tenant_id, scope, request, channel=channel, clarifications_used=clarified,
-                                    prior_leader=leader, answer=text if clarified else None, mode=mode)
+    if escalation.safety_match(text):  # RTE-21 (CP-0042): an emergency is never routed, the default agent speaks the safety line
+        record = await supervisor.safety_route(tenant_id, scope, text, channel=channel)
+    else:
+        record = await supervisor.route(tenant_id, scope, request, channel=channel, clarifications_used=clarified,
+                                        prior_leader=leader, answer=text if clarified else None, mode=mode)
     topic = f"conversation:{conv_id}"
     async with sessionmaker()() as s:
         conv = await get(s, tenant_id, conv_id)
@@ -423,7 +428,11 @@ async def routed_text_turn(conv_id: str, tenant_id: str, text: str, app: Any) ->
     reply = "".join(rest).strip()
     if reply:
         messages.append({"speaker": "agent", "agent_id": out["agent_id"], "text": reply})
-    return await turn_result(conv_id, tenant_id, messages, routed=True)
+    session, transferred = out["session"], False
+    while session.transferred_to is not None:  # XFR-10 (CP-0042): a transfer in the first routed turn is followed, as in message()
+        session, transferred = session.transferred_to, True
+        messages += await _answer(session, last_caller_line(session) or text)
+    return await turn_result(conv_id, tenant_id, messages, routed=True, transferred=transferred)
 
 
 def _routing_out(decision: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -441,6 +450,9 @@ async def _open_text(conv: Conversation, call: Call, message: str | None, app: A
         reply = await session.reply(message)
         if reply:
             messages.append({"speaker": "agent", "agent_id": call.agent_id, "text": reply})
+        while session.transferred_to is not None:  # XFR-10 (CP-0042): a transfer in the opening answer is followed too
+            session = session.transferred_to
+            messages += await _answer(session, last_caller_line(session) or message)
     return messages
 
 

@@ -35,6 +35,10 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 Safety phrases (case-insensitive substring): `suicide`, `kill myself`, `end my life`, `hurt myself`, `want to die`, `overdose`, `chest pain`, `can't breathe`, `cannot breathe`, `stroke`, `unconscious`, `severe bleeding`, `heart attack`.
 
+**History is not an emergency** ([CP-0042](/changes/cp-0042-safety-and-transfers-at-the-front-desk.md)). The three medical-history phrases `chest pain`, `heart attack` and `stroke` do not match when the same line carries a history marker: `last year`, `last month`, `years ago`, `months ago`, `weeks ago`, `history of`, `when I was`, `previously`, `in the past`, or `in` followed by a year (`19xx`, `20xx`). A present-tense cue in the line (`right now`, `at the moment`, `having a`, `i'm having`, `i am having`) matches even with a marker. Every other phrase, and every Hindi phrase ([/architecture/languages.md](/architecture/languages.md)), matches as before. Underwriting and claims conversations mention past conditions; a sales call must be able to hear "I had a heart attack last year" without ending.
+
+The screen runs on every agent turn (ES-01) and, in a routed conversation, at the front desk before routing ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md), step 0, RTE-21).
+
 # Escalation procedure
 
 1. If already escalated, do nothing (idempotent).
@@ -85,3 +89,5 @@ The `resolution_note` is required (min 10 characters) — it is the evidence fle
 - **ES-09** — Given three verification results with `verified: false` in one call, then exactly one escalation with category `verification_failed` exists and the call ends `handoff`.
 - **ES-08** — Given the model calls `escalate_to_human` twice, then only one escalation row exists.
 - **ES-10** — Given a conversation with 3 transfers, when the agent calls `transfer_to_agent` again, then exactly one escalation with category `transfer_failed` is created, the hand-off message is delivered and the segment ends `handoff`.
+- **ES-11** — Given the lines "I had a heart attack last year and I'm on blood thinners", "history of stroke", "chest pain when I was 40" and "I had chest pain in 2019", then `safety_match` is false; given "I have chest pain right now", "I'm having a heart attack", "I think I'm having a stroke", "I had a heart attack" (no marker) and "I want to end my life, it was last year too", then it is true ([CP-0042](/changes/cp-0042-safety-and-transfers-at-the-front-desk.md)).
+- **ES-12** — Given any agent and a caller turn "Full medical underwriting please, I had a heart attack last year", then the model is called, no escalation is created and the call continues ([CP-0042](/changes/cp-0042-safety-and-transfers-at-the-front-desk.md)).

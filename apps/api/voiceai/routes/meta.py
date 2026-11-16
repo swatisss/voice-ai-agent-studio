@@ -54,7 +54,6 @@ async def healthz(s: AsyncSession = Depends(get_session)) -> dict:
         "db": db_ok,
         "jobs": worker.alive or not settings.jobs_enabled,
         "providers": {
-            "groq": g.provider_configured("groq"),
             "openrouter": g.provider_configured("openrouter"),
             "openai": g.provider_configured("openai"),
             "deepgram": bool(settings.deepgram_api_key),

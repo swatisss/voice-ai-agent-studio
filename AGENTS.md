@@ -34,7 +34,9 @@ Full workflow: `specs/process/sdd-workflow.md`. Writing rules: `specs/process/co
 python scripts/setup.py --install            # new machine: hooks, apps/api/.env, dependencies
 python scripts/spec_check.py --ci --base origin/main   # exactly what CI enforces (spec-first, log, lifecycle, coverage ratchet)
 python scripts/spec_check.py                 # quick spec lint (repo root)
-cd apps/api && uv sync && uv run pytest      # backend tests
+cd apps/api && uv sync && uv run pytest      # backend tests (on Windows with Application Control, sentencex is blocked: run them in Docker instead, see below)
+# Backend tests in Docker (Linux venv in a named volume, needed for the voice-pipeline tests on locked-down Windows):
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/app" -v voiceai-test-venv:/opt/venv -v voiceai-test-cache:/root/.cache -e UV_PROJECT_ENVIRONMENT=/opt/venv -e UV_LINK_MODE=copy -w /app/apps/api python:3.12-slim sh -c "apt-get update -qq && apt-get install -y -qq git >/dev/null && pip install -q uv && uv sync --frozen -q && uv run --no-sync python -m pytest -q -p no:cacheprovider"
 python scripts/dev.py                        # whole stack: web :3000 + API :8000, prefixed logs, Ctrl+C stops all
 python scripts/stack.py start|stop|status|logs   # same stack in the background; start --llm/--role/--decision-model pin models
 python scripts/demo_walkthrough.py --learning  # the demo end to end on a scripted fake LLM: no keys, no cost, ~30 s; report in apps/api/data/demo-runs/

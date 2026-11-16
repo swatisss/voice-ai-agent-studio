@@ -1,4 +1,4 @@
-"""LLM gateway: roles -> Groq/OpenRouter/OpenAI models via one OpenAI-compatible client.
+"""LLM gateway: roles -> OpenAI/OpenRouter models via one OpenAI-compatible client.
 
 Spec: /architecture/llm-gateway.md, /decisions/adr-0003-llm-gateway.md
 """
@@ -165,7 +165,7 @@ class Gateway:
 
     def _key_from_settings(self, provider: str) -> str | None:
         s = get_settings()
-        return {"groq": s.groq_api_key, "openrouter": s.openrouter_api_key, "openai": s.openai_api_key}.get(provider)
+        return {"openrouter": s.openrouter_api_key, "openai": s.openai_api_key}.get(provider)
 
     def _client(self, provider: str) -> openai.AsyncOpenAI:
         if provider in self._clients:
@@ -253,7 +253,7 @@ class Gateway:
                 except StopAsyncIteration:
                     break
                 first = False
-                usage = getattr(chunk, "usage", None) or (getattr(chunk, "model_extra", None) or {}).get("x_groq", {}).get("usage")
+                usage = getattr(chunk, "usage", None)
                 if usage:
                     u = usage if isinstance(usage, dict) else usage.model_dump()
                     result.usage.input_tokens = int(u.get("prompt_tokens") or 0)
@@ -307,7 +307,7 @@ class Gateway:
         result.text = result.text.rstrip()
         result.tool_calls = [ToolCall(f"call_{i}", n, json.dumps(a)) for i, (n, a) in enumerate(reply.tool_calls)]
         result.finish_reason = "tool_calls" if result.tool_calls else "stop"
-        result.usage = Usage(input_tokens=100, output_tokens=20, cost_usd=self.usage_cost("groq:openai/gpt-oss-120b", Usage(100, 20)))
+        result.usage = Usage(input_tokens=100, output_tokens=20, cost_usd=self.usage_cost("openai:gpt-4.1-mini", Usage(100, 20)))
         yield {"type": "done", "result": result}
 
     async def chat(self, role: str, messages: list[dict[str, Any]], override: str | None = None) -> ChatResult:

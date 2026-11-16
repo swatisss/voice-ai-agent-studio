@@ -22,7 +22,7 @@ The agent you build in Act 2 is new, so it has no history yet. Acts 6 and 7 ther
 
 Do these the evening before, then again 30 minutes before you present.
 
-- [ ] **Keys in `apps/api/.env`:** an LLM key (`GROQ_API_KEY`, `OPENAI_API_KEY` or `OPENROUTER_API_KEY`) and `DEEPGRAM_API_KEY` for voice. Without Deepgram, use the **Type** tab everywhere; every act still works.
+- [ ] **Keys in `apps/api/.env`:** `OPENAI_API_KEY` (or `OPENROUTER_API_KEY` alone) and `DEEPGRAM_API_KEY` for voice. Without Deepgram, use the **Type** tab everywhere; every act still works.
 - [ ] **Fresh demo data:** `cd apps/api && uv run voiceai seed --reset`. This gives four weeks of history (123 calls), five agents, the problem clusters and the test scenarios.
 - [ ] **Start the stack:** `python scripts/dev.py` from the repo root. Web at http://localhost:3000, API at http://localhost:8000. Use `localhost`, not an IP, or the browser blocks the microphone.
 - [ ] **Pick the business unit:** bottom of the sidebar → *Customer Support & Channels*.
@@ -253,7 +253,7 @@ Pick these by audience; each takes 1–3 minutes.
 | Talk closes at once with "Voice is unavailable" | `DEEPGRAM_API_KEY` is missing. Use **Type**; every act works the same. |
 | Microphone blocked | Open the app on `http://localhost`, not an IP address. |
 | The agent interrupts itself | Use a headset; the microphone is picking up the speaker. |
-| Replies slow or failing, Groq 429 in the API log | Groq's free tier is rate-limited. Add `OPENAI_API_KEY` (every role falls back to it) or switch roles to OpenAI in `.env` (see the local runbook). |
+| Replies slow or failing, OpenAI 429 in the API log | The OpenAI account is out of credit or rate-limited. Add credit, or set `OPENROUTER_API_KEY` so the fallback answers. |
 | Scorecard stays "Not scored yet" | Scoring runs after the call's analysis in the background job worker; give it 5–20 seconds. `python scripts/dev.py` runs the worker; check the `[api]` log for LLM errors. |
 | Memory not used in call 2 | The caller must be verified in both calls, and the first call needs a few seconds after it ends to be remembered. |
 | Run learning now takes minutes | Expected with real models: each proposal is checked with dozens of simulated calls. Lower *Test repeats when checking a proposal* to 1, and pre-run it before presenting. |

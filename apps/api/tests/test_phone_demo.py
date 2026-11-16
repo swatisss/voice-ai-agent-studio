@@ -30,7 +30,7 @@ def _load():  # noqa: ANN202
 demo = _load()
 FULL = {
     "TWILIO_ACCOUNT_SID": "ACtest", "TWILIO_AUTH_TOKEN": "secret-token-value", "TWILIO_PHONE_NUMBER": "+15551234567",
-    "DEEPGRAM_API_KEY": "dg-secret-key-value", "GROQ_API_KEY": "gsk-secret-key-value",
+    "DEEPGRAM_API_KEY": "dg-secret-key-value", "OPENAI_API_KEY": "sk-secret-key-value",
 }
 
 
@@ -50,8 +50,9 @@ def test_preflight_names_each_problem_and_never_prints_keys():
     for expected in ("TWILIO_AUTH_TOKEN is missing", "DEEPGRAM_API_KEY is missing", "no LLM key", "international format", "DEMO_TRANSFER_TO", "no tunnel tool", "port 8000 is busy"):
         assert expected in text, expected
     assert "ACtest" not in text and "TWILIO_ACCOUNT_SID" not in text
-    only_openai = {k: v for k, v in FULL.items() if k != "GROQ_API_KEY"} | {"OPENAI_API_KEY": "sk-secret-key-value"}
-    assert demo.preflight(only_openai, args(public_url="https://x.example"), which=which_none, uv=["uv"], in_use=lambda p: False) == []
+    no_llm = {k: v for k, v in FULL.items() if k != "OPENAI_API_KEY"}
+    assert any("no LLM key" in p for p in demo.preflight(no_llm, args(public_url="https://x.example"), which=which_none, uv=["uv"], in_use=lambda p: False))
+    assert demo.preflight(FULL, args(public_url="https://x.example"), which=which_none, uv=["uv"], in_use=lambda p: False) == []
     assert demo.preflight({**FULL, "TWILIO_AUTH_TOKEN": "secret-token-value"}, args(), which=which_none, uv=["uv"], in_use=lambda p: False) != []
     assert demo.preflight(FULL, args(), which=lambda n: "/bin/ngrok", uv=["uv"], in_use=lambda p: False) == []
     assert demo.preflight(FULL, args(public_url="https://x.example"), which=which_none, uv=["uv"], in_use=lambda p: False) == []

@@ -24,3 +24,5 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-07T00:00:00Z" }
 * Cost per token is higher than `gpt-oss-120b`; prices come from the price table and must be kept current.
 * Prompts leave for one more third party; the synthetic-data rule applies to every provider ([/product/healthcare-compliance.md](/product/healthcare-compliance.md)).
 * A wrong or unavailable OpenAI model ID fails with a 404, which is deliberately not a fallback trigger.
+
+> **Update 2026-11-16:** Superseded in part by [CP-0043](/changes/cp-0043-remove-groq.md): Groq is removed and OpenAI is now the primary of every chat role.

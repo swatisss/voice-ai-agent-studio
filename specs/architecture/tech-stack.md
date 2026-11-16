@@ -15,7 +15,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | Web framework | FastAPI + Uvicorn |
 | ORM / DB | SQLAlchemy 2.x async; `aiosqlite` locally, `asyncpg` for Postgres |
 | Settings | `pydantic-settings` (env vars, `.env`) |
-| LLM client | `openai` Python SDK (OpenAI-compatible endpoints of Groq, OpenRouter and OpenAI) |
+| LLM client | `openai` Python SDK (OpenAI-compatible endpoints of OpenAI and OpenRouter) |
 | HTTP client | `httpx` (also used in-process via ASGI transport for relative tool URLs) |
 | Embeddings | `fastembed` with `BAAI/bge-small-en-v1.5` (384-d, local CPU); deterministic `hash` embedder for tests |
 | Vector search | NumPy cosine similarity in-process ([/decisions/adr-0004-storage-and-vectors.md](/decisions/adr-0004-storage-and-vectors.md)) |
@@ -39,7 +39,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 | Purpose | Default | Alternatives (config only) |
 |---|---|---|
-| LLM — all roles | Groq `openai/gpt-oss-120b` | Any OpenRouter model; Groq `openai/gpt-oss-20b`; OpenAI `gpt-4.1-mini` |
+| LLM — all roles | OpenAI `gpt-4.1-mini` | Any OpenRouter model, e.g. `openai/gpt-oss-120b` |
 | Speech-to-text | Deepgram `nova-3` streaming | — |
 | Text-to-speech | Deepgram `aura-2-thalia-en` (per persona voice) | Other Deepgram Aura-2 voices |
 | Speech-to-speech (optional, per agent) | OpenAI Realtime, gateway role `speech` ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)) | another provider by a later CP |

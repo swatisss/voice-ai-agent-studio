@@ -1,10 +1,6 @@
 # LLM roles -> provider:model refs, fallbacks and prices.
 # Spec: /architecture/llm-gateway.md  (model IDs live here only - never in code)
 providers:
-  groq:
-    base_url: "https://api.groq.com/openai/v1"
-    api_key_env: GROQ_API_KEY
-    stream_usage: false        # Groq reports usage in x_groq on the last chunk
   openrouter:
     base_url: "https://openrouter.ai/api/v1"
     api_key_env: OPENROUTER_API_KEY
@@ -18,8 +14,6 @@ providers:
     stream_usage: true
 
 models:   # price per 1M tokens (USD)
-  "groq:openai/gpt-oss-120b":       { input: 0.15, output: 0.60, json_schema: true,  reasoning_effort: true }
-  "groq:openai/gpt-oss-20b":        { input: 0.10, output: 0.50, json_schema: true,  reasoning_effort: true }
   "openrouter:openai/gpt-oss-120b": { input: 0.15, output: 0.60, json_schema: false, reasoning_effort: true }
   "openrouter:openai/gpt-oss-20b":  { input: 0.10, output: 0.50, json_schema: false, reasoning_effort: true }
   # Non-reasoning OpenAI chat models only (they take max_tokens and temperature). Confirm IDs and prices in the OpenAI console.
@@ -29,35 +23,35 @@ models:   # price per 1M tokens (USD)
   # in the OpenAI console (spike S4 could not reach the console).
   "openai:gpt-realtime-2.1":        { kind: speech, input: 4.00, output: 16.00, audio_input: 32.00, audio_output: 64.00 }
 
-roles:
+roles:   # every chat role: OpenAI primary, one optional OpenRouter fallback (skipped without a key; CP-0043)
   realtime:
-    model: "groq:openai/gpt-oss-120b"
+    model: "openai:gpt-4.1-mini"
     params: { reasoning_effort: low, temperature: 0.3, max_tokens: 800 }
-    fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
+    fallback: ["openrouter:openai/gpt-oss-120b"]
   analysis:
-    model: "groq:openai/gpt-oss-120b"
+    model: "openai:gpt-4.1-mini"
     params: { reasoning_effort: low, temperature: 0 }
-    fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
+    fallback: ["openrouter:openai/gpt-oss-120b"]
   drafting:
-    model: "groq:openai/gpt-oss-120b"
+    model: "openai:gpt-4.1-mini"
     params: { reasoning_effort: medium, temperature: 0.4 }
-    fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
+    fallback: ["openrouter:openai/gpt-oss-120b"]
   simulator:
-    model: "groq:openai/gpt-oss-20b"
+    model: "openai:gpt-4.1-mini"
     params: { reasoning_effort: low, temperature: 0.7, max_tokens: 400 }
-    fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
+    fallback: ["openrouter:openai/gpt-oss-120b"]
   judge:
-    model: "groq:openai/gpt-oss-120b"
+    model: "openai:gpt-4.1-mini"
     params: { reasoning_effort: low, temperature: 0 }
-    fallback: ["openrouter:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
+    fallback: ["openrouter:openai/gpt-oss-120b"]
   turn:
-    model: "groq:openai/gpt-oss-20b"
+    model: "openai:gpt-4.1-mini"
     params: { reasoning_effort: low, temperature: 0, max_tokens: 200 }
-    fallback: ["openrouter:openai/gpt-oss-20b", "openai:gpt-4.1-mini"]
+    fallback: ["openrouter:openai/gpt-oss-20b"]
   router:       # supervisor routing: the front desk's clarifying questions (/architecture/supervisor-routing.md)
-    model: "groq:openai/gpt-oss-20b"
+    model: "openai:gpt-4.1-mini"
     params: { reasoning_effort: low, temperature: 0, max_tokens: 300 }
-    fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1-mini"]
+    fallback: ["openrouter:openai/gpt-oss-120b"]
   speech:
     model: "openai:gpt-realtime-2.1"
     voices: [marin, cedar, coral, alloy, ash, ballad, echo, sage, shimmer, verse]   # first is the default; confirm in the console

@@ -14,7 +14,6 @@ os.environ.update({
     "AUTO_SEED": "0",
     "JOBS_ENABLED": "0",
     "LLM_FAKE": "1",
-    "GROQ_API_KEY": "",
     "OPENROUTER_API_KEY": "",
     "OPENAI_API_KEY": "",
     "DEEPGRAM_API_KEY": "",

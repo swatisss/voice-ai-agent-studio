@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from voiceai import conversations
 from voiceai.conversations import CreateBody
 from voiceai.db import get_session
+from voiceai.errors import ApiError
 from voiceai.models import Conversation
 from voiceai.routes.calls import MessageBody
 from voiceai.tenancy import current_tenant
@@ -23,12 +24,16 @@ router = APIRouter(prefix="/api/conversations")
 
 class StudioCreate(CreateBody):
     scope: Literal["member", "staff"] = "member"
+    routing_mode: str | None = None  # RTE-22: playground override of the front desk's routing mode (not in the public API)
 
 
 @router.post("", status_code=201)
 async def create(body: StudioCreate, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    payload = CreateBody(**body.model_dump(exclude={"scope"}))
-    return await conversations.create(s, tenant_id, payload, source="playground", scope=body.scope, app=request.app, base_url=str(request.base_url))
+    if body.routing_mode not in (None, "embedding", "decision_model"):
+        raise ApiError(422, "invalid_routing_mode", "routing_mode must be 'embedding' or 'decision_model'")
+    payload = CreateBody(**body.model_dump(exclude={"scope", "routing_mode"}))
+    return await conversations.create(s, tenant_id, payload, source="playground", scope=body.scope, app=request.app, base_url=str(request.base_url),
+                                      routing_mode=body.routing_mode)
 
 
 @router.get("")

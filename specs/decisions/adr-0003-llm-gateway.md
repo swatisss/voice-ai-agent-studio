@@ -24,3 +24,5 @@ The LLM must be cheap and switchable. Groq gives very fast, low-cost inference o
 * Provider-specific features (e.g. `reasoning_effort`) are gated per model entry.
 
 Amended by [ADR-0007](adr-0007-openai-provider.md): OpenAI is a third provider, and the last fallback of every role.
+
+> **Update 2026-11-16:** Groq is no longer a provider ([CP-0043](/changes/cp-0043-remove-groq.md)); the gateway design stands.

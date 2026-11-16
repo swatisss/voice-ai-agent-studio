@@ -146,18 +146,19 @@ def test_check_flag_exit_codes(tmp_path, monkeypatch, capsys):
 def test_key_warnings_never_leak_values(tmp_path):
     """Covers: DEV-06"""
     root = _repo(tmp_path)
-    (root / "apps" / "api" / ".env").write_text("GROQ_API_KEY=gsk_supersecret\nDEEPGRAM_API_KEY=\n# comment\n")
+    (root / "apps" / "api" / ".env").write_text("OPENAI_API_KEY=sk_supersecret\nDEEPGRAM_API_KEY=\n# comment\n")
     errors, warnings, status = dev.preflight(ns(), ["uv"], "npm", environ={}, root=root, in_use=lambda p: False)
-    assert not errors and status == {"GROQ_API_KEY": True, "OPENROUTER_API_KEY": False, "OPENAI_API_KEY": False, "DEEPGRAM_API_KEY": False}
+    assert not errors and status == {"OPENROUTER_API_KEY": False, "OPENAI_API_KEY": True, "DEEPGRAM_API_KEY": False}
     assert any("DEEPGRAM_API_KEY" in w and "Type" in w for w in warnings)
     assert not any("agent replies will fail" in w for w in warnings)
-    assert "gsk_supersecret" not in " ".join(warnings)
+    assert "sk_supersecret" not in " ".join(warnings)
 
-    (root / "apps" / "api" / ".env").write_text("OPENROUTER_API_KEY=or-secret\n")
+    (root / "apps" / "api" / ".env").write_text("OPENROUTER_API_KEY=or-secret\n")  # OpenRouter alone is complete too: no LLM_ROLE_* advice
     _, warnings, _ = dev.preflight(ns(), ["uv"], "npm", environ={}, root=root, in_use=lambda p: False)
-    assert any("LLM_ROLE_*" in w for w in warnings) and "or-secret" not in " ".join(warnings)
-    _, warnings, _ = dev.preflight(ns(), ["uv"], "npm", environ={"LLM_ROLE_REALTIME": "openrouter:openai/gpt-oss-120b"}, root=root, in_use=lambda p: False)
-    assert not any("LLM_ROLE_*" in w for w in warnings)
+    assert not any("agent replies will fail" in w or "LLM_ROLE_*" in w for w in warnings) and "or-secret" not in " ".join(warnings)
+    (root / "apps" / "api" / ".env").write_text("DEEPGRAM_API_KEY=dg\n")  # no LLM key at all
+    _, warnings, _ = dev.preflight(ns(), ["uv"], "npm", environ={}, root=root, in_use=lambda p: False)
+    assert any("OPENAI_API_KEY or OPENROUTER_API_KEY" in w for w in warnings)
 
     # an OpenAI key alone is a complete LLM setup: every role falls back to OpenAI, so no LLM warning and no LLM_ROLE_* advice
     (root / "apps" / "api" / ".env").write_text("OPENAI_API_KEY=sk-supersecret\n")

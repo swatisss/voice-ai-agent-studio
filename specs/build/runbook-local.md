@@ -12,7 +12,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 * Python 3.12 and **uv** — Windows: `winget install --source winget Python.Python.3.12 astral-sh.uv`; macOS: `brew install python@3.12 uv`.
 * Node.js LTS (24.x) — Windows: `winget install --source winget OpenJS.NodeJS.LTS`; macOS: `brew install node`.
 * Windows note: if `winget install astral-sh.uv` stalls on an admin prompt, `py -3.12 -m pip install --user uv` and run uv as `py -m uv`.
-* Keys: an LLM key (`GROQ_API_KEY` by default, or `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`), `DEEPGRAM_API_KEY` (voice). The other LLM keys are optional fallbacks and model switching.
+* Keys: `OPENAI_API_KEY` (the LLM) and `DEEPGRAM_API_KEY` (voice). `OPENROUTER_API_KEY` is an optional fallback and model switch.
 
 # First run
 
@@ -40,33 +40,11 @@ Or single-origin by hand: `npm run build` in `apps/web`, then `uv run voiceai se
 
 | You have | Do this | What works |
 |---|---|---|
-| Groq key, **no Deepgram** | Put `GROQ_API_KEY` in `apps/api/.env`; use the **Type** tab on Test call | Everything except the microphone: resolve, escalate, console, insights, evaluation, dashboard |
-| OpenAI key only | Put `OPENAI_API_KEY` in `apps/api/.env`; no `LLM_ROLE_*` lines needed (every role falls back to OpenAI), though the OpenAI-only lines below skip the failed Groq attempt | Same as above |
-| OpenRouter key only | Put `OPENROUTER_API_KEY` and the five `LLM_ROLE_*` lines (below) in `apps/api/.env` | Same as above |
+| OpenAI key, **no Deepgram** | Put `OPENAI_API_KEY` in `apps/api/.env`; use the **Type** tab on Test call | Everything except the microphone: resolve, escalate, console, insights, evaluation, dashboard |
+| OpenRouter key only | Put `OPENROUTER_API_KEY` in `apps/api/.env`; no `LLM_ROLE_*` lines needed (OpenAI is skipped for lack of a key and the OpenRouter fallback answers) | Same as above |
 | No LLM key | `LLM_FAKE=1 EMBEDDINGS_PROVIDER=hash` | UI and plumbing only: the agent answers with a canned placeholder, so the demo acts do not work |
 
-OpenRouter-only role lines (the simulator's fallback is Groq-only, so all five are needed; the optional `turn` role falls back to a local heuristic when unavailable):
-
-```
-LLM_ROLE_REALTIME=openrouter:openai/gpt-oss-120b
-LLM_ROLE_ANALYSIS=openrouter:openai/gpt-oss-120b
-LLM_ROLE_DRAFTING=openrouter:openai/gpt-oss-120b
-LLM_ROLE_SIMULATOR=openrouter:openai/gpt-oss-20b
-LLM_ROLE_JUDGE=openrouter:openai/gpt-oss-120b
-```
-
-OpenAI role lines (use these when Groq is rate-limited, so each turn goes straight to OpenAI; confirm the model IDs in the OpenAI console):
-
-```
-LLM_ROLE_REALTIME=openai:gpt-4.1-mini
-LLM_ROLE_ANALYSIS=openai:gpt-4.1-mini
-LLM_ROLE_DRAFTING=openai:gpt-4.1-mini
-LLM_ROLE_JUDGE=openai:gpt-4.1-mini
-LLM_ROLE_SIMULATOR=openai:gpt-4.1-mini
-LLM_ROLE_TURN=openai:gpt-4.1-mini
-```
-
-The seeded Northgate agents run on the cascade pipeline and need `DEEPGRAM_API_KEY` for voice plus an LLM key. An agent switched to the realtime pipeline in its Voice tab needs only `OPENAI_API_KEY` for voice and no Deepgram key; try it from the Test call page first. Answering a real phone call locally (Twilio number, tunnel, `PUBLIC_BASE_URL`) or simulating one with no Twilio account is in [/build/runbook-phone.md](/build/runbook-phone.md); for a demo, `python scripts/phone_demo.py` does all of it from values in `.env` ([/build/phone-demo.md](/build/phone-demo.md)).
+The seeded Northgate agents run on the cascade pipeline and need `DEEPGRAM_API_KEY` for voice plus `OPENAI_API_KEY`. An agent switched to the realtime pipeline in its Voice tab needs only `OPENAI_API_KEY` for voice and no Deepgram key; try it from the Test call page first. Answering a real phone call locally (Twilio number, tunnel, `PUBLIC_BASE_URL`) or simulating one with no Twilio account is in [/build/runbook-phone.md](/build/runbook-phone.md); for a demo, `python scripts/phone_demo.py` does all of it from values in `.env` ([/build/phone-demo.md](/build/phone-demo.md)).
 
 **Email, SMS and message calls** ([/architecture/contact-tools.md](/architecture/contact-tools.md)). With no settings every agent's messages go to the **outbox**: shown on the call detail, never delivered. To deliver for real:
 
@@ -75,7 +53,7 @@ The seeded Northgate agents run on the cascade pipeline and need `DEEPGRAM_API_K
 * The seeded members' contacts are fictional; set `CONTACT_REDIRECT_EMAIL` and `CONTACT_REDIRECT_PHONE` to your own inbox and verified phone so every real message lands there.
 * `/healthz` shows `messaging` with the provider of each channel; restart the API after changing `.env`.
 
-Duplicate keys in `.env` are a trap: when a variable appears twice the later line wins, so a stale or truncated second `GROQ_API_KEY=` silently replaces a good first one (Groq then answers 401 `invalid_api_key`).
+Duplicate keys in `.env` are a trap: when a variable appears twice the later line wins, so a stale or truncated second `OPENAI_API_KEY=` silently replaces a good first one (OpenAI then answers 401 `invalid_api_key`).
 
 Without `DEEPGRAM_API_KEY` the Talk tab refuses the voice socket (close code 4500) and shows a toast; the API stays healthy. The refused voice call row stays `active` in the Calls list. Add the key later with no other change.
 
@@ -103,5 +81,5 @@ cd apps/web && npm run build
 * **Voice closes with 4500** — `DEEPGRAM_API_KEY` missing; use Type mode.
 * **Talk connects and drops at once, the call has no events** — the voice pipeline could not load. On Windows with Application Control the API log shows `DLL load failed while importing sentencex: An Application Control policy has blocked this file`. Ask IT to allow `apps/api/.venv`, or run the stack in Docker: `python scripts/docker_stack.py start`, then open `http://localhost:8080` ([/build/docker-stack.md](/build/docker-stack.md)). Stop `dev.py` first: both use `apps/api/data/voiceai.db`.
 * **Dental tools return `connection_error`** — the dental demo mock is not running. `dev.py` and `docker_stack.py` start it on 8766 unless `--no-mock`; a `[dev]` warning says when the port is held by something else.
-* **Groq 429** (`tokens per minute (TPM): Limit 8000`) — the free-tier cap is per model and one tool-calling turn can exceed it, and packets and analysis share the quota. Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` (the fallback then answers), move the background roles to `groq:openai/gpt-oss-20b`, switch the roles to OpenAI (lines above), or enable Groq billing.
+* **OpenAI 429 `insufficient_quota`** — the account has no credit or hit its rate limit. Add credit in the OpenAI console, or set `OPENROUTER_API_KEY` (the fallback then answers).
 * **First knowledge search slow** — fastembed downloads its model once (~70 MB).

@@ -20,7 +20,7 @@ def test_hooks_and_env_are_configured_without_clobbering(tmp_path):
     mod = _load()
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     (tmp_path / "apps" / "api").mkdir(parents=True)
-    (tmp_path / "apps" / "api" / ".env.example").write_text("GROQ_API_KEY=\n")
+    (tmp_path / "apps" / "api" / ".env.example").write_text("OPENAI_API_KEY=\n")
 
     assert mod.configure_hooks(tmp_path) is True
     hooks = subprocess.run(["git", "config", "core.hooksPath"], cwd=tmp_path, capture_output=True, text=True).stdout.strip()
@@ -28,10 +28,10 @@ def test_hooks_and_env_are_configured_without_clobbering(tmp_path):
 
     assert mod.ensure_env(tmp_path) == "created"
     env = tmp_path / "apps" / "api" / ".env"
-    assert env.read_text() == "GROQ_API_KEY=\n"
-    env.write_text("GROQ_API_KEY=secret\n")  # a developer's real keys must survive a re-run
+    assert env.read_text() == "OPENAI_API_KEY=\n"
+    env.write_text("OPENAI_API_KEY=secret\n")  # a developer's real keys must survive a re-run
     assert mod.ensure_env(tmp_path) == "exists"
-    assert env.read_text() == "GROQ_API_KEY=secret\n"
+    assert env.read_text() == "OPENAI_API_KEY=secret\n"
 
 
 def test_hooks_skipped_outside_git(tmp_path):
@@ -45,7 +45,7 @@ def test_a_fresh_env_gets_a_tenant_secrets_key(tmp_path):
 
     mod = _load()
     (tmp_path / "apps" / "api").mkdir(parents=True)
-    (tmp_path / "apps" / "api" / ".env.example").write_text("GROQ_API_KEY=\nTENANT_SECRETS_KEY=        # comment\n")
+    (tmp_path / "apps" / "api" / ".env.example").write_text("OPENAI_API_KEY=\nTENANT_SECRETS_KEY=        # comment\n")
     assert mod.has_secrets_key(tmp_path) is False
     assert mod.ensure_env(tmp_path) == "created"
     line = next(l for l in (tmp_path / "apps" / "api" / ".env").read_text().splitlines() if l.startswith("TENANT_SECRETS_KEY="))
@@ -57,7 +57,7 @@ def test_a_fresh_env_gets_a_public_api_secret(tmp_path):
     """Covers: SDD-10"""
     mod = _load()
     (tmp_path / "apps" / "api").mkdir(parents=True)
-    (tmp_path / "apps" / "api" / ".env.example").write_text("GROQ_API_KEY=\nPUBLIC_API_SECRET=          # comment\n")
+    (tmp_path / "apps" / "api" / ".env.example").write_text("OPENAI_API_KEY=\nPUBLIC_API_SECRET=          # comment\n")
     assert mod.ensure_env(tmp_path) == "created"
     env = tmp_path / "apps" / "api" / ".env"
     line = next(l for l in env.read_text().splitlines() if l.startswith("PUBLIC_API_SECRET="))

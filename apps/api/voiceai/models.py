@@ -601,6 +601,7 @@ class Conversation(Base):
     current_call_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     transfer_count: Mapped[int] = mapped_column(Integer, default=0)
     clarifications: Mapped[int] = mapped_column(Integer, default=0)
+    routing_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)  # playground override of the front desk's mode (RTE-22)
     routing: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)

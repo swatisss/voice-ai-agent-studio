@@ -367,7 +367,7 @@ def test_router_role_only(tmp_path):
     from voiceai.llm.gateway import Gateway
 
     g = Gateway()
-    assert g.role_model("router") and g.roles["router"]["fallback"][-1].startswith("openai:")
+    assert g.role_model("router") and g.role_model("router").startswith("openai:") and g.roles["router"]["fallback"] == ["openrouter:openai/gpt-oss-120b"]
     cfg = yaml.safe_load(open(get_settings().models_config, encoding="utf-8"))
     assert "decision" not in cfg and not hasattr(g, "decision")
 
@@ -476,3 +476,35 @@ async def test_time_budget_bounds_and_health(client, monkeypatch, database):
         h = (await client.get("/healthz")).json()
         assert h["router"]["decision_model"]["timeouts_ms"] == {"voice": used, "text": 1500}
     get_settings.cache_clear()
+
+
+async def test_playground_routing_mode_overrides_the_front_desk(client, indexed, model, monkeypatch):
+    """Covers: RTE-22"""
+    claims, care = indexed["claims"]["agent_id"], indexed["care"]["agent_id"]
+    monkeypatch.setattr(catalog, "stage_a", clear_win(claims, care))
+
+    async def routed(**extra):  # noqa: ANN003, ANN202
+        r = await client.post("/api/conversations", headers=H, json={"channel": "text", "scope": "member", **extra})
+        assert r.status_code == 201, r.text
+        cid = r.json()["conversation_id"]
+        await client.post(f"/api/conversations/{cid}/messages", headers=H, json={"text": CLAIM})
+        view = (await client.get(f"/api/conversations/{cid}", headers=H)).json()
+        return view, view["routing"][0]
+
+    model.answer = {"choice": care, "confidence": 0.9, "x_jev_confidence": 0.9, "probabilities": {care: 0.9}}
+    view, rec = await routed(routing_mode="decision_model")  # front desk on embedding, the conversation asks for the model
+    assert view["routing_mode"] == "decision_model" and rec["mode"] == "decision_model" and rec["method"] == "decision" and len(model.requests) == 1
+
+    await _front_desk(routing_mode="decision_model")  # front desk on the model, the conversation asks for the embedding
+    before = len(model.requests)
+    view, rec = await routed(routing_mode="embedding")
+    assert rec["mode"] == "embedding" and rec["method"] == "embedding" and len(model.requests) == before
+
+    view, rec = await routed()  # no override: the front desk's setting applies
+    assert view["routing_mode"] is None and rec["mode"] == "decision_model" and len(model.requests) == before + 1
+
+    bad = await client.post("/api/conversations", headers=H, json={"channel": "text", "scope": "member", "routing_mode": "llm"})
+    assert bad.status_code == 422 and bad.json()["error"] == "invalid_routing_mode"
+    from voiceai.conversations import CreateBody
+
+    assert "routing_mode" not in CreateBody.model_fields  # the public API has no such field

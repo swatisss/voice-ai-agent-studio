@@ -48,7 +48,7 @@ Wire format and control messages: [/api/voice-protocol.md](/api/voice-protocol.m
 
 # Latency
 
-* Target p50 < 1.2 s from end of caller speech to first agent audio on Groq.
+* Target p50 < 1.2 s from end of caller speech to first agent audio on the primary model.
 * `assistant` events store `latency_ms` = time from turn dispatch to first text chunk.
 * Filler line before tool rounds is on by default for voice (`policy.voice_filler`).
 

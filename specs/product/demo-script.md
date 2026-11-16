@@ -109,5 +109,5 @@ On any voice call open **Live controls**: switch the persona from Eva to Hannah 
 # Fallbacks
 
 * Audio fails → use the **Type** tab for every act (identical behaviour).
-* LLM provider slow → switch the agent's realtime model in the builder (Groq, OpenRouter or OpenAI).
+* LLM provider slow → switch the agent's realtime model in the builder (OpenAI or OpenRouter).
 * Eval takes too long → it streams progress; talk through the per-case results as they arrive.

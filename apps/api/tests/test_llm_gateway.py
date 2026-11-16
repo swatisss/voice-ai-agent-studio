@@ -24,14 +24,14 @@ async def test_fallback_on_retryable(real_mode, monkeypatch):
 
     async def stream_one(self, role, ref, messages, tools):  # noqa: ANN001, ANN202
         tried.append(ref)
-        if ref.startswith("groq:"):
+        if ref.startswith("openai:"):
             raise gw._Retryable("503 service unavailable")
         yield {"type": "text", "text": "hi"}
         yield {"type": "done", "result": gw.ChatResult(text="hi", model_ref=ref)}
 
     monkeypatch.setattr(gw.Gateway, "_stream_one", stream_one)
     events = [e async for e in real_mode.stream_chat("realtime", [{"role": "user", "content": "x"}])]
-    assert tried == ["groq:openai/gpt-oss-120b", "openrouter:openai/gpt-oss-120b"]
+    assert tried == ["openai:gpt-4.1-mini", "openrouter:openai/gpt-oss-120b"]
     assert events[-1]["result"].model_ref == "openrouter:openai/gpt-oss-120b"
 
 
@@ -50,7 +50,7 @@ async def test_no_fallback_on_validation_error(real_mode, monkeypatch):
     monkeypatch.setattr(gw.Gateway, "_stream_one", stream_one)
     with pytest.raises(Boom):
         _ = [e async for e in real_mode.stream_chat("realtime", [{"role": "user", "content": "x"}])]
-    assert tried == ["groq:openai/gpt-oss-120b"]
+    assert tried == ["openai:gpt-4.1-mini"]
 
 
 def test_agent_override_is_first_ref(real_mode):
@@ -85,13 +85,13 @@ async def test_json_retry_once(real_mode, monkeypatch):
 
 def test_usage_cost(real_mode):
     """Covers: LG-05"""
-    assert real_mode.usage_cost("groq:openai/gpt-oss-120b", gw.Usage(1_000_000, 1_000_000)) == pytest.approx(0.75)
+    assert real_mode.usage_cost("openrouter:openai/gpt-oss-120b", gw.Usage(1_000_000, 1_000_000)) == pytest.approx(0.75)
 
 
 def test_role_env_override(monkeypatch):
     """Covers: LG-06"""
-    monkeypatch.setenv("LLM_ROLE_JUDGE", "groq:openai/gpt-oss-20b")
-    assert gw.Gateway().role_model("judge") == "groq:openai/gpt-oss-20b"
+    monkeypatch.setenv("LLM_ROLE_JUDGE", "openrouter:openai/gpt-oss-20b")
+    assert gw.Gateway().role_model("judge") == "openrouter:openai/gpt-oss-20b"
 
 
 def test_role_override_from_dotenv_settings(monkeypatch):
@@ -101,12 +101,12 @@ def test_role_override_from_dotenv_settings(monkeypatch):
     monkeypatch.delenv("LLM_ROLE_JUDGE", raising=False)
     monkeypatch.setattr(gw, "get_settings", lambda: Settings(llm_role_judge="openrouter:openai/gpt-oss-20b"))
     assert gw.Gateway().role_model("judge") == "openrouter:openai/gpt-oss-20b"
-    monkeypatch.setenv("LLM_ROLE_JUDGE", "groq:openai/gpt-oss-120b")  # the environment variable wins
-    assert gw.Gateway().role_model("judge") == "groq:openai/gpt-oss-120b"
+    monkeypatch.setenv("LLM_ROLE_JUDGE", "openrouter:openai/gpt-oss-120b")  # the environment variable wins
+    assert gw.Gateway().role_model("judge") == "openrouter:openai/gpt-oss-120b"
 
 
 # ---------------------------------------------------------------- OpenAI provider (CP-0008)
-ROLE_REFS = ("realtime", "analysis", "drafting", "simulator", "judge", "turn")
+ROLE_REFS = ("realtime", "analysis", "drafting", "simulator", "judge", "turn", "router")
 STREAM_ROLES = ("realtime", "simulator", "turn")
 JSON_ROLES = ("analysis", "drafting", "judge")
 
@@ -116,10 +116,10 @@ def _settings(**keys: str) -> Settings:
 
 
 class FakeOpenAI:
-    """Stands in for openai.AsyncOpenAI: records requests, can answer 429 for Groq, never touches the network."""
+    """Stands in for openai.AsyncOpenAI: records requests, can answer 429 for OpenAI, never touches the network."""
 
     created: list = []
-    groq_limited = False
+    openai_limited = False
 
     def __init__(self, *, base_url: str, api_key: str, default_headers=None, max_retries: int = 0) -> None:  # noqa: ANN001
         self.base_url, self.api_key, self.requests = base_url, api_key, []
@@ -128,7 +128,7 @@ class FakeOpenAI:
 
     async def create(self, **kwargs):  # noqa: ANN003, ANN201
         self.requests.append(kwargs)
-        if FakeOpenAI.groq_limited and "groq" in self.base_url:
+        if FakeOpenAI.openai_limited and "api.openai.com" in self.base_url:
             request = httpx.Request("POST", self.base_url)
             raise openai.RateLimitError("429 tokens per minute", response=httpx.Response(429, request=request), body=None)
         if kwargs.get("stream"):
@@ -155,7 +155,7 @@ class _Stream:
 
 @pytest.fixture
 def fake_openai(monkeypatch):  # noqa: ANN001, ANN201
-    FakeOpenAI.created, FakeOpenAI.groq_limited = [], False
+    FakeOpenAI.created, FakeOpenAI.openai_limited = [], False
     monkeypatch.setattr(gw.openai, "AsyncOpenAI", FakeOpenAI)
     monkeypatch.setattr(gw, "fake_active", lambda: False)
     for role in ROLE_REFS:
@@ -171,11 +171,11 @@ def _gateway(monkeypatch, **keys: str) -> gw.Gateway:  # noqa: ANN001
 async def test_openai_key_from_dotenv_settings_and_healthz(client, monkeypatch, fake_openai):
     """Covers: LG-08"""
     g = _gateway(monkeypatch, openai_api_key="sk-from-dotenv")
-    assert g.provider_configured("openai") and not g.provider_configured("groq")
+    assert g.provider_configured("openai") and not g.provider_configured("openrouter")
     c = g._client("openai")
     assert c.api_key == "sk-from-dotenv" and c.base_url == "https://api.openai.com/v1"
     monkeypatch.setattr(gw, "_gateway", g)
-    assert (await client.get("/healthz")).json()["providers"] == {"groq": False, "openrouter": False, "openai": True, "deepgram": False, "twilio": False}
+    assert (await client.get("/healthz")).json()["providers"] == {"openrouter": False, "openai": True, "deepgram": False, "twilio": False}
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-from-environment")  # the environment variable wins over the .env line
     assert _gateway(monkeypatch, openai_api_key="sk-from-dotenv")._client("openai").api_key == "sk-from-environment"
@@ -208,8 +208,8 @@ async def test_openai_role_request_shape_and_cost(monkeypatch, fake_openai):
 
 async def test_every_role_falls_back_to_openai(monkeypatch, fake_openai):
     """Covers: LG-10"""
-    g = _gateway(monkeypatch, openai_api_key="sk-test")  # no Groq or OpenRouter key, no LLM_ROLE_* line
-    assert all(g.refs_for(role)[-1].startswith("openai:") for role in ROLE_REFS)
+    g = _gateway(monkeypatch, openai_api_key="sk-test")  # no OpenRouter key, no LLM_ROLE_* line
+    assert all(g.refs_for(role)[0].startswith("openai:") and g.refs_for(role)[1:] and all(r.startswith("openrouter:") for r in g.refs_for(role)[1:]) for role in ROLE_REFS)
     messages = [{"role": "user", "content": "x"}]
     for role in STREAM_ROLES:
         events = [e async for e in g.stream_chat(role, messages)]
@@ -217,16 +217,31 @@ async def test_every_role_falls_back_to_openai(monkeypatch, fake_openai):
     for role in JSON_ROLES:
         out, _ = await g.complete_json(role, messages, Out)
         assert out.value == 1
-    assert {c.base_url for c in fake_openai.created} == {"https://api.openai.com/v1"}  # Groq and OpenRouter were skipped, not called
+    assert {c.base_url for c in fake_openai.created} == {"https://api.openai.com/v1"}  # OpenRouter was skipped, not called
 
 
-async def test_groq_429_is_served_by_openai(monkeypatch, fake_openai):
+async def test_openai_429_is_served_by_openrouter(monkeypatch, fake_openai):
     """Covers: LG-10"""
-    fake_openai.groq_limited = True
-    g = _gateway(monkeypatch, groq_api_key="gsk-test", openai_api_key="sk-test")  # no OpenRouter key
+    fake_openai.openai_limited = True
+    g = _gateway(monkeypatch, openai_api_key="sk-test", openrouter_api_key="or-test")
     events = [e async for e in g.stream_chat("realtime", [{"role": "user", "content": "x"}])]
-    assert events[-1]["result"].model_ref == "openai:gpt-4.1-mini"
-    assert [c.base_url for c in fake_openai.created] == ["https://api.groq.com/openai/v1", "https://api.openai.com/v1"]
+    assert events[-1]["result"].model_ref == "openrouter:openai/gpt-oss-120b"
+    assert [c.base_url for c in fake_openai.created] == ["https://api.openai.com/v1", "https://openrouter.ai/api/v1"]
+
+
+async def test_no_groq_anywhere(client, monkeypatch, fake_openai):
+    """Covers: LG-15"""
+    g = _gateway(monkeypatch, openai_api_key="sk-test")
+    assert "groq" not in g.providers and not any(r.startswith("groq:") for r in g.models)
+    for role in ROLE_REFS:
+        refs = g.refs_for(role)
+        assert refs[0].startswith("openai:") and refs[1:] and all(r.startswith("openrouter:") for r in refs[1:]), role
+    assert not hasattr(Settings(_env_file=None), "groq_api_key")
+    monkeypatch.setattr(gw, "_gateway", g)
+    assert "groq" not in (await client.get("/healthz")).json()["providers"]
+    with pytest.raises(gw._Retryable, match="unknown provider groq"):  # a leftover groq: ref is an unknown provider
+        g._client("groq")
+    assert not any(r.startswith("groq:") for r in g.selectable())
 
 
 async def test_openai_models_are_priced_and_selectable(client, monkeypatch, fake_openai):

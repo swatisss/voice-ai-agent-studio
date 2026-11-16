@@ -149,7 +149,7 @@ async def view(s: AsyncSession, conv: Conversation, include_transcript: bool = F
     current = next((c for c in calls if c.id == conv.current_call_id), None)
     out = {
         "id": conv.id, "status": conv.status, "channel": conv.channel, "transport": conv.transport, "source": conv.source,
-        "scope": conv.scope, "external_id": conv.external_id, "metadata": conv.metadata_ or {},
+        "scope": conv.scope, "routing_mode": conv.routing_mode, "external_id": conv.external_id, "metadata": conv.metadata_ or {},
         "started_at": conv.started_at.isoformat(), "ended_at": conv.ended_at.isoformat() if conv.ended_at else None,
         "outcome": conv.outcome, "end_reason": conv.end_reason,
         "agent": {"id": current.agent_id, "name": names.get(current.agent_id)} if current else None,
@@ -217,7 +217,8 @@ async def start_segment(s: AsyncSession, conv: Conversation, agent_id: str, rout
 
 
 async def create(s: AsyncSession, tenant_id: str, body: CreateBody, *, source: str, scope: str, app: Any,
-                 api_key_id: str | None = None, max_concurrent_voice: int | None = None, base_url: str | None = None) -> dict[str, Any]:
+                 api_key_id: str | None = None, max_concurrent_voice: int | None = None, base_url: str | None = None,
+                 routing_mode: str | None = None) -> dict[str, Any]:
     """Create a conversation and its first segment; text answers at once, voice returns `connect` (PUB-05, PUB-07)."""
     if body.channel == "text" and (body.transport or body.audio_format):
         raise ApiError(422, "validation_error", "transport and audio_format apply to voice conversations only")
@@ -253,7 +254,7 @@ async def create(s: AsyncSession, tenant_id: str, body: CreateBody, *, source: s
 
     settings: dict[str, Any] = {"audio_format": body.audio_format or "mulaw_8k"} if transport == "media-stream" else {}
     conv = Conversation(tenant_id=tenant_id, source=source, api_key_id=api_key_id, channel=body.channel, transport=transport,
-                        scope=scope, external_id=body.external_id, metadata_=body.metadata or {}, settings=settings)
+                        scope=scope, external_id=body.external_id, metadata_=body.metadata or {}, settings=settings, routing_mode=routing_mode)
     s.add(conv)
     await s.flush()
     call: Call | None = None
@@ -353,12 +354,12 @@ async def front_desk_turn(conv_id: str, tenant_id: str, text: str, app: Any) -> 
     async with sessionmaker()() as s:
         conv = await get(s, tenant_id, conv_id)
         earlier = [e["text"] for e in (conv.settings or {}).get("front_desk_events", []) if e["kind"] == "user"]
-        clarified, scope, channel = conv.clarifications, conv.scope, conv.channel
+        clarified, scope, channel, mode = conv.clarifications, conv.scope, conv.channel, conv.routing_mode
         asked = [r for r in (conv.routing or []) if r.get("method") == "clarify"]
     request = " ".join([*earlier, text]) if clarified else text
     leader = ((asked[-1].get("candidates") or [{}])[0].get("agent_id")) if clarified and asked else None
     record = await supervisor.route(tenant_id, scope, request, channel=channel, clarifications_used=clarified,
-                                    prior_leader=leader, answer=text if clarified else None)
+                                    prior_leader=leader, answer=text if clarified else None, mode=mode)
     topic = f"conversation:{conv_id}"
     async with sessionmaker()() as s:
         conv = await get(s, tenant_id, conv_id)
@@ -596,13 +597,13 @@ async def transfer(old: Any, requested: dict[str, Any], *, extra_text: str | Non
             return {"kind": "escalate", "detail": "The conversation is gone"}
         if conv.transfer_count >= MAX_TRANSFERS:  # XFR-04
             return {"kind": "escalate", "detail": f"The conversation reached {MAX_TRANSFERS} transfers"}
-        scope, channel, clarifications = conv.scope, conv.channel, conv.clarifications
+        scope, channel, clarifications, mode = conv.scope, conv.channel, conv.clarifications, conv.routing_mode
     callers = [m["content"] for m in old.history if m.get("role") == "user" and isinstance(m.get("content"), str)]
     last = extra_text or (callers[-1] if callers else "")
     request = " ".join([*callers[-2:], *([extra_text] if extra_text else [])])
     record = await supervisor.route(tenant_id, scope, request or (requested.get("reason") or ""), channel=channel, trigger="transfer",
                                     exclude={old.agent_id}, reason=requested.get("reason"),
-                                    clarifications_used=clarifications if allow_clarify else 99, allow_clarify=allow_clarify)
+                                    clarifications_used=clarifications if allow_clarify else 99, allow_clarify=allow_clarify, mode=mode)
     topic = f"conversation:{old.conversation_id}"
     async with sessionmaker()() as s:
         conv = await s.get(Conversation, old.conversation_id)

@@ -155,3 +155,7 @@ UI-74
 # microphone; not yet checked by hand. What feeds it is tested: VO-09 (cascade interims, throttle, clear, topics) and RV-17
 # (realtime deltas and speech start). Approval and a hand check on a voice call requested from the owner.
 UI-75
+
+# CP-0044 Routing switch on Test call Full flow: there are no browser tests; type check passes, not yet clicked through. The API
+# behind it is covered by RTE-22 (tests/test_supervisor_routing.py). Approval and a browser check requested from the owner.
+UI-76

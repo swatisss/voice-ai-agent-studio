@@ -27,7 +27,7 @@ def main() -> None:
         "EMBEDDINGS_PROVIDER": "fastembed",  # the local embedding model (CPU, no API): retrieval as in a real run
         "KNOWLEDGE_ALLOW_PRIVATE_URLS": "1",  # the demo website runs on 127.0.0.1
         # no keys at all: even a code path that skipped the fake could not reach a paid model
-        "GROQ_API_KEY": "", "OPENROUTER_API_KEY": "", "OPENAI_API_KEY": "", "DEEPGRAM_API_KEY": "",
+        "OPENROUTER_API_KEY": "", "OPENAI_API_KEY": "", "DEEPGRAM_API_KEY": "",
         "DECISION_MODEL_URL": "", "DECISION_MODEL_API_KEY": "", "TWILIO_ACCOUNT_SID": "", "TWILIO_AUTH_TOKEN": "",
         "SIMLI_API_KEY": "", "LIVEKIT_API_KEY": "", "LIVEKIT_API_SECRET": "",
         # Studio sign-in on, with throwaway passwords the runner knows (scripts/demo_walkthrough.py)

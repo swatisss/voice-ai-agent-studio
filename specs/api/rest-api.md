@@ -129,7 +129,7 @@ The playground's full-flow mode and the Studio's views of conversations. Same be
 
 | Method | Path | Body → Result |
 |---|---|---|
-| POST | `/api/conversations` | `{scope: "member"\|"staff", channel, message?, agent_id?, transport?, caller?, context?}` → as the public create; voice returns `connect` for `/v1/voice/{id}` |
+| POST | `/api/conversations` | `{scope: "member"\|"staff", channel, message?, agent_id?, transport?, caller?, context?, routing_mode?}` → as the public create; `routing_mode` (`embedding`\|`decision_model`) overrides the front desk's mode for this conversation only (RTE-22; 422 `invalid_routing_mode` otherwise); voice returns `connect` for `/v1/voice/{id}` |
 | POST | `/api/conversations/{id}/messages` | `{text}` → turn result (JSON or SSE) |
 | POST | `/api/conversations/{id}/end` | → `{status, outcome}` |
 | GET | `/api/conversations` | query `source?`, `status?` → `{items: [conversation summary]}`, newest first, at most 200 |

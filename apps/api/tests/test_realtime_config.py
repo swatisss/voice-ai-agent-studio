@@ -49,7 +49,7 @@ async def test_transfer_voice_and_speech_model_validation(client, seeded):
     agent = seeded["claims"]["agent_id"]
     cfg = await _draft(client, agent)
     for bad in ({"telephony": {"transfer_to": "0123"}}, {"voice": {**cfg["voice"], "realtime": {"voice": "not-a-voice"}}},
-                {"models": {**cfg["models"], "speech": "groq:openai/gpt-oss-120b"}}):
+                {"models": {**cfg["models"], "speech": "openrouter:openai/gpt-oss-120b"}}):
         assert (await _save(client, agent, {**cfg, **bad})).status_code == 422, bad
     for good in ("+15557654321", "sip:claims@example.com"):
         assert (await _save(client, agent, {**cfg, "telephony": {"transfer_to": good}})).status_code == 200

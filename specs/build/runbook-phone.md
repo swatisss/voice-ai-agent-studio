@@ -11,7 +11,7 @@ Spec: [/architecture/telephony.md](/architecture/telephony.md), [/architecture/r
 
 # One command (recommended for demos)
 
-Put these in `apps/api/.env` once: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` (your Twilio number in international format, e.g. `+44…`), `DEEPGRAM_API_KEY` and an LLM key (`GROQ_API_KEY` or `OPENAI_API_KEY`), and optionally `DEMO_TRANSFER_TO` (a phone to hand the call to). Install `ngrok` (and run `ngrok config add-authtoken …` once) or `cloudflared`. Then:
+Put these in `apps/api/.env` once: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` (your Twilio number in international format, e.g. `+44…`), `DEEPGRAM_API_KEY` and `OPENAI_API_KEY`, and optionally `DEMO_TRANSFER_TO` (a phone to hand the call to). Install `ngrok` (and run `ngrok config add-authtoken …` once) or `cloudflared`. Then:
 
 ```bash
 python scripts/phone_demo.py
@@ -37,7 +37,7 @@ You need: a Twilio account (a trial is enough), one Twilio phone number with voi
    TWILIO_ACCOUNT_SID=AC...
    TWILIO_AUTH_TOKEN=...
    DEEPGRAM_API_KEY=...       # cascade agents (the seeded ones), plus an LLM key
-   GROQ_API_KEY=...           # or OPENAI_API_KEY; OPENAI_API_KEY alone is enough for a realtime agent
+   OPENAI_API_KEY=...         # the agent's language model; also enough for a realtime agent
    ```
 3. **Tunnel.** Start the API (`cd apps/api && uv run voiceai serve`, or `python scripts/dev.py`), then in another terminal:
    ```bash

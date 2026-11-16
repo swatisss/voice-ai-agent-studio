@@ -1,5 +1,7 @@
 # Change proposals
 
+* [CP-0044 Routing mode switch in the playground](cp-0044-routing-mode-switch.md) - Full flow gets an Embedding | Decision model switch that overrides the front desk's routing mode for one conversation
+* [CP-0043 Remove Groq as an LLM provider](cp-0043-remove-groq.md) - OpenAI becomes the primary of every chat role with an optional OpenRouter fallback; Groq's key, models, health dot and docs go
 * [CP-0041 Human-like routed conversations](cp-0041-human-like-routed-conversations.md) - A clarified call goes to the agent that led, the caller's request is handed over and survives verification, the filler only fills a wait, the caller sees their words while speaking, and Eva (warm, upbeat) replaces Olivia at the front desk
 * [CP-0040 Contact tools - email, SMS and message calls](cp-0040-contact-tools.md) - Every agent can send the caller details by email (Brevo), SMS or an automated message call (Twilio), to the registered contact or a confirmed address; outbox by default, never from simulations
 * [CP-0039 Northgate Health](cp-0039-northgate-health.md) - Replaces the Evergreen demo and the SafeTrip kit with a fictional UK insurer: a front desk and three agents (Customer Care, Health Cover Sales, Claims & Pre-authorisation) plus the dental kit

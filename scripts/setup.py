@@ -87,7 +87,7 @@ def main() -> int:
 
     print("2. Environment file")
     state = ensure_env()
-    print({"created": "  created apps/api/.env - add GROQ_API_KEY and DEEPGRAM_API_KEY",
+    print({"created": "  created apps/api/.env - add OPENAI_API_KEY and DEEPGRAM_API_KEY",
            "exists": "  apps/api/.env already exists (left untouched)",
            "missing-example": "  ! apps/api/.env.example not found"}[state])
     if state == "exists" and not has_secrets_key():

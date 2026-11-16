@@ -1,4 +1,4 @@
-// Spec: /ui/test-call.md (Full flow), /architecture/supervisor-routing.md (Playground, Routing record), /architecture/agent-transfer.md
+// Spec: /ui/test-call.md (Full flow, Routing switch UI-76), /architecture/supervisor-routing.md (Playground, Routing record), /architecture/agent-transfer.md
 "use client";
 
 import { Mic, PhoneOff, Send } from "lucide-react";
@@ -23,6 +23,7 @@ type View = {
   transcript: Line[]; escalation: { id: string; status: string } | null;
 };
 
+type RoutingMode = "embedding" | "decision_model";
 const ROUTING_MODE: Record<string, string> = { embedding: "Embedding", decision_model: "Decision model" };
 const FALLBACK: Record<string, string> = {
   not_configured: "not configured", phi_mode: "blocked by PHI mode", timeout: "timed out", invalid_answer: "gave an invalid answer", unsure: "was unsure",
@@ -77,6 +78,9 @@ export function FullFlow({ tenant, technical }: { tenant: string; technical: boo
   const toast = useToast();
   const { data: agents } = useApi<{ items: { id: string; name: string; mode: string; published_version: unknown }[] }>("/api/agents", [tenant]);
   const { data: useCases } = useApi<{ items: any[] }>("/api/use-cases", [tenant]);
+  const { data: frontDesk } = useApi<{ routing_mode: RoutingMode }>("/api/tenant-settings/front-desk", [tenant]);
+  const { data: health } = useApi<{ router?: { decision_model: { configured: boolean; blocked: boolean } } }>("/healthz", [tenant]);
+  const [routingMode, setRoutingMode] = useState<RoutingMode | null>(null);  // null = the front desk's setting (UI-76)
   const [scope, setScope] = useState<"member" | "staff">("member");
   const [mode, setMode] = useState<Mode>("type");
   const [callFrom, setCallFrom] = useState("none");
@@ -90,6 +94,10 @@ export function FullFlow({ tenant, technical }: { tenant: string; technical: boo
   const [speaking, setSpeaking] = useState(false);
   const voice = useRef<VoiceClient | null>(null);
   const names = Object.fromEntries((agents?.items ?? []).map((a) => [a.id, a.name]));
+  const defaultMode: RoutingMode = frontDesk?.routing_mode ?? "embedding";
+  const chosenMode: RoutingMode = routingMode ?? defaultMode;
+  const dm = health?.router?.decision_model;
+  const dmNote = !dm ? null : dm.blocked ? "Blocked by PHI mode" : !dm.configured ? "Not configured on this server" : null;
   const audienceAgents = (agents?.items ?? []).filter((a) => a.published_version && a.mode === (scope === "member" ? "inbound" : "internal"));
   const ucs = (useCases?.items ?? []).filter((u) => audienceAgents.some((a) => a.id === u.agent_id));
 
@@ -125,7 +133,7 @@ export function FullFlow({ tenant, technical }: { tenant: string; technical: boo
     setStatus("connecting");
     const number = scope === "member" ? CALL_FROM.find((o) => o.id === callFrom)?.number : undefined;
     try {
-      const r = await api("/api/conversations", { method: "POST", json: { channel: mode === "talk" ? "voice" : "text", scope, caller: number ? { number } : undefined } });
+      const r = await api("/api/conversations", { method: "POST", json: { channel: mode === "talk" ? "voice" : "text", scope, routing_mode: chosenMode, caller: number ? { number } : undefined } });
       setConvId(r.conversation_id);
       if (mode === "type") {
         setLines(r.messages.map((m: any) => ({ segment: null, speaker: m.speaker, text: m.text })));
@@ -185,6 +193,20 @@ export function FullFlow({ tenant, technical }: { tenant: string; technical: boo
         <Select id="audience" className="w-40" value={scope} disabled={busy} onChange={(e) => setScope(e.target.value as "member" | "staff")}>
           <option value="member">Members</option><option value="staff">Staff</option>
         </Select>
+        <span className="ml-2 text-sm text-muted" id="routing-label">Routing</span>
+        <div className="flex gap-1" role="group" aria-labelledby="routing-label">
+          {(["embedding", "decision_model"] as RoutingMode[]).map((m) => {
+            const off = m === "decision_model" && dmNote != null;
+            return (
+              <button key={m} aria-pressed={chosenMode === m} disabled={busy || off} title={off ? dmNote ?? undefined : undefined} onClick={() => setRoutingMode(m)}
+                className={cx("min-h-9 rounded-full px-4 py-1 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+                  chosenMode === m ? "bg-accent text-on-accent" : "text-muted hover:bg-accent-soft disabled:hover:bg-transparent")}>
+                {ROUTING_MODE[m]}{m === defaultMode ? " (default)" : ""}
+              </button>
+            );
+          })}
+        </div>
+        {dmNote && <span className="text-xs text-muted">Decision model: {dmNote.toLowerCase()}</span>}
       </div>
       {ucs.length > 0 && <p className="text-sm text-muted"><span className="font-medium text-fg">Handles:</span> {ucs.map((u) => u.title).join(" · ")}</p>}
       <div className="grid gap-4 lg:grid-cols-3">

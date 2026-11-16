@@ -14,10 +14,9 @@ gcloud auth login
 gcloud config set project <PROJECT_ID>
 gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
 gcloud artifacts repositories create voiceai --repository-format=docker --location=us-central1
-printf '%s' "$GROQ_API_KEY"       | gcloud secrets create GROQ_API_KEY --data-file=-
+printf '%s' "$OPENAI_API_KEY"     | gcloud secrets create OPENAI_API_KEY --data-file=-
 printf '%s' "$DEEPGRAM_API_KEY"   | gcloud secrets create DEEPGRAM_API_KEY --data-file=-
 printf '%s' "$OPENROUTER_API_KEY" | gcloud secrets create OPENROUTER_API_KEY --data-file=-   # optional
-printf '%s' "$OPENAI_API_KEY"     | gcloud secrets create OPENAI_API_KEY --data-file=-       # optional
 ```
 
 For phone calls also create `TWILIO_AUTH_TOKEN` and `TWILIO_ACCOUNT_SID` the same way (`printf '%s' "$TWILIO_AUTH_TOKEN" | gcloud secrets create TWILIO_AUTH_TOKEN --data-file=-`). `OPENROUTER_API_KEY`, `OPENAI_API_KEY` (required by realtime agents), `TWILIO_AUTH_TOKEN` and `TWILIO_ACCOUNT_SID` are optional: the deploy script attaches a secret only if it exists in Secret Manager.

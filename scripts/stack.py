@@ -6,7 +6,7 @@ apps/api/data/stack/stack.log and returns once the stack answers; `stop` ends it
 
     python scripts/stack.py start                                   # models from config/models.yaml and apps/api/.env
     python scripts/stack.py start --llm openai:gpt-4.1-mini         # every chat role on one exact model
-    python scripts/stack.py start --role realtime=groq:openai/gpt-oss-120b --role judge=openai:gpt-4.1-mini
+    python scripts/stack.py start --role realtime=openrouter:openai/gpt-oss-120b --role judge=openai:gpt-4.1-mini
     python scripts/stack.py start --decision-model https://api.typesafe.ai --decision-name jev-latest
     python scripts/stack.py start --fake                            # scripted fake LLM: no keys, no cost
     python scripts/stack.py status                                  # pid, health, the model each role uses, routing mode

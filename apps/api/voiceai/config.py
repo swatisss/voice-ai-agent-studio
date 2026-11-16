@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     jobs_enabled: bool = True
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
-    groq_api_key: str | None = None
     openrouter_api_key: str | None = None
     openai_api_key: str | None = None
     deepgram_api_key: str | None = None

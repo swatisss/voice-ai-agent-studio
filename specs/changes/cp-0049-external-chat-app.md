@@ -2,8 +2,8 @@
 type: Change Proposal
 title: CP-0049 External chat app and the human message channel
 description: A separate customer chat web app on its own port that talks to the agents only through the public API, plus the smallest platform change that lets a specialist type to the customer after an escalation.
-status: draft
-cp_state: accepted
+status: stable
+cp_state: implemented
 tags: [public-api, chat, escalation, console, channels]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

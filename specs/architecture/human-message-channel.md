@@ -2,7 +2,7 @@
 type: Component Spec
 title: Human message channel
 description: How a text conversation continues between the customer and a specialist after the AI hands off - customer lines stored for the human, specialist replies from the console, a polling endpoint for the customer's app, and resolution ending the conversation.
-status: draft
+status: stable
 tags: [architecture, escalation, public-api, chat, console]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---
@@ -31,7 +31,7 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
   "cursor": "…" }
 ```
 
-* Items are the conversation's visible lines in order across segments: caller (`user`), front desk and agent (`assistant`) and `human`; no tool calls, system events or analysis. `speaker: human` items also carry `author` (first name).
+* Items are the conversation's visible lines in order: the front desk's lines (greeting, clarifying questions; `speaker: front_desk`, or `caller` for the caller's own lines before routing), then each segment's caller, agent (`assistant`) and `human` lines; no tool calls, system events or analysis. Every item carries `id` (its own cursor, so a client drops duplicates); `speaker: human` items also carry `author` (first name).
 * `cursor` identifies the last item returned; sending it back returns only later items. No cursor returns everything. A cursor that is not valid is 422 `invalid_cursor`.
 * `escalation` is `null` before an escalation; `assignee` is the first name of the specialist once accepted, else `null`. `status` is the conversation's.
 * Authentication, tenant, scope and rate limits are the public API's ([/api/public-api.md](/api/public-api.md)); another key's conversation is 404.

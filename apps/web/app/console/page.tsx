@@ -28,6 +28,8 @@ export default function ConsolePage() {
   const [note, setNote] = useState("");
   const [noteErr, setNoteErr] = useState<string | null>(null);
   const [showTranscript, setShowTranscript] = useState(true);
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
   const [chime, setChime] = useState(true);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [, tick] = useState(0);
@@ -56,6 +58,10 @@ export default function ConsolePage() {
   }
 
   useEvents(["console"], (e) => {  // UI-12
+    if (e.type === "escalation.message") {  // UI-86: a line in the conversation panel
+      if (selected === (e.data as { escalation_id: string }).escalation_id) loadDetail(selected);
+      return;
+    }
     const esc = e.data as Escalation;
     setData((prev) => {
       const items = prev?.items ?? [];
@@ -88,6 +94,18 @@ export default function ConsolePage() {
       await loadDetail(selected!);
       reload();
     } catch (e) { toast((e as ApiError).detail, "bad"); }
+  }
+
+  async function sendReply() {  // UI-86
+    const text = reply.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      await api(`/api/escalations/${selected}/messages`, { method: "POST", json: { text } });
+      setReply("");
+      await loadDetail(selected!);
+    } catch (e) { toast((e as ApiError).detail, "bad"); }
+    setSending(false);
   }
 
   async function resolve() {
@@ -138,6 +156,26 @@ export default function ConsolePage() {
               <Card title={<button className="flex items-center gap-1" onClick={() => setShowTranscript(!showTranscript)}>{showTranscript ? <ChevronDown size={14} /> : <ChevronRight size={14} />}Transcript</button>}>
                 {showTranscript ? <Transcript events={detail.events} /> : <div className="text-sm text-muted">{detail.events.filter((x: any) => x.kind === "user").length} caller turns</div>}
               </Card>
+              {detail.human_thread && (
+                <Card title="Conversation" actions={<Badge tone={detail.conversation_status === "ended" ? "neutral" : "ok"}>{detail.conversation_status === "ended" ? "Ended" : "Live chat"}</Badge>}>
+                  <ul className="max-h-80 space-y-2 overflow-y-auto" aria-live="polite" data-testid="conversation-thread">
+                    {detail.events.filter((x: any) => ["user", "assistant", "human"].includes(x.kind) && x.text).map((x: any) => (
+                      <li key={x.seq} className={cx("flex", x.kind === "human" ? "justify-end" : "justify-start")}>
+                        <div className={cx("max-w-[80%] rounded-xl px-3 py-2 text-sm", x.kind === "human" ? "bg-accent text-white" : x.kind === "user" ? "bg-neutral-soft" : "border border-line bg-panel")}>
+                          <div className="text-[11px] opacity-70">{x.kind === "human" ? (x.data?.author ?? "You") : x.kind === "user" ? "Customer" : "Virtual assistant"}</div>
+                          {x.text}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <form className="mt-3 flex gap-2" onSubmit={(ev) => { ev.preventDefault(); sendReply(); }}>
+                    <Input className="flex-1" value={reply} maxLength={2000} onChange={(ev) => setReply(ev.target.value)} aria-label="Reply to the customer"
+                      disabled={detail.status !== "accepted" || detail.conversation_status === "ended"}
+                      placeholder={detail.status === "waiting" ? "Accept to reply" : detail.status === "accepted" && detail.conversation_status !== "ended" ? "Type a reply" : "This conversation is closed"} />
+                    <Button variant="primary" type="submit" disabled={detail.status !== "accepted" || detail.conversation_status === "ended" || !reply.trim() || sending}>Send</Button>
+                  </form>
+                </Card>
+              )}
               <Card title="Handle" actions={<Badge tone={detail.status === "resolved" ? "ok" : "warn"}>{label(detail.status)}</Badge>}>
                 {detail.status === "waiting" && <Button variant="primary" onClick={accept}>Accept</Button>}
                 {detail.status === "accepted" && (

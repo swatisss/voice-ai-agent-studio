@@ -2,7 +2,7 @@
 type: API Contract
 title: Public API (v1)
 description: The server-to-server API a tenant's backend uses to start and run conversations with its agents - API keys and scopes, conversations over text and voice, connect tokens, transports, streaming, rate limits and errors.
-status: draft
+status: stable
 tags: [api, public, security, voice]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 ---

@@ -2,7 +2,7 @@
 type: Component Spec
 title: External chat app
 description: A separate Next.js customer chat app on port 3100 whose server holds a member API key and reaches the agents only through the public API - configuration, server routes, polling, resume and failure behavior.
-status: draft
+status: stable
 tags: [architecture, chat, public-api, integration]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---
@@ -28,7 +28,7 @@ Show how an outside system uses the platform. `apps/chat/` is deliberately **not
 | Route | Does |
 |---|---|
 | `POST /api/chat` | `{message?}` → creates a text conversation (`channel: text`, `external_id: web-<random>`, `metadata: {source: "chat-app"}`); returns `{conversation_id, items, cursor, status}` with the front desk's greeting and disclosure and, when a message was sent, the AI's reply |
-| `POST /api/chat/{id}/messages` | `{text}` → sends the line; returns the new `items`, `cursor`, `status`, `escalation` |
+| `POST /api/chat/{id}/messages` | `{text, cursor?}` (text 1 to 2000 characters, else 422 `invalid_message`) → sends the line, then returns what is new since `cursor`: `items`, `cursor`, `status`, `escalation` |
 | `GET /api/chat/{id}/messages?cursor=` | proxies the platform poll; same shape |
 | `POST /api/chat/{id}/end` | ends the conversation |
 

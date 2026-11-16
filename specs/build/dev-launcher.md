@@ -2,7 +2,7 @@
 type: Tool Spec
 title: Dev launcher
 description: scripts/dev.py - starts the web frontend, the API and the dental demo mock together from one terminal with prefixed logs, pre-flight checks, readiness messages and clean shutdown.
-status: draft
+status: stable
 tags: [build, tooling, dx]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 ---

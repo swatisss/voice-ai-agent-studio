@@ -2,7 +2,7 @@
 type: UI Spec
 title: Customer chat app
 description: The look and behavior of the separate customer chat - a branded header, a standing virtual-assistant disclaimer, bubbles, typing indicator, and clear notices when a specialist is being connected and has joined.
-status: draft
+status: stable
 tags: [ui, chat, escalation]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

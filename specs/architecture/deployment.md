@@ -2,7 +2,7 @@
 type: Component Spec
 title: Deployment
 description: Local zero-infrastructure development and the GCP Cloud Run deployment topology, configuration and constraints.
-status: stable
+status: draft
 tags: [architecture, deployment, gcp]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -32,6 +32,9 @@ One container image (multi-stage `infra/Dockerfile`): stage 1 builds the web exp
 | Secrets | Secret Manager → env `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`; optional `OPENROUTER_API_KEY`, `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID`, `TENANT_SECRETS_KEY` (encrypts tenants' own OpenAI keys, [/architecture/tenant-settings.md](/architecture/tenant-settings.md)) (all attached only when the secret exists) | |
 | Env | `AUTO_SEED=1`, `JOBS_ENABLED=1`, `CORS_ORIGINS=`, and for phone calls and public-API voice `PUBLIC_BASE_URL=<service URL>` | |
 | Public API and routing | Secrets `PUBLIC_API_SECRET` (connect tokens), optional `DECISION_MODEL_API_KEY`, `WEBRTC_TURN_CREDENTIAL`; env `DECISION_MODEL_URL`, `DECISION_MODEL_NAME`, `DECISION_MODEL_THRESHOLD`, `DECISION_MODEL_HOSTED`, `DECISION_MODEL_TIMEOUT_VOICE_MS`, `DECISION_MODEL_TIMEOUT_TEXT_MS`, `PHI_MODE` (default `1` on Cloud Run), `WEBRTC_STUN_URLS`, `WEBRTC_TURN_URLS`, `WEBRTC_TURN_USERNAME` ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md), [/architecture/webrtc-transport.md](/architecture/webrtc-transport.md)) | |
+| Hosted media room | Secrets `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (never in env files committed or in responses); env `LIVEKIT_URL` (`wss://<project>.livekit.cloud`), optional `LIVEKIT_TOKEN_TTL_S` (600), `HANDOVER_WAIT_S` (180); all optional, attached only when they exist ([/architecture/hosted-media-room.md](/architecture/hosted-media-room.md), [/build/runbook-livekit.md](/build/runbook-livekit.md)) | |
+
+**Media rooms on Cloud Run.** The AI and scribe participants are outbound clients of LiveKit Cloud inside the single instance: no inbound port, no TURN of ours (unlike [WebRTC](/architecture/webrtc-transport.md)). They need the instance to keep CPU (`--no-cpu-throttling`) and a single instance (their state is in process). Cloud Run's docs state only TCP and HTTP behaviour and say nothing about outbound UDP, so media over UDP from Cloud Run is **UNVERIFIED**; `scripts/livekit_check.py` is run from the service before the feature is relied on, and the fallback is a separate always-on worker ([ADR-0015](/decisions/adr-0015-hosted-media-room-livekit.md)). A room call counts up to four participants against the LiveKit plan.
 
 Phone calls ([/architecture/telephony.md](/architecture/telephony.md)) need nothing beyond the table above: Twilio calls the public HTTPS service (`--allow-unauthenticated`; the webhook is protected by its signature, not by IAM), and each call is one long WebSocket held by the single instance. The 3600 s timeout bounds a call, `--no-cpu-throttling` keeps audio flowing between requests, and min instance 1 avoids a cold start on the first ring. How many concurrent calls a 2 vCPU instance holds, for each pipeline, is measured in spike S4 and recorded here when known.
 
@@ -44,7 +47,7 @@ Deploy script: `infra/deploy-cloudrun.sh` ([/build/runbook-gcp.md](/build/runboo
 
 # Health
 
-`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"openrouter":bool,"openai":bool,"deepgram":bool,"twilio":bool},"public_api":bool,"router":{"decision_model":{"configured":bool,"hosted":bool,"blocked":bool}},"webrtc":bool,"messaging":{"email":"brevo"|"outbox","sms":"twilio"|"outbox","call":"twilio"|"outbox"}}` (booleans = configured, no network call; `public_api` = `PUBLIC_API_SECRET` set; `messaging` = the provider each contact tool would use now, [/architecture/contact-tools.md](/architecture/contact-tools.md)).
+`GET /healthz` → `{"status":"ok","db":true,"jobs":true,"providers":{"openrouter":bool,"openai":bool,"deepgram":bool,"twilio":bool},"public_api":bool,"router":{"decision_model":{"configured":bool,"hosted":bool,"blocked":bool}},"webrtc":bool,"livekit":bool,"messaging":{"email":"brevo"|"outbox","sms":"twilio"|"outbox","call":"twilio"|"outbox"}}` (booleans = configured, no network call; `public_api` = `PUBLIC_API_SECRET` set; `messaging` = the provider each contact tool would use now, [/architecture/contact-tools.md](/architecture/contact-tools.md)).
 
 # Acceptance
 
@@ -53,4 +56,5 @@ Deploy script: `infra/deploy-cloudrun.sh` ([/build/runbook-gcp.md](/build/runboo
 - **DEP-04** — Given `TWILIO_AUTH_TOKEN` set only as a line in `apps/api/.env`, when `/healthz` is requested, then `providers.twilio` is `true` (false when absent); and given `infra/deploy-cloudrun.sh` run with `PUBLIC_BASE_URL` set and Secret Manager secrets `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID` and `OPENAI_API_KEY`, then the service is deployed with env `PUBLIC_BASE_URL` and those secrets attached, and a missing optional secret is skipped with a message and does not fail the deploy (script check by hand).
 - **DEP-03** — Given the Dockerfile, when built, then the image contains the web export and the fastembed model so first requests need no downloads.
 - **DEP-06** — Given no messaging settings, then `/healthz` reports `messaging` `{email: "outbox", sms: "outbox", call: "outbox"}`; given `BREVO_API_KEY` and `EMAIL_FROM` set only as lines in `apps/api/.env`, `email` is `brevo`; given `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM_NUMBER`, `sms` and `call` are `twilio`; no key value appears in the response.
+- **LKH-21** — Given `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` set only as lines in `apps/api/.env`, then `/healthz` reports `livekit: true` (false when any is absent) and no value appears in the response; and `infra/deploy-cloudrun.sh` attaches the key and secret as secrets and the URL as env when they exist and skips them with a message otherwise (script check by hand).
 - **DEP-05** — Given `PUBLIC_API_SECRET`, `DECISION_MODEL_URL` and `PHI_MODE` set only as lines in `apps/api/.env`, then `/healthz` reports `public_api: true` and the router block from them; given `K_SERVICE` set, no `PHI_MODE` and a hosted decision model, `router.decision_model.blocked` is `true`; and `infra/deploy-cloudrun.sh` attaches the new secrets when they exist and skips them otherwise (script check by hand).

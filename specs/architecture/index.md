@@ -33,6 +33,7 @@
 * [Capability catalog](capability-catalog.md) - Per-agent capability profiles built and re-indexed automatically from description, use cases, tools and knowledge; editable use cases; the routing suite
 * [Agent transfer](agent-transfer.md) - The transfer_to_agent tool: segments, what carries over, transfer limit, misroute checks and learning
 * [Webhooks](webhooks.md) - Signed, retried webhooks for public-API conversations; IDs only by default
+* [Hosted media room and live voice handover](hosted-media-room.md) - LiveKit Cloud room with customer, AI, specialist and a transcribing scribe; warm hand-over, control messages, limits
 * [WebRTC transport](webrtc-transport.md) - WebRTC voice for public-API and playground conversations, TURN on Cloud Run
 * [Deployment](deployment.md) - Local dev and GCP Cloud Run topology
 * [Agent Desk role](agent-desk.md) - The call-centre specialist role: allow-listed API, escalated calls only, masked identifiers, comments on escalation patterns that feed the learning loop

@@ -2,7 +2,7 @@
 type: Decision Record
 title: Tech stack
 description: Languages, frameworks, providers and the version policy for the platform; the single reference for dependencies.
-status: stable
+status: draft
 tags: [architecture, stack, dependencies]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -20,6 +20,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | Embeddings | `fastembed` with `BAAI/bge-small-en-v1.5` (384-d, local CPU); deterministic `hash` embedder for tests |
 | Vector search | NumPy cosine similarity in-process ([/decisions/adr-0004-storage-and-vectors.md](/decisions/adr-0004-storage-and-vectors.md)) |
 | Voice | `pipecat-ai` with extras `deepgram`, `silero`, `websocket`, plus the extras for the OpenAI Realtime service and the Twilio serializer (names confirmed in spike S4) |
+| Hosted media room | `pipecat-ai[livekit]` (inside `voiceai/voice/`) and `livekit-api` for tokens and room administration on the server; `livekit-client` in the web app ([/architecture/hosted-media-room.md](/architecture/hosted-media-room.md), [ADR-0015](/decisions/adr-0015-hosted-media-room-livekit.md)); versions pinned when implemented |
 | Secrets at rest | `cryptography` (Fernet) for tenants' stored provider keys ([/architecture/tenant-settings.md](/architecture/tenant-settings.md)) |
 | Docs parsing | `pypdf` for PDFs; stdlib `html.parser` for URLs; `pyyaml` for frontmatter |
 | Tests | `pytest`, `pytest-asyncio`, fake LLM provider |

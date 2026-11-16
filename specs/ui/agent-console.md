@@ -2,7 +2,7 @@
 type: UI Spec
 title: Agent console
 description: The human specialist's view - live escalation queue, groundwork packet, transcript, accept and resolve with disposition.
-status: stable
+status: draft
 tags: [ui, console, escalation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -16,6 +16,7 @@ The page of the **Agent Desk** specialist ([/ui/agent-desk.md](/ui/agent-desk.md
   * **Packet card** (top, large type): summary; intent; entities as chips; "Already tried" checklist; reason; sentiment `start → end` with trend arrow; suggested next action highlighted. While `packet_status: pending`, show a skeleton with "Preparing handoff notes…". Fallback packets show a small "Basic notes (AI summary unavailable)" label.
   * **Transcript** (collapsible, collapsed by default once the packet is ready).
   * Actions: **Accept** (assignee = name from a "Your name" field persisted in `localStorage`, default "Specialist"); after accept: disposition select + resolution note textarea (min 10 chars, hint: "What did you tell the caller? This teaches the agent.") + **Resolve**.
+* **Live voice** ([CP-0050](/changes/cp-0050-livekit-live-handover.md)). An escalation from a call in a media room shows a **Live voice** strip under the packet: "Customer waiting 00:42" and **Take the call**. After it, the strip becomes the voice panel: connection state, **Mute** and **Hang up** (leaving without resolving puts the customer back on hold), a live transcript of both sides (the customer's lines and the specialist's own, marked "You"), and a headset hint. The packet card stays beside it so the specialist can read while talking. **Resolve** is available while connected; resolving ends the call for the customer. See [/ui/agent-desk.md](/ui/agent-desk.md).
 * New escalations arrive via SSE topic `console` with a soft chime (toggle) and a highlight animation.
 
 # Acceptance

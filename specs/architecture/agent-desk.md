@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent Desk role
 description: A third sign-in role for call-centre specialists - the console, escalated calls with masked details, escalation patterns they can comment on (feeding the learning loop), and read-only knowledge, agent settings and member memory; everything else is refused by the API; identifiers are masked in what they see and in application logs.
-status: stable
+status: draft
 tags: [architecture, auth, roles, console, learning, privacy]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---
@@ -28,7 +28,7 @@ The API is **deny by default** for a specialist: a request not in this table is 
 | Area | Allowed |
 |---|---|
 | Session | `/api/auth/*`, `GET /api/tenants` (answers only the account's unit) |
-| Console | `GET /api/escalations`, `GET /api/escalations/{id}`, `POST /api/escalations/{id}/accept`, `POST /api/escalations/{id}/resolve`; the event stream with topic `console` only |
+| Console | `GET /api/escalations`, `GET /api/escalations/{id}`, `POST /api/escalations/{id}/accept`, `POST /api/escalations/{id}/resolve`; the event stream with topic `console` only; for a live voice call in a media room `POST /api/escalations/{id}/voice/join` and `GET /api/escalations/{id}/voice` ([/architecture/hosted-media-room.md](/architecture/hosted-media-room.md), LKH-15) |
 | Calls | `GET /api/calls` and `GET /api/calls/{id}` **for escalated calls only** (the list is forced to calls with an escalation; any other call is 404 `call_not_found`) |
 | Patterns | `GET /api/insights/clusters`, `GET /api/insights/clusters/{id}`, `GET /api/insights/clusters/{id}/comments`, `POST /api/insights/clusters/{id}/comments` |
 | Knowledge | `GET /api/knowledge`, `GET /api/knowledge/{id}`, `GET /api/knowledge/sources`, `GET /api/knowledge/sources/{id}`, `POST /api/knowledge/search` |

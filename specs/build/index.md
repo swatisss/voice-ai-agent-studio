@@ -7,4 +7,5 @@
 * [Local runbook](runbook-local.md) - Install, configure, run, seed and test on a developer machine
 * [Phone demo launcher](phone-demo.md) - scripts/phone_demo.py: tunnel, API, number mapping and Twilio webhook in one command
 * [Phone runbook](runbook-phone.md) - Answer a real call: local Twilio + tunnel setup, no-Twilio check, Cloud Run setup, IVR, troubleshooting
+* [LiveKit runbook](runbook-livekit.md) - Owner steps: free LiveKit Cloud project, three settings, connectivity check, two-machine handover demo
 * [GCP runbook](runbook-gcp.md) - Build and deploy to Cloud Run, with optional Cloud SQL

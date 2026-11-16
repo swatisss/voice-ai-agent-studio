@@ -2,7 +2,7 @@
 type: Component Spec
 title: Escalation
 description: When and how calls are handed to humans - triggers, reason categories, the groundwork packet, the safety screen, and the human console lifecycle.
-status: stable
+status: draft
 tags: [architecture, escalation, handoff]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -52,6 +52,8 @@ The screen runs on every agent turn (ES-01) and, in a routed conversation, at th
 5. Build the packet **immediately** in a background task (not the job queue): LLM `analysis` role with [/prompts/escalation-packet.md](/prompts/escalation-packet.md) over transcript + state. On success `packet_status: ready`; on failure the deterministic fallback packet with `packet_status: fallback`. Publish `escalation.updated`.
 6. **The AI call ends** once the handoff (or safety) message has been delivered, with reason `handoff` ([/architecture/call-ending-and-feedback.md](/architecture/call-ending-and-feedback.md), CE-01), as virtual-agent platforms do when a conversation is handed to a human. The escalation stays `waiting` for the console; the caller is then offered the feedback prompt like any ended call (not on a phone call, which has no page). On a phone call whose agent has `telephony.transfer_to`, the live call is also redirected to that destination after the message ([/architecture/telephony.md](/architecture/telephony.md), TEL-07). The *holding* reply (policy `holding_message`) survives only as a fallback for a session that is escalated yet still open.
 
+**Voice in a media room** ([CP-0050](/changes/cp-0050-livekit-live-handover.md)). For a call with transport `livekit`, step 6 differs: after the hand-off message the call is **not** ended; it stays `escalated`, the escalation carries `voice_state: waiting`, the AI stays silent and a specialist may take the voice call, after which the AI segment ends `handoff` and the call continues between the caller and the specialist ([/architecture/hosted-media-room.md](/architecture/hosted-media-room.md), LKH-05, LKH-08). Steps 1 to 5 and the lifecycle below are unchanged; the console event adds `voice`.
+
 Evaluation (simulated) calls also create an escalation row so judging can see the outcome, but they never reach the human console: no `console` events, no packet LLM call (deterministic fallback packet), and `GET /api/escalations` excludes them.
 
 # Groundwork packet
@@ -96,3 +98,4 @@ The `resolution_note` is required (min 10 characters) — it is the evidence fle
 - **ES-11** — Given the lines "I had a heart attack last year and I'm on blood thinners", "history of stroke", "chest pain when I was 40" and "I had chest pain in 2019", then `safety_match` is false; given "I have chest pain right now", "I'm having a heart attack", "I think I'm having a stroke", "I had a heart attack" (no marker) and "I want to end my life, it was last year too", then it is true ([CP-0042](/changes/cp-0042-safety-and-transfers-at-the-front-desk.md)).
 - **ES-13** — Given any agent, when the caller says "I want to speak to a human", "agent please", "get me a manager right now" or "can I talk to someone real, this bot is useless", then the call escalates with `caller_requested` and the hand-off line without a model reply; "can I talk to someone about adding my baby" and "my aunt, a person I care for, died" do not escalate.
 - **ES-12** — Given any agent and a caller turn "Full medical underwriting please, I had a heart attack last year", then the model is called, no escalation is created and the call continues ([CP-0042](/changes/cp-0042-safety-and-transfers-at-the-front-desk.md)).
+- **LKH-17** — Given an escalation on a call with transport `livekit`, then after the hand-off message the call is not ended (status `escalated`, `voice_state: waiting`); the same escalation on a WebSocket, WebRTC, phone or text call ends the call `handoff` as before (CE-01). (Numbered in the `LKH` series to avoid clashing with other change proposals' ES numbers.)

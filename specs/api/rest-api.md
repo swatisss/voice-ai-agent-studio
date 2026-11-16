@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -123,6 +123,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | POST | `/api/calls/{id}/rescore` | → `{job_id}`; queues `score_call` again; 409 `call_active`, 409 `not_scorable` for a simulation call |
 | WS | `/api/voice/{id}?tenant=` | [/api/voice-protocol.md](/api/voice-protocol.md) |
 
+`POST /api/calls` also accepts `transport: "livekit"` with `channel: "voice"` (a call in a hosted media room, [/architecture/hosted-media-room.md](/architecture/hosted-media-room.md)); the result then carries `connect: {url, token, room, expires_at}` and no WebSocket is opened; 503 `livekit_unavailable` when LiveKit is not configured. Escalation summaries and `GET /api/escalations/{id}` carry `voice` (`{state: "waiting"|"connected"|"ended", joined_at}` or `null`).
+
 `GET /api/calls` also accepts `conversation_id`; call summaries and `GET /api/calls/{id}` carry `conversation_id`, `segment` and `routed_by` (`null` for calls outside a conversation).
 
 ## Conversations (Studio)
@@ -172,7 +174,9 @@ The specialist role reaches only the requests listed in [/architecture/agent-des
 | GET | `/api/escalations` | query `status?` → `{items: [escalation + call summary]}` |
 | GET | `/api/escalations/{id}` | escalation + call events |
 | POST | `/api/escalations/{id}/accept` | `{assignee}` → escalation; 409 unless `waiting` |
-| POST | `/api/escalations/{id}/resolve` | `{disposition, resolution_note}` → escalation; 409 unless `accepted` |
+| POST | `/api/escalations/{id}/resolve` | `{disposition, resolution_note}` → escalation; 409 unless `accepted`; on a call in a media room it also closes the room and ends the call `human_ended` |
+| POST | `/api/escalations/{id}/voice/join` | `{}` → `{url, token, room, expires_at}`; accepts the escalation for the signed-in specialist; 409 `not_voice` / `not_waiting` / `already_taken`, 503 `livekit_unavailable` |
+| GET | `/api/escalations/{id}/voice` | → `{state, room, joined_at, specialist}`; 404 for a call without a media room |
 
 ## Insights
 | Method | Path | Body → Result |
@@ -238,4 +242,5 @@ The specialist role reaches only the requests listed in [/architecture/agent-des
 - **API-16** — Given a call in which the agent sent an email to the registered contact and an SMS to a number the caller gave, then `GET /api/calls/{id}` lists both under `contact_messages` in order with channel, destination, masked `to`, status and provider; `contact_messages` holds no full address, and the registered contact's full address appears nowhere in the response (an address the caller said is in the transcript like anything else they said); a call without messages has `[]`.
 - **API-15** — Given an open `check_failing` action, when `POST /api/actions/{id}/dismiss` is sent, then it is `dismissed` with `closed_by` and `closed_at`, a second dismiss returns 409 `invalid_state`, `GET /api/insights/actions` no longer lists it and `?status=all` does; `POST /api/actions/{id}/answer` on it returns 409; another tenant gets 404.
 - **API-14** — Given `POST /api/knowledge/sources` for the fixture site, then the response is 202 with `status: indexing` and exactly one `sync_knowledge_source` job is queued; `GET /api/knowledge/sources/{id}` shows `page_count` rising until `ready`; a second `POST …/sync` while the first runs answers 409 `sync_in_progress`; another tenant gets 404.
+- **LKH-20** — Given LiveKit configured and a `waiting` voice escalation, then `POST /api/escalations/{id}/voice/join` returns `{url, token, room, expires_at}` and the escalation is `accepted`; a second call is 409 `already_taken`, an escalation without a media room 409 `not_voice`, an ended call 409 `not_waiting`; `POST /api/calls` with `transport: "livekit"` returns `connect` and `/healthz` agrees (LKH-01).
 - **API-13** — Given `PUT /api/tenant-settings/front-desk` with a default member agent that is internal, a pipeline the tenant does not allow, or `max_clarifications: 3`, then the response is 422 and nothing changes; `GET` on a tenant without settings returns the defaults.

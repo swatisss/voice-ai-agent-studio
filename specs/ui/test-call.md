@@ -2,7 +2,7 @@
 type: UI Spec
 title: Test call
 description: Pick a published agent, then talk or type to it with a live transcript; the agent opens a voice call with its spoken welcome, and technical details are shown on demand.
-status: stable
+status: draft
 tags: [ui, voice, test-call]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -66,6 +66,21 @@ A **Live controls** card at the top of the right column (and shown before the ca
 5. On `interrupt`, playback stops instantly.
 6. On close code 4500, show "Voice is unavailable (speech provider key missing) — use Type mode".
 
+# Voice room (live handover)
+
+In Talk mode, when `/healthz` reports `livekit: true`, the call card shows a **Voice connection** switch, *Direct* | *Voice room*, disabled while a call runs (with LiveKit unconfigured the *Voice room* option is disabled with "Not configured on this server"). With *Voice room* the page starts `POST /api/calls {channel: "voice", transport: "livekit"}`, connects with `livekit-client` using `connect.url` and `connect.token`, publishes the microphone, plays the AI's audio, and takes the transcript and notices from SSE `call.event` as in every call ([/architecture/hosted-media-room.md](/architecture/hosted-media-room.md)). The banner under the mic button follows the room:
+
+| State | Banner |
+|---|---|
+| connecting | "Connecting to the room..." |
+| talking to the AI | "Connected - talking to the assistant" |
+| `handover waiting` | "A specialist has been asked to join. Please stay on the line." with a running wait time |
+| `handover connected` | "You are now talking with {name}, a specialist." and the AI pulse is replaced by the specialist's speaking pulse |
+| `handover waiting_again` | "Your specialist was disconnected. Please hold." |
+| `end` | the outcome banner and feedback prompt as at the end of any call; for `handover_timeout`: "No specialist was available. We will follow up." |
+
+**Hang up** disconnects from the room. A denied microphone shows the existing permission message; a join failure shows "Voice is unavailable. Try Direct or Type mode".
+
 # Type mode
 
 1. **Start chat** → `POST /api/calls {channel: "text"}`; greeting shown.
@@ -98,4 +113,7 @@ For an agent on the realtime voice pipeline ([/architecture/realtime-voice.md](/
 - **UI-35** — Given a Talk call that the server ends (goodbye, hand-off or silence), then without any action from the tester the microphone stops, the "Listening" state disappears, and the outcome banner and the feedback prompt appear.
 - **UI-60** — Given Full flow with audience Members, when a chat starts and the tester types "I need to get treatment for my knee approved", then the front desk greeting comes first, a notice "Routed to Claims & Pre-authorisation" appears, the Routing card lists the decision with candidates and scores, and the claims agent's intro and answer follow; asking then about a missed Direct Debit payment shows a transfer notice and a second decision in the Routing card; switching back to Single agent restores the agent select.
 - **UI-76** — Given Full flow with the front desk on *Embedding* and a configured decision model, when the tester sets the Routing switch to *Decision model* and starts a chat, then `POST /api/conversations` carries `routing_mode: decision_model`, the Routing card shows mode "decision_model" for every decision, and the switch is disabled until the conversation ends; with no decision model configured the *Decision model* option is disabled with "Not configured on this server"; with no change the request carries the default shown.
+- **LKH-22** — Given `/healthz` with `livekit: true`, when Talk mode is open, then the *Voice connection* switch shows *Direct* | *Voice room*, is disabled while a call runs, and with `livekit: false` *Voice room* is disabled with "Not configured on this server"; choosing *Voice room* and Start call sends `POST /api/calls` with `transport: "livekit"` and connects with the returned URL and token, never showing the token.
+- **LKH-23** — Given a Voice room call that escalates and then connects to a specialist, then the banner moves through "A specialist has been asked to join..." (with a wait time), "You are now talking with {name}, a specialist." and, when the specialist resolves, the outcome banner and the feedback prompt; with a specialist drop it shows "Your specialist was disconnected. Please hold."
+- **LKH-24** — Given a Voice room call whose join fails or whose microphone is denied, then the page shows "Voice is unavailable. Try Direct or Type mode" or the microphone message, releases the microphone, and starts no call that stays active.
 - **UI-75** — Given a Test call voice call, in Single agent or Full flow, when `call.partial` events arrive, then a provisional caller bubble (muted, italic, "…" while its text is empty) shows and updates live, is replaced in place by the caller's final message when its `call.event` arrives, and disappears after 3 s with no final message.

@@ -3,7 +3,7 @@ type: Change Proposal
 title: CP-0051 Twilio phone warm handover with a recorded, transcribed human leg
 description: An escalated phone call becomes a Twilio conference - the specialist's Indian phone or browser is rung and briefed, bridged warm, recorded on two channels - and a batch transcription writes the human portion into the call's events so the learning loop learns from what the person said.
 status: draft
-cp_state: proposed
+cp_state: accepted
 tags: [telephony, twilio, escalation, handover, india, learning]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

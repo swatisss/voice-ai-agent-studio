@@ -3,7 +3,7 @@ type: Change Proposal
 title: CP-0052 WhatsApp via Twilio as a text channel with human handover
 description: WhatsApp (Twilio sandbox first, a production sender later) talks to the same agents, escalates to Agent Desk over the human message channel, respects the 24-hour window with a template for late replies, handles opt-out and Hindi voice notes, and keeps the user's address out of everything but one column.
 status: draft
-cp_state: proposed
+cp_state: accepted
 tags: [whatsapp, twilio, channels, escalation, privacy]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

@@ -2,7 +2,7 @@
 type: Component Spec
 title: Fleet learning
 description: Post-call analysis, gap clustering, impact estimation, fix drafting from human resolutions, and approval into a new agent version.
-status: stable
+status: draft
 tags: [architecture, learning, clustering]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -50,7 +50,7 @@ Seeded history creates clusters directly from its `cluster_key` (deterministic d
 
 # 4. Fix drafting (`draft_fix` job, triggered by the Insights UI or the nightly run)
 
-Prompt [/prompts/fix-draft.md](/prompts/fix-draft.md), role `drafting`. Evidence: up to 10 member calls — gap summaries, caller goals, and **human resolution notes** (the ground truth of what a human told the caller) — plus the reviewer's answer when one was given ([learning actions](/architecture/learning-actions.md)) and the **specialist comments** on the cluster, one line each "Specialist comment (name): …" ([/architecture/agent-desk.md](/architecture/agent-desk.md), CP-0047); a call without a note shows `(no note)`, never the analysis's own summary, so facts come only from people (CP-0032). The cluster's other members are held out for the gate and never shown (at least one in a cluster of 3 or more, [self-learning](/architecture/self-learning.md)). A `missing_knowledge` cluster with no note, no reviewer answer and no specialist comment of at least 20 characters is not drafted: `draft-fix` answers 409 `answer_needed`. The prompt also gets the attached articles closest to the gap (title and content, up to 3) and the tenant's tools that the agent does not have. A proposal records its `origin` (`manual` or `nightly`) and up to 2 derived scenarios. Output `kind` (the full table, with `knowledge_edit` and `tool_attach`, is in [/architecture/self-learning.md](/architecture/self-learning.md)):
+Prompt [/prompts/fix-draft.md](/prompts/fix-draft.md), role `drafting`. Evidence: up to 10 member calls — gap summaries, caller goals, and **human resolution notes** (the ground truth of what a human told the caller) — plus the reviewer's answer when one was given ([learning actions](/architecture/learning-actions.md)) the **human portion** of a phone call (the specialist's lines transcribed from the recorded handover, one line "Human portion (specialist): …" cut at 600 characters, [/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md), CP-0051) and the **specialist comments** on the cluster, one line each "Specialist comment (name): …" ([/architecture/agent-desk.md](/architecture/agent-desk.md), CP-0047); a call without a note shows `(no note)`, never the analysis's own summary, so facts come only from people (CP-0032). The cluster's other members are held out for the gate and never shown (at least one in a cluster of 3 or more, [self-learning](/architecture/self-learning.md)). A `missing_knowledge` cluster with no note, no reviewer answer and no specialist comment of at least 20 characters is not drafted: `draft-fix` answers 409 `answer_needed`. The prompt also gets the attached articles closest to the gap (title and content, up to 3) and the tenant's tools that the agent does not have. A proposal records its `origin` (`manual` or `nightly`) and up to 2 derived scenarios. Output `kind` (the full table, with `knowledge_edit` and `tool_attach`, is in [/architecture/self-learning.md](/architecture/self-learning.md)):
 
 | Kind | When | Payload |
 |---|---|---|

@@ -2,7 +2,7 @@
 type: Data Model
 title: Data model
 description: All tables, columns, enums and relationships of the platform; portable across SQLite and Postgres.
-status: stable
+status: draft
 tags: [data, schema]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -29,7 +29,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **webhook_deliveries** — `id`, `tenant_id`, `endpoint_id`, `event_id` (`evt_…`), `type`, `conversation_id`, `payload` JSON, `status` (`pending`|`delivered`|`failed`), `attempts` int, `last_status_code` (nullable), `last_error` (nullable), `next_attempt_at`, `created_at`, `delivered_at` (nullable)
 
-**conversations** — `id`, `tenant_id`, `source` (`api`|`playground`|`phone`), `api_key_id` (nullable), `channel` (`text`|`voice`), `transport` (`text`|`websocket`|`media-stream`|`webrtc`|`twilio`|`browser`), `scope` (`member`|`staff`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable, the last segment's), `end_reason` (nullable), `external_id` (nullable, ≤ 128), `metadata` JSON, `current_call_id` (nullable), `routing_mode` (nullable, the playground's per-conversation override, RTE-22), `transfer_count` int, `clarifications` int, `routing` JSON list (decisions, [/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)), `settings` JSON (the conversation's persona, voice and pipeline), `started_at`, `ended_at`
+**conversations** — `id`, `tenant_id`, `source` (`api`|`playground`|`phone`|`whatsapp`), `api_key_id` (nullable), `channel` (`text`|`voice`), `transport` (`text`|`websocket`|`media-stream`|`webrtc`|`twilio`|`browser`), `scope` (`member`|`staff`), `status` (`active`|`escalated`|`ended`), `outcome` (nullable, the last segment's), `end_reason` (nullable), `external_id` (nullable, ≤ 128), `metadata` JSON, `current_call_id` (nullable), `routing_mode` (nullable, the playground's per-conversation override, RTE-22), `transfer_count` int, `clarifications` int, `routing` JSON list (decisions, [/architecture/supervisor-routing.md](/architecture/supervisor-routing.md)), `settings` JSON (the conversation's persona, voice and pipeline), `started_at`, `ended_at`
 
 **capability_profiles** — `id`, `tenant_id`, `agent_id` (unique), `agent_version_id`, `scope`, `card` JSON (name, description, skills, tools, knowledge, generated examples), `summary`, `input_hash`, `status` (`ready`|`indexing`|`failed`), `error` (nullable), `built_at` ([/architecture/capability-catalog.md](/architecture/capability-catalog.md))
 
@@ -85,6 +85,14 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 **phone_numbers** — `id`, `tenant_id`, `e164` (unique across all tenants), `target` (`agent`|`front_desk`, default `agent`), `agent_id` (nullable; set for `agent`), `label` (nullable), `created_at`; routes an inbound phone number to the agent's published version or to the front desk ([/architecture/telephony.md](/architecture/telephony.md))
 
+**call_recordings** — `id`, `tenant_id`, `call_id` (indexed), `provider` (`twilio`), `recording_sid` (unique), `source` (`conference`|`dial`), `channels` int (1|2), `duration_s` int, `channel_map` JSON (nullable; `{"1": "caller", "2": "specialist"}`), `status` (`received`|`transcribed`|`failed`|`deleted`), `error` (nullable), `created_at`, `transcribed_at` (nullable), `deleted_at` (nullable); the handover recording's metadata only, no audio ([/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md), CP-0051)
+
+**desk_presence** — `id`, `tenant_id`, `user_email` (unique with `tenant_id`), `ready` bool, `updated_at`; a specialist counts as Ready when `ready` and `updated_at` is under 90 seconds old (CP-0051)
+
+**whatsapp_senders** — `id`, `tenant_id`, `address` (unique across all tenants, `whatsapp:+E164`), `mode` (`sandbox`|`production`), `target` (`agent`|`front_desk`), `agent_id` (nullable), `label` (nullable), `created_at`; routes an inbound WhatsApp message to an agent or the front desk ([/architecture/whatsapp-channel.md](/architecture/whatsapp-channel.md), CP-0052)
+
+**whatsapp_threads** — `id`, `tenant_id`, `sender_id` (FK), `conversation_id` (indexed), `address` (nullable, the user's full WhatsApp address: the only place it is stored, cleared after `WHATSAPP_ADDRESS_RETENTION_DAYS`), `address_last4`, `status` (`active`|`opted_out`|`ended`), `last_inbound_at`, `window_expires_at`, `last_message_sid` (nullable), `attachment_notice_sent` bool, `queued` JSON list (human texts waiting for an open window), `created_at`, `updated_at` (CP-0052)
+
 **member_memories** — `id`, `tenant_id`, `agent_id`, `member_ref` (indexed with `tenant_id`, `agent_id`), `kind` (`episode`|`fact`), `category`, `text`, `status` (`active`|`retired`), `valid_at`, `invalid_at` (nullable), `superseded_by` (nullable), `expires_at`, `source_call_id`, `source_seq` (nullable), `embedding` JSON, `prompt_version`, `created_at`, `updated_at` ([/architecture/agent-memory.md](/architecture/agent-memory.md))
 
 **memory_events** — `id`, `tenant_id`, `agent_id` (nullable for erasure), `member_ref`, `memory_id` (nullable), `action` (`added`|`superseded`|`confirmed`|`restored`|`expired`|`erased`), `actor` (`agent`|`studio`|`system`), `call_id` (nullable), `text_before`, `text_after`, `reason` (all nullable; emptied by expiry and erasure), `at`
@@ -122,3 +130,5 @@ tenant ─┬─ agent ─┬─ agent_version ── call ─┬─ call_event
 - **DM-13** — Given an existing database without `clusters.human_answer`, `clusters.human_answer_by` and `clusters.reopened_at`, when the app starts, then the columns are added as null and existing clusters keep their status.
 - **DM-12** — Given an existing database without `knowledge_docs.source_id`, `knowledge_docs.miss_count`, `knowledge_docs.updated_at` and `knowledge_chunks.content_hash`, when the app starts, then the columns are added (null or 0), existing docs have no source, and search over them is unchanged.
 - **DM-10** — Given an existing database without the CP-0023…CP-0026 columns (`calls.conversation_id`, `segment`, `routed_by`; `phone_numbers.target`; `tenant_settings.front_desk`; `use_cases.updated_at`; nullable `eval_runs.agent_id` and `phone_numbers.agent_id`), when the app starts, then they are added with their defaults, existing calls have no conversation, existing numbers have target `agent`, and no row is lost.
+- **DM-20** — Given an existing database without `whatsapp_senders` and `whatsapp_threads` (and `conversations.source` values only `api`, `playground`, `phone`), when the app starts, then the tables are created and no other table or row changes; the full WhatsApp address of a user exists only in `whatsapp_threads.address` and is null once cleared (CP-0052).
+- **DM-21** — Given an existing database without `call_recordings` and `desk_presence`, when the app starts, then the tables are created and no other table or row changes; a recording row holds no audio and `recording_sid` is unique so a repeated callback adds nothing (CP-0051). The table count of DM-01 grows by these four tables and by those of other accepted changes.

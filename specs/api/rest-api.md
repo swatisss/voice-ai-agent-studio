@@ -2,7 +2,7 @@
 type: API Contract
 title: REST API
 description: Every /api endpoint with method, purpose, request and response shapes, and error conventions.
-status: stable
+status: draft
 tags: [api, rest]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -173,6 +173,17 @@ The specialist role reaches only the requests listed in [/architecture/agent-des
 | GET | `/api/escalations/{id}` | escalation + call events |
 | POST | `/api/escalations/{id}/accept` | `{assignee}` → escalation; 409 unless `waiting` |
 | POST | `/api/escalations/{id}/resolve` | `{disposition, resolution_note}` → escalation; 409 unless `accepted` |
+| POST | `/api/escalations/{id}/messages` | CP-0049; for a WhatsApp conversation also `409 window_closed`, `409 opted_out`, `409 template_not_configured` and a `delivery` field (`sent`, `queued_template`) in the stored `human` event ([/architecture/whatsapp-channel.md](/architecture/whatsapp-channel.md)) |
+
+## Handover phone and WhatsApp senders
+
+| Method | Path | Body → Result |
+|---|---|---|
+| POST | `/api/desk/phone-token` | → `{token, identity, ttl_seconds}`; 503 `phone_unavailable` without the Twilio API key ([/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md)) |
+| PUT | `/api/desk/phone-presence` | `{ready}` → `{ready, expires_in_s}` |
+| GET / POST / DELETE | `/api/whatsapp-senders`, `/api/whatsapp-senders/{id}` | admin; `{address, mode, target, agent_id?, label?}`; 409 `sender_in_use` ([/architecture/whatsapp-channel.md](/architecture/whatsapp-channel.md)) |
+
+Twilio calls, not the Studio, the routes under `/api/telephony/twilio/handover/…` and `/api/channels/twilio/whatsapp/{inbound,status}`: signed, tenant from the call or the sender row.
 
 ## Insights
 | Method | Path | Body → Result |
@@ -222,6 +233,11 @@ The specialist role reaches only the requests listed in [/architecture/agent-des
 | GET | `/healthz` | see [/architecture/deployment.md](/architecture/deployment.md) |
 
 # Acceptance
+
+- **API-23** — Given a WhatsApp escalation read with `GET /api/escalations/{id}`, then it carries `channel_state` `{channel, window_open, window_expires_at, opted_out, mode}` and each `human` event's `delivery`; given a phone call with a handover, `GET /api/calls/{id}` carries `handover` `{mode, state, answered_by, started_at, connected_at, ended_at}` and `recordings` `[{id, status, channels, duration_s}]` without any media URL; a call or conversation of any other kind has neither.
+- **API-22** — Given the desk phone endpoints, then `phone-token` and `phone-presence` work for a specialist, admin and reviewer, answer 503 `phone_unavailable` without `TWILIO_API_KEY_SID` and `TWILIO_API_KEY_SECRET`, never return a secret, and `phone-presence` with `ready` missing is 422.
+- **API-21** — Given a call recording row, then no endpoint returns a Twilio recording URL, SID-signed media or audio.
+- **API-20** — Given the WhatsApp sender endpoints, then `POST` validates the address format, `mode` and `target` (422), a duplicate is 409 `sender_in_use`, only an admin may write (reviewers and specialists 403), another tenant's sender is 404 and `DELETE` removes it.
 
 - **API-01** — Given an unpublished agent, when `POST /api/calls` is made, then the response is 409 `agent_not_published`.
 - **API-02** — Given a text call, when `POST /messages` is made on a voice call id, then the response is 409 `wrong_channel`.

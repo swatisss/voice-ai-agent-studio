@@ -1,5 +1,7 @@
 # Change proposals
 
+* [CP-0052 WhatsApp via Twilio](cp-0052-whatsapp-via-twilio.md) - WhatsApp (sandbox first) as a text channel: the AI answers, escalation to Agent Desk over the human message channel, the 24-hour window with a follow-up template, opt-out, Hindi voice notes, the user's address kept in one column
+* [CP-0051 Twilio phone warm handover](cp-0051-twilio-phone-warm-handover.md) - An escalated call becomes a Twilio conference: the specialist's Indian phone or browser is rung and briefed, bridged warm and recorded on two channels; a batch transcription writes the human portion into the call for the learning loop
 * [CP-0048 Live conversation QA fixes](cp-0048-live-conversation-qa-fixes.md) - A request for a person escalates at once (front desk and agents), callers on someone else's policy are not verified, amounts are spoken in pounds
 * [CP-0047 Agent Desk role](cp-0047-agent-desk-role.md) - A third role for call-centre specialists: console, escalated calls (masked), comments on escalation patterns that feed learning, read-only knowledge, agent settings and member memory; the console leaves the builders' sidebar
 * [CP-0046 Final QA - fixes for every finding](cp-0046-final-qa-fixes.md) - One proposal for the pre-demo QA findings and the 2026-11-16 re-check: grounded amounts, third parties, hand-off wording, markdown in voice, out-of-scope line, latency defaults, builder friction, demo tooling

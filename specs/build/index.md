@@ -7,4 +7,5 @@
 * [Local runbook](runbook-local.md) - Install, configure, run, seed and test on a developer machine
 * [Phone demo launcher](phone-demo.md) - scripts/phone_demo.py: tunnel, API, number mapping and Twilio webhook in one command
 * [Phone runbook](runbook-phone.md) - Answer a real call: local Twilio + tunnel setup, no-Twilio check, Cloud Run setup, IVR, troubleshooting
+* [Twilio handover and WhatsApp runbook](runbook-twilio-handover-whatsapp.md) - Console and env steps for the warm phone handover and WhatsApp sandbox, the spikes, and the demo script
 * [GCP runbook](runbook-gcp.md) - Build and deploy to Cloud Run, with optional Cloud SQL

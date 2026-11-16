@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent Desk role
 description: A third sign-in role for call-centre specialists - the console, escalated calls with masked details, escalation patterns they can comment on (feeding the learning loop), and read-only knowledge, agent settings and member memory; everything else is refused by the API; identifiers are masked in what they see and in application logs.
-status: stable
+status: draft
 tags: [architecture, auth, roles, console, learning, privacy]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---
@@ -29,6 +29,8 @@ The API is **deny by default** for a specialist: a request not in this table is 
 |---|---|
 | Session | `/api/auth/*`, `GET /api/tenants` (answers only the account's unit) |
 | Console | `GET /api/escalations`, `GET /api/escalations/{id}`, `POST /api/escalations/{id}/accept`, `POST /api/escalations/{id}/resolve`; the event stream with topic `console` only |
+| Phone | `POST /api/desk/phone-token`, `PUT /api/desk/phone-presence` (the specialist's browser as a phone, [/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md)) |
+| Channel replies | `POST /api/escalations/{id}/messages` on an API or WhatsApp text conversation (CP-0049, [/architecture/whatsapp-channel.md](/architecture/whatsapp-channel.md)) |
 | Calls | `GET /api/calls` and `GET /api/calls/{id}` **for escalated calls only** (the list is forced to calls with an escalation; any other call is 404 `call_not_found`) |
 | Patterns | `GET /api/insights/clusters`, `GET /api/insights/clusters/{id}`, `GET /api/insights/clusters/{id}/comments`, `POST /api/insights/clusters/{id}/comments` |
 | Knowledge | `GET /api/knowledge`, `GET /api/knowledge/{id}`, `GET /api/knowledge/sources`, `GET /api/knowledge/sources/{id}`, `POST /api/knowledge/search` |
@@ -76,3 +78,4 @@ A specialist (or admin or reviewer) can add a comment to any cluster of the acco
 - **DESK-09** — Given a cluster, when the specialist posts a comment of 9 characters, then 422 `comment_too_short`; with 60 characters it is stored with their name, role and masked text, `GET …/comments` lists it, and a `cluster.updated` event is published; the admin can also comment; a reviewer's comment records "Riley Reviewer".
 - **DESK-10** — Given a ready `missing_knowledge` cluster whose calls have no resolution note, when a specialist comments with 30 characters, then `needs_answer` is false, its `answer_needed` action is closed, and the drafter's evidence contains "Specialist comment (Sam Specialist): …"; a comment of 15 characters is stored but `needs_answer` stays true; no comment changes `signal_count`.
 - **DESK-11** — Given an admin or reviewer, then `POST /api/escalations/{id}/accept` and `resolve` still succeed (AUTH-04).
+- **DESK-12** — Given a signed-in specialist, when they call `POST /api/desk/phone-token` and `PUT /api/desk/phone-presence`, then both are allowed (not `role_forbidden`) and scoped to their own business unit; a reply to an escalated WhatsApp conversation through `POST /api/escalations/{id}/messages` is allowed and the customer's address appears masked (`address_last4`) in everything the specialist reads (WA-12).

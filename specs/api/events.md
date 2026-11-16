@@ -2,7 +2,7 @@
 type: API Contract
 title: Server-sent events
 description: The SSE endpoint, topic subscription rules and event payloads the web app consumes for live updates.
-status: stable
+status: draft
 tags: [api, events, sse]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---
@@ -30,6 +30,7 @@ A `: ping` comment every 15 s keeps proxies open. Topics and the bus semantics a
 | `call.ended` | `{call_id, status, outcome, end_reason}` |
 | `escalation.created` | escalation summary `{id, call_id, status, reason_category, reason_detail, packet_status, created_at}` |
 | `escalation.updated` | same shape plus `packet` when ready |
+| `handover.transcribed` | `{call_id, recording_id}` on topic `console`: the handover recording was transcribed and the human portion is on the call (CP-0051) |
 | `analysis.created` | `{call_id, outcome, root_cause, cluster_id}` |
 | `cluster.updated` | cluster summary |
 | `proposal.updated` | `{id, cluster_id, status, kind, title}` |

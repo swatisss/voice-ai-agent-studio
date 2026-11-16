@@ -35,5 +35,7 @@
 * [Webhooks](webhooks.md) - Signed, retried webhooks for public-API conversations; IDs only by default
 * [WebRTC transport](webrtc-transport.md) - WebRTC voice for public-API and playground conversations, TURN on Cloud Run
 * [Deployment](deployment.md) - Local dev and GCP Cloud Run topology
+* [Phone warm handover](phone-warm-handover.md) - Conference-based handover of an escalated phone call to a specialist's phone or browser, brief, two-channel recording, batch transcription into human events, learning hooks
+* [WhatsApp channel (Twilio)](whatsapp-channel.md) - WhatsApp as a text channel through Twilio: senders, signed webhooks, the 24-hour window and follow-up template, opt-out, voice notes, address privacy, human handover over the message channel
 * [Agent Desk role](agent-desk.md) - The call-centre specialist role: allow-listed API, escalated calls only, masked identifiers, comments on escalation patterns that feed the learning loop
 * [Studio sign-in and roles](studio-auth.md) - Two demo accounts, signed session cookie, the API guard and admin-only table, who is recorded

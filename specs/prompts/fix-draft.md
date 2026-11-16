@@ -10,7 +10,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Variables
 
-`cluster_name`, `cluster_description`, `root_cause`, `evidence` (per call: caller goal, gap summary, the specialist's resolution note or `(no note)`; plus one line with the reviewer's answer when a reviewer answered the cluster, CP-0032), `existing_tools` (name + description), `tool_catalog` (endpoints available in the business API that are not yet tools: method, path, description, parameters), `existing_doc_titles`, `attached_articles` (up to 3 attached articles closest to the gap: id, title, content), `unattached_tools` (tenant tools the agent lacks: name, description).
+`cluster_name`, `cluster_description`, `root_cause`, `evidence` (per call: caller goal, gap summary, the specialist's resolution note or `(no note)`; plus one line with the reviewer's answer when a reviewer answered the cluster, and one line per specialist comment on the cluster ("Specialist comment (name): …"), CP-0032), `existing_tools` (name + description), `tool_catalog` (endpoints available in the business API that are not yet tools: method, path, description, parameters), `existing_doc_titles`, `attached_articles` (up to 3 attached articles closest to the gap: id, title, content), `unattached_tools` (tenant tools the agent lacks: name, description).
 
 # Output
 
@@ -30,7 +30,7 @@ You improve an AI phone assistant for a health insurer. A cluster of calls went 
 Cluster: {{cluster_name}} — {{cluster_description}}
 Root cause: {{root_cause}}
 
-Evidence (caller goal, gap, and what a person said resolved it: a specialist's note, or a reviewer's answer; "(no note)" means no person answered that call):
+Evidence (caller goal, gap, and what a person said resolved it: a specialist's note or comment, or a reviewer's answer; "(no note)" means no person answered that call):
 {{evidence}}
 
 Attached knowledge articles closest to this gap:

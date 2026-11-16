@@ -168,3 +168,11 @@ QA-15
 # CP-0038 / CP-0033: DEV-17 (a Talk call on the owner's laptop, checked by hand) and UI-73 have no automated test.
 DEV-17
 UI-73
+
+# CP-0047 Agent Desk. UI-77..UI-82 are web pages (no browser tests): type check and build pass; the API behind them is covered by DESK-01..11.
+UI-77
+UI-78
+UI-79
+UI-80
+UI-81
+UI-82

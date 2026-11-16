@@ -9,6 +9,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-28T00:00:00Z" }
 
 # Page (`/members/memory/?ref=…&agent=…`)
 
+The Agent Desk specialist sees it read-only (no Export, Erase or Restore, [/ui/agent-desk.md](/ui/agent-desk.md)).
+
 Reached from a call's detail page (**Member memory** link next to the verified member, [/ui/calls.md](/ui/calls.md)). Header: the member reference masked to its last three digits (`NGH-•••237`) and first name, an **agent** select (agents of the tenant that hold memory for this member), and the buttons **Export** and **Erase member** (v1 has no roles, so anyone working in the tenant sees them; [/product/scope.md](/product/scope.md)).
 
 Body, for the selected agent ([/architecture/agent-memory.md](/architecture/agent-memory.md)):

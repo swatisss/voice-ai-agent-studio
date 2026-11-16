@@ -5,16 +5,18 @@ import { AudioWaveform } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Button, Field, Input } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
+import { homeFor } from "@/lib/auth";
 
 const ACCOUNTS = [
   { email: "admin@echomind.test", label: "Admin: publishes agents and approves fixes" },
-  { email: "reviewer@echomind.test", label: "Reviewer: works escalations, answers and reviews" },
+  { email: "reviewer@echomind.test", label: "Reviewer: reviews scorecards and answers learning tasks" },
+  { email: "specialist@echomind.test", label: "Agent Desk: call-centre specialist, works the escalation queue" },
 ];
 
 /** Only paths inside the Studio are followed after sign-in. */
-function nextPath(): string {
-  const next = new URLSearchParams(window.location.search).get("next") ?? "/";
-  return next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login") ? next : "/";
+function nextPath(home: string): string {
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login") ? next : home;
 }
 
 export default function LoginPage() {
@@ -28,8 +30,8 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await api("/api/auth/login", { method: "POST", json: { email, password } });
-      window.location.href = nextPath();
+      const r = await api<{ user: { role: "admin" | "reviewer" | "specialist" } }>("/api/auth/login", { method: "POST", json: { email, password } });
+      window.location.href = nextPath(homeFor(r.user.role));
     } catch (err) {
       setError(err instanceof ApiError && err.status === 401 ? "Email or password is wrong" : "Could not sign in. Is the API running?");
       setBusy(false);

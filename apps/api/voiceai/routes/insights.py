@@ -13,15 +13,16 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import auth
+from voiceai import auth, mask
 from voiceai.db import get_session, utcnow
 from voiceai.errors import ApiError
 from voiceai.learning import actions, evaluate, nightly, propose, test_suites
 from voiceai.learning.analyze import cluster_summary
 from voiceai.learning.impact import impact
 from voiceai.models import (
-    Agent, Call, CallAnalysis, CallFeedback, Cluster, EvalResult, EvalRun, FixProposal, KnowledgeDoc, LearningAction, LearningRun,
+    Agent, Call, CallAnalysis, CallFeedback, Cluster, ClusterComment, EvalResult, EvalRun, FixProposal, KnowledgeDoc, LearningAction, LearningRun,
 )
+from voiceai.events import bus
 from voiceai.tenancy import current_tenant
 
 router = APIRouter(prefix="/api")
@@ -84,6 +85,45 @@ async def cluster_detail(cluster_id: str, tenant_id: str = Depends(current_tenan
     proposals = (await s.scalars(select(FixProposal).where(FixProposal.cluster_id == c.id).order_by(FixProposal.created_at.desc()))).all()
     extras = (await actions.cluster_extras(s, [c]))[c.id]
     return {**cluster_out(c, recent), **extras, "calls": evidence, "proposals": [propose.proposal_summary(p) for p in proposals]}
+
+
+class CommentBody(BaseModel):
+    text: str
+
+
+def comment_out(c: ClusterComment) -> dict[str, Any]:
+    return {"id": c.id, "cluster_id": c.cluster_id, "author": c.author, "author_role": c.author_role, "text": c.text,
+            "created_at": c.created_at.isoformat() if c.created_at else None}
+
+
+@router.get("/insights/clusters/{cluster_id}/comments")
+async def list_comments(cluster_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    await _cluster(s, tenant_id, cluster_id)
+    rows = (await s.scalars(select(ClusterComment).where(ClusterComment.cluster_id == cluster_id, ClusterComment.tenant_id == tenant_id)
+                            .order_by(ClusterComment.created_at))).all()
+    return {"items": [comment_out(c) for c in rows]}
+
+
+@router.post("/insights/clusters/{cluster_id}/comments")
+async def add_comment(cluster_id: str, body: CommentBody, request: Request, tenant_id: str = Depends(current_tenant),
+                      s: AsyncSession = Depends(get_session)) -> dict:
+    """DESK-09: a person's comment on a pattern; masked, append-only, evidence for the fix draft."""
+    c = await _cluster(s, tenant_id, cluster_id)
+    text = body.text.strip()
+    if len(text) < 10:
+        raise ApiError(422, "comment_too_short", "A comment needs at least 10 characters")
+    if len(text) > 1000:
+        raise ApiError(422, "comment_too_long", "A comment can be at most 1000 characters")
+    row = ClusterComment(tenant_id=tenant_id, cluster_id=c.id, author=auth.actor(request, "Studio")[:120], author_role=auth.role_of(request),
+                         text=mask.text(text))
+    s.add(row)
+    await s.flush()
+    if len(text) >= actions.COMMENT_ANSWER_MIN:
+        await actions.comment_answers(s, tenant_id, c, row.author)
+    await s.commit()
+    out = comment_out(row)
+    bus.publish(tenant_id, "insights", "cluster.updated", {"id": c.id, "comment": out})
+    return out
 
 
 @router.post("/insights/clusters/{cluster_id}/draft-fix")

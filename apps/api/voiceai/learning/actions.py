@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai import jobs
@@ -18,7 +18,7 @@ from voiceai.errors import ApiError
 from voiceai.events import bus
 from voiceai.models import (
     Agent, AgentVersion, Call, CallAnalysis, CallFeedback, CallScorecard, CheckReview, Cluster, Escalation, EvalResult, EvalRun,
-    EvalScenario, FixProposal, LearningAction,
+    EvalScenario, FixProposal, LearningAction, ClusterComment,
 )
 from voiceai.schemas import LearningConfig
 
@@ -52,16 +52,22 @@ def rank(items: list[LearningAction]) -> list[LearningAction]:
     return sorted(items, key=lambda a: (SEVERITY.get(a.severity, 9), -(a.impact or 0), a.created_at or utcnow()))
 
 
+COMMENT_ANSWER_MIN = 20  # DESK-10: a comment this long counts as a person's answer
+
+
 # ------------------------------------------------------------------ clusters: human answers and fixes
 async def clusters_with_notes(s: AsyncSession, cluster_ids: list[str]) -> set[str]:
-    """Clusters with at least one member call a specialist resolved with a note."""
+    """Clusters a person has spoken to: a member call a specialist resolved with a note, or a specialist comment of 20+ characters."""
     if not cluster_ids:
         return set()
     rows = (await s.execute(
         select(CallAnalysis.cluster_id).join(Escalation, Escalation.call_id == CallAnalysis.call_id)
         .where(CallAnalysis.cluster_id.in_(cluster_ids), Escalation.resolution_note.is_not(None), Escalation.resolution_note != "")
     )).all()
-    return {r[0] for r in rows}
+    commented = (await s.execute(
+        select(ClusterComment.cluster_id).where(ClusterComment.cluster_id.in_(cluster_ids), func.length(ClusterComment.text) >= COMMENT_ANSWER_MIN)
+    )).all()
+    return {r[0] for r in rows} | {r[0] for r in commented}
 
 
 def needs_answer(c: Cluster, noted: set[str]) -> bool:
@@ -303,6 +309,16 @@ async def close(s: AsyncSession, a: LearningAction, status: str, by: str, note: 
     await s.commit()
     bus.publish(a.tenant_id, "insights", "action.updated", action_out(a, agent.name if agent else None))
     return a
+
+
+async def comment_answers(s: AsyncSession, tenant_id: str, cluster: Cluster, by: str) -> None:
+    """DESK-10: a comment of 20+ characters is a person's answer, so the cluster's open `answer_needed` action closes. Caller commits."""
+    a = await s.scalar(select(LearningAction).where(LearningAction.tenant_id == tenant_id, LearningAction.agent_id == cluster.agent_id,
+                                                    LearningAction.key == f"answer_needed:{cluster.id}", LearningAction.status == "open"))
+    if a is not None:
+        a.status, a.closed_at, a.closed_by, a.note = "resolved", utcnow(), (by or "Specialist")[:120], "Answered by a specialist comment"
+        await s.flush()
+        bus.publish(tenant_id, "insights", "action.updated", action_out(a))
 
 
 async def answer(s: AsyncSession, a: LearningAction, text: str, by: str) -> LearningAction:

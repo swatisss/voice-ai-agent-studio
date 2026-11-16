@@ -165,6 +165,8 @@ The playground's full-flow mode and the Studio's views of conversations. Same be
 | GET | `/api/outbound/targets` | query `agent_id` → `{items: [{member_ref, first_name, summary, context}]}` from the agent's `outbound.targets_url`; 409 `not_outbound` for other agents ([/architecture/call-modes.md](/architecture/call-modes.md)) |
 
 ## Escalations (console)
+The specialist role reaches only the requests listed in [/architecture/agent-desk.md](/architecture/agent-desk.md); every other request answers 403 `role_forbidden`, and a request for another business unit 403 `tenant_forbidden`. Its responses are masked.
+
 | Method | Path | Body → Result |
 |---|---|---|
 | GET | `/api/escalations` | query `status?` → `{items: [escalation + call summary]}` |
@@ -177,6 +179,8 @@ The playground's full-flow mode and the Studio's views of conversations. Same be
 |---|---|---|
 | GET | `/api/insights/clusters` | query `agent_id?` → `{items: [cluster + weekly_escalations, est_weekly_cost_usd, dislike_count, signal_count, ready_for_fix, label, snoozed_until]}`; `dislike_count` = member calls with a thumbs down in the last 28 days, `signal_count` = distinct member escalations plus thumbs-down calls in that window ([/architecture/fleet-learning.md](/architecture/fleet-learning.md)) |
 | GET | `/api/insights/clusters/{id}` | cluster + member calls (analysis + resolution notes + `feedback`) + proposals; every cluster (list and detail) also carries `human_answer`, `reopened_at`, `needs_answer` (a `missing_knowledge` cluster with no specialist note and no `human_answer`) and `fix` (`{proposal_id, version, decided_at, before_per_week, after_per_week, held}` or `null`, [/architecture/learning-actions.md](/architecture/learning-actions.md)) |
+| GET | `/api/insights/clusters/{id}/comments` | → `{items: [{id, cluster_id, author, author_role, text, created_at}]}`, oldest first ([/architecture/agent-desk.md](/architecture/agent-desk.md)) |
+| POST | `/api/insights/clusters/{id}/comments` | `{text}` (10-1000 chars) → the comment; 422 `comment_too_short` / `comment_too_long`; any signed-in role; the text is masked before it is stored; counts as human evidence for the fix draft |
 | POST | `/api/insights/clusters/{id}/draft-fix` | → `{job_id}` (proposal arrives via `proposal.updated` event); 409 if not ready; 409 `answer_needed` when `needs_answer` |
 | POST | `/api/insights/clusters/{id}/ignore` | → cluster |
 | GET | `/api/proposals/{id}` | proposal (with `origin`) + draft doc + `original_doc` (the article a `knowledge_edit` revises, else `null`) + latest eval run (summary with its gate + results, each with `repeat`, `failures`, `call_id` and `scenario_name`) |

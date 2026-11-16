@@ -19,7 +19,7 @@ from voiceai.knowledge.ingest import create_doc
 from voiceai.knowledge.search import search as kb_search
 from voiceai.llm.gateway import gateway
 from voiceai.models import (
-    Agent, AgentVersion, Call, CallAnalysis, CallFeedback, Cluster, Escalation, EvalRun, EvalScenario, FixProposal, KnowledgeDoc, Skill, Tool,
+    Agent, AgentVersion, Call, CallAnalysis, CallFeedback, Cluster, ClusterComment, Escalation, EvalRun, EvalScenario, FixProposal, KnowledgeDoc, Skill, Tool,
 )
 from voiceai.schemas import FixDraft, SkillDef, ToolDef
 
@@ -119,6 +119,7 @@ async def draft(s: AsyncSession, tenant_id: str, cluster: Cluster, origin: str =
     members = await cluster_evidence(s, cluster.id, limit=60)
     evidence = members[: shown_count(len(members))]  # the drafter sees only these; the rest are held out (SL-08, SL-18)
     doc_titles = list((await s.scalars(select(KnowledgeDoc.title).where(KnowledgeDoc.id.in_(cfg.get("knowledge_doc_ids", []))))).all())
+    comments = (await s.scalars(select(ClusterComment).where(ClusterComment.cluster_id == cluster.id).order_by(ClusterComment.created_at))).all()
     attached = await _attached_articles(s, tenant_id, cfg, cluster, evidence)
     own = {t["name"] for t in cfg.get("tools", [])}
     unattached = [t for t in (await s.scalars(select(Tool).where(Tool.tenant_id == tenant_id, Tool.status == "active"))).all() if t.name not in own]
@@ -127,7 +128,8 @@ async def draft(s: AsyncSession, tenant_id: str, cluster: Cluster, origin: str =
         "fix-draft",
         cluster_name=cluster.name, cluster_description=cluster.description, root_cause=cluster.root_cause,
         evidence="\n".join([*(f"- Goal: {e['caller_goal']} | Gap: {e['gap_summary']} | Specialist: {e['resolution_note'] or '(no note)'}" for e in evidence),
-                             *([f"- Reviewer's answer for all of these callers: {cluster.human_answer}"] if cluster.human_answer else [])]),
+                             *([f"- Reviewer's answer for all of these callers: {cluster.human_answer}"] if cluster.human_answer else []),
+                             *(f"- Specialist comment ({c.author}): {c.text}" for c in comments)]),
         attached_articles="\n\n".join(f"[{d.id}] {d.title}\n{d.content[:3000]}" for d in attached) or "(none)",
         existing_tools="\n".join(f"- {t['name']}: {t['description']}" for t in cfg.get("tools", [])) or "- (none)",
         unattached_tools="\n".join(f"- {t.name}: {t.description}" for t in unattached) or "- (none)",

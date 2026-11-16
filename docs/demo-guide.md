@@ -12,7 +12,7 @@ In about 35 minutes the audience watches one story: you build a new voice agent 
 | 2. Build | A new *Prior Authorization Assistant*: persona, rules, a knowledge article, a new tool, a skill, memory, scoring settings, publish | 8 min |
 | 3. Playground | Text and voice test calls: verification, a tool lookup, a knowledge answer, memory, feedback | 6 min |
 | 4. Call detail | Transcript, tool calls and the call's scorecard; a human review of one verdict | 3 min |
-| 5. Hand-off | An escalation with a groundwork packet in the Agent console | 3 min |
+| 5. Hand-off | An escalation with a groundwork packet, worked by a call-centre specialist in the Agent Desk | 4 min |
 | 6. Measure | The Evaluation page: scores per version, drift, judge calibration; a test suite run | 6 min |
 | 7. Learn | Run learning now, the learning inbox, the check, approve and publish | 7 min |
 
@@ -27,7 +27,7 @@ Do these the evening before, then again 30 minutes before you present.
 - [ ] **Start the stack:** `python scripts/dev.py` from the repo root. Web at http://localhost:3000, API at http://localhost:8000. Use `localhost`, not an IP, or the browser blocks the microphone.
 - [ ] **Pick the business unit:** bottom of the sidebar → *Customer Support & Channels*.
 - [ ] **Speed up the learning check:** open the Customer Care Agent → **Evaluation** tab → *Learning* card → set *Test repeats when checking a proposal* to **1** → **Save draft** → **Publish**. A proposal check then needs about 30 simulated calls instead of about 70.
-- [ ] **Pre-run the learning loop:** Dashboard → **Run learning now**, and wait until the card shows the run (several minutes with real models). This plays the "overnight" run, so the inbox is full when you reach Act 7.
+- [ ] **Pre-run the learning loop** (after Sam's comment above): Dashboard → **Run learning now**, and wait until the card shows the run (several minutes with real models). This plays the "overnight" run, so the inbox is full when you reach Act 7.
 - [ ] **Headset** for voice, to avoid echo.
 - [ ] **Models:** keep the agents on `openai:gpt-4.1-mini` (the `LLM_ROLE_*` lines in `.env`) and do not touch the builder's model select on stage. Starting with `scripts/stack.py`: pass `--llm openai:gpt-4.1-mini`.
 - [ ] **Routing:** the decision-model budgets default to 1.5 s (voice) and 2.5 s (text); to demo without Jev start the stack with `--routing embedding`. Keep `PHI_MODE=0` (synthetic data).
@@ -36,7 +36,9 @@ Do these the evening before, then again 30 minutes before you present.
 - [ ] **Fallback:** keep the Type tab ready for any audio problem; Talk needs the Docker stack on :8080.
 - [ ] **In Full flow say only scripted lines.** Emergencies, off-topic requests and "a person please" are shown in Single agent.
 - [ ] **Act 3:** keep asthma as the declared condition. A past cardiac history is fine now; a present one (chest pain right now) rightly gets the 999 line.
-- [ ] **Windows to have open:** the app in one window, and the **Agent console** in a second window for a teammate playing the human specialist (Act 5).
+- [ ] **Accounts:** set `STUDIO_ADMIN_PASSWORD`, `STUDIO_REVIEWER_PASSWORD` and `STUDIO_SPECIALIST_PASSWORD` in `apps/api/.env` (the specialist works in `STUDIO_SPECIALIST_TENANT`, default `northgate-health`). Restart the API.
+- [ ] **Windows to have open (one browser profile each, or a private window):** **Alex Admin** (`admin@echomind.test`) builds, publishes and approves; **Sam Specialist** (`specialist@echomind.test`, the Agent Desk) takes the escalations and teaches the agent. Riley Reviewer (`reviewer@echomind.test`) is optional. Sign in as Sam in the second window and leave it on the **Agent console** (Act 5).
+- [ ] **Stage Sam's comment before the pre-run:** as Sam, **Patterns** → *Adding a newborn to coverage* → **Comments** → type `Always mention the 60-day window and that the baby's cover starts from the date of birth.` → **Add comment**. The pre-run below then drafts the fix with it (Act 7).
 
 **Demo callers** (they share these details only when the agent asks):
 
@@ -62,10 +64,11 @@ Open with the **Dashboard**: one place shows how every agent of this business un
     - **Personas** — reusable voices and speaking styles.
     - **Test call** — the playground.
     - **Calls** — every conversation, with its scorecard.
-    - **Agent console** — where humans take over.
     - **Insights** — what goes wrong, and proposed fixes.
     - **Evaluation** — scores and test suites.
     - **Settings** — voice pipelines and keys.
+
+   Say: "This is the builders' workspace. The people who take the calls the agents cannot finish have their own, much smaller one: you will see it in Act 5." The **Agent console** is not in this sidebar on purpose.
 6. Show the **Business unit** switcher at the bottom of the sidebar: every agent, call and score belongs to one unit and never leaks into another.
 
 **Say:** "Agents here are declarative. You describe what the agent knows, what it may do and what it must never do. The platform runs it, scores it and learns from it."
@@ -173,19 +176,21 @@ Every call is recorded, analysed and scored within seconds of ending. Open **Cal
 
 **Say:** "Safety checks such as 'no member data before verification' are decided from the event log in code, not by an LLM's opinion. The judge only answers the questions code cannot."
 
-## Act 5 — Hand-off to a human (3 min)
+## Act 5 — Hand-off to a human, and the Agent Desk (4 min)
 
-When the agent should not handle something, it hands the call over with notes, so the caller never repeats themselves. Keep the **Agent console** open in the second window.
+When the agent should not handle something, it hands the call over with notes, so the caller never repeats themselves. Two people are in this act: you (Alex Admin) as the caller, and **Sam Specialist** in the second window.
 
 1. On **Test call**, with the Prior Authorization Assistant, *Call from: No number*, **Start chat**.
 2. Type: `My CPAP authorization PA-78001 was denied and I want to appeal it.`
 3. Give `610277` and `January 30, 1958` when asked. The agent looks the authorization up (denied: insufficient documentation, the provider may resubmit with a sleep study), explains it, and — because your *Escalate when* rule says so — hands over: "I'm connecting you with a specialist…". The banner reads **Escalated — waiting for a specialist**.
-4. In the console window the escalation appears at once under **Waiting** with a chime. Within a second or two the **groundwork packet** fills in: summary, intent, authorization number as a chip, *Already tried* (identity verified, authorization looked up), reason, sentiment from start to end, and a suggested next action.
-5. The teammate clicks **Accept**, reads the packet aloud, chooses disposition *Appeal filed*, writes a note (`Started an appeal; asked the provider for the sleep study.`) and clicks **Resolve**.
+4. **Sam's window.** Sign in as `specialist@echomind.test`: it lands on the **Agent console** with five items in the sidebar (Agent console, Escalated calls, Patterns, Knowledge, Agents) and no dashboard, no settings and no business-unit switcher. Say: "A specialist sees only what they need."
+5. The escalation appears at once under **Waiting** with a chime. Within a second or two the **groundwork packet** fills in: summary, intent, authorization number as a chip, *Already tried* (identity verified, authorization looked up), reason, sentiment from start to end, and a suggested next action. Member numbers, emails and phone numbers are masked (`NGH-•••237`).
+6. Sam clicks **Accept** (the name is Sam's own), reads the packet aloud, chooses disposition *Appeal filed*, writes a note (`Started an appeal; asked the provider for the sleep study.`) and clicks **Resolve**. The notice says the note is now evidence for the learning loop.
+7. Still in Sam's window: **Escalated calls** shows only escalated calls (open the one just resolved: transcript, packet and note, but no scorecard or cost). **Knowledge** and **Agents** are read-only (a *Read-only* badge, no edit buttons), and **Agents** shows each agent's published rules. Try `/settings/` in the address bar: Sam is sent back to the console with "Not available for your role".
 
-**Say:** "That resolution note is the ground truth of what a human told the caller. When enough calls go the same way, the platform drafts a fix from those notes — that's Act 7."
+**Say:** "That resolution note is the ground truth of what a human told the caller. When enough calls go the same way, the platform drafts a fix from those notes — that's Act 7. And Sam can also teach the agent directly, on a whole pattern."
 
-The call's detail page now shows the escalation, the packet, the disposition and the note next to its scorecard.
+In your window, the call's detail page now shows the escalation, the packet, the disposition and the note next to its scorecard.
 
 ## Act 6 — Measure it (6 min)
 
@@ -225,8 +230,8 @@ Every night the platform reviews each agent's calls, drafts fixes and checks the
 2. Press **Run learning now** to show the trigger. The button reads **Learning…** and the card updates when it finishes. Clusters that already have a proposal are skipped, so this second run is quick.
 3. Click **Review proposals** → **Insights**. At the top: the **Last night** strip and **Waiting for review** — one card per proposal with a *Nightly* badge, its kind, title, rationale and a **Passed** or **Failed** badge.
 4. Open *Adding a newborn to your coverage* (**Open**). Show:
-    - **Evidence**: 5 escalated calls, each with what the human specialist actually told the caller.
-    - **Proposed fix**: a knowledge article written from those notes (60-day window, member portal steps, birth record). The drafter never adds member data or medical advice.
+    - **Evidence**: 5 escalated calls, each with what the human specialist actually told the caller, and under it **Specialist comments**: Sam's comment from before the night run, with Sam's name and the *Agent Desk* badge.
+    - **Proposed fix**: a knowledge article written from those notes **and Sam's comment** (60-day window, cover from the date of birth, member portal steps, birth record). The drafter never adds member data or medical advice.
     - **Derived test scenarios**: built from real calls, added to the test suite on approval.
     - **Evaluation**: the current version against the fix on the cluster's calls, on calls **held out** from the drafter, on the derived scenarios and on the whole test suite. Summary such as "Baseline 0/6 → Candidate 5/6 · Held out 3/4 · No regressions", and **Check passed**.
 5. Click any cell of the grid: each run's result, its failures and the simulated call.
@@ -237,6 +242,17 @@ Every night the platform reviews each agent's calls, drafts fixes and checks the
 If a proposal's check **failed**, its reasons are listed (for example "1 test scenario regressed: Claim paid 3/3 → 1/3"). **Approve** is disabled; **Publish anyway** asks for a written reason.
 
 **Say:** "It learns only from real signals — escalations, unhappy callers, unanswered searches, failed lookups, and judge verdicts that humans have confirmed. It proposes; people decide."
+
+### The desk teaches the agent live (optional, 3 min)
+
+Show that a specialist's comment reaches the learning loop without a single call being replayed. This uses a pattern that is still **Watching**, so the comment is the new evidence.
+
+1. In Sam's window open **Patterns** → *Prior authorization status* (*Watching 3 of 5*). Read the three escalated calls and what Sam's colleagues told callers.
+2. Under **Comments** type `Prior authorisation status is in the member portal under Treatment, and our team can read it out over the phone once the caller is verified.` → **Add comment**. It appears with Sam's name and role.
+3. In Alex's window open **Insights** → the same cluster → **Evidence**: *Specialist comments* shows Sam's comment. Say: "The drafter reads it exactly like a resolution note, and a comment of 20+ characters counts as a person's answer, so a cluster with no notes can be drafted from it. It does not make the cluster ready sooner: the threshold is still five real escalations."
+4. For a cluster with no resolution notes at all (*Answer needed* under **Needs attention**), Sam's comment closes that action and **Draft fix** appears.
+
+**Say:** "Two ways to teach the agent: one note per call, and one comment per pattern. Both are written by people; the agent never edits itself."
 
 ## Optional extras
 
@@ -287,6 +303,9 @@ The nightly run fires only when 02:00 UTC passes while the server is running. St
 | Run | Phone calls through Twilio, transfer on hand-off | Extras |
 | Run | Caller feedback after each call | Act 3 |
 | Hand-off | Escalation with a groundwork packet, agent console, dispositions and notes | Act 5 |
+| Agent Desk | A third role for call-centre specialists: five-item workspace, console, escalated calls only, read-only knowledge and agent settings, member memory without erase or export | Act 5 |
+| Agent Desk | Identifiers masked for the specialist (member numbers, emails, phone numbers) and in application logs; the API refuses everything outside the desk | Act 5 |
+| Learn | Specialist comments on an escalation pattern: evidence for the fix draft, read by admins in Insights | Act 7, extras |
 | Measure | Scorecard on every call: measures, code and judge checks, hard gates, evidence | Act 4 |
 | Measure | Human review of judge verdicts and judge calibration | Acts 4, 6 |
 | Measure | Evaluation page: per-version rollups, trend, drift, checks, scored calls | Act 6 |

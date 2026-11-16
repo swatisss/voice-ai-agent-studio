@@ -1,29 +1,41 @@
 // Spec: /ui/app-shell.md, /ui/design-system.md (Layout)
 "use client";
 
-import { AudioWaveform, Bot, Gauge, Headphones, LayoutDashboard, Lightbulb, LogOut, Menu, Phone, PhoneCall, Settings, ShieldCheck, UserRound, X } from "lucide-react";
+import { AudioWaveform, BookOpen, Bot, Gauge, Headphones, LayoutDashboard, Lightbulb, LogOut, Menu, Phone, PhoneCall, Settings, ShieldCheck, UserRound, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, setApiTenant, useEvents } from "@/lib/api";
-import { loginUrl, MeCtx, type Me } from "@/lib/auth";
-import { Badge, cx, Select, ToastProvider } from "./ui";
+import { homeFor, loginUrl, MeCtx, ROLE_LABEL, specialistMayOpen, type Me } from "@/lib/auth";
+import { Badge, cx, Select, ToastProvider, useToast } from "./ui";
 
 type Tenant = { id: string; name: string };
 const TenantCtx = createContext<{ tenant: string; tenants: Tenant[] }>({ tenant: "", tenants: [] });
 export const useTenant = () => useContext(TenantCtx);
 
-const NAV = [
+type NavItem = { href: string; label: string; icon: typeof Bot; badge?: "console" | "insights" };
+const CONSOLE: NavItem = { href: "/console/", label: "Agent console", icon: Headphones, badge: "console" };
+
+/** The builders' sidebar (UI-29, UI-78): the console is the specialists' tool, listed here only with sign-in off. */
+const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/agents/", label: "Agents", icon: Bot },
   { href: "/personas/", label: "Personas", icon: UserRound },
   { href: "/test-call/", label: "Test call", icon: PhoneCall },
   { href: "/calls/", label: "Calls", icon: Phone },
-  { href: "/console/", label: "Agent console", icon: Headphones, badge: "console" as const },
   { href: "/insights/", label: "Insights", icon: Lightbulb, badge: "insights" as const },
   { href: "/evaluation/", label: "Evaluation", icon: Gauge },
   { href: "/compliance/", label: "Compliance", icon: ShieldCheck },
   { href: "/settings/", label: "Settings", icon: Settings },
+];
+
+/** The Agent Desk specialist's sidebar (UI-77). */
+const DESK_NAV: NavItem[] = [
+  CONSOLE,
+  { href: "/calls/", label: "Escalated calls", icon: Phone },
+  { href: "/patterns/", label: "Patterns", icon: Lightbulb },
+  { href: "/knowledge/", label: "Knowledge", icon: BookOpen },
+  { href: "/agents/view/", label: "Agents", icon: Bot },
 ];
 
 const PRODUCT = "Echo Mind";
@@ -49,6 +61,18 @@ export function Shell({ children }: { children: ReactNode }) {
   return <MeCtx.Provider value={me}><Studio me={me}>{children}</Studio></MeCtx.Provider>;
 }
 
+/** UI-77: a specialist who opens a page outside their workspace goes back to the console with a notice. */
+function DeskGuard({ path }: { path: string }) {
+  const router = useRouter();
+  const toast = useToast();
+  useEffect(() => {
+    if (specialistMayOpen(path)) return;
+    toast("Not available for your role", "warn");
+    router.replace("/console/");
+  }, [path, router, toast]);
+  return null;
+}
+
 function Studio({ me, children }: { me: Me; children: ReactNode }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenant, setTenantState] = useState("");
@@ -57,6 +81,10 @@ function Studio({ me, children }: { me: Me; children: ReactNode }) {
   const [ready, setReady] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const path = usePathname();
+  const desk = me.enabled && me.user?.role === "specialist";  // the Agent Desk workspace
+  const home = homeFor(me.user?.role);
+  const nav = desk ? DESK_NAV : me.enabled ? NAV : [...NAV.slice(0, 5), CONSOLE, ...NAV.slice(5)];
+  const allowed = !desk || specialistMayOpen(path);
   const signOut = async () => {
     await api("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     window.location.href = "/login/";
@@ -75,18 +103,19 @@ function Studio({ me, children }: { me: Me; children: ReactNode }) {
       try { saved = localStorage.getItem("tenant") ?? ""; } catch { /* ignore */ }
       setTenant(r.items.some((t) => t.id === saved) ? saved : r.items[0]?.id ?? "");
     }).catch(() => setTenants([]));
-    api("/healthz").then(setHealth).catch(() => setHealth(null));
-  }, [setTenant]);
+    if (!desk) api("/healthz").then(setHealth).catch(() => setHealth(null));
+  }, [setTenant, desk]);
 
   const refreshBadges = useCallback(() => {
     if (!tenant) return;
     api<{ items: unknown[] }>("/api/escalations?status=waiting").then((r) => setWaiting(r.items.length)).catch(() => undefined);
+    if (desk) return;
     Promise.all([  // clusters ready for a fix plus proposals waiting for review
       api<{ items: { ready_for_fix: boolean }[] }>("/api/insights/clusters"), api<{ items: unknown[] }>("/api/insights/inbox"),
     ]).then(([c, inbox]) => setReady(c.items.filter((x) => x.ready_for_fix).length + inbox.items.length)).catch(() => undefined);
-  }, [tenant]);
+  }, [tenant, desk]);
   useEffect(() => { refreshBadges(); }, [refreshBadges]);
-  useEvents(["console", "insights"], (e) => {  // UI-02
+  useEvents(desk ? ["console"] : ["console", "insights"], (e) => {  // UI-02
     if (e.type.startsWith("escalation") || e.type.startsWith("cluster") || e.type.startsWith("proposal") || e.type.startsWith("learning")) refreshBadges();
   }, tenant);
   useEffect(() => { setMenuOpen(false); }, [path]);
@@ -111,13 +140,13 @@ function Studio({ me, children }: { me: Me; children: ReactNode }) {
   const sidebar = (label: string, copy: string, onClose?: () => void) => (
     <div className="flex h-full flex-col overflow-y-auto">
       <div className="flex items-center justify-between gap-2 px-5 py-5">
-        <Link href="/" className="flex items-center gap-3" aria-label={`${PRODUCT} ${CAPTION} home`}>{brand}</Link>
+        <Link href={home} className="flex items-center gap-3" aria-label={`${PRODUCT} ${CAPTION} home`}>{brand}</Link>
         {onClose && (
           <button className="rounded-full p-2 hover:bg-accent-soft" onClick={onClose} aria-label="Close menu" autoFocus><X size={22} /></button>
         )}
       </div>
       <nav className="flex-1 space-y-1 px-3" aria-label={label}>
-        {NAV.map(({ href, label: text, icon: Icon, badge }) => {
+        {nav.map(({ href, label: text, icon: Icon, badge }) => {
           const active = href === "/" ? path === "/" : path.startsWith(href);
           const count = badge === "console" ? waiting : badge === "insights" ? ready : 0;
           return (
@@ -134,19 +163,26 @@ function Studio({ me, children }: { me: Me; children: ReactNode }) {
           <div className="flex items-center gap-2" aria-label="Signed in">
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{me.user.name}</span>
-              <Badge tone={me.user.role === "admin" ? "accent" : "neutral"}>{me.user.role === "admin" ? "Admin" : "Reviewer"}</Badge>
+              <Badge tone={me.user.role === "admin" ? "accent" : "neutral"}>{ROLE_LABEL[me.user.role]}</Badge>
             </span>
             <button className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-accent hover:bg-accent-soft" onClick={signOut}>
               <LogOut size={14} aria-hidden="true" />Sign out
             </button>
           </div>
         )}
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted" htmlFor={`business-unit-${copy}`}>Business unit</label>
-          <Select id={`business-unit-${copy}`} className="unit-select" value={tenant} onChange={(e) => setTenant(e.target.value)}>
-            {tenants.map((t) => <option key={t.id} value={t.id}>{unitOf(t.name)}</option>)}
-          </Select>
-        </div>
+        {desk ? (
+          <div aria-label="Business unit">
+            <div className="text-xs font-medium text-muted">Business unit</div>
+            <div className="text-sm font-medium">{unitOf(tenants.find((t) => t.id === tenant)?.name ?? "")}</div>
+          </div>
+        ) : (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted" htmlFor={`business-unit-${copy}`}>Business unit</label>
+            <Select id={`business-unit-${copy}`} className="unit-select" value={tenant} onChange={(e) => setTenant(e.target.value)}>
+              {tenants.map((t) => <option key={t.id} value={t.id}>{unitOf(t.name)}</option>)}
+            </Select>
+          </div>
+        )}
         {health?.providers && (
           <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted" aria-label="Provider status">
             {Object.entries(health.providers).map(([k, ok]) => (
@@ -168,7 +204,7 @@ function Studio({ me, children }: { me: Me; children: ReactNode }) {
         <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-line bg-panel md:block">{sidebar("Primary", "side")}</aside>
         <div className="md:pl-64">
           <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-panel px-4 py-2 shadow-[var(--shadow)] md:hidden">
-            <Link href="/" className="flex items-center gap-3" aria-label={`${PRODUCT} ${CAPTION} home`}>{brand}</Link>
+            <Link href={home} className="flex items-center gap-3" aria-label={`${PRODUCT} ${CAPTION} home`}>{brand}</Link>
             <button className="rounded-full p-2 hover:bg-accent-soft" onClick={() => setMenuOpen(true)} aria-label="Menu" aria-expanded={menuOpen}><Menu size={22} /></button>
           </header>
           {menuOpen && (
@@ -178,7 +214,8 @@ function Studio({ me, children }: { me: Me; children: ReactNode }) {
             </div>
           )}
           <main id="main" className="mx-auto w-full max-w-7xl p-4 md:p-6">
-            {tenant ? children : <div className="text-sm text-muted">Loading business units… (is the API running?)</div>}
+            {desk && <DeskGuard path={path} />}
+            {!allowed ? null : tenant ? children : <div className="text-sm text-muted">Loading business units… (is the API running?)</div>}
           </main>
         </div>
       </ToastProvider>

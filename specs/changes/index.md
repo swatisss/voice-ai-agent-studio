@@ -1,5 +1,6 @@
 # Change proposals
 
+* [CP-0047 Agent Desk role](cp-0047-agent-desk-role.md) - A third role for call-centre specialists: console, escalated calls (masked), comments on escalation patterns that feed learning, read-only knowledge, agent settings and member memory; the console leaves the builders' sidebar
 * [CP-0046 Final QA - fixes for every finding](cp-0046-final-qa-fixes.md) - One proposal for the pre-demo QA findings and the 2026-11-16 re-check: grounded amounts, third parties, hand-off wording, markdown in voice, out-of-scope line, latency defaults, builder friction, demo tooling
 * [CP-0045 A small seeded call history](cp-0045-small-seeded-call-history.md) - 20 seeded calls instead of 123; the newborn cluster stays ready for a fix, pre-authorisation shows as watching
 * [CP-0044 Routing mode switch in the playground](cp-0044-routing-mode-switch.md) - Full flow gets an Embedding | Decision model switch that overrides the front desk's routing mode for one conversation

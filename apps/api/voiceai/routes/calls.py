@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from voiceai import auth
 from voiceai.db import get_session, sessionmaker
 from voiceai.errors import ApiError
 from voiceai import call_settings
@@ -197,7 +198,7 @@ async def give_feedback(call_id: str, body: FeedbackBody, tenant_id: str = Depen
 
 @router.get("/calls")
 async def list_calls(
-    agent_id: str | None = None, outcome: str | None = None, channel: str | None = None, direction: str | None = None,
+    request: Request, agent_id: str | None = None, outcome: str | None = None, channel: str | None = None, direction: str | None = None,
     feedback: Literal["up", "down", "none"] | None = None, conversation_id: str | None = None,
     include_seed: bool = True, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session),
 ) -> dict:
@@ -210,6 +211,8 @@ async def list_calls(
         .order_by(Call.started_at.desc())
         .limit(500)
     )
+    if auth.is_specialist(request):  # DESK-04: the Agent Desk sees escalated calls only
+        q = q.where(Call.id.in_(select(Escalation.call_id).where(Escalation.tenant_id == tenant_id)))
     if agent_id:
         q = q.where(Call.agent_id == agent_id)
     if conversation_id:
@@ -231,12 +234,12 @@ async def list_calls(
 
 
 @router.get("/calls/{call_id}")
-async def call_detail(call_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+async def call_detail(call_id: str, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     call = await s.scalar(select(Call).where(Call.id == call_id, Call.tenant_id == tenant_id))
-    if not call:
+    esc = await s.scalar(select(Escalation).where(Escalation.call_id == call_id))
+    if not call or (esc is None and auth.is_specialist(request)):  # DESK-04
         raise ApiError(404, "call_not_found", "Call not found")
     events = (await s.scalars(select(CallEvent).where(CallEvent.call_id == call_id).order_by(CallEvent.seq))).all()
-    esc = await s.scalar(select(Escalation).where(Escalation.call_id == call_id))
     analysis = await s.scalar(select(CallAnalysis).where(CallAnalysis.call_id == call_id))
     version = await s.get(AgentVersion, call.agent_version_id)
     fb = await s.scalar(select(CallFeedback).where(CallFeedback.call_id == call_id))

@@ -7,7 +7,7 @@ Spec: /product/demo-walkthrough.md
     python scripts/dev.py                                  # in another terminal, for a live run against the stack on :8000
     python scripts/demo_walkthrough.py --live              # REAL LLM calls on your keys (costs money): Acts 1-4 and 7
     python scripts/demo_walkthrough.py --live --learning   # also Act 5 (the newborn fix) and Act 6 (the loop); approvals change the stack
-    (with Studio sign-in on it signs in as the admin and the reviewer)
+    (with Studio sign-in on it signs in as the admin, the reviewer and the specialist)
 
 The story is Northgate Health, a fictional UK health insurer (/demo-data/northgate-health.md), on a freshly seeded
 `northgate-health`: Act 1 Customer Care (Sarah's cover and a Digital GP booking, David's missed Direct Debit); Act 2 the
@@ -49,7 +49,7 @@ REPORT_DIR = ROOT / "apps" / "api" / "data" / "demo-runs"
 API_DIR = ROOT / "apps" / "api"
 
 CARE, SALES, CLAIMS = "Customer Care", "Health Cover Sales", "Claims & Pre-authorisation"  # the seeded agents
-FAKE_ADMIN_PASSWORD, FAKE_REVIEWER_PASSWORD = "fake-admin-pass", "fake-reviewer-pass"  # the throwaway fake server only
+FAKE_ADMIN_PASSWORD, FAKE_REVIEWER_PASSWORD, FAKE_SPECIALIST_PASSWORD = "fake-admin-pass", "fake-reviewer-pass", "fake-specialist-pass"  # the throwaway fake server only
 
 # Synthetic members (/demo-data/northgate-members.md); numbers in the Ofcom drama range
 # Act 1: Sarah Mitchell's cover and a Digital GP booking for her daughter; David Okoro's missed Direct Debit
@@ -110,6 +110,8 @@ LOOP_RETRY = "Can I suspend my cover while I'm living overseas for a few months?
 LOOP_NOTE = ("You can pause a Northgate health policy once, for 3 to 12 months, while you live or work abroad. Call us before you leave. "
              "No premiums are taken and there is no cover while it is paused; it restarts on the same terms with no new medical "
              "questions when you are back.")
+LOOP_COMMENT = ("When people ask about pausing cover abroad, tell them it is a once-only pause of 3 to 12 months and that they must "
+                "call before they leave.")
 # Act 7: Sarah Mitchell's registered number; the caller never gives the right date of birth
 ADVERSARY_NUMBER = "+447700900141"
 ADVERSARY_TURNS = [
@@ -252,6 +254,7 @@ class Walkthrough:
     def __init__(self, args: argparse.Namespace):
         self.args, self.api, self.r = args, Api(args.api, args.tenant), Report()
         self.reviewer = Api(args.api, args.tenant)  # the human in the loop (/architecture/studio-auth.md); the same as api with sign-in off
+        self.specialist = Api(args.api, args.tenant)  # the call-centre specialist, Agent Desk (/architecture/agent-desk.md)
         self.signed_in = False
         self.agents: dict[str, dict[str, Any]] = {}  # name -> agent row
         self.agent_id = ""  # Customer Care: the agent the learning acts teach
@@ -292,7 +295,7 @@ class Walkthrough:
         return self.r.add("1 Preflight", "routing profiles ready for the front desk", True)
 
     def _sign_in(self) -> None:
-        """With Studio sign-in on, the admin approves and the reviewer works the console (CP-0034)."""
+        """With Studio sign-in on, the admin approves, the reviewer reviews and the specialist works the console (CP-0034, CP-0047)."""
         if not (self.api.get("/api/auth/me") or {}).get("enabled"):
             self.r.notes["Sign-in"] = "off (every request acts as the admin)"
             return
@@ -300,12 +303,13 @@ class Walkthrough:
         try:
             self.api.login("admin@echomind.test", pw["admin"])
             self.reviewer.login("reviewer@echomind.test", pw["reviewer"])
+            self.specialist.login("specialist@echomind.test", pw["specialist"])
         except ApiError as exc:
-            self.r.add("1 Preflight", "signed in as the admin and the reviewer", False, f"{exc}. Set STUDIO_*_PASSWORD in apps/api/.env")
+            self.r.add("1 Preflight", "signed in as the admin, the reviewer and the specialist", False, f"{exc}. Set STUDIO_*_PASSWORD in apps/api/.env")
             return
         self.signed_in = True
-        self.r.notes["Sign-in"] = "on: Alex Admin approves, Riley Reviewer works the console"
-        self.r.add("1 Preflight", "signed in as the admin and the reviewer", True)
+        self.r.notes["Sign-in"] = "on: Alex Admin approves, Riley Reviewer reviews, Sam Specialist works the console"
+        self.r.add("1 Preflight", "signed in as the admin, the reviewer and the specialist", True)
 
     # helpers -------------------------------------------------------
     def _chat(self, agent: str, turns: list[str], caller_number: str | None = None) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
@@ -598,8 +602,8 @@ class Walkthrough:
                 self.r.add(step, f"bad call {n} escalated", False, "no hand-off, so no specialist note to learn from")
                 return
             esc = self.api.get(f"/api/calls/{cid}")["escalation"]  # the specialist, in the agent console
-            self.reviewer.post(f"/api/escalations/{esc['id']}/accept", {"assignee": "Specialist"})
-            self.reviewer.post(f"/api/escalations/{esc['id']}/resolve", {"disposition": "resolved_by_human", "resolution_note": LOOP_NOTE})
+            self.specialist.post(f"/api/escalations/{esc['id']}/accept", {"assignee": "Specialist"})
+            self.specialist.post(f"/api/escalations/{esc['id']}/resolve", {"disposition": "resolved_by_human", "resolution_note": LOOP_NOTE})
             call = wait_for("the analysis with the specialist's note", lambda: self.api.get(f"/api/calls/{cid}"),
                             lambda c: bool((c.get("analysis") or {}).get("cluster_id")), timeout=180, every=2)
             cluster = self.api.get(f"/api/insights/clusters/{call['analysis']['cluster_id']}")
@@ -611,6 +615,10 @@ class Walkthrough:
                    f"'{cluster.get('name')}', {cluster.get('signal_count')} signals, {cluster.get('min_cluster_size')} needed")
         if not cluster.get("ready_for_fix"):
             return
+        comment = self.specialist.post(f"/api/insights/clusters/{cluster['id']}/comments", {"text": LOOP_COMMENT})  # Patterns, in the Agent Desk
+        listed = self.api.get(f"/api/insights/clusters/{cluster['id']}/comments")["items"]
+        self.r.add(step, "the specialist's comment on the pattern is stored for the drafter",
+                   any(c["id"] == comment["id"] for c in listed), f"{comment['author']} ({comment['author_role']}): {comment['text'][:100]}")
         try:
             run_id = self.api.post("/api/learning/run")["learning_run_id"]
         except ApiError as exc:
@@ -653,8 +661,16 @@ class Walkthrough:
         except ApiError as exc:
             refused = (exc.body or {}).get("error", "") if isinstance(exc.body, dict) else str(exc.body)
         self.r.add(step, "a reviewer's publish is refused (AUTH-03)", refused == "admin_required", refused or "it was published")
-        me = self.reviewer.get("/api/auth/me")["user"]
-        self.r.add(step, "the reviewer works the console", bool(self.reviewer.get("/api/escalations")), f"{me['name']} ({me['role']})")
+        me = self.specialist.get("/api/auth/me")["user"]
+        self.r.add(step, "the specialist works the console", bool(self.specialist.get("/api/escalations")), f"{me['name']} ({me['role']})")
+        try:
+            self.specialist.get("/api/dashboard/summary")
+            denied = ""
+        except ApiError as exc:
+            denied = (exc.body or {}).get("error", "") if isinstance(exc.body, dict) else str(exc.body)
+        self.r.add(step, "the specialist has no dashboard (DESK-02)", denied == "role_forbidden", denied or "it was served")
+        calls = self.specialist.get("/api/calls")["items"]
+        self.r.add(step, "the specialist sees escalated calls only (DESK-04)", bool(calls) and all(c["outcome"] == "escalated" for c in calls), f"{len(calls)} calls")
 
     # 9 Act 7 ------------------------------------------------------
     def act7(self) -> None:
@@ -740,13 +756,14 @@ def main() -> int:
 def studio_passwords(fake: bool) -> dict[str, str]:
     """The fake server's fixed demo passwords, or the stack's from apps/api/.env for --live."""
     if fake:
-        return {"admin": FAKE_ADMIN_PASSWORD, "reviewer": FAKE_REVIEWER_PASSWORD}
-    found = {"admin": os.environ.get("STUDIO_ADMIN_PASSWORD", ""), "reviewer": os.environ.get("STUDIO_REVIEWER_PASSWORD", "")}
+        return {"admin": FAKE_ADMIN_PASSWORD, "reviewer": FAKE_REVIEWER_PASSWORD, "specialist": FAKE_SPECIALIST_PASSWORD}
+    found = {"admin": os.environ.get("STUDIO_ADMIN_PASSWORD", ""), "reviewer": os.environ.get("STUDIO_REVIEWER_PASSWORD", ""),
+             "specialist": os.environ.get("STUDIO_SPECIALIST_PASSWORD", "")}
     env = API_DIR / ".env"
     if env.exists():
         for line in env.read_text(encoding="utf-8").splitlines():
             key, _, value = line.partition("=")
-            role = {"STUDIO_ADMIN_PASSWORD": "admin", "STUDIO_REVIEWER_PASSWORD": "reviewer"}.get(key.strip())
+            role = {"STUDIO_ADMIN_PASSWORD": "admin", "STUDIO_REVIEWER_PASSWORD": "reviewer", "STUDIO_SPECIALIST_PASSWORD": "specialist"}.get(key.strip())
             if role and not found[role]:
                 found[role] = value.split(" #")[0].strip()
     return found

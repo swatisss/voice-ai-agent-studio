@@ -29,7 +29,7 @@ Agent select. Summary strip: open clusters, fixable clusters ready, escalations/
 # Cluster detail (`/insights/cluster/?id=…`)
 
 1. Header with stats and status; **Draft fix** / **Ignore**; the fix line (before and after per week). When `needs_answer`, **Draft fix** is replaced by the answer form of *Needs attention* ("No specialist has answered these callers yet. What should the agent tell them?"); a saved `human_answer` is shown with who gave it.
-2. **Evidence**: table of member calls — date, caller goal, gap summary, human resolution note, **caller feedback** ("Helpful" / "Not helpful" and the comment), link to call. Calls the agent resolved but the caller marked "Not helpful" are listed here like escalations.
+2. **Evidence**: table of member calls — date, caller goal, gap summary, human resolution note, **caller feedback** ("Helpful" / "Not helpful" and the comment), link to call. Calls the agent resolved but the caller marked "Not helpful" are listed here like escalations. Below the table, **Specialist comments** (author, role, time, text) with a form to add one; the same comments the Agent Desk writes on its Patterns page ([/ui/agent-desk.md](/ui/agent-desk.md)).
 3. **Proposal** panel (when one exists):
    * kind badge, *Nightly* / *Manual* badge, title, rationale;
    * payload view: article rendered as Markdown with an **Edit** toggle (textarea); for `knowledge_edit` a side-by-side of the current and revised article with changed paragraphs highlighted; for `tool_attach` the tool's name, description and endpoint; or skill + tool definitions (`JsonView` + edit); and the derived scenarios;

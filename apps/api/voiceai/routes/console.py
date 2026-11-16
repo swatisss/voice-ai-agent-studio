@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import auth
+from voiceai import auth, mask
 from voiceai.db import get_session
 from voiceai.models import Call, CallEvent, Escalation
 from voiceai.routes.calls import call_summary
@@ -60,5 +60,6 @@ async def accept(escalation_id: str, body: AcceptBody, request: Request, tenant_
 
 
 @router.post("/{escalation_id}/resolve")
-async def resolve(escalation_id: str, body: ResolveBody, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
-    return esc_mod.summary(await esc_mod.resolve(s, tenant_id, escalation_id, body.disposition, body.resolution_note))
+async def resolve(escalation_id: str, body: ResolveBody, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    note = mask.text(body.resolution_note) if auth.is_specialist(request) else body.resolution_note  # DESK-06: masked before it is stored
+    return esc_mod.summary(await esc_mod.resolve(s, tenant_id, escalation_id, body.disposition, note))

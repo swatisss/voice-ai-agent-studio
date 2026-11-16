@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     # Studio sign-in (/architecture/studio-auth.md): on when a password is set; unset secret = derived from the passwords
     studio_admin_password: str | None = None
     studio_reviewer_password: str | None = None
+    studio_specialist_password: str | None = None
+    studio_specialist_tenant: str = "northgate-health"  # the one business unit the Agent Desk account works in
     studio_session_secret: str | None = None
     # WebRTC transport (/architecture/webrtc-transport.md)
     webrtc_stun_urls: str = "stun:stun.l.google.com:19302"

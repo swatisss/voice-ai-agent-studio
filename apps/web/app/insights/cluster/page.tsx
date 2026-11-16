@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { type Action, AnswerForm, useActions } from "@/components/actions";
 import { ClusterLabel, FixLine } from "@/components/cluster-label";
+import { ClusterComments } from "@/components/comments";
 import { FeedbackBadge } from "@/components/feedback";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, Card, Field, Input, JsonView, Spinner, Textarea, useToast } from "@/components/ui";
@@ -288,6 +289,8 @@ function ClusterDetail() {
           </table>
         </div>
       </Card>
+
+      <ClusterComments clusterId={id} tenant={tenant} title="Specialist comments" />
     </div>
   );
 }

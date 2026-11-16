@@ -35,4 +35,5 @@
 * [Webhooks](webhooks.md) - Signed, retried webhooks for public-API conversations; IDs only by default
 * [WebRTC transport](webrtc-transport.md) - WebRTC voice for public-API and playground conversations, TURN on Cloud Run
 * [Deployment](deployment.md) - Local dev and GCP Cloud Run topology
+* [Agent Desk role](agent-desk.md) - The call-centre specialist role: allow-listed API, escalated calls only, masked identifiers, comments on escalation patterns that feed the learning loop
 * [Studio sign-in and roles](studio-auth.md) - Two demo accounts, signed session cookie, the API guard and admin-only table, who is recorded

@@ -1,4 +1,4 @@
-"""Studio sign-in: two fixed demo accounts, a signed session cookie, the admin-only guard, who is recorded.
+"""Studio sign-in: three fixed demo accounts, a signed session cookie, the admin-only guard, who is recorded.
 
 Spec: /architecture/studio-auth.md
 """
@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from voiceai import desk
 from voiceai.config import get_settings
 from voiceai.errors import ApiError
 
@@ -29,21 +30,33 @@ SESSION_SECONDS = 12 * 3600
 class User:
     email: str
     name: str
-    role: str  # admin | reviewer
+    role: str  # admin | reviewer | specialist
+    tenant_id: str | None = None  # a specialist works in one business unit (DESK-03)
 
     def out(self) -> dict[str, str]:
-        return {"email": self.email, "name": self.name, "role": self.role}
+        base = {"email": self.email, "name": self.name, "role": self.role}
+        return {**base, "tenant_id": self.tenant_id} if self.tenant_id else base
 
 
 ADMIN = User("admin@echomind.test", "Alex Admin", "admin")
 REVIEWER = User("reviewer@echomind.test", "Riley Reviewer", "reviewer")
+SPECIALIST = User("specialist@echomind.test", "Sam Specialist", "specialist")
 STUDIO = User("", "Studio", "admin")  # sign-in off: every request acts as this (AUTH-06)
-ACCOUNTS = {ADMIN.email: ADMIN, REVIEWER.email: REVIEWER}
+ACCOUNTS = {ADMIN.email: ADMIN, REVIEWER.email: REVIEWER, SPECIALIST.email: SPECIALIST}
+
+
+def account(email: str) -> User | None:
+    """The account for an email; the specialist carries its business unit from settings."""
+    user = ACCOUNTS.get(email)
+    if user is SPECIALIST:
+        return User(user.email, user.name, user.role, get_settings().studio_specialist_tenant)
+    return user
 
 
 def _passwords() -> dict[str, str]:
     st = get_settings()
-    return {ADMIN.email: st.studio_admin_password or "", REVIEWER.email: st.studio_reviewer_password or ""}
+    return {ADMIN.email: st.studio_admin_password or "", REVIEWER.email: st.studio_reviewer_password or "",
+            SPECIALIST.email: st.studio_specialist_password or ""}
 
 
 def enabled() -> bool:
@@ -55,7 +68,7 @@ def _key() -> bytes:
     if st.studio_session_secret:
         return st.studio_session_secret.encode()
     pw = _passwords()  # derived: sessions survive a restart and end when a password changes
-    return hashlib.sha256(f"studio-session|{pw[ADMIN.email]}|{pw[REVIEWER.email]}".encode()).digest()
+    return hashlib.sha256(f"studio-session|{pw[ADMIN.email]}|{pw[REVIEWER.email]}|{pw[SPECIALIST.email]}".encode()).digest()
 
 
 def _b64(raw: bytes) -> str:
@@ -83,7 +96,7 @@ def verify(token: str | None, now: float | None = None) -> User | None:
         data = json.loads(_unb64(payload))
     except ValueError:
         return None
-    user = ACCOUNTS.get(data.get("email", ""))
+    user = account(data.get("email", ""))
     if user is None or data.get("role") != user.role or not _passwords()[user.email]:
         return None
     if int(data.get("exp", 0)) < (now or time.time()):
@@ -146,6 +159,10 @@ class AuthMiddleware:
             if user is None:
                 await JSONResponse({"error": "login_required", "detail": "Sign in to the Studio"}, status_code=401)(scope, receive, send)
                 return
+            if user.role == "specialist":  # DESK-02: an allow-list, deny by default; masked and reduced answers
+                tenant = user.tenant_id or ""
+                await desk.serve(self.app, scope, receive, send, tenant)
+                return
             if user.role != "admin" and admin_only(method, path):
                 await JSONResponse({"error": "admin_required", "detail": "Only an admin can do this: it changes what callers hear or how the business unit is set up"},
                                    status_code=403)(scope, receive, send)
@@ -155,6 +172,16 @@ class AuthMiddleware:
 
 def current_user(request: Request) -> User | None:
     return getattr(request.state, "studio_user", None)
+
+
+def is_specialist(request: Request) -> bool:
+    user = current_user(request)
+    return bool(enabled() and user and user.role == "specialist")
+
+
+def role_of(request: Request) -> str:
+    user = current_user(request)
+    return user.role if user else STUDIO.role
 
 
 def actor(request: Request, given: str) -> str:
@@ -178,7 +205,7 @@ class Login(BaseModel):
 
 @router.post("/login")
 async def login(body: Login, request: Request, response: Response) -> dict[str, Any]:
-    user = ACCOUNTS.get(body.email.strip().lower())
+    user = account(body.email.strip().lower())
     expected = _passwords().get(user.email, "") if user else ""
     ok = hmac.compare_digest(body.password.encode(), expected.encode()) if expected else False
     if not (user and ok):

@@ -321,6 +321,19 @@ class Cluster(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
+class ClusterComment(Base):
+    """A person's comment on an escalation pattern; evidence for the fix draft. Spec: /architecture/agent-desk.md (DM-16)"""
+
+    __tablename__ = "cluster_comments"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    cluster_id: Mapped[str] = mapped_column(String(32), ForeignKey("clusters.id", ondelete="CASCADE"), index=True)
+    author: Mapped[str] = mapped_column(String(120))
+    author_role: Mapped[str] = mapped_column(String(16))
+    text: Mapped[str] = mapped_column(Text)  # masked before it is stored
+    created_at: Mapped[datetime] = _created()
+
+
 class CallScorecard(Base):
     """Measures and check verdicts of one scored real call (/architecture/call-scoring.md)."""
 

@@ -74,9 +74,13 @@ async def create_agent(body: AgentCreate, tenant_id: str = Depends(current_tenan
 
 
 @router.get("/agents/{agent_id}")
-async def get_agent(agent_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+async def get_agent(agent_id: str, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
     agent = await _agent(s, tenant_id, agent_id)
-    return agent_out(agent, await _version(s, agent))
+    version = await _version(s, agent)
+    out = agent_out(agent, version)
+    if auth.is_specialist(request) and version is not None:  # the Agent Desk reads what callers get, never an unpublished draft
+        out["draft_config"] = version.config
+    return out
 
 
 @router.put("/agents/{agent_id}")
@@ -110,7 +114,7 @@ async def versions(agent_id: str, tenant_id: str = Depends(current_tenant), s: A
     await _agent(s, tenant_id, agent_id)
     rows = (await s.scalars(select(AgentVersion).where(AgentVersion.agent_id == agent_id).order_by(AgentVersion.version.desc()))).all()
     return {"items": [{"id": v.id, "version": v.version, "change_note": v.change_note, "source_proposal_id": v.source_proposal_id,
-                       "created_at": v.created_at.isoformat()} for v in rows]}
+                       "published_by": v.published_by, "created_at": v.created_at.isoformat()} for v in rows]}
 
 
 @router.get("/agents/{agent_id}/checks")

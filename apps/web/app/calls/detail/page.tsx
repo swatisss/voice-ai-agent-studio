@@ -12,6 +12,7 @@ import { useTenant } from "@/components/shell";
 import { Transcript } from "@/components/transcript";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { api, type MemoryEvent, type MemoryItem, useApi, useEvents } from "@/lib/api";
+import { useIsSpecialist } from "@/lib/auth";
 import { label, maskRef, MODE_LABEL, MODE_TONE, money, outcomeTone, ROOT_CAUSE, secs, when } from "@/lib/format";
 
 export default function Page() {
@@ -21,6 +22,7 @@ export default function Page() {
 function CallDetail() {
   const id = useSearchParams().get("id") ?? "";
   const { tenant } = useTenant();
+  const desk = useIsSpecialist();  // UI-79: no scorecard, cost, audit or routing cards
   const { data: c, error, reload } = useApi<any>(id ? `/api/calls/${id}` : null, [tenant]);
   const [seq, setSeq] = useState<number | null>(null);
   useEvents(["evaluation"], (e) => { if (e.type === "scorecard.updated" && e.data?.call_id === id) reload(); }, tenant);  // UI-48
@@ -55,7 +57,7 @@ function CallDetail() {
           <Badge tone="info">Identified by caller ID{c.identification.attestation ? ` · ${c.identification.attestation}` : ""}</Badge>
         )}
       </div>
-      {c.version_info && (  // UI-72: the audit trail (CMP-03)
+      {!desk && c.version_info && (  // UI-72: the audit trail (CMP-03)
         <p className="text-sm text-muted" aria-label="Audit trail">
           Answered by v{c.version_info.version} · published by {c.version_info.published_by ?? "unknown"} on {when(c.version_info.published_at)}
           {c.version_info.source_proposal && (
@@ -72,8 +74,8 @@ function CallDetail() {
         <div><div className="text-xs text-muted">Caller</div><span className="mono">{maskRef(c.caller_ref)}</span></div>
         {c.telephony && <div><div className="text-xs text-muted">Dialled number</div><span className="mono">{c.telephony.to}</span></div>}
         {c.telephony && <div><div className="text-xs text-muted">Caller phone</div><span className="mono">•••• {c.telephony.from_last4}</span></div>}
-        <div><div className="text-xs text-muted">LLM cost</div>{money(c.llm_cost_usd, 4)}</div>
-        <div><div className="text-xs text-muted">Tokens</div>{c.tokens_in + c.tokens_out}</div>
+        {!desk && <div><div className="text-xs text-muted">LLM cost</div>{money(c.llm_cost_usd, 4)}</div>}
+        {!desk && <div><div className="text-xs text-muted">Tokens</div>{c.tokens_in + c.tokens_out}</div>}
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2" title="Transcript"><Transcript events={c.events} highlightSeq={seq} /></Card>
@@ -89,7 +91,7 @@ function CallDetail() {
               )}
             </Card>
           )}
-          {c.conversation_id && <ConversationCard conversationId={c.conversation_id} callId={c.id} meta={{ routing: c.routing, handoff: c.handoff }} tenant={tenant} />}
+          {!desk && c.conversation_id && <ConversationCard conversationId={c.conversation_id} callId={c.id} meta={{ routing: c.routing, handoff: c.handoff }} tenant={tenant} />}
           {c.memory && <MemoryCard memory={c.memory} memberHref={c.caller_ref ? `/members/memory/?ref=${encodeURIComponent(c.caller_ref)}&agent=${encodeURIComponent(c.agent_id)}` : null} />}
           {c.feedback && (  // UI-36
             <Card title="Caller feedback" actions={<FeedbackBadge rating={c.feedback.rating} />}>
@@ -98,8 +100,8 @@ function CallDetail() {
             </Card>
           )}
           {c.contact_messages?.length > 0 && <MessagesCard messages={c.contact_messages} />}
-          <ScorecardCard card={c.scorecard} events={c.events} onEvidence={showTurn} onChange={reload}
-            onRescore={c.channel === "simulation" ? undefined : async () => { await api(`/api/calls/${id}/rescore`, { method: "POST" }); }} />
+          {!desk && <ScorecardCard card={c.scorecard} events={c.events} onEvidence={showTurn} onChange={reload}
+            onRescore={c.channel === "simulation" ? undefined : async () => { await api(`/api/calls/${id}/rescore`, { method: "POST" }); }} />}
           {a && (
             <Card title="Analysis">
               <dl className="space-y-1.5 text-sm">
@@ -109,7 +111,7 @@ function CallDetail() {
                 <div><dt className="text-xs text-muted">Caller goal</dt><dd>{a.caller_goal}</dd></div>
                 {a.resolution_summary && <div><dt className="text-xs text-muted">Resolution</dt><dd>{a.resolution_summary}</dd></div>}
                 <div><dt className="text-xs text-muted">Sentiment</dt><dd>{a.sentiment_start} → {a.sentiment_end}</dd></div>
-                {a.cluster_id && <div><Link className="text-accent" href={`/insights/cluster/?id=${a.cluster_id}`}>Open cluster</Link></div>}
+                {a.cluster_id && <div><Link className="text-accent" href={`${desk ? "/patterns/cluster/" : "/insights/cluster/"}?id=${a.cluster_id}`}>Open {desk ? "pattern" : "cluster"}</Link></div>}
               </dl>
             </Card>
           )}

@@ -8,6 +8,7 @@ import { useTenant } from "@/components/shell";
 import { Transcript } from "@/components/transcript";
 import { Badge, Button, Card, cx, EmptyState, Field, Input, Select, Spinner, Tabs, Textarea, useToast } from "@/components/ui";
 import { api, ApiError, type Escalation, useApi, useEvents } from "@/lib/api";
+import { useMe } from "@/lib/auth";
 import { ago, DISPOSITIONS, label, maskRef, REASON } from "@/lib/format";
 
 type Queue = "waiting" | "mine" | "resolved";
@@ -19,7 +20,10 @@ export default function ConsolePage() {
   const [queue, setQueue] = useState<Queue>("waiting");
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
-  const [me, setMe] = useState("Specialist");
+  const session = useMe();
+  const signedIn = session.enabled ? session.user?.name : undefined;  // signed in: the assignee is the session's name
+  const [typed, setMe] = useState("Specialist");
+  const me = signedIn ?? typed;
   const [disposition, setDisposition] = useState("resolved_by_human");
   const [note, setNote] = useState("");
   const [noteErr, setNoteErr] = useState<string | null>(null);
@@ -29,7 +33,7 @@ export default function ConsolePage() {
   const [, tick] = useState(0);
   const audio = useRef<AudioContext | null>(null);
 
-  useEffect(() => { try { setMe(localStorage.getItem("specialist") || "Specialist"); } catch { /* ignore */ } }, []);
+  useEffect(() => { if (!signedIn) try { setMe(localStorage.getItem("specialist") || "Specialist"); } catch { /* ignore */ } }, []);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
 
   const loadDetail = useCallback(async (id: string) => {
@@ -90,7 +94,7 @@ export default function ConsolePage() {
     if (note.trim().length < 10) { setNoteErr("Write at least 10 characters — this note teaches the agent."); return; }  // UI-13
     try {
       await api(`/api/escalations/${selected}/resolve`, { method: "POST", json: { disposition, resolution_note: note } });
-      toast("Escalation resolved", "ok");
+      toast(session.user?.role === "specialist" ? "Resolved. Thanks, this is now evidence for the learning loop." : "Escalation resolved", "ok");
       setNote(""); setNoteErr(null);
       await loadDetail(selected!);
       reload();
@@ -102,7 +106,7 @@ export default function ConsolePage() {
       <div className="flex items-center gap-3">
         <h1 className="text-xl font-semibold">Agent console</h1>
         <div className="ml-auto flex items-center gap-2">
-          <Input className="w-44" value={me} onChange={(e) => setMe(e.target.value)} aria-label="Your name" />
+          {signedIn ? <span className="text-sm text-muted">Signed in as {signedIn}</span> : <Input className="w-44" value={me} onChange={(e) => setMe(e.target.value)} aria-label="Your name" />}
           <Button variant="ghost" onClick={() => setChime(!chime)} aria-label="Toggle chime">{chime ? <Bell size={16} /> : <BellOff size={16} />}</Button>
         </div>
       </div>

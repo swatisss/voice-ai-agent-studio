@@ -8,6 +8,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, Card, EmptyState, Modal, Select, Spinner, useToast } from "@/components/ui";
 import { api, ApiError, downloadJson, type MemberMemory, type MemoryEvent, type MemoryItem, useApi } from "@/lib/api";
+import { useIsSpecialist } from "@/lib/auth";
 import { label, maskRef, type Tone, when } from "@/lib/format";
 
 const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
@@ -24,6 +25,7 @@ function MemberMemoryPage() {
   const router = useRouter();
   const toast = useToast();
   const { tenant } = useTenant();
+  const desk = useIsSpecialist();  // UI-82: read-only for the Agent Desk
   const ref = params.get("ref") ?? "";
   const agentParam = params.get("agent") ?? "";
   const base = `/api/members/${encodeURIComponent(ref)}/memory`;
@@ -92,8 +94,8 @@ function MemberMemoryPage() {
           </Select>
         )}
         <div className="ml-auto flex gap-2">
-          <Button onClick={exportJson} disabled={notFound}><Download size={14} />Export</Button>
-          <Button adminOnly variant="danger" onClick={() => setConfirmOpen(true)} disabled={notFound}><Trash2 size={14} />Erase member</Button>
+          {!desk && <Button onClick={exportJson} disabled={notFound}><Download size={14} />Export</Button>}
+          {!desk && <Button adminOnly variant="danger" onClick={() => setConfirmOpen(true)} disabled={notFound}><Trash2 size={14} />Erase member</Button>}
         </div>
       </div>
 
@@ -146,7 +148,7 @@ function MemberMemoryPage() {
                         {ev?.reason && <div className="mt-1 text-xs text-muted">Reason: {ev.reason}</div>}
                         {href && <Link className="mt-1 inline-block text-xs font-medium text-accent" href={href}>Why the agent knew this</Link>}
                       </div>
-                      <Button variant="ghost" onClick={() => restore(m)} loading={busyId === m.id}><RotateCcw size={14} />Restore</Button>
+                      {!desk && <Button variant="ghost" onClick={() => restore(m)} loading={busyId === m.id}><RotateCcw size={14} />Restore</Button>}
                     </li>
                   );
                 })}

@@ -1,7 +1,7 @@
 ---
 type: Component Spec
 title: Studio sign-in and roles
-description: Two fixed demo accounts (admin and reviewer), a signed session cookie, the API guard that refuses admin-only requests from reviewers, and how the signed-in person is recorded on approvals, reviews and published versions.
+description: Three fixed demo accounts (admin, reviewer and Agent Desk specialist), a signed session cookie, the API guard that refuses admin-only requests from reviewers, and how the signed-in person is recorded on approvals, reviews and published versions.
 status: stable
 tags: [architecture, auth, security, roles]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-02T00:00:00Z" }
@@ -17,6 +17,9 @@ The Studio's human in the loop is a role, not a name typed in a box. A **reviewe
 |---|---|---|---|
 | `admin@echomind.test` | Alex Admin | `admin` | `STUDIO_ADMIN_PASSWORD` |
 | `reviewer@echomind.test` | Riley Reviewer | `reviewer` | `STUDIO_REVIEWER_PASSWORD` |
+| `specialist@echomind.test` | Sam Specialist | `specialist` | `STUDIO_SPECIALIST_PASSWORD` |
+
+The **specialist** is the call-centre role (shown as Agent Desk). It is not a builder: its API access is an allow-list, deny by default, and its answers are masked ([/architecture/agent-desk.md](/architecture/agent-desk.md), [CP-0047](/changes/cp-0047-agent-desk-role.md)). The admin-only table below applies to builders only; a specialist is refused everything it does not list.
 
 * **Sign-in is on** when at least one password setting is non-empty. An account whose password is unset cannot sign in.
 * **Sign-in is off** otherwise: no cookie is needed and every request acts as `{name: "Studio", role: "admin"}`; request-body names (`decided_by`, `assignee`, `reviewer`, `by`) are used as before.
@@ -25,6 +28,7 @@ The Studio's human in the loop is a role, not a name typed in a box. A **reviewe
 
 # Session
 
+* A signed-in specialist's `GET /api/auth/me` also carries `tenant_id` (the business unit the account is bound to); the web app lands each role on its home page (specialist `/console/`, others `/`).
 * `POST /api/auth/login` `{email, password}` compares in constant time. Success sets cookie `studio_session` and returns `{user: {email, name, role}}`; anything else is 401 `bad_credentials` with no hint which part was wrong.
 * The cookie value is `base64url(json{email, role, exp}).base64url(hmac_sha256)`; it is `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` when the request came over HTTPS, and expires after **12 hours**. A tampered, expired or unknown-account cookie counts as no session.
 * `POST /api/auth/logout` clears the cookie (204). `GET /api/auth/me` returns `{enabled, user}` (`user` is `null` without a session; with sign-in off it is the built-in admin).

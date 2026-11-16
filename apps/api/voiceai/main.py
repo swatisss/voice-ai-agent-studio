@@ -29,7 +29,7 @@ import voiceai.memory  # noqa: F401  (memory jobs)
 import voiceai.webhooks  # noqa: F401  (webhook deliveries)
 import voiceai.routing.catalog  # noqa: F401  (index_capabilities)
 import voiceai.routing.suite  # noqa: F401  (run_routing_suite)
-from voiceai import auth, db
+from voiceai import auth, db, mask
 from voiceai.config import get_settings
 from voiceai.errors import ApiError, install_handlers
 from voiceai.jobs import worker
@@ -108,6 +108,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="Voice Agent Studio", version="0.1.0", lifespan=lifespan)
     telephony_helpers.assert_safe_settings()  # TEL-10
+    mask.install_log_filter()  # DESK-07
     install_handlers(app)
     app.add_middleware(auth.AuthMiddleware)  # AUTH-01: inside CORS, so refusals carry CORS headers
     app.add_middleware(

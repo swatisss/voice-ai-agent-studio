@@ -9,6 +9,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 
 # Layout (`/console/`)
 
+The page of the **Agent Desk** specialist ([/ui/agent-desk.md](/ui/agent-desk.md)); signed in, the assignee is the signed-in name and the "Your name" field is not shown. Callers are masked as in [/architecture/agent-desk.md](/architecture/agent-desk.md).
+
 * Left column: queue tabs **Waiting** (count) · **Mine** (accepted by me) · **Resolved today**. Each item: time waiting (live), reason badge (Safety = bad tone, pinned to top), intent, caller (masked), sentiment end.
 * Main: selected escalation.
   * **Packet card** (top, large type): summary; intent; entities as chips; "Already tried" checklist; reason; sentiment `start → end` with trend arrow; suggested next action highlighted. While `packet_status: pending`, show a skeleton with "Preparing handoff notes…". Fallback packets show a small "Basic notes (AI summary unavailable)" label.

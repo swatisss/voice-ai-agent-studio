@@ -78,8 +78,8 @@ class Settings(BaseSettings):
     decision_model_name: str | None = None
     decision_model_threshold: float = 0.55
     decision_model_hosted: str | None = None       # 1 (default) | 0: a hosted model is blocked in PHI mode
-    decision_model_timeout_voice_ms: str | None = None  # 100-5000 ms; unset or not a number = 350 (CP-0029)
-    decision_model_timeout_text_ms: str | None = None   # 100-5000 ms; unset or not a number = 1500
+    decision_model_timeout_voice_ms: str | None = None  # 100-5000 ms; unset or not a number = 1500 (CP-0029, CP-0046)
+    decision_model_timeout_text_ms: str | None = None   # 100-5000 ms; unset or not a number = 2500
     phi_mode: str | None = None                    # 1 | 0; unset = on when running on Cloud Run (K_SERVICE set)
 
     embeddings_provider: str = "fastembed"  # fastembed | hash

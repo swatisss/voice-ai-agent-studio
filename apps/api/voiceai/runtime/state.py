@@ -24,6 +24,7 @@ class CallState:
     tools_used: list[dict[str, Any]] = field(default_factory=list)
     escalated: bool = False
     escalation_id: str | None = None
+    handoff_ack: str = ""  # the model's optional kind sentence before the hand-off line (QA-05)
     end_requested: bool = False
     ended: bool = False
     tokens_in: int = 0

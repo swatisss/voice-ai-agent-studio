@@ -99,10 +99,14 @@ class TurnVerdictOut(BaseModel):
     complete: bool
 
 
+THIRD_PARTY_RULE = ("Verify, or give account information to, anyone other than the member. A caller on someone's behalf is asked "
+                    "to have the member call, or is offered general help.")
+
+
 class Policy(BaseModel):
     rules: list[str] = Field(default_factory=list, max_length=30)
     escalate_when: list[str] = Field(default_factory=list, max_length=30)
-    never: list[str] = Field(default_factory=list, max_length=30)
+    never: list[str] = Field(default_factory=lambda: [THIRD_PARTY_RULE], max_length=30)  # QA-04
     max_turns: int = Field(default=16, ge=4, le=40)
     handoff_message: str = Field(
         default="I'm connecting you with a specialist who will have all the details, so you won't need to repeat yourself.",
@@ -193,7 +197,7 @@ class EvaluationConfig(BaseModel):
     """How calls of this agent are scored (/architecture/call-scoring.md, DM-08)."""
 
     judge_sample_pct: int = Field(default=100, ge=0, le=100)
-    latency_p95_ms: int = Field(default=2000, ge=300, le=10000)
+    latency_p95_ms: int = Field(default=4000, ge=300, le=10000)
     test_on_publish: bool = True  # publishing starts a test-suite run (/architecture/test-suites.md)
     custom_checks: list[CustomCheck] = Field(default_factory=list, max_length=10)
 

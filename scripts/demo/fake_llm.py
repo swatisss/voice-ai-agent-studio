@@ -52,7 +52,7 @@ SYNONYMS = {"newborn": "baby", "newborns": "baby", "babies": "baby", "infant": "
 
 
 def words(text: str) -> set[str]:
-    found = (w for w in re.findall(r"[a-z0-9£,'-]+", text.lower()) if len(w) > 2 and w not in STOP)
+    found = (w for w in (x.strip(",'-") for x in re.findall(r"[a-z0-9£,'-]+", text.lower())) if len(w) > 2 and w not in STOP)  # QA-15: "policy," is "policy"
     return {SYNONYMS.get(w, w) for w in found}
 
 

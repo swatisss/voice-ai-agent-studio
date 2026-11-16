@@ -16,6 +16,8 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-01T00:00:00Z" }
 | `areas` | the top two or three shortlisted agents as `- <use-case titles, comma separated>` lines (never agent names or ids) |
 | `channel` | `voice` or `text` |
 
+Only areas the caller's request actually matches (score at least the shortlist floor) are listed, and at least two are needed to ask ([CP-0046](/changes/cp-0046-final-qa-fixes.md), QA-09).
+
 # Output
 
 `{"question": "<= 160 chars"}`

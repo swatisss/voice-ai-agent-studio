@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +15,7 @@ from voiceai.db import get_session
 from voiceai.errors import ApiError
 from voiceai.call_settings import persona_dict
 from voiceai.models import Agent, Persona
-from voiceai.schemas import PersonaIn
+from voiceai.schemas import VOICE_RE, PersonaIn
 from voiceai.tenancy import current_tenant
 
 router = APIRouter(prefix="/api")
@@ -69,3 +70,31 @@ async def delete_persona(persona_id: str, tenant_id: str = Depends(current_tenan
     await s.delete(p)
     await s.commit()
     return Response(status_code=204)
+
+
+class SampleIn(BaseModel):
+    voice: str = Field(max_length=40)
+    text: str = Field(min_length=1, max_length=300)
+
+
+@router.post("/personas/sample")
+async def voice_sample(body: SampleIn, tenant_id: str = Depends(current_tenant)) -> Response:  # noqa: ARG001
+    """QA-13 (P4): the persona's voice reading a line, so it is heard before a live call (/architecture/personas.md)."""
+    import httpx
+
+    from voiceai.config import get_settings
+
+    if not VOICE_RE.fullmatch(body.voice):
+        raise ApiError(422, "invalid_voice", "Unknown voice")
+    key = get_settings().deepgram_api_key
+    if not key:
+        raise ApiError(503, "voice_unavailable", "No speech key is configured, so the voice cannot be played")
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post("https://api.deepgram.com/v1/speak", params={"model": body.voice, "encoding": "mp3"},
+                                     headers={"Authorization": f"Token {key}"}, json={"text": body.text})
+    except httpx.HTTPError as exc:
+        raise ApiError(502, "voice_unavailable", "The speech service did not answer") from exc
+    if resp.status_code >= 400:
+        raise ApiError(502, "voice_unavailable", f"The speech service refused the request ({resp.status_code})")
+    return Response(content=resp.content, media_type="audio/mpeg")

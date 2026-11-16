@@ -16,6 +16,8 @@ from voiceai.errors import ApiError
 from voiceai.models import Agent, AgentVersion, Persona, TenantSettings
 
 CONNECTING_DEFAULT = "One moment while I connect you."
+OUT_OF_SCOPE_DEFAULT = ("I can help with health insurance questions, such as your policy, payments, claims and getting a quote. "
+                        "What would you like to do?")  # QA-10
 GREETING_DEFAULT = "Thanks for calling. How can I help you today?"
 DISCLOSURE_DEFAULT = "I'm a virtual assistant, and this call may be recorded for quality."
 
@@ -28,6 +30,7 @@ class FrontDesk:
     min_confidence: float | None = None
     max_clarifications: int = 1
     connecting_message: str = CONNECTING_DEFAULT
+    out_of_scope_line: str = OUT_OF_SCOPE_DEFAULT
     min_routing_accuracy: float = 0.9
     routing_mode: str = "embedding"  # embedding | decision_model (CP-0028)
     clear_win: float = 0.80
@@ -44,6 +47,7 @@ class FrontDeskPatch(BaseModel):
     min_confidence: float | None = Field(default=None, ge=0, le=1)
     max_clarifications: int | None = Field(default=None, ge=0, le=2)
     connecting_message: str | None = Field(default=None, min_length=1, max_length=120)
+    out_of_scope_line: str | None = Field(default=None, min_length=1, max_length=300)
     min_routing_accuracy: float | None = Field(default=None, ge=0.5, le=1)
     routing_mode: Literal["embedding", "decision_model"] | None = None
     clear_win: float | None = Field(default=None, ge=0.5, le=0.99)
@@ -102,7 +106,7 @@ async def update(s: AsyncSession, tenant_id: str, patch: FrontDeskPatch) -> Fron
             if agent_id and not await _routable_in(s, tenant_id, agent_id, scope):
                 raise ApiError(422, "invalid_settings", f"The default agent for {scope} must be a routable {'inbound' if scope == 'member' else 'internal'} agent")
             fd.default_agents[scope] = agent_id or None
-    for name in ("min_confidence", "max_clarifications", "connecting_message", "min_routing_accuracy", "routing_mode", "clear_win", "clear_margin"):
+    for name in ("min_confidence", "max_clarifications", "connecting_message", "out_of_scope_line", "min_routing_accuracy", "routing_mode", "clear_win", "clear_margin"):
         value = getattr(patch, name)
         if value is not None:
             setattr(fd, name, value.strip() if isinstance(value, str) else value)

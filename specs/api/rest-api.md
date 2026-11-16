@@ -84,6 +84,7 @@ generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 | GET | `/api/personas` | `{items: [persona + used_by: [agent names]]}` |
 | POST | `/api/personas` | persona fields ([/architecture/personas.md](/architecture/personas.md)) → persona |
 | PUT | `/api/personas/{id}` | persona fields → persona |
+| POST | `/api/personas/sample` | `{voice, text}` → `audio/mpeg` of the voice reading the text; 422 `invalid_voice`; 503 `voice_unavailable` without a speech key ([CP-0046](/changes/cp-0046-final-qa-fixes.md)) |
 | DELETE | `/api/personas/{id}` | 204; 409 `persona_in_use` while an agent draft references it |
 
 `settings` (in call responses and `GET /api/calls/{id}`): `{pipeline: "cascade"|"realtime", persona: {id, name, voice, speed}, turn_detection: {...}, openai_key_source?: "tenant"|"platform"}`, the effective values after overrides; `openai_key_source` is present on voice calls of the realtime pipeline from call creation (the admission plan's credential source).

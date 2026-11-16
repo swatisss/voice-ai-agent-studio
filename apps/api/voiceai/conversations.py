@@ -357,7 +357,7 @@ async def front_desk_turn(conv_id: str, tenant_id: str, text: str, app: Any) -> 
         conv = await get(s, tenant_id, conv_id)
         earlier = [e["text"] for e in (conv.settings or {}).get("front_desk_events", []) if e["kind"] == "user"]
         clarified, scope, channel, mode = conv.clarifications, conv.scope, conv.channel, conv.routing_mode
-        asked = [r for r in (conv.routing or []) if r.get("method") == "clarify"]
+        asked = [r for r in (conv.routing or []) if r.get("method") == "clarify" and not r.get("bare")]
     request = " ".join([*earlier, text]) if clarified else text
     leader = ((asked[-1].get("candidates") or [{}])[0].get("agent_id")) if clarified and asked else None
     if escalation.safety_match(text):  # RTE-21 (CP-0042): an emergency is never routed, the default agent speaks the safety line
@@ -370,9 +370,10 @@ async def front_desk_turn(conv_id: str, tenant_id: str, text: str, app: Any) -> 
         conv = await get(s, tenant_id, conv_id)
         settings = dict(conv.settings or {})
         events = list(settings.get("front_desk_events", []))
-        if record["method"] == "clarify":
+        if record["method"] in ("clarify", "out_of_scope"):
             settings["front_desk_events"] = events + [{"kind": "user", "text": text}, {"kind": "assistant", "text": record["clarification"]}]
-            conv.settings, conv.clarifications = settings, conv.clarifications + 1
+            real = record["method"] == "clarify" and not record.get("bare")  # QA-08, QA-10: asking again does not use up the clarification
+            conv.settings, conv.clarifications = settings, conv.clarifications + (1 if real else 0)
             conv.routing = [*(conv.routing or []), record]
             await s.commit()
             bus.publish(tenant_id, topic, "routing.decision", {"conversation_id": conv_id, "decision": record})

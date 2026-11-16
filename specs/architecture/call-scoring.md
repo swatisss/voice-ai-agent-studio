@@ -63,6 +63,7 @@ Routed conversation segments ([/architecture/agent-transfer.md](/architecture/ag
 |---|---|---|---|
 | `outcome.goal_met` | outcome | no | Was the caller's goal met by the agent, or correctly routed to a human? |
 | `outcome.escalation_appropriate` | outcome | no | Did the agent escalate exactly when it had to (policy, safety, caller request, a gap it could not fill) and not otherwise? |
+| `knowledge.amounts_supported` | knowledge | no | **Code** ([CP-0046](/changes/cp-0046-final-qa-fixes.md), QA-02). Every currency amount (£, $, €) an assistant line states appears as a number in a tool result, a knowledge result or a caller line of the same call; the check fails naming the unsupported amounts and their event seqs, is `n/a` when no amount was stated, and never blocks (soft). |
 | `knowledge.grounded` | knowledge | no | Is every factual claim supported by a tool or knowledge result in the transcript? |
 | `knowledge.admits_unknown` | knowledge | no | When the information was missing, did the agent say so instead of guessing? (`n/a` if nothing was missing) |
 | `tools.right_use` | tools | no | Did the agent look up what needed a lookup, with arguments the caller gave, and avoid needless calls? |

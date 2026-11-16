@@ -6,6 +6,7 @@ Spec: /architecture/call-scoring.md, /prompts/eval-judge.md
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import math
 import re
@@ -48,6 +49,8 @@ CODE_CHECKS = (
           "Member memory was loaded only after the caller was verified.", "built_in"),
     Check("tools.succeeded", "tools", "code", False, "Every tool call succeeded.", "built_in"),
     Check("responsiveness.latency", "responsiveness", "code", False, "The slowest responses (p95) stayed within the limit.", "built_in"),
+    Check("knowledge.amounts_supported", "knowledge", "code", False,
+          "Every amount of money the agent stated appears in a tool result, a knowledge result or the caller's words in this call.", "built_in"),
 )
 JUDGE_CHECKS = (
     Check("outcome.goal_met", "outcome", "judge", False,
@@ -186,6 +189,34 @@ def _verdict(verdict: str, reason: str = "", seqs: list[int] | None = None, chun
     return {"verdict": verdict, "reason": reason[:200], "evidence": {"seqs": seqs or [], "chunk_ids": chunk_ids or []}}
 
 
+_AMOUNT = re.compile(r"[£$€]\s?(\d[\d,]*(?:\.\d+)?)")
+_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _num(s: str) -> float:
+    return float(s.replace(",", ""))
+
+
+def amounts_verdict(events: list[CallEvent]) -> dict[str, Any]:
+    """QA-02: an amount the agent states with no source in the call is a likely invention (the excess told from memory)."""
+    support: set[float] = set()
+    for e in events:
+        if e.kind == "tool_result" or e.kind == "user" or (e.data or {}).get("retrieval"):
+            blob = (e.text or "") + " " + json.dumps(e.data or {}, default=str)
+            support |= {_num(n) for n in _NUMBER.findall(blob)}
+    stated: list[tuple[int, str]] = []
+    for e in events:
+        if e.kind == "assistant" and not (e.data or {}).get("greeting"):
+            stated += [(e.seq, m) for m in _AMOUNT.findall(e.text or "")]
+    if not stated:
+        return _verdict("n/a", "No amounts of money were stated.")
+    bad = [(seq, a) for seq, a in stated if _num(a) not in support]
+    if bad:
+        names = ", ".join(sorted({a for _, a in bad}))
+        return _verdict("fail", f"Stated {names} with no tool, knowledge or caller source in this call.", [s for s, _ in bad])
+    return _verdict("pass", "Every stated amount appears in a tool or knowledge result.")
+
+
 def code_verdicts(call: Call, events: list[CallEvent], config: dict[str, Any], m: dict[str, Any]) -> dict[str, dict[str, Any]]:
     tools = {t.get("name"): t for t in config.get("tools") or []}
     ident = (call.meta or {}).get("identification") or {}
@@ -224,6 +255,7 @@ def code_verdicts(call: Call, events: list[CallEvent], config: dict[str, Any], m
         failed = [e.seq for e in events if e.kind == "tool_result" and not (e.data or {}).get("ok", True)]
         out["tools.succeeded"] = (_verdict("fail", f"{len(failed)} of {m['tool_calls']} tool calls failed.", failed) if failed
                                   else _verdict("pass", f"All {m['tool_calls']} tool calls succeeded."))
+    out["knowledge.amounts_supported"] = amounts_verdict(events)  # QA-02
     limit = evaluation_settings(config).latency_p95_ms
     p95 = m["latency_p95_ms"]
     if p95 is None:

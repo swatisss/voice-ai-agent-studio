@@ -53,6 +53,8 @@ There is no Twilio voice simulator. Flow A is tested with a phone or Twilio Dev 
 
 Verification belongs to the conversation: a transfer carries `verified`, `verified_member_ref`, `verification_level`, the identification and the attempt count to the next segment, which starts verified and does not ask again. A conversation never becomes verified by routing or by an API `context` entry ([/architecture/agent-transfer.md](/architecture/agent-transfer.md)).
 
+**Third parties and self-escalation** ([CP-0046](/changes/cp-0046-final-qa-fixes.md), QA-03, QA-04). The default policy `never` list says: "Verify, or give account information to, anyone other than the member. A caller on someone's behalf is asked to have the member call, or is offered general help." The prompt tells the model never to escalate because verification failed: the platform escalates after the third failed attempt (IDV-04).
+
 # Acceptance
 
 - **IDV-01** — Given a signed Twilio webhook with `From` equal to Sarah Mitchell's registered number, when the call is created, then `meta.identification` holds `NGH-410237`, `Sarah`, method `caller_id` and the `StirVerstat` value, the call is not verified, and no full caller number is stored anywhere.

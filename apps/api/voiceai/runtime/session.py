@@ -27,7 +27,7 @@ from voiceai import call_settings
 from voiceai.call_settings import CallSettings
 from voiceai.live import SettingsChange
 from voiceai.models import Agent, AgentVersion, Call, CallEvent, Tenant
-from voiceai.runtime import endings, escalation, language, outbound
+from voiceai.runtime import endings, escalation, language, outbound, speech
 from voiceai.runtime.prompt import NOT_VERIFIED, NOTHING, system_prompt
 from voiceai.runtime.state import CallState
 from voiceai.runtime.tools import ToolExecutor, all_schemas, truncate
@@ -425,7 +425,9 @@ class AgentSession:
 
     # -- the rules, shared by the policy and _turn()
     def _handoff_line(self) -> str:
-        return self.config.get("policy", {}).get("handoff_message") or HANDOFF_DEFAULT
+        line = self.config.get("policy", {}).get("handoff_message") or HANDOFF_DEFAULT
+        ack, self.state.handoff_ack = self.state.handoff_ack, ""
+        return f"{ack} {line}" if ack else line  # QA-05: the acknowledgement, then the fixed line
 
     def _caller_rule(self, text: str) -> _Rule | None:
         """The deterministic rules that run before any model reply (RT-02, CE-02, ES-01); None = let the model answer."""
@@ -539,8 +541,9 @@ class AgentSession:
                     if ev["type"] == "text":
                         if first_chunk_ms is None:
                             first_chunk_ms = int((time.perf_counter() - turn_started) * 1000)
-                        round_text += ev["text"]
-                        yield ev["text"]
+                        chunk = speech.plain(ev["text"]) if self.channel == "voice" else ev["text"]  # QA-07
+                        round_text += chunk
+                        yield chunk
                     else:
                         result = ev["result"]
             except (LLMError, Exception) as exc:  # noqa: BLE001 - RT-06

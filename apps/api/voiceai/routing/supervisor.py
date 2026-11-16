@@ -73,6 +73,15 @@ def clear_winner(ranked: list[dict[str, Any]], fd: front_desk.FrontDesk) -> dict
     return top if top["score"] >= fd.clear_win and top["score"] - second >= fd.clear_margin else None
 
 
+BARE = re.compile(r"^\W*(yes|yeah|yep|yup|no|nope|nah|ok|okay|sure|please|hello|hi|hey)\W*$", re.I)
+ASK_AGAIN = "What can I help you with?"
+
+
+def is_bare(text: str) -> bool:
+    """A line that is only a yes, a no or a greeting says nothing to route on (QA-08)."""
+    return bool(BARE.match(text.strip()))
+
+
 NEGATIVE = re.compile(r"^\W*(no|nope|nah|neither|none of (those|them|these)|something else|not really|not that)\b", re.I)
 
 
@@ -124,14 +133,20 @@ async def route(tenant_id: str, scope: str, text: str, *, channel: str, trigger:
             only = next(iter(pool))
             record.update(method="single", agent_id=only, confidence=1.0, reason="The only agent for this audience")
             return record
+        if trigger == "start" and answer is None and clarifications_used == 0 and is_bare(text):  # QA-08: ask, route nothing, keep the one clarification
+            record.update(method="clarify", bare=True, reason="The line has nothing to route on", clarification=ASK_AGAIN)
+            return record
         t0 = time.perf_counter()
         ranked = await catalog.stage_a(s, tenant_id, scope, text, set(pool))
         record["stage_a_ms"] = int((time.perf_counter() - t0) * 1000)
         record["candidates"] = ranked[:SHORTLIST]
+        said_none = False
         if mode == "decision_model":  # RTE-02, RTE-03, RTE-04, RTE-13: the model first, the embedding as fallback
             choice, why = await ask_model(text, reason, ranked, pool, channel, fd)
             if choice is not None:
                 record["stage_b"] = choice.record()
+            said_none = bool(choice is not None and choice.agent_id is None and why == "unsure"
+                             and choice.confidence >= (fd.min_confidence if fd.min_confidence is not None else choice.threshold))
             if why is None and choice is not None:
                 record.update(method="decision", agent_id=choice.agent_id, confidence=round(choice.confidence, 4),
                               reason="Chosen by the decision model")
@@ -143,8 +158,20 @@ async def route(tenant_id: str, scope: str, text: str, *, channel: str, trigger:
             return record
         record["unsure"] = True
         top = ranked[0] if ranked else None
+        qualifying = [r for r in ranked if r["score"] >= FLOOR]
+        if trigger == "start" and answer is None and clarifications_used == 0 and (not qualifying or (said_none and not win)):
+            # QA-10: nothing here can help (no candidate at the floor, or the model is sure it is none and the embedding has no clear win)
+            record.update(method="out_of_scope", reason="Nothing this front desk can help with",
+                          clarification=fd.out_of_scope_line or front_desk.OUT_OF_SCOPE_DEFAULT)
+            record["ms"] = int((time.perf_counter() - started) * 1000)
+            return record
+        if len(qualifying) == 1 and trigger == "start":  # QA-09: one real candidate is no choice to offer
+            record.update(method="embedding", agent_id=qualifying[0]["agent_id"], confidence=qualifying[0]["score"],
+                          reason="The only match above the floor")
+            record["ms"] = int((time.perf_counter() - started) * 1000)
+            return record
         if allow_clarify and clarifications_used < fd.max_clarifications:  # RTE-05
-            profiles = [pool[r["agent_id"]] for r in shortlist_of(ranked)[:3]]
+            profiles = [pool[r["agent_id"]] for r in qualifying[:3]] or [pool[r["agent_id"]] for r in shortlist_of(ranked)[:3]]
             record.update(method="clarify", reason="Not sure which area this is",
                           clarification=await clarifying_question(text, profiles, channel))
             return record

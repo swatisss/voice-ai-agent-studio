@@ -15,6 +15,8 @@ Cards: name, description, **mode badge** (Inbound / Outbound / Internal), publis
 
 Header: agent name, version badge (`v3` / "Draft changes" when draft differs from published), buttons **Save draft**, **Publish** (modal with change note; shows validation errors from the API), **Run tests** (saves the draft if it has unsaved changes, then starts a test-suite run on the draft, [/architecture/test-suites.md](/architecture/test-suites.md); shows progress "Testing 7 of 18" and then "5 of 6 scenarios passed every run" linking to the run; never blocks Publish; disabled with a note when the agent has no scenarios), **Test call** (opens `/test-call/?agent=…`).
 
+Builder changes of [CP-0046](/changes/cp-0046-final-qa-fixes.md) (QA-13): **Publish** lists what is missing when no knowledge, tools or skills are attached ("Nothing attached yet: …") and offers *Publish anyway*; the Policy tab shows an example line as placeholder in each list; Overview calls the model select **Chat model** with readable names ("gpt-4.1-mini (OpenAI)"); the Persona tab has **Play sample** (the persona's voice reading its greeting through `POST /api/personas/sample`); the Evaluation tab's slow-response limit defaults to 4,000 ms.
+
 Tabs:
 
 | Tab | Content |

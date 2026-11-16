@@ -29,6 +29,13 @@ Do these the evening before, then again 30 minutes before you present.
 - [ ] **Speed up the learning check:** open the Customer Care Agent → **Evaluation** tab → *Learning* card → set *Test repeats when checking a proposal* to **1** → **Save draft** → **Publish**. A proposal check then needs about 30 simulated calls instead of about 70.
 - [ ] **Pre-run the learning loop:** Dashboard → **Run learning now**, and wait until the card shows the run (several minutes with real models). This plays the "overnight" run, so the inbox is full when you reach Act 7.
 - [ ] **Headset** for voice, to avoid echo.
+- [ ] **Models:** keep the agents on `openai:gpt-4.1-mini` (the `LLM_ROLE_*` lines in `.env`) and do not touch the builder's model select on stage. Starting with `scripts/stack.py`: pass `--llm openai:gpt-4.1-mini`.
+- [ ] **Routing:** the decision-model budgets default to 1.5 s (voice) and 2.5 s (text); to demo without Jev start the stack with `--routing embedding`. Keep `PHI_MODE=0` (synthetic data).
+- [ ] **Dental kit:** do not install it before Act 1; run `python scripts/demo_kits.py dental` right before Act 5, or demo it last. It makes the front desk ask more questions.
+- [ ] **One process:** do not start an evaluation run and a live call at the same time; the UI, calls and jobs share one process.
+- [ ] **Fallback:** keep the Type tab ready for any audio problem; Talk needs the Docker stack on :8080.
+- [ ] **In Full flow say only scripted lines.** Emergencies, off-topic requests and "a person please" are shown in Single agent.
+- [ ] **Act 3:** keep asthma as the declared condition. A past cardiac history is fine now; a present one (chest pain right now) rightly gets the 999 line.
 - [ ] **Windows to have open:** the app in one window, and the **Agent console** in a second window for a teammate playing the human specialist (Act 5).
 
 **Demo callers** (they share these details only when the agent asks):

@@ -1,13 +1,13 @@
 // Spec: /ui/agent-builder.md (Header, Overview, Use cases, Voice tab, Memory tab, Evaluation tab), /architecture/capability-catalog.md, /architecture/call-scoring.md, /architecture/test-suites.md, /architecture/realtime-voice.md, /architecture/telephony.md, /architecture/tenant-settings.md, /architecture/agent-memory.md, /architecture/caller-verification.md
 "use client";
 
-import { Eye, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { Eye, Pencil, Play, Plus, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useTenant } from "@/components/shell";
 import { Badge, Button, Card, Field, Input, JsonView, Modal, Select, Spinner, Tabs, Textarea, useToast } from "@/components/ui";
-import { api, ApiError, useApi, useEvents } from "@/lib/api";
+import { api, apiBlob, ApiError, useApi, useEvents } from "@/lib/api";
 import { when } from "@/lib/format";
 import { DEFAULT_TURN, VOICES, voiceLabel } from "@/lib/voices";
 import { TurnDetectionEditor } from "@/components/voice-settings";
@@ -91,6 +91,11 @@ function Builder() {
     }
   }
 
+  const missing = [
+    !(draft?.knowledge_doc_ids?.length || draft?.knowledge_source_ids?.length) && "knowledge",
+    !draft?.tool_ids?.length && "tools", !draft?.skill_ids?.length && "skills",
+  ].filter(Boolean) as string[];
+
   async function publish() {
     setPublishError(null);
     if (dirty && !(await save())) return;
@@ -149,13 +154,21 @@ function Builder() {
         </div>
       )}
       <Modal open={publishOpen} title="Publish a new version" onClose={() => setPublishOpen(false)}
-        footer={<><Button onClick={() => setPublishOpen(false)}>Cancel</Button><Button adminOnly variant="primary" onClick={publish}>Publish</Button></>}>
+        footer={<><Button onClick={() => setPublishOpen(false)}>Cancel</Button><Button adminOnly variant="primary" onClick={publish}>{missing.length ? "Publish anyway" : "Publish"}</Button></>}>
         <Field label="Change note"><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What changed?" /></Field>
+        {missing.length > 0 && (  // QA-13 (P1): never a silent publish of an empty agent
+          <div role="status" className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
+            Nothing attached yet: {missing.join(", ")}. You can still publish; the agent will answer from its instructions only.
+          </div>
+        )}
         {publishError && <div className="rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{publishError}</div>}
       </Modal>
     </div>
   );
 }
+
+/** QA-13 (P3): "openai:gpt-4.1-mini" reads as "gpt-4.1-mini (OpenAI)". */
+const modelName = (ref: string) => { const [provider, ...rest] = ref.split(":"); const name = rest.join(":"); return name ? `${name} (${provider === "openai" ? "OpenAI" : provider === "openrouter" ? "OpenRouter" : provider})` : ref; };
 
 type TabProps = { draft: any; update: (path: string[], v: unknown) => void };
 
@@ -174,10 +187,10 @@ function Overview({ draft, meta, setMeta, update }: TabProps & { meta: { name: s
       )}
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Name"><Input value={meta.name} onChange={(e) => setMeta({ ...meta, name: e.target.value })} /></Field>
-        <Field label="Realtime model" hint={models ? `Role default: ${models.roles.realtime}` : undefined}>
+        <Field label="Chat model" hint={models ? `Role default: ${modelName(models.roles.realtime)}` : "The model that answers callers; speech-to-speech is set on the Voice tab"}>
           <Select value={draft.models?.realtime ?? ""} onChange={(e) => update(["models", "realtime"], e.target.value || null)}>
             <option value="">Default (role setting)</option>
-            {models?.selectable.map((m: string) => <option key={m} value={m}>{m}</option>)}
+            {models?.selectable.map((m: string) => <option key={m} value={m}>{modelName(m)}</option>)}
           </Select>
         </Field>
         <Field label="Call mode" hint="Inbound: customers call in. Outbound: the agent phones people from a target list. Internal: staff ask questions, no member verification.">
@@ -212,6 +225,23 @@ function Overview({ draft, meta, setMeta, update }: TabProps & { meta: { name: s
   );
 }
 
+function SamplePlayer({ voice, text }: { voice: string; text: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  async function play() {  // QA-13 (P4): hear the voice before a live call
+    setBusy(true);
+    try {
+      const blob = await apiBlob("/api/personas/sample", { method: "POST", json: { voice, text: text.slice(0, 300) } });
+      const audio = new Audio(URL.createObjectURL(blob));
+      audio.onended = () => URL.revokeObjectURL(audio.src);
+      await audio.play();
+    } catch (e) {
+      toast((e as ApiError).detail ?? "The voice could not be played", "bad");
+    } finally { setBusy(false); }
+  }
+  return <Button className="mt-2" variant="ghost" disabled={busy} onClick={play}><Play size={14} />{busy ? "Playing…" : "Play sample"}</Button>;
+}
+
 function Persona({ draft, update }: TabProps) {
   const { tenant } = useTenant();
   const { data } = useApi<{ items: any[] }>("/api/personas", [tenant]);
@@ -231,6 +261,7 @@ function Persona({ draft, update }: TabProps) {
             <div className="flex flex-wrap items-center gap-2"><b>{chosen.name}</b><Badge tone="info">{voiceLabel(chosen.voice)}</Badge><Badge>speed {chosen.speed}×</Badge></div>
             <div className="mt-1 italic text-muted">“{chosen.greeting}”</div>
             <div className="mt-1 text-muted">{chosen.style}</div>
+            <SamplePlayer voice={chosen.voice} text={chosen.greeting} />
           </div>
         )}
       </Card>
@@ -377,7 +408,7 @@ function MemoryTab({ draft, update }: TabProps) {  // UI-42
 
 /** Defaults for drafts saved before evaluation settings existed (/data/agent-config.md, Evaluation settings). */
 const LEARNING_DEFAULTS = { nightly: true, max_proposals_per_night: 3, regression_repeats: 3, snooze_days: 7 };
-const EVAL_DEFAULTS = { judge_sample_pct: 100, latency_p95_ms: 2000, test_on_publish: true, custom_checks: [] as { question: string; group: string; hard_gate: boolean }[] };
+const EVAL_DEFAULTS = { judge_sample_pct: 100, latency_p95_ms: 4000, test_on_publish: true, custom_checks: [] as { question: string; group: string; hard_gate: boolean }[] };
 
 function EvaluationTab({ id, draft, update, savedAt }: TabProps & { id: string; savedAt: string }) {  // UI-49
   const { tenant } = useTenant();
@@ -471,13 +502,13 @@ function LearningSettings({ draft, update }: TabProps) {
   );
 }
 
-function ListEditor({ label, items, onChange }: { label: string; items: string[]; onChange: (v: string[]) => void }) {
+function ListEditor({ label, items, onChange, example }: { label: string; items: string[]; onChange: (v: string[]) => void; example?: string }) {
   return (
     <Field label={label}>
       <div className="space-y-1.5">
         {items.map((it, i) => (
           <div key={i} className="flex gap-2">
-            <Input value={it} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} />
+            <Input value={it} placeholder={example} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} />
             <Button variant="ghost" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label="Remove"><Trash2 size={14} /></Button>
           </div>
         ))}
@@ -492,9 +523,9 @@ function PolicyTab({ draft, update }: TabProps) {
   return (
     <Card>
       <div className="grid gap-5 md:grid-cols-2">
-        <ListEditor label="Rules" items={p.rules} onChange={(v) => update(["policy", "rules"], v)} />
-        <ListEditor label="Escalate when" items={p.escalate_when} onChange={(v) => update(["policy", "escalate_when"], v)} />
-        <ListEditor label="Never" items={p.never} onChange={(v) => update(["policy", "never"], v)} />
+        <ListEditor label="Rules" example="Example: Always read a new email address back before saving it." items={p.rules} onChange={(v) => update(["policy", "rules"], v)} />
+        <ListEditor label="Escalate when" example="Example: The caller wants to make a complaint." items={p.escalate_when} onChange={(v) => update(["policy", "escalate_when"], v)} />
+        <ListEditor label="Never" example="Example: Promise that a claim will be paid." items={p.never} onChange={(v) => update(["policy", "never"], v)} />
         <div className="space-y-3">
           <Field label="Max turns"><Input type="number" min={4} max={40} value={p.max_turns} onChange={(e) => update(["policy", "max_turns"], Number(e.target.value))} /></Field>
           <Field label="Handoff message"><Textarea value={p.handoff_message} onChange={(e) => update(["policy", "handoff_message"], e.target.value)} /></Field>

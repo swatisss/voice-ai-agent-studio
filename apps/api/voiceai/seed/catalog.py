@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from voiceai.schemas import THIRD_PARTY_RULE
+
 CARE_TENANT = "northgate-health"
 SANDBOX_TENANT = "northgate-sandbox"
 
@@ -317,7 +319,7 @@ PERSONAS: list[dict[str, Any]] = [
 ]
 
 # ---- agents
-_STD_NEVER = ["Promise that treatment or a claim will be paid before a pre-authorisation is issued.", "Share information about anyone other than the verified member and the people on their policy."]
+_STD_NEVER = ["Promise that treatment or a claim will be paid before a pre-authorisation is issued.", "Share information about anyone other than the verified member and the people on their policy.", THIRD_PARTY_RULE]
 _TD = {"mode": "semantic", "min_silence_ms": 700, "max_extra_wait_ms": 1500, "evaluator": "heuristic", "allow_interruptions": True}
 
 AGENTS: list[dict[str, Any]] = [
@@ -370,7 +372,7 @@ AGENTS: list[dict[str, Any]] = [
                 "The caller seems confused, vulnerable or under pressure from someone else.",
                 "The caller wants business or group cover.",
             ],
-            "never": ["Pressure the caller or say an offer ends today.", "Compare Northgate with named competitors.", "Give medical advice."],
+            "never": ["Pressure the caller or say an offer ends today.", "Compare Northgate with named competitors.", "Give medical advice.", THIRD_PARTY_RULE],
             "max_turns": 30,
             "handoff_message": "I'll pass you to one of our health insurance specialists, who will have your quote in front of them.",
         },
@@ -396,7 +398,7 @@ AGENTS: list[dict[str, Any]] = [
                 "The caller is distressed about a cancer diagnosis and wants to talk to a person.",
                 "The caller asks for a person.",
             ],
-            "never": ["Give medical advice or say which treatment is best.", "Discuss another member's claim.", "Say surgery is approved while the pre-authorisation is pending."],
+            "never": ["Give medical advice or say which treatment is best.", "Discuss another member's claim.", "Say surgery is approved while the pre-authorisation is pending.", THIRD_PARTY_RULE],
             "max_turns": 20,
             "handoff_message": "I'm connecting you with a claims specialist who will have all the details, so you won't need to repeat yourself.",
             "holding_message": "A claims specialist will be with you shortly. Thanks for your patience.",

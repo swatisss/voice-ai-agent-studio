@@ -159,3 +159,12 @@ UI-75
 # CP-0044 Routing switch on Test call Full flow: there are no browser tests; type check passes, not yet clicked through. The API
 # behind it is covered by RTE-22 (tests/test_supervisor_routing.py). Approval and a browser check requested from the owner.
 UI-76
+
+# CP-0046 Final QA. QA-13 is builder and playground UI (no browser tests): type check and build pass, click-through requested from the
+# owner. QA-15 is checked by running scripts/demo_walkthrough.py --learning (0 failed on 2026-11-16) and spec_check --ci.
+QA-13
+QA-15
+
+# CP-0038 / CP-0033: DEV-17 (a Talk call on the owner's laptop, checked by hand) and UI-73 have no automated test.
+DEV-17
+UI-73

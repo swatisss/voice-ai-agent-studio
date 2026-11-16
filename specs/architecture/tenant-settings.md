@@ -26,7 +26,7 @@ Changing `allowed_pipelines` to drop `realtime` while any agent of the tenant ha
 
 # Front desk
 
-`tenant_settings.front_desk` holds the front desk of routed conversations: persona, pipeline, default agent per scope, confidence threshold override, maximum clarifying questions, connecting message and the routing suite's pass mark. Rules and defaults: [/architecture/supervisor-routing.md](/architecture/supervisor-routing.md). The pipeline must be in `allowed_pipelines`; dropping `realtime` while the front desk uses it is refused with 409 `pipeline_in_use` naming "Front desk". Settings → Front desk edits it ([/ui/settings.md](/ui/settings.md)).
+`tenant_settings.front_desk` holds the front desk of routed conversations: persona, pipeline, default agent per scope, confidence threshold override, maximum clarifying questions, connecting message, out-of-scope line ([CP-0046](/changes/cp-0046-final-qa-fixes.md)) and the routing suite's pass mark. Rules and defaults: [/architecture/supervisor-routing.md](/architecture/supervisor-routing.md). The pipeline must be in `allowed_pipelines`; dropping `realtime` while the front desk uses it is refused with 409 `pipeline_in_use` naming "Front desk". Settings → Front desk edits it ([/ui/settings.md](/ui/settings.md)).
 
 # Enforcement points
 

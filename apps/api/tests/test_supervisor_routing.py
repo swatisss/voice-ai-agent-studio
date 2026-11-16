@@ -346,7 +346,7 @@ async def test_health_reports_the_decision_model(client, monkeypatch, database):
     monkeypatch.setenv("DECISION_MODEL_TIMEOUT_VOICE_MS", "")
     monkeypatch.setenv("DECISION_MODEL_TIMEOUT_TEXT_MS", "")
     get_settings.cache_clear()
-    budgets = {"voice": 350, "text": 1500}
+    budgets = {"voice": 1500, "text": 2500}
     try:
         h = (await client.get("/healthz")).json()
         assert h["public_api"] is True
@@ -457,24 +457,26 @@ async def test_time_budgets_are_settings(indexed, model, monkeypatch):
 
     rec = await route("voice", "1000", "")
     assert rec["method"] == "decision" and rec["agent_id"] == care and rec["fallbacks"] == []
-    rec = await route("voice", "", "")  # the default voice budget, 350 ms
+    rec = await route("voice", "", "")  # the default voice budget is 1.5 s (CP-0046), so a 600 ms answer decides
+    assert rec["method"] == "decision" and rec["agent_id"] == care
+    rec = await route("voice", "400", "")  # a tighter budget times out into the embedding
     assert rec["method"] == "embedding" and rec["agent_id"] == claims
     assert rec["fallbacks"] == [{"target": "decision_model", "error": "timeout"}]
     rec = await route("text", "1000", "200")  # text has its own budget
     assert rec["method"] == "embedding" and rec["fallbacks"] == [{"target": "decision_model", "error": "timeout"}]
-    rec = await route("text", "100", "")  # the default text budget, 1.5 s
+    rec = await route("text", "100", "")  # the default text budget, 2.5 s
     assert rec["method"] == "decision" and rec["agent_id"] == care
 
 
 async def test_time_budget_bounds_and_health(client, monkeypatch, database):
     """Covers: RTE-17"""
     monkeypatch.setenv("DECISION_MODEL_TIMEOUT_TEXT_MS", "")
-    for raw, used in (("50", 100), ("99999", 5000), ("abc", 350), ("", 350), ("800", 800)):
+    for raw, used in (("50", 100), ("99999", 5000), ("abc", 1500), ("", 1500), ("800", 800)):
         monkeypatch.setenv("DECISION_MODEL_TIMEOUT_VOICE_MS", raw)
         get_settings.cache_clear()
         assert decision.timeout_ms("voice") == used, raw
         h = (await client.get("/healthz")).json()
-        assert h["router"]["decision_model"]["timeouts_ms"] == {"voice": used, "text": 1500}
+        assert h["router"]["decision_model"]["timeouts_ms"] == {"voice": used, "text": 2500}
     get_settings.cache_clear()
 
 

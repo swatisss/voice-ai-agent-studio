@@ -35,6 +35,20 @@ export async function api<T = any>(path: string, init: RequestInit & { json?: un
 }
 
 /** Fetch on mount and when deps/tenant change. */
+/** A binary response, such as a voice sample (QA-13). */
+export async function apiBlob(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Blob> {
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
+  if (currentTenant) headers["X-Tenant-Id"] = currentTenant;
+  let body = init.body;
+  if (init.json !== undefined) { headers["Content-Type"] = "application/json"; body = JSON.stringify(init.json); }
+  const res = await fetch(`${API_BASE}${path}`, { credentials: "include", ...init, headers, body });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, data.error ?? "error", data.detail ?? res.statusText);
+  }
+  return res.blob();
+}
+
 export function useApi<T = any>(path: string | null, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<ApiError | null>(null);

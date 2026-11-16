@@ -39,6 +39,8 @@ Safety phrases (case-insensitive substring): `suicide`, `kill myself`, `end my l
 
 The screen runs on every agent turn (ES-01) and, in a routed conversation, at the front desk before routing ([/architecture/supervisor-routing.md](/architecture/supervisor-routing.md), step 0, RTE-21).
 
+**Categories** ([CP-0046](/changes/cp-0046-final-qa-fixes.md), QA-06): `caller_requested` only when the caller asked for a person; `knowledge_gap` when there is no approved answer; `capability_gap` when no tool or skill exists; `policy_required` when a rule sends it to a person; `frustration` when the caller is upset. The groundwork packet's `entities` never list the emergency numbers (999, 116 123) the safety message speaks (QA-14).
+
 # Escalation procedure
 
 1. If already escalated, do nothing (idempotent).

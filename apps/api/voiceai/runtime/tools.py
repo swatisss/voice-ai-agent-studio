@@ -45,12 +45,17 @@ BUILTIN_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "escalate_to_human",
-            "description": "Hand the call to a human specialist. Then say exactly the message this tool returns.",
+            "description": ("Hand the call to a human specialist. Then say exactly the message this tool returns. Pick the category by what "
+                            "happened: caller_requested only if the caller asked for a person; knowledge_gap when there is no approved answer; "
+                            "capability_gap when you have no tool or skill for it; policy_required when a rule says a person must handle it; "
+                            "frustration when the caller is upset."),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "reason_category": {"type": "string", "enum": list(ESCALATION_CATEGORIES)},
                     "reason_detail": {"type": "string", "description": "One sentence: why a human is needed"},
+                    "acknowledgement": {"type": "string", "maxLength": 140,
+                                        "description": "Optional: one short, kind sentence for the caller before the hand-off line, such as I'm sorry to hear that."},
                 },
                 "required": ["reason_category", "reason_detail"],
             },
@@ -182,6 +187,7 @@ class ToolExecutor:
             category = str(a.get("reason_category") or "other")
             if category not in ESCALATION_CATEGORIES:
                 category = "other"
+            self.state.handoff_ack = " ".join(str(a.get("acknowledgement") or "").split())[:140]  # QA-05
             if self.escalate is not None:
                 await self.escalate(category, str(a.get("reason_detail") or ""))
             return {"status": "escalated", "say": self.handoff_message}, True

@@ -20,7 +20,7 @@ from voiceai.config import get_settings
 
 log = logging.getLogger("voiceai.routing.decision")
 
-TIMEOUT_DEFAULT_MS = {"voice": 350, "text": 1500}
+TIMEOUT_DEFAULT_MS = {"voice": 1500, "text": 2500}  # QA-11
 TIMEOUT_BOUNDS_MS = (100, 5000)
 NONE = "none"
 NONE_TEXT = "The request fits none of these, or is too vague to tell."

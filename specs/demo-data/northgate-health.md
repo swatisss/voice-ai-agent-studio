@@ -42,7 +42,7 @@ Every persona's disclosure starts "I'm a virtual assistant, and this call may be
 
 Turn detection for all three: semantic, heuristic evaluator, 700 ms + 1,500 ms, interruptions allowed.
 
-**Policies** (rules · escalate when · never):
+**Policies** (rules · escalate when · never; every agent's `never` list also carries the third-party rule, [CP-0046](/changes/cp-0046-final-qa-fixes.md)):
 
 * **Customer Care** — verify before any member detail; never take bank or card details (send a secure link); read new contact details back; transfer treatment approval, consultants and health claim status to claims and new quotes to sales; tell an emergency caller to call 999 · complaints, cancellation, a member has died, adding an adult, removing someone or changing cover mid-term, disputing a charge or cash plan decision · promise payment before pre-authorisation; share another person's information; ask for or repeat bank or card numbers. Hand-off: "I'm connecting you with a colleague who will have all the details, so you won't need to repeat yourself."
 * **Health Cover Sales** — non-advised: facts, never a recommendation; one detail at a time with read-back; key facts and declaration read with a clear yes to each before `create_policy`; mention the 21-day cooling-off; no bank details (secure link) · referred to an underwriter, asks for advice, seems confused, vulnerable or under pressure, wants business cover · pressure or "today only" offers; comparing named competitors; medical advice. Hand-off: "I'll pass you to one of our health insurance specialists, who will have your quote in front of them."

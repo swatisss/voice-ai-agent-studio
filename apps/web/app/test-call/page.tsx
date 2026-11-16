@@ -52,17 +52,18 @@ function TestCallPage() {
   const router = useRouter();
   const { tenant } = useTenant();
   const [full, setFull] = useState(params.get("mode") === "full");
+  const agentParam = params.get("agent");  // QA-13 (P5): a link to one agent opens Single agent, whatever mode was remembered
   const [technical, setTechnicalState] = useState(false);
   useEffect(() => {
     try {
-      if (!params.get("mode") && localStorage.getItem(MODE_KEY) === "full") setFull(true);
+      if (!params.get("mode") && !params.get("agent") && localStorage.getItem(MODE_KEY) === "full") setFull(true);
       setTechnicalState(localStorage.getItem(TECH_KEY) === "1");
     } catch { /* storage unavailable */ }
   }, [params]);
   const choose = (f: boolean) => {
     setFull(f);
     try { localStorage.setItem(MODE_KEY, f ? "full" : "single"); } catch { /* storage unavailable */ }
-    router.replace(f ? "/test-call/?mode=full" : "/test-call/");
+    router.replace(f ? "/test-call/?mode=full" : agentParam ? `/test-call/?agent=${encodeURIComponent(agentParam)}` : "/test-call/");
   };
   if (!full) return <TestCall flowSwitch={<FlowSwitch full={false} onChange={choose} />} />;
   const setTechnical = (on: boolean) => {
@@ -102,6 +103,7 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
   const [escalated, setEscalated] = useState(false);
   const [text, setText] = useState("");
   const [waiting, setWaiting] = useState(false);
+  useEffect(() => { if (!waiting) document.getElementById("caller-message")?.focus(); }, [waiting]);  // QA-13 (P8): the box keeps focus after each reply
   const [level, setLevel] = useState(0);
   const [speaking, setSpeaking] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(true);
@@ -276,7 +278,7 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
             <div className="mb-3 max-w-md space-y-1">
               <label className="text-xs font-medium text-muted" htmlFor="call-from">Call from</label>
               <Select id="call-from" value={callFrom} disabled={busy} onChange={(e) => setCallFrom(e.target.value)}>
-                {CALL_FROM.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                {CALL_FROM.filter((o) => ["none", "unknown"].includes(o.id) || tenant === "northgate-health").map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </Select>
             </div>
           )}
@@ -297,7 +299,7 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
             {status === "ended" && callId && <FeedbackPrompt key={callId} callId={callId} />}  {/* UI-34: only once the call has ended */}
             {mode === "type" && status === "active" && (
               <div className="mt-3 flex gap-2">
-                <Input value={text} disabled={escalated || waiting} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
+                <Input id="caller-message" value={text} disabled={escalated || waiting} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
                   placeholder={escalated ? "Escalated to a specialist — end the chat when done" : "Type as the caller…"} />
                 <Button variant="primary" onClick={send} disabled={escalated || waiting || !text.trim()}><Send size={14} /></Button>
               </div>
@@ -332,6 +334,11 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
                   })}
                 </ul>
               )}
+            </Card>
+          )}
+          {agentUcs.length === 0 && (  // QA-13 (P6): never a blank column
+            <Card title="Test script">
+              <p className="text-sm text-muted">No use cases yet. Add one in <Link className="text-accent" href={`/agents/edit/?id=${agentId}`}>the agent&apos;s Use cases tab</Link> and its starting phrase shows up here.</p>
             </Card>
           )}
           {technical && (  // UI-32: builder-facing details, off by default

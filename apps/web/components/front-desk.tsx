@@ -2,12 +2,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card, Field, Input, Select, Spinner, useToast } from "@/components/ui";
+import { Button, Card, Field, Input, Select, Spinner, Textarea, useToast } from "@/components/ui";
 import { api, ApiError, useApi } from "@/lib/api";
 
 type FrontDesk = {
   persona_id: string | null; pipeline: "cascade" | "realtime"; default_agents: { member: string | null; staff: string | null };
-  min_confidence: number | null; max_clarifications: number; connecting_message: string; min_routing_accuracy: number;
+  min_confidence: number | null; max_clarifications: number; connecting_message: string; out_of_scope_line: string; min_routing_accuracy: number;
   routing_mode: "embedding" | "decision_model"; clear_win: number; clear_margin: number;
 };
 type DecisionModelHealth = { configured: boolean; hosted: boolean; blocked: boolean };
@@ -87,6 +87,9 @@ export function FrontDeskCard({ tenant, allowRealtime }: { tenant: string; allow
           </div>
         </Field>
         <Field label="Connecting message"><Input maxLength={120} value={form.connecting_message} onChange={(e) => setForm({ ...form, connecting_message: e.target.value })} /></Field>
+        <Field label="Out-of-scope reply" hint="Said once when nothing here can help, such as the weather or a job application; no agent opens">
+          <Textarea maxLength={300} value={form.out_of_scope_line} onChange={(e) => setForm({ ...form, out_of_scope_line: e.target.value })} />
+        </Field>
         <Field label="Routing" hint={form.routing_mode === "decision_model" ? dmNote : undefined}>
           <Select value={form.routing_mode} onChange={(e) => setForm({ ...form, routing_mode: e.target.value as FrontDesk["routing_mode"] })}>
             <option value="embedding">Embedding (default)</option>

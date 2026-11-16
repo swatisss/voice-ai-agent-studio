@@ -149,6 +149,17 @@ def fallback_packet(esc: Escalation, events: list[CallEvent], tools_used: list[d
     ).model_dump()
 
 
+EMERGENCY_NUMBERS = ("999", "116 123", "116123")
+
+
+def clean_entities(entities: dict[str, Any]) -> dict[str, Any]:
+    """QA-14: the emergency numbers the safety message speaks are not facts about the caller; drop them from the packet."""
+    def keep(key: str, value: Any) -> bool:
+        flat = "".join(str(value).split())
+        return not (flat in {n.replace(" ", "") for n in EMERGENCY_NUMBERS} or "emergency" in key.lower() or "samaritans" in key.lower())
+    return {k: v for k, v in (entities or {}).items() if keep(k, v)}
+
+
 async def build_packet(escalation_id: str, tools_used: list[dict[str, Any]], verified_ref: str | None) -> None:
     async with sessionmaker()() as s:
         esc = await s.get(Escalation, escalation_id)
@@ -169,6 +180,7 @@ async def build_packet(escalation_id: str, tools_used: list[dict[str, Any]], ver
             data = packet.model_dump()
             data["escalation_reason"]["category"] = esc.reason_category
             data["caller_verified"] = bool(verified_ref)
+            data["entities"] = clean_entities(data.get("entities") or {})
             esc.packet, esc.packet_status = data, "ready"
         except Exception as exc:  # noqa: BLE001 - ES-05 any failure -> deterministic packet
             log.warning("packet LLM failed for %s: %s", escalation_id, exc)

@@ -1,6 +1,6 @@
 # Echo Mind Voice Agent Studio — the demo guide
 
-November 16, 2026 · for a trial with an insurer's contact-centre and digital teams · about 40 minutes, with a 12-minute short cut
+November 16, 2026 · for a trial with an insurer's contact-centre and digital teams · about 40 minutes, with a 12-minute short cut · the case it makes: **people and AI together cost less than people alone, and callers wait less**
 
 Everything on screen is synthetic: a fictional UK insurer, **Northgate Health**, with three AI agents, a front desk, 20 calls of history and four members you can call as. Nothing here is real customer data.
 
@@ -12,13 +12,25 @@ Everything on screen is synthetic: a fictional UK insurer, **Northgate Health**,
 >
 > Every call is scored against the rules your team wrote. What your specialists tell callers becomes the evidence the platform uses to propose improvements, **proves each one on past calls, and waits for a person to approve it**. The agent never edits itself.
 
-**Three promises, each one proved live in this guide**
+**Why a business buys it: both sides of the call** (the same argument as the product deck)
+
+| | Today: every call ends with a person | With Echo Mind: the cheapest *safe* resolver takes each call |
+|---|---|---|
+| **The customer** | A menu, a queue, security questions, then the same story again after every transfer | Answered at once, 24/7, one front desk, say it once, done on the call |
+| **The company** | Every call is paid by the minute, a payment date or a bereavement alike | The AI resolves routine calls end to end for about a penny of model time; people take the calls that need a person |
+| **The specialists** | They drown in routine; complaints, disputes and vulnerable callers queue behind look-ups | They get only the calls that need them, each with a groundwork packet: the whole story is already written |
+| **The learning** | What specialists tell callers stays in notes, and the same gaps recur every week | Their notes and comments become tested fixes: a gap costs less every week |
+
+**This is not "AI instead of people".** The business wants calls handled by humans and wants the cost down; the answer is to put each call with the right resolver. The AI contains the routine; your people keep everything that needs judgement, empathy or authority, and they stay in charge of what the AI is allowed to say.
+
+**Four promises, each one proved live in this guide**
 
 | Promise | What the audience sees | Act |
 |---|---|---|
 | **Build without code** | An agent made of plain-English rules, skills and your APIs; versioned; every call knows which version answered | 2, 3 |
 | **Run it safely** | Verification before data, grounded answers, hard gates, emergency and third-party handling, a person on request, masked identifiers | 1, 4, 7 |
 | **It gets better, under control** | Specialists teach it; fixes are drafted, tested on past calls and approved by an admin | 5, 6 |
+| **Cheaper for the company, better for the customer** | Containment and the cost of each gap on the Dashboard and Insights; the arithmetic in section 3 | 0, 6 |
 
 **Two workspaces, because there are two kinds of people**
 
@@ -40,13 +52,62 @@ Measured on 2026-11-16 with real conversations on `gpt-4.1-mini` (the platform r
 | Chat cost of one verified call with a booking | **about US$0.015 (1.5 cents)**, five turns, three tool lookups and a booking | "A resolved call costs the model about a cent and a half." |
 | Quote to policy on a call | **about US$0.015** for the chat, including creating the policy | "A whole sale, quote to policy number, for a cent or two of model time." |
 | Scoring, analysis and judging in the background | roughly 3–4× the chat cost (an estimate, not metered per call) | "Even with the grading behind every call, it is cents." |
-| Assumptions on the Dashboard | a call handled by a person is assumed at **$9.50** and by the AI at **$1.20**; both are settings you change | "These are your numbers to set; the page does the sums." |
+| Assumptions on the Dashboard | a call handled by a person is assumed at **$9.50** and by the AI at **$1.20**; both are configuration values you change | "These are your numbers to set; the page does the sums." The $1.20 is deliberately generous: the measured model cost is about 1.5 cents, so it also covers telephony, platform and supervision. |
+| Containment in the demo history | **10 of the 19 decided calls** resolved with no person: about half (the share of calls an AI agent resolves safely, with no person) | "In this history about one call in two never needed a person." |
+| What that is worth at the defaults | 10 contained calls × ($9.50 − $1.20) = **$83.00** on twenty demo calls | "On twenty demo calls. Your volumes and your cost per call replace these numbers." |
+| Gaps, in money | The Insights page prices each gap: escalations a week × ($9.50 − $1.20); the newborn gap is about **$10 a week** in the demo data | "Each gap has a price, and fixing it moves those callers to the AI." |
 
-Do **not** quote savings as a fact for their business: the Dashboard uses configurable assumptions, and these are demo calls.
+Do **not** quote savings as a fact for their business: the Dashboard uses configurable assumptions, and these are demo calls. Their own baseline comes from a pilot (section 3). The product deck's "about two in three calls" came from an earlier, larger demo history; with today's 20-call history the Dashboard shows about half: quote what is on screen.
 
 ---
 
-## 3. Before you start (do this the evening before, and again 30 minutes before)
+## 3. The business case: people and AI, together
+
+This is the section for the buyer who says *"we want every call handled by a human."* Lead with it in Act 0, come back to it in Act 4 and Act 6, and close on it.
+
+### 3.1 Who handles what
+
+| Kind of call | Who takes it | Why |
+|---|---|---|
+| **Routine and answerable**: a payment date, a missed Direct Debit, a document, a GP booking, claim status, a quote | **The AI, end to end**, in your systems, on the call | Fast, consistent, cents per call. This is *containment*. |
+| **Needs a person, but not from zero**: a declined-claim dispute, a change the agent may not make, no approved answer | **AI first, then a specialist** | The AI verifies the caller, looks things up and writes the groundwork packet, so the person starts with the whole story and spends their minutes on the decision. |
+| **Always a person**: a complaint, a bereavement, a vulnerable caller, an emergency, and **any caller who asks for one** | **A person, immediately** | By rule, enforced in code: escalate-when rules, the safety screen and the person-on-request rule. |
+
+The AI never decides which calls need judgement by itself: your policy rules and the platform's safety rules do, and every call is scored against them.
+
+### 3.2 The arithmetic
+
+The Dashboard's own formula is: **saving = contained calls × (cost of a person-handled call − cost of an AI-handled call)**. A contained call is one the AI resolved with no person; an escalated call still costs a person's time, so it saves nothing in this formula (and any time the packet saves the specialist is *extra*, left out on purpose).
+
+At the platform defaults ($9.50 per person-handled call, $1.20 per AI-handled call), for **10,000 calls a month**. This is an illustration of how the sum works, not a forecast:
+
+| Share of calls the AI contains | Calls contained | Monthly cost with people alone | Monthly cost with people and AI | Lower by |
+|---|---|---|---|---|
+| 30% | 3,000 | $95,000 | $70,100 | 26% |
+| 50% (about today's demo history) | 5,000 | $95,000 | $53,500 | 44% |
+| 67% (the product deck's figure) | 6,700 | $95,000 | $39,390 | 59% |
+
+Say: *"Every point of containment is worth the same $8.30 on a call. Your job in a pilot is to find your containment and your two cost numbers; this page does the rest."*
+
+Two things make the number move after launch, and both are on screen:
+
+* **Containment rises as gaps are fixed.** Insights prices every gap in dollars a week and the learning loop closes it from what your specialists told callers (Act 6).
+* **Specialist time falls per escalated call.** The packet removes the questions; measure handle time before and after in the pilot (it is not in the table above).
+
+### 3.3 What to promise, and what not to
+
+* **Promise:** a measured containment rate and cost per call from your own pilot; the human stays in charge of what the agent may say; callers wait less.
+* **Do not promise:** a savings figure for their business before the pilot; that every call will be contained; a number for customer satisfaction (the platform records a thumbs up or down per call; use it in the pilot to compare with today).
+
+### 3.4 The pilot to propose (from the deck's next steps)
+
+1. **Pick one call type** with high volume, for example payments or pre-authorisation status.
+2. **Connect** the tools to your system's test APIs and load the help content you already use.
+3. **Prove**: run it alongside your people for a set number of weeks, and compare containment, cost per call, the caller's thumbs and the specialists' handle time with today.
+
+---
+
+## 4. Before you start (do this the evening before, and again 30 minutes before)
 
 Run through every box. The first one has already bitten once.
 
@@ -76,17 +137,23 @@ Run through every box. The first one has already bitten once.
 
 ---
 
-## 4. The story, act by act
+## 5. The story, act by act
 
 Each act: **Do** it, **expect** this, **say** this, and **why it sells**. Times add to 40 minutes. For the 12-minute cut, do the acts marked ★.
 
-### Act 0 — Open with the problem (2 min)
+### Act 0 — Open with the cost problem (3 min)
 
-On **Alex's Dashboard**: the four tiles (calls, containment, escalated to a person, response time), containment by week, escalations by root cause, and the clusters.
+On **Alex's Dashboard**. Start with what the buyer does today: every call ends with a person.
 
-**Say:** "Most escalations come from a few missing answers and a few missing lookups. This page tells you which, and what each one costs."
+| Do | Expect | Say |
+|---|---|---|
+| The four tiles | **Containment** (about half in the demo history), **Escalated to human**, calls and response time | "Containment is the share of calls the AI resolves with no person, safely. Today, in your world, that number is zero: every call ends with a person." |
+| **Escalations by root cause** and **Top clusters** | Most hand-offs come from a few missing answers and a few missing lookups; each cluster shows its weekly cost | "The calls that reach a person fall into a few repeating gaps, and each gap has a price." |
+| Open **Adding a newborn to the policy** | Five escalated calls and a weekly cost of about **$10** | "That is one gap. Fix it and those callers are served by the AI, and your specialists never see them again." |
 
-**Why it sells:** it frames the platform as an improvement engine, not a chatbot.
+**Say:** "We are not replacing your people. We are making sure a person takes the calls that need a person, and that the routine ones cost a penny, not a queue. I will show you both halves: the AI finishing a routine call, and your specialist starting a hard one with the whole story already written."
+
+**Why it sells:** it opens on the buyer's own cost problem and reframes "all calls to humans" as "humans where it matters".
 
 ### Act 1 ★ — One number for everything (6 min)
 
@@ -152,7 +219,7 @@ On **Alex's Dashboard**: the four tiles (calls, containment, escalated to a pers
 | **Knowledge** and **Agents** | *Read-only* badge; each agent's published rules, tools and versions | "Specialists can see why the agent said what it said, not change it." |
 | Type `/settings/` in the address bar | Back to the console: "Not available for your role" | "It is enforced by the server, not just hidden." |
 
-**Why it sells:** the human is faster *because* the AI did the first minutes, and the data stays protected.
+**Why it sells:** this is the other half of the cost story. The specialist only gets the calls that need a person, and starts each one with the verified caller, the lookups and the summary already done, so their minutes go on the decision. The data stays protected. **Say:** "Your people take fewer calls, and every one of them is a call worth a person."
 
 ### Act 5 ★ — Every rule is graded (5 min)
 
@@ -183,7 +250,7 @@ The platform turns what specialists say into improvements. Nothing reaches a cal
 
 **Optional, 3 minutes — the desk teaches live.** As Sam, **Patterns → Pre-authorisation status** (watching) → comment `Prior authorisation status is in the member portal under Treatment, and our team can read it out once the caller is verified.` Show it appear under Alex's **Specialist comments**. **Say:** "A comment of twenty characters or more counts as a person's answer, so even a pattern with no notes can be drafted from it. It does not make a pattern ready sooner: that still needs five real escalations."
 
-**Why it sells:** the cost of every escalation goes down over time, and a human stays in charge.
+**Why it sells:** this is how the cost keeps falling. Each approved fix moves a gap from the people column to the AI column (the newborn gap was about $10 a week), and a human approved every change. **Say:** "Containment is not a number you buy once; your specialists raise it every week by teaching the agent."
 
 ### Act 7 ★ — When a caller pushes (5 min)
 
@@ -207,7 +274,7 @@ The runtime enforces the rules, not just the prompt.
 
 ---
 
-## 5. If someone asks…
+## 6. If someone asks…
 
 | Question | Answer, from what you have just shown |
 |---|---|
@@ -217,12 +284,15 @@ The runtime enforces the rules, not just the prompt.
 | Who sees what? | Admin, reviewer and specialist roles; the specialist sees five pages, escalated calls only, masked (Act 4). |
 | Can it connect to our systems? | Tools are HTTP calls with JSON-schema parameters; here they call a mock of a member system; production tools point at yours. |
 | How do we know it is working? | Scorecard on every call, per-version rollups, drift, test suites (Act 5), and the escalation clusters (Act 6). |
-| What does it cost? | Model time is cents per call (section 2). Plan your own savings with the Dashboard's settings. |
+| We want every call handled by a human. | "Every call that needs one still gets one, immediately, and any caller can ask. What changes is that routine calls stop costing a person's minutes: a payment date, a document, a GP booking. Your specialists get only the calls that need them, with the story already written." (section 3.1) |
+| Will this replace our agents? | "It changes what they spend their day on. Complaints, disputes, bereavements and vulnerable callers always go to a person, and your specialists decide what the AI learns: nothing it says changes without a person approving it." |
+| How much will we save? | "That depends on your containment and your two cost numbers, so we measure them in a pilot. The sum is containment times the gap between a person-handled and an AI-handled call (section 3.2); the demo history is about half contained." |
+| What does it cost? | Model time is cents per call, about 1.5 cents measured (section 2). The Dashboard's $1.20 per AI call is a generous planning figure you can change; plan savings with your own numbers (section 3). |
 | What about voice? | **Talk** mode (Deepgram) and a speech-to-speech option; every act works by text if audio fails. |
 
 ---
 
-## 6. Known limits (say them before they find them)
+## 7. Known limits (say them before they find them)
 
 | Limit | What you see | What to say |
 |---|---|---|
@@ -232,7 +302,7 @@ The runtime enforces the rules, not just the prompt.
 | Simulated callers in test suites sometimes invent follow-ups | A scenario can fail although the agent was right | "Open the simulated call and show it." |
 | Hindi and Hinglish person requests | Left to the model | Show English. |
 
-## 7. If something goes wrong on stage
+## 8. If something goes wrong on stage
 
 | Symptom | Fix |
 |---|---|
@@ -244,14 +314,15 @@ The runtime enforces the rules, not just the prompt.
 | Wrong or empty data | Reseed: `uv run voiceai seed --reset`; check the business unit. |
 | Audio problems | Use **Type**; every act works the same. |
 
-## 8. The 12-minute cut
+## 9. The 12-minute cut
 
-Act 0 (1) → Act 1 (3) → Act 3, first four lines only (2) → Act 4 (3, with Sam) → Act 6, the proposal and approve (2) → Act 7, person on request and mum's policy (1). Close.
+Act 0 (2, say the cost line) → Act 1 (3) → Act 3, first four lines only (2) → Act 4 (3, with Sam) → Act 6, the proposal and approve (2) → Act 7, person on request and mum's policy (1). Close.
 
-## 9. Feature checklist
+## 10. Feature checklist
 
 | Area | Feature | Act |
 |---|---|---|
+| Cost | Containment, cost per call and the weekly price of each gap; a pilot that measures your own baseline | 0, 3, 6 |
 | Front desk | One entry for every caller; the supervisor routes by capability; transfers keep context | 1 |
 | Build | Plain-English rules, skills, tools, knowledge, persona, versions | 2 |
 | Sales | Quote, price, underwrite and create a policy with consent | 3 |

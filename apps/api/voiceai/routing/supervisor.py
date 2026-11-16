@@ -187,7 +187,8 @@ async def route(tenant_id: str, scope: str, text: str, *, channel: str, trigger:
         return record
 
 
-async def safety_route(tenant_id: str, scope: str, text: str, *, channel: str) -> dict[str, Any]:
+async def safety_route(tenant_id: str, scope: str, text: str, *, channel: str, method: str = "safety",
+                       reason: str = "Emergency or self-harm language") -> dict[str, Any]:
     """RTE-21 (CP-0042): a caller line with emergency or self-harm language is never routed. The scope's default agent,
     or the Stage A leader without one, takes the segment and its own safety rule speaks the fixed line. No decision model."""
     started = time.perf_counter()
@@ -208,7 +209,7 @@ async def safety_route(tenant_id: str, scope: str, text: str, *, channel: str) -
             record["stage_a_ms"] = int((time.perf_counter() - t0) * 1000)
             record["candidates"] = ranked[:SHORTLIST]
             chosen = ranked[0]["agent_id"] if ranked else next(iter(pool))
-        record.update(method="safety", agent_id=chosen, confidence=1.0, reason="Emergency or self-harm language")
+        record.update(method=method, agent_id=chosen, confidence=1.0, reason=reason)
         record["ms"] = int((time.perf_counter() - started) * 1000)
         return record
 

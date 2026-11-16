@@ -39,7 +39,7 @@ export default function KnowledgePage() {
         <Card title={`${hits.length} matching passages`}>
           {!hits.length ? <p className="text-sm text-muted">Nothing found: the agent would not be able to answer this.</p> : (
             <ul className="space-y-2 text-sm">
-              {hits.map((h, i) => <li key={i} className="rounded-lg border border-line p-2"><div className="font-medium">{h.title ?? h.doc_title}</div><p className="text-muted">{h.text ?? h.content}</p></li>)}
+              {hits.map((h, i) => <li key={i} className="rounded-lg border border-line p-2"><div className="font-medium">{h.title ?? h.doc_title}</div><p className="text-muted">{String(h.text ?? h.content ?? "").replace(/\*\*/g, "")}</p></li>)}
             </ul>
           )}
         </Card>

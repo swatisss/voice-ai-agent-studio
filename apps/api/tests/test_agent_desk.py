@@ -267,3 +267,26 @@ async def test_builders_can_still_work_the_console_through_the_api(client, seede
     assert r.status_code == 200
     async with sessionmaker()() as s:
         assert "NGH-410237" in (await s.get(Escalation, esc_id)).resolution_note  # only the specialist's own writing is masked
+
+
+async def test_only_one_specialist_wins_a_simultaneous_accept(client, seeded, signin):
+    """Covers: ES-06, DESK-11"""
+    import asyncio
+
+    signin()
+    _, esc_id = await _escalated(seeded)
+    await _login(client, "specialist")
+    rs = await asyncio.gather(*[client.post(f"/api/escalations/{esc_id}/accept", headers=H, json={"assignee": "x"}) for _ in range(6)])
+    codes = sorted(r.status_code for r in rs)
+    assert codes == [200] + [409] * 5, codes
+    async with sessionmaker()() as s:
+        assert (await s.get(Escalation, esc_id)).assignee == "Sam Specialist"
+
+
+def test_timestamps_survive_masking():
+    """Covers: DESK-05"""
+    stamps = ["2026-11-16T15:34:17.123276+00:00", "2026-11-16T15:34:17+00:00", "2026-11-16 15:34:17.123456", "2026-11-16T15:34:17.123276Z"]
+    for ts in stamps:
+        assert mask.text(ts) == ts and mask.walk({"at": ts, "n": [ts]}) == {"at": ts, "n": [ts]}
+    assert mask.text(f"started {stamps[0]}, member NGH-410237") == f"started {stamps[0]}, member NGH-\u2022\u2022\u2022237"
+    assert mask.text("cost 0.123456 usd") == "cost 0.123456 usd"

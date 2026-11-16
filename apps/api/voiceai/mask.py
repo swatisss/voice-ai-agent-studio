@@ -15,7 +15,8 @@ NOT_MEMBER = {"PA", "CL", "PMI", "CC", "CSH", "UW", "RT", "GPB", "QT", "EV"}
 _REF = re.compile(r"(?<![\w-])([A-Z]{2,5})-(\d{6})(?![\w-])")
 _EMAIL = re.compile(r"(?<![\w.+-])([\w.+-])[\w.+-]*@([\w-]+(?:\.[\w-]+)+)")
 _PHONE = re.compile(r"(?<![\w-])\+?\d[\d ()-]{7,}\d(?![\w-])")
-_DIGITS = re.compile(r"(?<![\w-])\d{6,}(?![\w-])")
+_DIGITS = re.compile(r"(?<![\w.:+-])\d{6,}(?![\w.:-])")  # not the fraction of a time or a decimal
+_ISO = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?")
 
 
 def member_ref(ref: str | None) -> str | None:
@@ -45,14 +46,25 @@ def _phone_sub(m: re.Match[str]) -> str:
     return phone(m.group(0)) or "" if len(digits) >= 9 else m.group(0)  # a date or a short number is not a telephone number
 
 
-def text(value: str) -> str:
-    """Mask identifiers anywhere in free text. Best effort: hides identifiers, not names or health details."""
-    if not value:
-        return value
+def _mask_plain(value: str) -> str:
     out = _REF.sub(lambda m: m.group(0) if m.group(1) in NOT_MEMBER else f"{m.group(1)}-{DOT * 3}{m.group(2)[-3:]}", value)
     out = _EMAIL.sub(lambda m: f"{m.group(1)}***@{m.group(2)}", out)
     out = _PHONE.sub(_phone_sub, out)
     return _DIGITS.sub(lambda m: f"{DOT * 3}{m.group(0)[-3:]}", out)
+
+
+def text(value: str) -> str:
+    """Mask identifiers anywhere in free text. Best effort: hides identifiers, not names or health details.
+
+    A timestamp (`2026-11-16T15:34:17.123276+00:00`) is never an identifier and is left exactly as it is.
+    """
+    if not value:
+        return value
+    parts, last = [], 0
+    for m in _ISO.finditer(value):
+        parts += [_mask_plain(value[last:m.start()]), m.group(0)]
+        last = m.end()
+    return "".join(parts) + _mask_plain(value[last:])
 
 
 def walk(data: Any) -> Any:

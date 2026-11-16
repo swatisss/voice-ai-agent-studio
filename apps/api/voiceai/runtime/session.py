@@ -439,6 +439,9 @@ class AgentSession:
         if policy.get("safety_screen", True) and escalation.safety_match(text):
             return _Rule(escalation.safety_message(text), end_reason="handoff", data={"safety": True},
                          escalate=("safety", "Caller used emergency or self-harm language"))
+        if escalation.person_match(text):  # ES-13 (CP-0048): a request for a person is never answered by a model
+            return _Rule(self._handoff_line(), end_reason="handoff", data={"person_request": True},
+                         escalate=("caller_requested", "Caller asked to speak to a person"))
         return None
 
     async def _apply_rule(self, rule: _Rule) -> str:

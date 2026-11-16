@@ -10,7 +10,7 @@ import re
 import unicodedata
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from voiceai import jobs, prompts
@@ -66,6 +66,25 @@ def safety_match(text: str) -> bool:
     if all(p in HISTORY_PHRASES for p in hits) and HISTORY_MARKERS.search(t) and not PRESENT_CUES.search(t):
         return False
     return True
+
+
+# CP-0048 (ES-13): a caller line that asks for a person. A request verb is needed, so "talk to someone about my claim" and a
+# person mentioned in passing ("a person who died", "I spoke to a human last week") do not match.
+_VERB = r"(?:speak|talk|chat|connect|put\s+me\s+(?:through|on)|get\s+me|transfer|pass\s+me|hand\s+me)"
+_NOUN = (r"(?:human|real\s+person|real\s+human|live\s+(?:agent|person)|actual\s+person|representative|advis[eo]r|manager|supervisor|"
+         r"operator|colleague|someone\s+real|somebody\s+real|(?:a|an|the)\s+(?:person|agent))")
+_PERSON = (
+    re.compile(rf"\b{_VERB}\b[^.?!]{{0,30}}?\b{_NOUN}\b"),
+    re.compile(r"\b(?:i|we)\s+(?:want|need|would\s+like)\s+(?:a|an|to\s+(?:speak|talk)\s+to\s+a)?\s*(?:human|real\s+person|real\s+human|live\s+agent|representative)\b"),
+    re.compile(r"\b(?:human|agent|manager|representative|operator)\s+please\b"),
+    re.compile(r"^\W*(?:a\s+|an\s+)?(?:human|agent|person|representative|manager|operator|real\s+person)(?:\s+please)?\W*$"),
+)
+
+
+def person_match(text: str) -> bool:
+    """ES-13: the caller asks for a person; the call escalates with `caller_requested` without asking a model."""
+    t = unicodedata.normalize("NFC", text).lower().replace("\u2019", "'")
+    return any(rx.search(t) for rx in _PERSON)
 
 
 def safety_message(text: str) -> str:
@@ -200,8 +219,13 @@ async def accept(s: AsyncSession, tenant_id: str, escalation_id: str, assignee: 
     esc = await get_owned(s, tenant_id, escalation_id)
     if esc.status != "waiting":
         raise ApiError(409, "invalid_state", f"Escalation is {esc.status}, not waiting")
-    esc.status, esc.assignee, esc.accepted_at = "accepted", (assignee or "Specialist")[:120], utcnow()
+    # One winner when two specialists press Accept together: only the update that still finds it waiting counts.
+    won = await s.execute(update(Escalation).where(Escalation.id == esc.id, Escalation.status == "waiting")
+                          .values(status="accepted", assignee=(assignee or "Specialist")[:120], accepted_at=utcnow()))
     await s.commit()
+    if won.rowcount != 1:
+        raise ApiError(409, "invalid_state", "Someone else has just accepted this escalation")
+    await s.refresh(esc)
     bus.publish(tenant_id, "console", "escalation.updated", summary(esc))
     return esc
 

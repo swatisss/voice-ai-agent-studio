@@ -362,6 +362,9 @@ async def front_desk_turn(conv_id: str, tenant_id: str, text: str, app: Any) -> 
     leader = ((asked[-1].get("candidates") or [{}])[0].get("agent_id")) if clarified and asked else None
     if escalation.safety_match(text):  # RTE-21 (CP-0042): an emergency is never routed, the default agent speaks the safety line
         record = await supervisor.safety_route(tenant_id, scope, text, channel=channel)
+    elif escalation.person_match(text):  # RTE-23 (CP-0048): a request for a person is never clarified; the default agent escalates
+        record = await supervisor.safety_route(tenant_id, scope, text, channel=channel, method="person_request",
+                                               reason="Caller asked for a person")
     else:
         record = await supervisor.route(tenant_id, scope, request, channel=channel, clarifications_used=clarified,
                                         prior_leader=leader, answer=text if clarified else None, mode=mode)

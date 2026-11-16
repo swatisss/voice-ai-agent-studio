@@ -47,7 +47,7 @@ export default function CallsPage() {
                 {data.items.filter((c) => !routedOnly || (c.conversation_id && c.routed_by && c.routed_by !== "explicit")).map((c) => (
                   <tr key={c.id} className="cursor-pointer border-t border-line hover:bg-neutral-soft" onClick={() => router.push(`/calls/detail/?id=${c.id}`)}>
                     <td className="py-2 whitespace-nowrap">{when(c.started_at)}</td>
-                    <td>{label(c.channel)}{c.transport === "phone" && <Badge tone="info" className="ml-1">Phone</Badge>}{c.conversation_id && c.routed_by && c.routed_by !== "explicit" && <Badge tone={c.routed_by === "transfer" ? "warn" : "accent"} className="ml-1">{c.routed_by === "transfer" ? "Transferred" : "Routed"} · {c.segment}</Badge>}{c.is_seed && <span className="ml-1 text-xs text-muted">(seed)</span>}</td>
+                    <td>{label(c.channel)}{c.transport === "phone" && <Badge tone="info" className="ml-1">Phone</Badge>}{c.conversation_id && c.routed_by && c.routed_by !== "explicit" && <Badge tone={c.routed_by === "transfer" ? "warn" : "accent"} className="ml-1">{c.routed_by === "transfer" ? "Transferred" : "Routed"} · {c.segment}</Badge>}{c.is_seed && !desk && <span className="ml-1 text-xs text-muted">(seed)</span>}</td>
                     <td><Badge tone={MODE_TONE[c.direction] ?? "neutral"}>{MODE_LABEL[c.direction] ?? "Inbound"}</Badge></td>
                     <td>{versionOf(c)}</td>
                     <td className="mono text-xs">{maskRef(c.caller_ref)}</td>

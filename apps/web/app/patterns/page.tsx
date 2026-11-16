@@ -31,7 +31,7 @@ export default function PatternsPage() {
                 </div>
                 <p className="mt-1 text-sm text-muted">{c.description}</p>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-                  <span>{c.call_count} calls · {c.escalation_count} escalated</span>
+                  <span>{c.call_count} {c.call_count === 1 ? "call" : "calls"} · {c.escalation_count} escalated</span>
                   <span>{ROOT_CAUSE[c.root_cause] ?? c.root_cause}</span>
                   {c.last_seen_at && <span>Last seen {when(c.last_seen_at)}</span>}
                 </div>

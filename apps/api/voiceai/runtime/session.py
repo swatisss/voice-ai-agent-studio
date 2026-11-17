@@ -152,6 +152,8 @@ class AgentSession:
         self.transferred_to: AgentSession | None = None  # set when this segment handed the conversation on
         self.carried_caller_line: str | None = None  # a transferred segment answers the caller's last line first
         self.handoff: dict[str, Any] = dict((getattr(call, "meta", None) or {}).get("handoff") or {})
+        self.in_room = bool(getattr(call, "media_room", None))  # a call in a hosted media room (LKH-17)
+        self.room_silent = False  # escalated in a room: the AI answers nothing while it waits for a specialist (LKH-05)
         self.member_profile = NOT_VERIFIED  # filled at verification for this call only (/architecture/agent-memory.md)
         self.member_memory = NOTHING
 
@@ -279,6 +281,11 @@ class AgentSession:
         """Idempotent (RT-08)."""
         if self.state.ended:
             return
+        if reason == "handoff" and self.in_room and self.state.escalated:  # LKH-17: in a room the call stays open
+            from voiceai import media_room
+
+            if await media_room.on_handoff(self):
+                return
         self.state.ended = True
         self.end_reason = reason
         REGISTRY.pop(self.call_id, None)
@@ -326,6 +333,11 @@ class AgentSession:
         await self._event("assistant", text, data or {})
         return text
 
+    async def record_room_line(self, kind: str, text: str, data: dict[str, Any]) -> int:
+        """LKH-09: a human voice line heard by the scribe (`user` for the customer, `human` for the specialist); returns its `seq`."""
+        await self._event(kind, text, data)
+        return self.seq
+
     async def note(self, text: str, data: dict[str, Any] | None = None) -> None:
         """A system line in the call's transcript (a transfer, a setting change): not something the caller hears."""
         await self._event("system", text, data)
@@ -342,7 +354,7 @@ class AgentSession:
     async def caller_turn(self, text: str) -> Decision:
         """A final caller transcript (RT-11): recorded, then the rules that run before any model reply."""
         text = text.strip()
-        if not text or self.state.ended:
+        if not text or self.state.ended or self.room_silent:  # LKH-05: no model request while a room call waits
             return Decision()
         self._tool_rounds = 0
         await self._record_user(text)
@@ -495,6 +507,8 @@ class AgentSession:
 
     # ------------------------------------------------------------ turn
     async def respond(self, user_text: str) -> AsyncIterator[str]:
+        if self.room_silent:  # LKH-05
+            return
         async with self._lock:
             async for chunk in self._turn(user_text):
                 yield chunk

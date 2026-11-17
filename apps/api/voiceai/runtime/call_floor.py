@@ -149,7 +149,7 @@ class CallFloor:
 
     async def tick(self, now: float | None = None) -> None:
         """One tick of the silence and call-length clock (called directly by tests with a fake `now`)."""
-        if self.closing:
+        if self.closing or getattr(self.session, "room_silent", False):  # LKH-18: no idle or reminder while a room call waits for a person
             return
         action = self.clock.tick(time.monotonic() if now is None else now, quiet=not (self.welcoming or self.busy))
         if action is None:

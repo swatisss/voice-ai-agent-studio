@@ -48,3 +48,7 @@ With `DB_INSTANCE` set, the script attaches the instance and sets `DATABASE_URL=
 
 * `curl https://<url>/healthz` shows `status: ok` and the configured providers.
 * Open the URL, pick a tenant, run Act 1 of the [demo script](/product/demo-script.md) in Type mode, then Talk mode.
+
+# Optional: live voice rooms (LiveKit)
+
+After the owner has a LiveKit project ([/build/runbook-livekit.md](/build/runbook-livekit.md)): store `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` as secrets, pass `LIVEKIT_URL` to `infra/deploy-cloudrun.sh`, then run the connectivity check from Cloud Run with a one-off job of the same image: `gcloud run jobs create livekit-check --image <IMAGE> --region <REGION> --set-env-vars LIVEKIT_URL=<wss url> --set-secrets LIVEKIT_API_KEY=LIVEKIT_API_KEY:latest,LIVEKIT_API_SECRET=LIVEKIT_API_SECRET:latest --command python --args scripts/livekit_check.py` and `gcloud run jobs execute livekit-check --wait`. Not yet run (no LiveKit account at implementation time).

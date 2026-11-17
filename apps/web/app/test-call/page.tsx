@@ -11,6 +11,7 @@ import { Badge, Button, Card, cx, EmptyState, Input, Select, Spinner, useToast }
 import { api, ApiError, type CallEvent, useApi, useEvents } from "@/lib/api";
 import { MODE_LABEL, MODE_TONE, money, secs } from "@/lib/format";
 import { VoiceClient } from "@/lib/voice";
+import { RoomClient, type RoomControl } from "@/lib/room";
 import { FeedbackPrompt } from "@/components/feedback";
 import { FullFlow } from "@/components/full-flow";
 import { LiveControlsCard } from "@/components/live-controls";
@@ -85,6 +86,12 @@ function TestCallPage() {
   );
 }
 
+function HoldTimer({ since }: { since: number }) {
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  return <span className="mono">{Math.max(0, Math.floor((Date.now() - since) / 1000))} s</span>;
+}
+
 function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
   const { tenant } = useTenant();
   const params = useSearchParams();
@@ -122,6 +129,11 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
   const [personaId, setPersonaId] = useState(params.get("persona") ?? "");
   const [turn, setTurn] = useState<TurnDetection>(DEFAULT_TURN);
   const voice = useRef<VoiceClient | null>(null);
+  const roomClient = useRef<RoomClient | null>(null);
+  const { data: health } = useApi<{ livekit?: boolean }>("/healthz", [tenant]);
+  const [voiceRoom, setVoiceRoom] = useState(false);  // LKH-22: Direct | Voice room
+  const [handover, setHandover] = useState<{ state: string; specialist?: string; since: number } | null>(null);  // LKH-23
+  const roomOn = mode === "talk" && voiceRoom && !!health?.livekit;
   const bottom = useRef<HTMLDivElement>(null);
 
   const merge = useCallback((incoming: CallEvent[]) => {
@@ -152,7 +164,7 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
   useEffect(() => {  // the agent's own defaults seed the controls whenever no call is running
     if (agentDetail && !callId) setTurn({ ...DEFAULT_TURN, ...(agentDetail.draft_config?.voice?.turn_detection ?? {}) });
   }, [agentDetail, callId]);
-  useEffect(() => () => voice.current?.hangup(), []);
+  useEffect(() => () => { voice.current?.hangup(); roomClient.current?.hangup(); }, []);
   useEffect(() => {  // the Technical details choice survives reloads; the page works without storage
     try { setTechnicalState(localStorage.getItem(TECH_KEY) === "1"); } catch { /* storage unavailable */ }
   }, []);
@@ -164,6 +176,9 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
   function reset() {
     voice.current?.hangup();
     voice.current = null;
+    roomClient.current?.hangup();
+    roomClient.current = null;
+    setHandover(null);
     setCallId(null); setEvents([]); setCall(null); setStatus("idle"); setEscalated(false); setLevel(0); setSpeaking(false);
   }
 
@@ -171,11 +186,33 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
     reset();
     setStatus("connecting");
     try {
-      const r = await api("/api/calls", { method: "POST", json: { agent_id: agentId, channel: mode === "talk" ? "voice" : "text", persona_id: personaId || undefined, turn_detection: mode === "talk" ? turn : undefined, context: outbound ? { member_ref: target?.member_ref } : undefined, caller_number: callerNumber } });
+      const r = await api("/api/calls", { method: "POST", json: { agent_id: agentId, channel: mode === "talk" ? "voice" : "text", transport: roomOn ? "livekit" : undefined, persona_id: personaId || undefined, turn_detection: mode === "talk" ? turn : undefined, context: outbound ? { member_ref: target?.member_ref } : undefined, caller_number: callerNumber } });
       setCallId(r.call_id);
       if (mode === "type") {
         await sync(r.call_id);
         setStatus("active");
+        return;
+      }
+      if (roomOn) {  // LKH-22, LKH-24: the room connection; the token is used once and never shown
+        const rc = new RoomClient({
+          onConnected: () => setStatus("active"),
+          onLevel: setLevel,
+          onSpeaking: setSpeaking,
+          onControl: (m: RoomControl) => {
+            if (m.type === "handover") setHandover({ state: m.state, specialist: m.specialist, since: Date.now() });
+            if (m.type === "end") { setStatus("ended"); setSpeaking(false); setLevel(0); roomClient.current?.hangup(); sync(r.call_id); }
+          },
+          onClose: () => { setStatus("ended"); sync(r.call_id); },
+        });
+        roomClient.current = rc;
+        try {
+          await rc.start(r.connect.url, r.connect.token);
+        } catch (e) {
+          rc.hangup(); roomClient.current = null;
+          await api(`/api/calls/${r.call_id}/end`, { method: "POST" }).catch(() => undefined);  // no call stays active
+          setStatus("idle");
+          toast(/permission|denied|notallowed/i.test(String(e)) ? "Microphone access was denied. Allow it in the browser and try again." : "Voice is unavailable. Try Direct or Type mode", "bad");
+        }
         return;
       }
       const client = new VoiceClient({
@@ -216,7 +253,8 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
 
   async function hangup() {
     if (!callId) return;
-    if (voice.current) { voice.current.hangup(); voice.current = null; }
+    if (roomClient.current) { roomClient.current.hangup(); roomClient.current = null; await api(`/api/calls/${callId}/end`, { method: "POST" }).catch(() => undefined); }
+    else if (voice.current) { voice.current.hangup(); voice.current = null; }
     else await api(`/api/calls/${callId}/end`, { method: "POST" }).catch(() => undefined);
     setStatus("ended");
     setTimeout(() => sync(callId), 400);  // UI-09
@@ -264,6 +302,26 @@ function TestCall({ flowSwitch }: { flowSwitch: React.ReactNode }) {
             ? <Button variant="danger" onClick={hangup}><PhoneOff size={14} />{mode === "talk" ? "Hang up" : "End chat"}</Button>
             : <Button variant="primary" onClick={start} disabled={outbound && !target}>{outbound && <PhoneOutgoing size={14} />}{startLabel}</Button>
         }>
+          {mode === "talk" && (  // LKH-22
+            <div className="mb-3 flex items-center gap-2" role="group" aria-label="Voice connection">
+              <span className="text-xs font-medium text-muted">Voice connection</span>
+              {[false, true].map((r) => (
+                <button key={String(r)} aria-pressed={voiceRoom === r} disabled={busy || (r && !health?.livekit)} title={r && !health?.livekit ? "Not configured on this server" : undefined}
+                  onClick={() => setVoiceRoom(r)}
+                  className={cx("rounded-full px-3 py-1 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60", voiceRoom === r ? "bg-accent text-on-accent" : "text-muted hover:bg-accent-soft")}>
+                  {r ? "Voice room" : "Direct"}
+                </button>
+              ))}
+              {!health?.livekit && <span className="text-xs text-muted">Voice room: Not configured on this server</span>}
+            </div>
+          )}
+          {handover && status === "active" && (  // LKH-23
+            <div role="status" className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
+              {handover.state === "waiting" && <>A specialist has been asked to join. Please hold. <HoldTimer since={handover.since} /></>}
+              {handover.state === "connected" && <>You are now talking with {handover.specialist}, a specialist.</>}
+              {handover.state === "waiting_again" && <>Your specialist was disconnected. Please hold. <HoldTimer since={handover.since} /></>}
+            </div>
+          )}
           {outbound && !busy && (
             <div className="mb-3 space-y-1">
               <label className="text-xs font-medium text-muted" htmlFor="outbound-target">Who should the agent call?</label>

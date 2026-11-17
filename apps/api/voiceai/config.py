@@ -1,6 +1,6 @@
 """Application settings from environment variables and `.env`.
 
-Spec: /architecture/deployment.md, /architecture/llm-gateway.md, /architecture/knowledge.md, /architecture/tenant-settings.md,
+Spec: /architecture/deployment.md, /architecture/hosted-media-room.md, /architecture/llm-gateway.md, /architecture/knowledge.md, /architecture/tenant-settings.md,
 /architecture/contact-tools.md
 """
 from __future__ import annotations
@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     webrtc_turn_urls: str | None = None
     webrtc_turn_username: str | None = None
     webrtc_turn_credential: str | None = None
+    # hosted media room (/architecture/hosted-media-room.md, LKH-21): all three set = voice rooms are available
+    livekit_url: str | None = None
+    livekit_api_key: str | None = None
+    livekit_api_secret: str | None = None
+    livekit_token_ttl_s: int = 600
+    handover_wait_s: float = 180
     llm_fake: bool = False
     # per-role model overrides (/architecture/llm-gateway.md, LG-06/LG-07); a real env var of the same name wins in the gateway
     llm_role_realtime: str | None = None

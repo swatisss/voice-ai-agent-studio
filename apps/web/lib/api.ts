@@ -138,6 +138,7 @@ export type Escalation = {
   id: string; call_id: string; status: string; reason_category: string; reason_detail: string;
   packet_status: string; packet: Packet | null; assignee: string | null; disposition: string | null;
   resolution_note: string | null; created_at: string; accepted_at: string | null; resolved_at: string | null; call?: any;
+  voice_state?: "waiting" | "connected" | "ended" | null;  // LKH-25: set only for a call in a voice room
 };
 
 // Spec: /architecture/agent-memory.md (Memory item), /ui/member-memory.md

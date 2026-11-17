@@ -208,6 +208,7 @@ class Call(Base):
     conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)  # a conversation's segment
     segment: Mapped[int | None] = mapped_column(Integer, nullable=True)
     routed_by: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    media_room: Mapped[str | None] = mapped_column(String(64), nullable=True)  # LiveKit room name of a `livekit` call (LKH-19)
     meta: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
@@ -240,6 +241,8 @@ class Escalation(Base):
     created_at: Mapped[datetime] = _created()
     accepted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    voice_state: Mapped[str | None] = mapped_column(String(16), nullable=True)  # waiting | connected | ended (LKH-19)
+    voice_joined_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
 
 class CallFeedback(Base):

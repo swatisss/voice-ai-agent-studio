@@ -42,6 +42,7 @@ Server to browsers over room data packets, topic `echo.control`, JSON `{type, ..
 # Failure and limits
 
 * **No configuration.** Without `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`, `transport: livekit` returns 503 `livekit_unavailable`; `/healthz` reports `livekit: false`. Every other transport behaves as before.
+* **Cascade only.** A room call runs the cascade pipeline; an agent set to the realtime pipeline is refused with 409 `livekit_cascade_only` until the check proves a realtime room pipeline.
 * **The AI cannot join** within 10 s: the call ends with reason `error`, the customer sees "Voice is unavailable", nothing is billed beyond the failed attempt.
 * **Free plan caps are hard** (5,000 participant-minutes, 100 concurrent connections, 5 concurrent agent sessions; research note): when LiveKit refuses a join, the same `error` ending applies. A staffed call is up to four participants.
 * **Cloud Run.** The AI and scribe are outbound clients inside the one service (min and max instances 1, no CPU throttling, [/architecture/deployment.md](/architecture/deployment.md)). Whether UDP media leaves Cloud Run is **UNVERIFIED**; `scripts/livekit_check.py` (LKH-16) decides, and the fallback in the ADR is a separate always-on worker.

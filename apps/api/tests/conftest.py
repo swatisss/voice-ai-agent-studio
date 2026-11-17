@@ -31,6 +31,7 @@ os.environ.update({
     "STUDIO_SPECIALIST_TENANT": "northgate-health",
     "STUDIO_SESSION_SECRET": "",
     "WEBRTC_TURN_URLS": "",
+    "LIVEKIT_URL": "", "LIVEKIT_API_KEY": "", "LIVEKIT_API_SECRET": "",  # voice rooms off unless a test sets them (LKH-01)
     # a developer's LLM_ROLE_* lines in apps/api/.env must not change the default roles the tests expect
     "LLM_ROLE_REALTIME": "",
     "LLM_ROLE_ANALYSIS": "",

@@ -97,6 +97,7 @@ def summary(e: Escalation) -> dict[str, Any]:
         "id": e.id, "call_id": e.call_id, "agent_id": e.agent_id, "status": e.status,
         "reason_category": e.reason_category, "reason_detail": e.reason_detail,
         "packet_status": e.packet_status, "packet": e.packet, "assignee": e.assignee,
+        "voice_state": e.voice_state,  # LKH-05, LKH-25: null unless the call is in a media room
         "disposition": e.disposition, "resolution_note": e.resolution_note,
         "created_at": e.created_at.isoformat() if e.created_at else None,
         "accepted_at": e.accepted_at.isoformat() if e.accepted_at else None,
@@ -149,6 +150,8 @@ def transcript_lines(events: list[CallEvent]) -> str:
             lines.append(f"Caller: {ev.text}")
         elif ev.kind == "assistant" and ev.text:
             lines.append(f"Agent: {ev.text}")
+        elif ev.kind == "human" and ev.text:  # LKH-10: a specialist's typed or spoken line is a human turn
+            lines.append(f"Specialist: {ev.text}")
         elif ev.kind == "tool_result":
             lines.append(f"Tool {ev.data.get('name')} -> {str(ev.data.get('result'))[:400]}")
     return "\n".join(lines)
@@ -248,4 +251,7 @@ async def resolve(s: AsyncSession, tenant_id: str, escalation_id: str, dispositi
     from voiceai import conversations
 
     await conversations.escalation_resolved(tenant_id, esc.call_id)  # HMC-05: an API text conversation ends with it
+    from voiceai import media_room
+
+    await media_room.resolved(tenant_id, esc.call_id)  # LKH-11: a call in a media room ends `human_ended`
     return esc

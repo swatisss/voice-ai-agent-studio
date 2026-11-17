@@ -34,7 +34,7 @@ if [[ -n "${PUBLIC_BASE_URL:-}" ]]; then
 fi
 # Supervisor routing and WebRTC (Spec: /architecture/supervisor-routing.md, /architecture/webrtc-transport.md).
 # PHI_MODE defaults to on when the service runs on Cloud Run; set PHI_MODE=0 only for synthetic data (a hosted decision model).
-for var in DECISION_MODEL_URL DECISION_MODEL_NAME DECISION_MODEL_THRESHOLD DECISION_MODEL_HOSTED DECISION_MODEL_TIMEOUT_VOICE_MS DECISION_MODEL_TIMEOUT_TEXT_MS PHI_MODE WEBRTC_TURN_URLS WEBRTC_TURN_USERNAME; do
+for var in DECISION_MODEL_URL DECISION_MODEL_NAME DECISION_MODEL_THRESHOLD DECISION_MODEL_HOSTED DECISION_MODEL_TIMEOUT_VOICE_MS DECISION_MODEL_TIMEOUT_TEXT_MS PHI_MODE WEBRTC_TURN_URLS WEBRTC_TURN_USERNAME LIVEKIT_URL LIVEKIT_TOKEN_TTL_S HANDOVER_WAIT_S; do
   if [[ -n "${!var:-}" ]]; then
     ENV_VARS+=",${var}=${!var}"
   fi
@@ -49,8 +49,13 @@ fi
 # OPENAI and DEEPGRAM are required; the others are optional and attached only when the secret exists
 # (the TWILIO_* secrets by phone calls, TENANT_SECRETS_KEY by tenants' own keys).
 SECRETS="OPENAI_API_KEY=OPENAI_API_KEY:latest,DEEPGRAM_API_KEY=DEEPGRAM_API_KEY:latest"
+# Live voice handover (Spec: /architecture/hosted-media-room.md, /build/runbook-livekit.md): LIVEKIT_URL is passed as an env var when set,
+# LIVEKIT_API_KEY and LIVEKIT_API_SECRET as secrets when they exist; without all three the voice-room transport stays off (503).
+if [[ -z "${LIVEKIT_URL:-}" ]]; then
+  echo "==> LIVEKIT_URL not set; deploying without live voice rooms"
+fi
 # PUBLIC_API_SECRET signs public-API connect tokens; DECISION_MODEL_API_KEY and WEBRTC_TURN_CREDENTIAL serve routing and WebRTC.
-for optional in OPENROUTER_API_KEY TWILIO_AUTH_TOKEN TWILIO_ACCOUNT_SID TENANT_SECRETS_KEY PUBLIC_API_SECRET DECISION_MODEL_API_KEY WEBRTC_TURN_CREDENTIAL; do
+for optional in OPENROUTER_API_KEY TWILIO_AUTH_TOKEN TWILIO_ACCOUNT_SID TENANT_SECRETS_KEY PUBLIC_API_SECRET DECISION_MODEL_API_KEY WEBRTC_TURN_CREDENTIAL LIVEKIT_API_KEY LIVEKIT_API_SECRET; do
   if gcloud secrets describe "${optional}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
     SECRETS+=",${optional}=${optional}:latest"
   else

@@ -28,7 +28,7 @@ from voiceai.schemas import E164_RE, TurnDetectionPatch
 from voiceai.runtime import escalation as esc_mod
 from voiceai.runtime.session import AgentSession, create_call
 from voiceai.tenancy import current_tenant, resolve_tenant
-from voiceai import admission, caller_id, memory, voice_calls
+from voiceai import admission, caller_id, media_room, memory, voice_calls
 
 router = APIRouter(prefix="/api")
 
@@ -36,6 +36,7 @@ router = APIRouter(prefix="/api")
 class CallCreate(BaseModel):
     agent_id: str
     channel: Literal["voice", "text"] = "text"
+    transport: Literal["direct", "livekit"] = "direct"  # `livekit`: a voice call in a hosted media room (LKH-01)
     persona_id: str | None = None
     turn_detection: TurnDetectionPatch | None = None
     context: dict[str, Any] | None = None  # outbound agents: {member_ref} of a listed target (OB-01)
@@ -80,7 +81,7 @@ def call_summary(c: Call, analysis: CallAnalysis | None = None, version: int | N
     return {
         "feedback": feedback,
         "id": c.id, "agent_id": c.agent_id, "agent_version_id": c.agent_version_id, "agent_version": version,
-        "channel": c.channel, "transport": "phone" if (c.meta or {}).get("telephony") else "browser", "direction": c.direction, "status": c.status, "outcome": c.outcome, "caller_ref": c.caller_ref,
+        "channel": c.channel, "transport": "livekit" if c.media_room else "phone" if (c.meta or {}).get("telephony") else "browser", "direction": c.direction, "status": c.status, "outcome": c.outcome, "caller_ref": c.caller_ref,
         "started_at": c.started_at.isoformat() if c.started_at else None,
         "ended_at": c.ended_at.isoformat() if c.ended_at else None, "end_reason": c.end_reason,
         "turn_count": c.turn_count, "tokens_in": c.tokens_in, "tokens_out": c.tokens_out,
@@ -99,6 +100,11 @@ def analysis_out(a: CallAnalysis | None) -> dict[str, Any] | None:
 
 @router.post("/calls")
 async def start_call(body: CallCreate, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    room = body.transport == "livekit"
+    if room:  # LKH-01: refused up front without the three settings; rooms are voice calls on the cascade pipeline
+        if body.channel != "voice":
+            raise ApiError(422, "invalid_transport", "transport livekit is for voice calls")
+        media_room.require_configured()
     live: dict = {}
     if body.persona_id:
         await _persona(s, tenant_id, body.persona_id)
@@ -115,7 +121,15 @@ async def start_call(body: CallCreate, request: Request, tenant_id: str = Depend
         if isinstance(decided, admission.Refusal):
             raise ApiError(409, decided.reason, "Voice is not available for this agent right now"
                            if decided.reason == "voice_unavailable" else "The agent's voice pipeline is not enabled for this business unit")
+        if room and decided.pipeline != "cascade":
+            raise ApiError(409, "livekit_cascade_only", "Voice rooms run the cascade pipeline; choose the Direct transport for this agent")
+    if room:
+        call.media_room = media_room.room_name(call.id)
     await s.commit()
+    if room:
+        session = await AgentSession.open(call.id, tenant_id, app=request.app)
+        return {"call_id": call.id, "greeting": None, "settings": await effective_settings(s, call),
+                "connect": await media_room.open_call(session)}
     greeting = None
     if body.channel == "text":
         session = await AgentSession.open(call.id, tenant_id, app=request.app)

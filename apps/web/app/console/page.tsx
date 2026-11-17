@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PacketCard } from "@/components/packet";
 import { useTenant } from "@/components/shell";
 import { Transcript } from "@/components/transcript";
+import { VoicePanel, VoiceStrip } from "@/components/voice-panel";
 import { Badge, Button, Card, cx, EmptyState, Field, Input, Select, Spinner, Tabs, Textarea, useToast } from "@/components/ui";
 import { api, ApiError, type Escalation, useApi, useEvents } from "@/lib/api";
 import { useMe } from "@/lib/auth";
@@ -143,6 +144,7 @@ export default function ConsolePage() {
                     </div>
                     <div className="mt-1 text-sm">{e.packet ? label(e.packet.intent) : e.reason_detail || "Preparing notes…"}</div>
                     <div className="mt-0.5 text-xs text-muted">Caller {maskRef(e.call?.caller_ref ?? (e.packet?.entities?.member_ref as string))} {e.packet && `· ${e.packet.sentiment.end}`}</div>
+                    <VoiceStrip esc={e} />
                   </button>
                 </li>
               ))}
@@ -176,6 +178,7 @@ export default function ConsolePage() {
                   </form>
                 </Card>
               )}
+              <VoicePanel esc={detail} onChanged={() => { loadDetail(detail.id); reload(); }} />
               <Card title="Handle" actions={<Badge tone={detail.status === "resolved" ? "ok" : "warn"}>{label(detail.status)}</Badge>}>
                 {detail.status === "waiting" && <Button variant="primary" onClick={accept}>Accept</Button>}
                 {detail.status === "accepted" && (

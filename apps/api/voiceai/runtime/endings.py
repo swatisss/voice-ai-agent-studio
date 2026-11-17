@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 
-END_REASONS = ("end_call", "farewell", "handoff", "idle", "max_duration", "hangup", "error")
+END_REASONS = ("end_call", "farewell", "handoff", "idle", "max_duration", "hangup", "error", "human_ended", "handover_timeout")
 
 GOODBYE = "Thank you for calling. Take care!"
 REMINDER_LINE = "Are you still there?"

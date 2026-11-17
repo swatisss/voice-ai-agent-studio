@@ -184,3 +184,12 @@ UI-85
 UI-86
 # CP-0049: CHAT-05 (reload resumes the thread) is client behaviour in components/chat.tsx with no browser test; the server side (poll after a cursor) is covered by CHAT-04.
 CHAT-05
+
+# CP-0050 live voice handover. LKH-22..LKH-28 are web pages and need a browser, a microphone and a real LiveKit room (no browser tests): type check and build pass; the server behaviour behind them is covered by LKH-01..21 against a fake room.
+LKH-22
+LKH-23
+LKH-24
+LKH-25
+LKH-26
+LKH-27
+LKH-28

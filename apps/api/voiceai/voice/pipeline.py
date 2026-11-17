@@ -27,6 +27,7 @@ from voiceai.config import get_settings
 from voiceai.events import caller_partial
 from voiceai.live import LiveControls
 from voiceai.runtime.session import AgentSession
+from voiceai.voice.livekit_transport import CustomerAudioOnly, RoomLink, SpokenWatcher
 from voiceai.voice.phone import PhoneSerializer, PhoneStream, serializer_for
 from voiceai.voice.processors import BrainProcessor, TurnAggregator
 from voiceai.voice.realtime import Connector, RealtimeBridge, RealtimeConnection, RATE as REALTIME_RATE
@@ -42,11 +43,22 @@ class WebRTCControl:
     end_reason = "hangup"
 
 
+class RoomControl:
+    """Stands in for a serializer on a room call: control messages go through the room's data channel (hub), not here."""
+
+    end_reason = "hangup"
+
+
 def make_transport(websocket: Any, phone: PhoneStream | None, in_rate: int, out_rate: int) -> tuple[Any, Any]:  # noqa: ANN401
     """The transport profile: `browser` (raw PCM + JSON control messages), `twilio` (mu-law 8 kHz Media Stream events) or a
     WebRTC peer connection (Opus; JSON control messages on the data channel)."""
     from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 
+    if isinstance(websocket, RoomLink):  # LKH-03: the AI as a participant of a hosted room
+        from pipecat.transports.livekit.transport import LiveKitParams, LiveKitTransport
+
+        params = LiveKitParams(audio_in_enabled=True, audio_in_sample_rate=in_rate, audio_out_enabled=True, audio_out_sample_rate=out_rate)
+        return LiveKitTransport(url=websocket.url, token=websocket.token, room_name=websocket.room, params=params), RoomControl()
     if isinstance(websocket, SmallWebRTCConnection):
         from pipecat.transports.base_transport import TransportParams
         from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
@@ -75,6 +87,8 @@ class CallEnder:
     async def __call__(self, reason: str) -> None:
         self.serializer.end_reason = reason
         await self.session.end(reason)
+        if not self.session.state.ended and getattr(self.session, "in_room", False):  # LKH-17: kept open for a specialist
+            return
         if isinstance(self.serializer, WebRTCControl) and self.task:  # WRTC-04: `end` before the connection closes
             await self.task.queue_frame(OutputTransportMessageUrgentFrame(message={"type": "end", "reason": reason}))
         if self.phone and self.phone.twilio:  # TEL-07: the transfer must happen before the stream closes
@@ -147,7 +161,10 @@ def build(
             await on_end.task.queue_frame(TTSUpdateSettingsFrame(delta=DeepgramTTSService.Settings(voice=voice, speed=speed)))
 
     controls.on_voice = apply_voice
-    pipeline = Pipeline([transport.input(), vad, stt, turns, brain, tts, transport.output()])
+    head: list[Any] = [transport.input()]
+    if isinstance(websocket, RoomLink):  # LKH-03: only the customer's audio reaches the model
+        head += [CustomerAudioOnly(), websocket.watcher]
+    pipeline = Pipeline([*head, vad, stt, turns, brain, tts, transport.output()])
     task = PipelineTask(pipeline, params=PipelineParams(audio_in_sample_rate=IN_RATE, audio_out_sample_rate=OUT_RATE))
     on_end.task = task
     return task, transport, brain, serializer

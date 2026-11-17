@@ -33,6 +33,15 @@ export function Transcript({ events, showTools = true, highlightSeq }: { events:
             </div>
           );
         }
+        if (e.kind === "human") {  // a specialist's typed or spoken line (LKH-27)
+          return (
+            <div key={e.seq} id={`seq-${e.seq}`} className={cx("flex scroll-mt-24 justify-start", hl(e.seq))}>
+              <div className="max-w-[75%] rounded-2xl rounded-bl-sm border border-accent bg-panel px-3 py-2 text-sm">
+                <div className="text-[11px] text-muted">{e.data?.author ?? "Specialist"}{e.data?.source === "voice" ? " (voice)" : ""}</div>{e.text}
+              </div>
+            </div>
+          );
+        }
         if (e.kind === "system") {
           return <div key={e.seq} id={`seq-${e.seq}`} className={cx("scroll-mt-24 text-center", hl(e.seq))}><Badge tone={e.data?.category === "safety" ? "bad" : "warn"}>{e.text}</Badge></div>;
         }

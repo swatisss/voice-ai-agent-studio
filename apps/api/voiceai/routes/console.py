@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import auth, conversations, mask
+from voiceai import auth, conversations, mask, media_room
 from voiceai.db import get_session
 from voiceai.models import Call, CallEvent, Conversation, Escalation
 from voiceai.routes.calls import call_summary
@@ -59,6 +59,19 @@ async def detail(escalation_id: str, tenant_id: str = Depends(current_tenant), s
         "conversation_status": conv.status if conv else None,
         "events": [{"seq": e.seq, "at": e.at.isoformat(), "kind": e.kind, "text": e.text, "data": e.data} for e in events],
     }
+
+
+@router.post("/{escalation_id}/voice/join")
+async def voice_join(escalation_id: str, request: Request, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    """LKH-07, LKH-20: take the live voice call - accepts the escalation and returns the specialist's room token (once)."""
+    return await media_room.specialist_join(s, tenant_id, escalation_id, auth.actor(request, "Specialist"))
+
+
+@router.get("/{escalation_id}/voice")
+async def voice_state(escalation_id: str, tenant_id: str = Depends(current_tenant), s: AsyncSession = Depends(get_session)) -> dict:
+    esc = await esc_mod.get_owned(s, tenant_id, escalation_id)
+    call = await s.get(Call, esc.call_id)
+    return media_room.voice_status(esc, call)
 
 
 @router.post("/{escalation_id}/accept")

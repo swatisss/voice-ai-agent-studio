@@ -2,7 +2,7 @@
 type: Component Spec
 title: Hosted media room and live voice handover
 description: A voice call in a LiveKit Cloud room - the browser customer and the AI share the room, a specialist on another machine takes the call (the AI leaves), and a scribe turns both human voices into call events for the learning loop.
-status: draft
+status: stable
 tags: [architecture, voice, livekit, handover, escalation, agent-desk]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

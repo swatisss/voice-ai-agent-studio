@@ -2,7 +2,7 @@
 type: Change Proposal
 title: CP-0050 Live voice handover on a hosted LiveKit Cloud room
 description: A customer talks to the AI in the browser; on escalation a specialist on another machine takes the voice call in Agent Desk (the AI leaves); both human voices are transcribed into call events for the learning loop.
-status: draft
+status: stable
 cp_state: accepted
 tags: [voice, livekit, handover, escalation, agent-desk, learning, deployment]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }

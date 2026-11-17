@@ -2,7 +2,7 @@
 type: UI Spec
 title: Test call
 description: Pick a published agent, then talk or type to it with a live transcript; the agent opens a voice call with its spoken welcome, and technical details are shown on demand.
-status: draft
+status: stable
 tags: [ui, voice, test-call]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

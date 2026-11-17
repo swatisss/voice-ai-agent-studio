@@ -23,6 +23,15 @@ from voiceai.runtime.session import create_call
 log = logging.getLogger("voiceai.telephony")
 router = APIRouter(prefix="/api/telephony/twilio")
 
+CARRIERS = ("twilio",)  # TEL-13 (ADR-0013): the registered carrier adapters; only Twilio exists so far
+carriers = APIRouter(prefix="/api/telephony")
+
+
+@carriers.post("/{carrier}/voice")
+async def unknown_carrier(carrier: str) -> Response:
+    """TEL-13: a carrier with no adapter answers 404 `unknown_carrier` and creates no call (Twilio has its own route above)."""
+    raise ApiError(404, "unknown_carrier", f"No carrier adapter is registered for '{carrier[:40]}'")
+
 
 def _xml(body: str) -> Response:
     return Response(content=body, media_type="application/xml")

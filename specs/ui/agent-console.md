@@ -2,7 +2,7 @@
 type: UI Spec
 title: Agent console
 description: The human specialist's view - live escalation queue, groundwork packet, transcript, accept and resolve with disposition.
-status: draft
+status: stable
 tags: [ui, console, escalation]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

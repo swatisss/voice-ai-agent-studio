@@ -2,7 +2,7 @@
 type: Component Spec
 title: Telephony (Twilio phone channel)
 description: Inbound phone calls through Twilio Media Streams - number-to-agent mapping, voice webhook and TwiML, the media-stream WebSocket, IVR context, transfer to a person, request security and settings.
-status: draft
+status: stable
 tags: [architecture, telephony, twilio, ivr]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-16T00:00:00Z" }
 ---

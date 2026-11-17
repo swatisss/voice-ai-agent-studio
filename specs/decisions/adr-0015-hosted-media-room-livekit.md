@@ -2,7 +2,7 @@
 type: Decision Record
 title: ADR-0015 A hosted media room (LiveKit Cloud) for live voice handover
 description: Customer, AI, specialist and a transcribing scribe meet in a LiveKit Cloud room so a human can take a voice call from another machine; the AI runs in our service through Pipecat's LiveKit transport; a WebSocket relay and Daily were considered.
-status: draft
+status: stable
 tags: [decision, voice, livekit, handover, deployment]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

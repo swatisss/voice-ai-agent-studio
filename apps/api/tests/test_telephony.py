@@ -1,6 +1,6 @@
 """Twilio phone channel: number mapping, webhook, signatures, media stream, IVR context and transfer.
 
-Covers: TEL-01, TEL-02, TEL-03, TEL-04, TEL-05, TEL-06, TEL-07, TEL-08, TEL-10, TEL-11
+Covers: TEL-01, TEL-02, TEL-03, TEL-04, TEL-05, TEL-06, TEL-07, TEL-08, TEL-10, TEL-11, TEL-13
 """
 from __future__ import annotations
 
@@ -115,6 +115,18 @@ def test_signature_is_required_and_bound_to_the_public_url(phone):
 def not_in_service(r) -> bool:  # noqa: ANN001
     root = ElementTree.fromstring(r.text)
     return r.status_code == 200 and [c.tag for c in root] == ["Say", "Hangup"] and "not in service" in (root.find("Say").text or "")  # type: ignore[union-attr]
+
+
+def test_only_the_twilio_carrier_is_registered(phone):
+    """Covers: TEL-13"""
+    from voiceai.routes import telephony as routes
+
+    assert routes.CARRIERS == ("twilio",)
+    before = rows(phone, "select count(*) from calls")[0][0]
+    r = phone.client.post("/api/telephony/acme/voice", data=call_params())
+    assert r.status_code == 404 and r.json()["error"] == "unknown_carrier"
+    assert rows(phone, "select count(*) from calls")[0][0] == before
+    assert signed_post(phone.client, call_params()).status_code == 200  # the Twilio route still answers (TEL-01)
 
 
 def test_unroutable_calls_hear_not_in_service(phone, monkeypatch):

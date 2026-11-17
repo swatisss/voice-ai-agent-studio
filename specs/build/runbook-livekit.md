@@ -2,7 +2,7 @@
 type: Runbook
 title: LiveKit runbook
 description: What the owner does to try a live voice handover - create a free LiveKit Cloud project, set three secrets, run the connectivity check, then a two-machine demo on localhost and on Cloud Run.
-status: draft
+status: stable
 tags: [build, runbook, livekit, voice, handover, gcp]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

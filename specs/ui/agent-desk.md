@@ -2,7 +2,7 @@
 type: UI Spec
 title: Agent Desk workspace
 description: What a call-centre specialist sees - a five-item sidebar (Agent console, Escalated calls, Patterns, Knowledge, Agents), read-only pages for knowledge, agent settings and member memory, and comments on escalation patterns.
-status: draft
+status: stable
 tags: [ui, roles, console, learning]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     twilio_recording_delete: bool = True  # delete the Twilio recording after a successful transcription
     handover_stt_provider: str = "deepgram"
     handover_stt_language: str = "auto"
+    # WhatsApp via Twilio (/architecture/whatsapp-channel.md, Settings)
+    twilio_whatsapp_from: str | None = None
+    twilio_messaging_service_sid: str | None = None
+    twilio_whatsapp_followup_content_sid: str | None = None
+    whatsapp_min_send_interval_s: float | None = None  # unset = 3 for a sandbox sender, 0 for production
+    whatsapp_address_retention_days: int = 30
     # contact tools (/architecture/contact-tools.md): provider per channel; unset = chosen from the keys below, else outbox
     email_provider: str | None = None   # brevo | outbox
     sms_provider: str | None = None     # twilio | outbox

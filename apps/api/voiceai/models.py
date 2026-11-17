@@ -597,6 +597,40 @@ class CallRecording(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
 
+class WhatsappSender(Base):
+    """A WhatsApp address of one tenant that routes to an agent or the front desk: /architecture/whatsapp-channel.md, DM-20."""
+
+    __tablename__ = "whatsapp_senders"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    address: Mapped[str] = mapped_column(String(32), unique=True, index=True)  # whatsapp:+E164, unique across all tenants
+    mode: Mapped[str] = mapped_column(String(12), default="sandbox")  # sandbox | production
+    target: Mapped[str] = mapped_column(String(16), default="agent")  # agent | front_desk
+    agent_id: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
+    label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = _created()
+
+
+class WhatsappThread(Base):
+    """One WhatsApp user talking to one sender: the 24-hour window clock and the only place the user's address is stored (DM-20)."""
+
+    __tablename__ = "whatsapp_threads"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = _tenant()
+    sender_id: Mapped[str] = mapped_column(String(32), ForeignKey("whatsapp_senders.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)  # set once the first turn opened it
+    address: Mapped[str | None] = mapped_column(String(32), nullable=True)  # the user's full address; cleared after retention
+    address_last4: Mapped[str] = mapped_column(String(4), default="")
+    status: Mapped[str] = mapped_column(String(12), default="active")  # active | opted_out | ended
+    last_inbound_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    window_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    last_message_sid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attachment_notice_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    queued: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)  # human texts waiting for an open window
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
 class DeskPresence(Base):
     """A specialist who switched on "Take calls in this browser": Ready while `updated_at` is under 90 seconds old."""
 
@@ -633,7 +667,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
     id: Mapped[str] = _id()
     tenant_id: Mapped[str] = _tenant()
-    source: Mapped[str] = mapped_column(String(16))  # api | playground | phone
+    source: Mapped[str] = mapped_column(String(16))  # api | playground | phone | whatsapp
     api_key_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     channel: Mapped[str] = mapped_column(String(8))  # text | voice
     transport: Mapped[str] = mapped_column(String(16))  # text | websocket | media-stream | webrtc | twilio | browser

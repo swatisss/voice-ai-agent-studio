@@ -12,6 +12,7 @@ DOT = "•"
 # Ids that look like `AB-123456` but are not member references (prior-auth, claim, policy, quote, retry ... ids).
 NOT_MEMBER = {"PA", "CL", "PMI", "CC", "CSH", "UW", "RT", "GPB", "QT", "EV"}
 
+_WA = re.compile(r"whatsapp:\+?\d[\d ]{4,}\d")  # a WhatsApp address (CP-0052, WA-12)
 _REF = re.compile(r"(?<![\w-])([A-Z]{2,5})-(\d{6})(?![\w-])")
 _EMAIL = re.compile(r"(?<![\w.+-])([\w.+-])[\w.+-]*@([\w-]+(?:\.[\w-]+)+)")
 _PHONE = re.compile(r"(?<![\w-])\+?\d[\d ()-]{7,}\d(?![\w-])")
@@ -46,7 +47,14 @@ def _phone_sub(m: re.Match[str]) -> str:
     return phone(m.group(0)) or "" if len(digits) >= 9 else m.group(0)  # a date or a short number is not a telephone number
 
 
+def wa_ref(address: str | None) -> str | None:
+    """`whatsapp:+447700900123` -> `wa-…0123`."""
+    digits = re.sub(r"\D", "", address or "")
+    return f"wa-…{digits[-4:]}" if digits else address
+
+
 def _mask_plain(value: str) -> str:
+    value = _WA.sub(lambda m: wa_ref(m.group(0)) or "", value)
     out = _REF.sub(lambda m: m.group(0) if m.group(1) in NOT_MEMBER else f"{m.group(1)}-{DOT * 3}{m.group(2)[-3:]}", value)
     out = _EMAIL.sub(lambda m: f"{m.group(1)}***@{m.group(2)}", out)
     out = _PHONE.sub(_phone_sub, out)

@@ -191,6 +191,13 @@ class Worker:
         except Exception:  # noqa: BLE001 - housekeeping must never stop the worker
             log.exception("conversation sweep failed")
         try:
+            from voiceai import whatsapp
+
+            await whatsapp.expire_idle()  # WA-14
+            await whatsapp.clear_addresses()  # WA-12
+        except Exception:  # noqa: BLE001
+            log.exception("whatsapp sweep failed")
+        try:
             await sources.schedule_due()  # daily and weekly website sources (/architecture/knowledge.md, Sync)
         except Exception:  # noqa: BLE001
             log.exception("knowledge source schedule failed")

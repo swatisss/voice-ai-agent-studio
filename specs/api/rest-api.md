@@ -234,7 +234,7 @@ Twilio calls, not the Studio, the routes under `/api/telephony/twilio/handover/�
 
 # Acceptance
 
-- **API-23** — Given a WhatsApp escalation read with `GET /api/escalations/{id}`, then it carries `channel_state` `{channel, window_open, window_expires_at, opted_out, mode}` and each `human` event's `delivery`; given a phone call with a handover, `GET /api/calls/{id}` carries `handover` `{mode, state, answered_by, started_at, connected_at, ended_at}` and `recordings` `[{id, status, channels, duration_s}]` without any media URL; a call or conversation of any other kind has neither.
+- **API-23** — Given a WhatsApp escalation read with `GET /api/escalations/{id}`, then it carries `channel_state` `{channel, window_open, window_expires_at, opted_out, mode, address_last4}` and each `human` event's `delivery`; given a phone call with a handover, `GET /api/calls/{id}` carries `handover` `{mode, state, answered_by, started_at, connected_at, ended_at}` and `recordings` `[{id, status, channels, duration_s}]` without any media URL; a call or conversation of any other kind has neither.
 - **API-22** — Given the desk phone endpoints, then `phone-token` and `phone-presence` work for a specialist, admin and reviewer, answer 503 `phone_unavailable` without `TWILIO_API_KEY_SID` and `TWILIO_API_KEY_SECRET`, never return a secret, and `phone-presence` with `ready` missing is 422.
 - **API-21** — Given a call recording row, then no endpoint returns a Twilio recording URL, SID-signed media or audio.
 - **API-20** — Given the WhatsApp sender endpoints, then `POST` validates the address format, `mode` and `target` (422), a duplicate is 409 `sender_in_use`, only an admin may write (reviewers and specialists 403), another tenant's sender is 404 and `DELETE` removes it.

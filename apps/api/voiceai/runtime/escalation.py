@@ -145,7 +145,10 @@ async def wait_packets() -> None:
 def transcript_lines(events: list[CallEvent]) -> str:
     lines = []
     for ev in events:
-        if ev.kind == "user":
+        if (ev.data or {}).get("on_human_leg"):  # TEL-24: the transcribed handover, after the AI's part
+            if ev.text and ev.kind in ("user", "human"):
+                lines.append(f"{'Caller (with the specialist)' if ev.kind == 'user' else 'Specialist'}: {ev.text}")
+        elif ev.kind == "user":
             lines.append(f"Caller: {ev.text}")
         elif ev.kind == "assistant" and ev.text:
             lines.append(f"Agent: {ev.text}")

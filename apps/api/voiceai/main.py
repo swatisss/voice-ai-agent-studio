@@ -35,8 +35,9 @@ from voiceai.errors import ApiError, install_handlers
 from voiceai.jobs import worker
 from voiceai.mock.routes import router as mock_router
 from voiceai.models import Tenant
+from voiceai import handover_transcribe  # noqa: F401  (registers the transcribe_handover job)
 from voiceai import telephony as telephony_helpers
-from voiceai.routes import agents, api_keys, calls, compliance, console, conversations, dashboard, evaluation, insights, knowledge, members, meta, personas, phone_numbers, public, telephony, tenant_settings, usecases
+from voiceai.routes import agents, api_keys, calls, compliance, console, conversations, dashboard, evaluation, handover as handover_routes, insights, knowledge, members, meta, personas, phone_numbers, public, telephony, tenant_settings, usecases
 from voiceai.runtime import app_ref, escalation
 
 log = logging.getLogger("voiceai")
@@ -117,7 +118,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"], allow_headers=["*"], allow_credentials=True,  # the Studio's session cookie
     )
     public.request_id_middleware(app)
-    for r in (auth.router, compliance.router, public.router, public.sockets, api_keys.router, conversations.router, meta.router, agents.router, personas.router, knowledge.router, calls.router, members.router, phone_numbers.router, telephony.router, tenant_settings.router, usecases.router, console.router, insights.router, evaluation.router, dashboard.router, mock_router):
+    for r in (auth.router, compliance.router, public.router, public.sockets, api_keys.router, conversations.router, meta.router, agents.router, personas.router, knowledge.router, calls.router, members.router, phone_numbers.router, telephony.router, handover_routes.callbacks, handover_routes.router, tenant_settings.router, usecases.router, console.router, insights.router, evaluation.router, dashboard.router, mock_router):
         app.include_router(r)
 
     @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

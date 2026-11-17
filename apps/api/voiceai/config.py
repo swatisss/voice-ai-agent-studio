@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     twilio_api_base: str = "https://api.twilio.com"
     twilio_validate_signature: bool = True
     public_base_url: str | None = None
+    # warm handover (/architecture/phone-warm-handover.md): recordings, browser tokens and the human-leg transcriber
+    twilio_api_key_sid: str | None = None
+    twilio_api_key_secret: str | None = None
+    twilio_hold_url: str = ""            # optional MP3 played to the waiting caller; empty = silence
+    twilio_recording_notice: str = "This call may be recorded for quality and training."
+    twilio_recording_delete: bool = True  # delete the Twilio recording after a successful transcription
+    handover_stt_provider: str = "deepgram"
+    handover_stt_language: str = "auto"
     # contact tools (/architecture/contact-tools.md): provider per channel; unset = chosen from the keys below, else outbox
     email_provider: str | None = None   # brevo | outbox
     sms_provider: str | None = None     # twilio | outbox

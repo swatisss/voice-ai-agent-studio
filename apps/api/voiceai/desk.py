@@ -28,6 +28,8 @@ ALLOWED: list[tuple[tuple[str, ...], re.Pattern[str]]] = [(m, re.compile(p)) for
     (("POST",), r"^/api/knowledge/search$"),
     (("GET",), r"^/api/agents(/" + _ID + r"(/versions)?)?$"),
     (("GET",), r"^/api/members/" + _ID + r"/memory$"),
+    (("POST",), r"^/api/desk/phone-token$"),
+    (("PUT",), r"^/api/desk/phone-presence$"),
 ]]
 EVENT_TOPICS = {"console"}
 # Cost and learning internals a specialist never receives (DESK-08).

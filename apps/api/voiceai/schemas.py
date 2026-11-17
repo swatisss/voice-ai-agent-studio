@@ -5,9 +5,9 @@ Spec: /data/agent-config.md, /architecture/escalation.md, /architecture/fleet-le
 from __future__ import annotations
 
 import re
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 BUILTIN_TOOLS = {"search_knowledge", "escalate_to_human", "end_call", "transfer_to_agent", "send_email", "send_sms", "place_call"}  # TS-06, TS-10, CT
 ESCALATION_CATEGORIES = (
@@ -147,8 +147,27 @@ E164_RE = re.compile(r"\+[1-9][0-9]{6,14}")
 SIP_RE = re.compile(r"sip:[^\s@]+@[^\s]+")
 
 
+class HandoverConfig(BaseModel):
+    """telephony.handover (/architecture/phone-warm-handover.md, TEL-14)."""
+
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["dial", "conference"] = "dial"
+    record: StrictBool = False
+    ring_seconds: Annotated[int, Field(strict=True, ge=5, le=120)] = 30
+    browser: StrictBool = False
+    brief: StrictBool = True
+
+
 class TelephonyConfig(BaseModel):
     transfer_to: str | None = Field(default=None, max_length=200)  # E.164 number or sip: URI (DM-06)
+    handover: HandoverConfig | None = None  # absent = the cold `<Dial>` transfer (TEL-07)
+
+    @model_validator(mode="after")
+    def _conference_needs_destination(self) -> TelephonyConfig:
+        h = self.handover
+        if h and h.mode == "conference" and not (h.browser or (self.transfer_to and E164_RE.fullmatch(self.transfer_to))):
+            raise ValueError("handover_needs_destination: a conference handover needs an E.164 transfer_to or browser: true")
+        return self
 
     @field_validator("transfer_to")
     @classmethod

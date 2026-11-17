@@ -120,50 +120,31 @@ def twiml_stream(stream_url: str, call_id: str) -> str:
 
 
 def stream_url(call_id: str, token: str, kind: str = "stream") -> str:
-    """kind creates and manages local Kubernetes clusters using Docker container 'nodes'
-
-Usage:
-  kind [command]
-
-Available Commands:
-  build       Build one of [node-image]
-  completion  Output shell completion code for the specified shell (bash, zsh or fish)
-  create      Creates one of [cluster]
-  delete      Deletes one of [cluster]
-  export      Exports one of [kubeconfig, logs]
-  get         Gets one of [clusters, nodes, kubeconfig]
-  help        Help about any command
-  load        Loads images into nodes
-  version     Prints the kind CLI version
-
-Flags:
-  -h, --help              help for kind
-  -q, --quiet             silence all stderr output
-  -v, --verbosity int32   info log verbosity, higher value produces more output
-      --version           version for kind
-
-Use "kind [command] --help" for more information about a command. stream: a call's stream; conversation: a front-desk conversation's stream (TEL-12)."""
+    """`stream`: a call's stream; `conversation`: a front-desk conversation's stream (TEL-12)."""
     base = (get_settings().public_base_url or "").rstrip("/")
     ws_base = "wss://" + base.split("://", 1)[-1] if base.startswith("https://") else "ws://" + base.split("://", 1)[-1]
     return f"{ws_base}/api/telephony/twilio/{kind}/{call_id}?token={token}"
 
 
-def twiml_dial(destination: str) -> str:
+def twiml_dial(destination: str, record_attributes: str = "") -> str:
     target = f"<Sip>{escape(destination)}</Sip>" if destination.startswith("sip:") else escape(destination)
-    return f"<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Dial>{target}</Dial></Response>"
+    return f"<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Dial{record_attributes}>{target}</Dial></Response>"
 
 
 # ---------------------------------------------------------------- transfer (TEL-07)
-async def transfer_call(call_sid: str, destination: str, client: httpx.AsyncClient | None = None) -> bool:
+async def transfer_call(call_sid: str, destination: str, client: httpx.AsyncClient | None = None, record_attributes: str = "") -> bool:
     """Redirect the live call to `destination` with a Twilio REST update. Never raises; the call ends either way."""
     s = get_settings()
     if not (s.twilio_account_sid and s.twilio_auth_token):
         return False
     url = f"{s.twilio_api_base.rstrip('/')}/2010-04-01/Accounts/{s.twilio_account_sid}/Calls/{call_sid}.json"
+    from voiceai import handover
+
+    client = client or handover.http_client_override()  # tests: a MockTransport client
     own = client is None
     client = client or httpx.AsyncClient(timeout=10)
     try:
-        resp = await client.post(url, data={"Twiml": twiml_dial(destination)}, auth=(s.twilio_account_sid, s.twilio_auth_token))
+        resp = await client.post(url, data={"Twiml": twiml_dial(destination, record_attributes)}, auth=(s.twilio_account_sid, s.twilio_auth_token))
         if resp.status_code >= 300:
             log.warning("Twilio transfer failed for %s: HTTP %s", call_sid, resp.status_code)
             return False
@@ -176,11 +157,42 @@ async def transfer_call(call_sid: str, destination: str, client: httpx.AsyncClie
             await client.aclose()
 
 
-async def on_phone_end(session: Any, reason: str, call_sid: str, client: httpx.AsyncClient | None = None) -> None:
-    """After the closing speech, before the stream closes: redirect an escalated phone call to the agent's transfer number."""
-    destination = ((session.config.get("telephony") or {}).get("transfer_to") or "").strip()
-    if not (session.state.escalated and destination):
+async def on_phone_end(session: Any, reason: str, call_sid: str, client: httpx.AsyncClient | None = None) -> None:  # noqa: ANN401
+    """After the closing speech, before the stream closes: hand an escalated phone call to a person, by the agent's
+    handover mode: `dial` (cold transfer, TEL-07, TEL-16) or `conference` (warm handover, TEL-15)."""
+    from voiceai import handover
+
+    cfg = session.config.get("telephony") or {}
+    plan = handover.plan_of(cfg)
+    if not session.state.escalated:
         return
-    ok = await transfer_call(call_sid, destination, client)
+    if plan.mode == "conference":
+        await handover.on_escalated_call_end(session, call_sid, plan)
+        return
+    destination = plan.destination
+    if not destination:
+        return
+    call_id = getattr(session, "call_id", None)
+    record = plan.record and bool(call_id)
+    if record:
+        await handover.mark_dial(call_id, call_sid)
+    ok = await transfer_call(call_sid, destination, client, handover.dial_record_attributes(call_id) if record else "")
     note = f"Call transferred to {destination}" if ok else f"Transfer to {destination} failed; the caller was disconnected"
     await session.note(note, {"transfer": {"to": destination, "ok": ok}})
+
+
+async def verified_form(request: Any) -> dict[str, str]:  # noqa: ANN401
+    """The form fields of a signed Twilio callback (TEL-02, TEL-10, TEL-20); 403 on a bad or missing signature."""
+    from voiceai.errors import ApiError
+
+    s = get_settings()
+    form = await request.form()
+    params = {key: [str(v) for v in form.getlist(key)] for key in form.keys()}
+    if not s.twilio_auth_token:
+        raise ApiError(403, "invalid_signature", "Twilio is not configured")
+    if s.twilio_validate_signature:
+        query = request.url.query
+        url = public_url(request.url.path + (f"?{query}" if query else ""))
+        if not valid_signature(s.twilio_auth_token, url, params, request.headers.get("x-twilio-signature")):
+            raise ApiError(403, "invalid_signature", "Bad or missing X-Twilio-Signature")
+    return {k: v[0] for k, v in params.items() if v}

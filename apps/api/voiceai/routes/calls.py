@@ -21,7 +21,7 @@ from voiceai import jobs
 from voiceai.db import utcnow
 from voiceai.learning import score_report, scoring
 from voiceai.models import (
-    AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, CallScorecard, CheckReview, ContactMessage, Escalation, FixProposal,
+    AgentVersion, Call, CallAnalysis, CallEvent, CallRecording, CallFeedback, CallScorecard, CheckReview, ContactMessage, Escalation, FixProposal,
     Persona,
 )
 from voiceai.schemas import E164_RE, TurnDetectionPatch
@@ -258,6 +258,19 @@ async def call_detail(call_id: str, request: Request, tenant_id: str = Depends(c
         "handoff": {k: v for k, v in ((call.meta or {}).get("handoff") or {}).items() if k in ("reason", "summary")} or None,
         "version_info": await _version_info(s, version),
         "contact_messages": await _contact_messages(s, call_id),  # API-16
+        **await _handover_out(s, call),  # API-23: a phone call with a handover carries `handover` and `recordings`
+    }
+
+
+async def _handover_out(s: AsyncSession, call: Call) -> dict[str, Any]:
+    h = (call.meta or {}).get("handover")
+    if not h:
+        return {}
+    recs = (await s.scalars(select(CallRecording).where(CallRecording.call_id == call.id).order_by(CallRecording.created_at))).all()
+    return {
+        "handover": {"mode": h.get("mode"), "state": h.get("state"), "answered_by": h.get("answered_by"), "started_at": h.get("started_at"),
+                     "connected_at": h.get("connected_at"), "ended_at": h.get("ended_at"), "record": bool(h.get("record"))},
+        "recordings": [{"id": r.id, "status": r.status, "channels": r.channels, "duration_s": r.duration_s} for r in recs],  # never a media URL
     }
 
 

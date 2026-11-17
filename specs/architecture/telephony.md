@@ -20,10 +20,10 @@ caller phone ─▶ (your IVR forwards here, optional) ─▶ Twilio number
                                                           ▼ 2. WebSocket from Twilio (8 kHz mu-law frames, JSON events)
                               /api/telephony/twilio/stream/{call_id}  ── Pipecat + TwilioFrameSerializer
                                                           │ same pipeline, brain, tools, escalation as a browser call
-                                                          ▼ 3. on hand-off: Twilio REST update → <Dial> transfer_to
+                                                          ▼ 3. on hand-off: Twilio REST update → <Dial> transfer_to, or a warm conference handover
 ```
 
-Only inbound calls are supported. Outbound agents are still simulated in the browser ([/architecture/call-modes.md](/architecture/call-modes.md)).
+Only inbound calls are supported; an escalated call can be handed to a person by a cold transfer or a warm conference handover ([/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md)). Outbound agents are still simulated in the browser ([/architecture/call-modes.md](/architecture/call-modes.md)).
 
 # Carrier adapters
 
@@ -36,7 +36,7 @@ Everything carrier-specific sits behind one interface ([ADR-0013](/decisions/adr
 | `inbound(params)` | `CallSid`, `From`, `To`, `StirVerstat`, `ivr_*` and `SipHeader_X-IVR-*` |
 | `answer(stream_url, call_id)` / `not_in_service()` | `<Connect><Stream>` / `<Say>` + `<Hangup/>` TwiML |
 | `serializer(start)` | mu-law 8 kHz frames, `clear` on barge-in (TEL-06) |
-| `transfer(call_ref, destination)` | REST update with `<Dial>` (TEL-07) |
+| `transfer(call_ref, plan)` | REST update with `<Dial>` (`dial` mode, TEL-07) or a conference handover (`conference` mode, [/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md), TEL-14 to TEL-27) |
 
 Routes are `/api/telephony/{carrier}/voice`, `/api/telephony/{carrier}/stream/{call_id}` and `/api/telephony/{carrier}/conversation/{conversation_id}`; an unregistered carrier answers 404 `unknown_carrier`. The call-bound stream token, IVR context rules, caller identification, admission and the pipeline are shared by every adapter. **SIP** reaches the platform through a carrier's SIP trunk or SIP domain into its adapter (with Twilio today), through the customer's own Asterisk over WebSocket (`externalMedia`, the next adapter), or through a speech model's own SIP endpoint; never as raw RTP on Cloud Run.
 
@@ -90,14 +90,14 @@ An IVR in front of the agent forwards the call to the Twilio number (or to a Twi
 
 # Transfer to a person
 
-Agent config `telephony.transfer_to` ([/data/agent-config.md](/data/agent-config.md)) is an E.164 number or a `sip:` URI. When a phone call is escalated ([/architecture/escalation.md](/architecture/escalation.md)):
+Agent config `telephony.transfer_to` ([/data/agent-config.md](/data/agent-config.md)) is an E.164 number or a `sip:` URI, and `telephony.handover.mode` chooses how the call reaches it: `dial` (the default, below) or `conference` (a warm handover with a spoken brief, a recording and a transcript for the learning loop: [/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md), [CP-0051](/changes/cp-0051-twilio-phone-warm-handover.md)). When a phone call is escalated ([/architecture/escalation.md](/architecture/escalation.md)):
 
 1. The hand-off (or safety) message is spoken in full as usual.
-2. If `transfer_to` is set and Twilio REST credentials (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`) are configured, the platform updates the live call through the Twilio REST API with TwiML `<Dial>` to `transfer_to`. Twilio leaves the media stream and bridges the caller to that destination.
-3. The call ends with reason `handoff` and the escalation stays `waiting` for the console exactly as today; the groundwork packet is for the person on the console. The transfer does not pass the packet to the destination's phone.
-4. If `transfer_to` is unset, credentials are missing or the REST call fails, nothing else happens: the call ends with reason `handoff` and the caller hears the hand-off message and then the line closes (a `system` event records the failure). The failure is never retried and never changes the outcome.
+2. **Mode `dial`.** If `transfer_to` is set and Twilio REST credentials (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`) are configured, the platform updates the live call through the Twilio REST API with TwiML `<Dial>` to `transfer_to` (with `record="record-from-answer-dual"` and a recording callback only when `handover.record` is true, TEL-16). Twilio leaves the media stream and bridges the caller to that destination. **Mode `conference`** moves the caller into a conference and rings the specialist (TEL-15).
+3. The call ends with reason `handoff` and the escalation stays `waiting` for the console exactly as today; the groundwork packet is for the person on the console. In `dial` mode the transfer does not pass the packet to the destination's phone (in `conference` mode a short brief is spoken to it).
+4. If `transfer_to` is unset (and `handover.browser` is off), credentials are missing or the REST call fails, nothing else happens: the call ends with reason `handoff` and the caller hears the hand-off message and then the line closes (a `system` event records the failure). The failure is never retried and never changes the outcome.
 
-A true warm transfer (the agent stays on the line, introduces the caller) is out of scope.
+A warm transfer in which the AI itself stays on the line and introduces the caller is out of scope.
 
 # Outbound SMS and message calls
 
@@ -119,6 +119,7 @@ The contact tools ([/architecture/contact-tools.md](/architecture/contact-tools.
 | `TWILIO_ACCOUNT_SID` | Needed for transfer and for outbound SMS and message calls (REST). |
 | `TWILIO_FROM_NUMBER` | Twilio number (E.164) that sends SMS and places message calls ([/architecture/contact-tools.md](/architecture/contact-tools.md)). |
 | `TWILIO_VALIDATE_SIGNATURE` | Default `1`. `0` is for local experiments only (TEL-10). |
+| `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`, `TWILIO_HOLD_URL`, `TWILIO_RECORDING_NOTICE`, `TWILIO_RECORDING_DELETE`, `HANDOVER_STT_PROVIDER`, `HANDOVER_STT_LANGUAGE` | Warm handover, recordings, browser tokens and the human-leg transcriber ([/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md)). |
 
 `GET /healthz` reports `providers.twilio` (auth token configured, no network call) ([/architecture/deployment.md](/architecture/deployment.md)).
 
@@ -137,7 +138,7 @@ Two ways, both in [/build/runbook-phone.md](/build/runbook-phone.md):
 - **TEL-04** — Given the stream endpoint, when a connection presents a missing, wrong, expired or already used token, then it closes with 4401 before any pipeline starts; given an unknown or ended call id it closes with 4404; given a valid token the pipeline starts on the Twilio `start` event.
 - **TEL-05** — Given webhook parameters `ivr_menu=claims`, `ivr_lang=en` and a non-`ivr_` parameter `foo`, when the call is created, then the call context holds `ivr_menu` and `ivr_lang` only (at most 10 entries, values at most 200 characters), the system prompt's `call_context` lists them, and the call is still unverified.
 - **TEL-06** — Given Twilio `media` events with mu-law audio, when the stream is running, then the pipeline receives the decoded audio, agent audio is sent back as mu-law `media` events carrying the `streamSid`, a Twilio `stop` event ends the session with reason `hangup`, and a caller interruption sends a `clear` event.
-- **TEL-07** — Given an escalated phone call, when the hand-off message has been delivered and `telephony.transfer_to` is set with Twilio credentials, then one Twilio REST update with `<Dial>` to that destination is made and the call ends with reason `handoff`; given no `transfer_to`, or a failing REST call, then no transfer happens, the call still ends with reason `handoff`, and a failure leaves a `system` event.
+- **TEL-07** — Given an escalated phone call of an agent in `dial` mode (the default; [CP-0051](/changes/cp-0051-twilio-phone-warm-handover.md) adds `conference`, TEL-14 to TEL-27), when the hand-off message has been delivered and `telephony.transfer_to` is set with Twilio credentials, then one Twilio REST update with `<Dial>` to that destination is made and the call ends with reason `handoff`; given no `transfer_to`, or a failing REST call, then no transfer happens, the call still ends with reason `handoff`, and a failure leaves a `system` event.
 - **TEL-08** — Given the phone-number API, when a number is added, listed and removed, then validation follows the rules above (E.164 format, 409 `number_in_use` on a duplicate, 422 for an unknown agent), a number of another tenant is not visible or removable (404), and removing it makes the webhook answer "not in service".
 - **TEL-09** — Given a running API with a mapped number and `scripts/fake_twilio.py`, when it plays a WAV file against the mapped number, then the webhook returns TwiML, the stream is accepted, the call appears as `active` and then `ended` in the Calls list, and the agent's reply audio is received (checked by hand against a running server with provider keys).
 - **TEL-10** — Given `TWILIO_VALIDATE_SIGNATURE=0`, when the process is on Cloud Run (`K_SERVICE` set), then the telephony routes refuse to start; when it is not, unsigned requests are accepted and a warning is logged; given no `TWILIO_AUTH_TOKEN`, the webhook answers the "not in service" TwiML and `/healthz` reports `providers.twilio: false`.

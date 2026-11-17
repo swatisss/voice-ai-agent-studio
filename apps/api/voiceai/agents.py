@@ -43,7 +43,8 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
         first = exc.errors()[0]
         loc = ".".join(str(x) for x in first.get("loc", []))
         msg = str(first.get("msg", "")).removeprefix("Value error, ")
-        raise ApiError(422, "invalid_config", f"{loc}: {msg}" if loc else msg) from exc
+        code = "handover_needs_destination" if msg.startswith("handover_needs_destination") else "invalid_config"  # TEL-14
+        raise ApiError(422, code, f"{loc}: {msg}" if loc else msg) from exc
     g = gateway()
     if cfg.models.realtime and cfg.models.realtime not in g.selectable():
         raise ApiError(422, "invalid_config", f"Unknown model '{cfg.models.realtime}'")

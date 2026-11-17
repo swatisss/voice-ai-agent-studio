@@ -706,9 +706,12 @@ async def front_desk_ended(tenant_id: str, conv_id: str, reason: str) -> None:
 
 
 # ---------------------------------------------------------------- human message channel (/architecture/human-message-channel.md)
+HUMAN_SOURCES = ("api", "whatsapp")
+
+
 def is_human_thread(conv: Conversation) -> bool:
-    """HMC: only API text conversations continue with a person after an escalation."""
-    return conv.source == "api" and conv.channel == "text"
+    """HMC-04: API and WhatsApp text conversations continue with a person after an escalation (CP-0052)."""
+    return conv.source in HUMAN_SOURCES and conv.channel == "text"
 
 
 async def _escalated_call(s: AsyncSession, conv: Conversation) -> tuple[Call, Escalation] | None:
@@ -726,8 +729,8 @@ async def _add_event(s: AsyncSession, call: Call, kind: str, text: str, data: di
     return ev
 
 
-async def human_line(conv: Conversation, text: str) -> None:
-    """HMC-01: a customer line after the hand-off, stored for the specialist."""
+async def human_line(conv: Conversation, text: str, extra: dict[str, Any] | None = None) -> None:
+    """HMC-01: a customer line after the hand-off, stored for the specialist (`extra`: e.g. a WhatsApp voice note flag)."""
     from voiceai.events import bus
 
     async with sessionmaker()() as s:
@@ -735,7 +738,7 @@ async def human_line(conv: Conversation, text: str) -> None:
         if found is None:
             raise ApiError(409, "conversation_ended", "This conversation has ended")
         call, esc = found
-        ev = await _add_event(s, call, "user", text.strip(), {"to_human": True})
+        ev = await _add_event(s, call, "user", text.strip(), {"to_human": True, **(extra or {})})
         await s.commit()
         seq, escalation_id = ev.seq, esc.id
     bus.publish(conv.tenant_id, "console", "escalation.message", {"escalation_id": escalation_id, "seq": seq, "speaker": "caller"})
@@ -750,7 +753,7 @@ async def human_reply(s: AsyncSession, tenant_id: str, escalation_id: str, text:
     call = await s.get(Call, esc.call_id)
     conv = await s.get(Conversation, call.conversation_id) if call and call.conversation_id else None
     if conv is None or not is_human_thread(conv):
-        raise ApiError(409, "wrong_channel", "Replies can only be typed to a text conversation from the public API")
+        raise ApiError(409, "wrong_channel", "Replies can only be typed to an API or WhatsApp text conversation")
     if conv.status == "ended":
         raise ApiError(409, "conversation_ended", "This conversation has ended")
     if esc.status != "accepted":
@@ -758,10 +761,22 @@ async def human_reply(s: AsyncSession, tenant_id: str, escalation_id: str, text:
     body = (text or "").strip()
     if not 1 <= len(body) <= 2000:
         raise ApiError(422, "invalid_message", "A reply must be 1 to 2000 characters")
-    ev = await _add_event(s, call, "human", body, {"author": author or esc.assignee or "Specialist"})
+    plan = None
+    if conv.source == "whatsapp":  # WA-07, WA-08, WA-10: 409 before anything is stored
+        from voiceai import whatsapp
+
+        plan = await whatsapp.plan_reply(s, conv)
+    data: dict[str, Any] = {"author": author or esc.assignee or "Specialist"}
+    if plan:
+        data["delivery"] = "sending"
+    ev = await _add_event(s, call, "human", body, data)
     await s.commit()
-    bus.publish(tenant_id, "console", "escalation.message", {"escalation_id": esc.id, "seq": ev.seq, "speaker": "human"})
-    return {"seq": ev.seq, "speaker": "human", "text": body, "at": ev.at.isoformat()}
+    out: dict[str, Any] = {"seq": ev.seq, "speaker": "human", "text": body, "at": ev.at.isoformat()}
+    seq, call_id, conv_id = ev.seq, call.id, conv.id
+    bus.publish(tenant_id, "console", "escalation.message", {"escalation_id": esc.id, "seq": seq, "speaker": "human"})
+    if plan:
+        out["delivery"] = await whatsapp.deliver_reply(tenant_id, conv_id, call_id, seq, body, plan, data["author"])
+    return out
 
 
 async def finish_human_thread(tenant_id: str, conv_id: str, reason: str) -> None:
@@ -789,8 +804,13 @@ async def escalation_resolved(tenant_id: str, call_id: str) -> None:
         conv = await s.get(Conversation, call.conversation_id) if call and call.conversation_id else None
         if conv is None or not is_human_thread(conv) or conv.status != "escalated":
             return
-        conv_id = conv.id
+        conv_id, whatsapp_chat = conv.id, conv.source == "whatsapp"
+        assignee = await s.scalar(select(Escalation.assignee).where(Escalation.call_id == call_id))
     await finish_human_thread(tenant_id, conv_id, "human_resolved")
+    if whatsapp_chat:  # WA-13: one closing message while the window is open; the next message opens a new conversation
+        from voiceai import whatsapp
+
+        await whatsapp.thread_closed(tenant_id, conv_id, assignee)
 
 
 def _cursor(segment: int, seq: int) -> str:

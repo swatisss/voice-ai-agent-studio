@@ -193,3 +193,16 @@ LKH-25
 LKH-26
 LKH-27
 LKH-28
+
+# CP-0051 phone warm handover. UI-91..UI-93 are the browser phone and the call-detail section (Twilio Voice SDK: needs a browser and a paid account):
+# type check and build pass; the API behind them is covered by TEL-17, TEL-22 and TEL-25. TEL-27 is the end-to-end call on a paid Twilio account (spikes S1-S5).
+UI-91
+UI-92
+UI-93
+TEL-27
+
+# CP-0052 WhatsApp. UI-94 and UI-95 are console panel additions (type check and build pass; no browser click-through).
+# WA-16 is the owner's check on the Twilio WhatsApp sandbox with a phone (spikes S6-S8): no Twilio account exists for the build.
+UI-94
+UI-95
+WA-16

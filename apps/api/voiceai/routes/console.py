@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import auth, conversations, mask, media_room
+from voiceai import auth, conversations, mask, media_room, whatsapp
 from voiceai.db import get_session
 from voiceai.models import Call, CallEvent, Conversation, Escalation
 from voiceai.routes.calls import call_summary
@@ -44,7 +44,14 @@ async def queue(status: str | None = None, tenant_id: str = Depends(current_tena
     if status:
         q = q.where(Escalation.status == status)
     rows = (await s.execute(q)).all()
-    return {"items": [{**esc_mod.summary(e), "call": call_summary(c)} for e, c in rows]}
+    convs = {c.id: c for c in (await s.scalars(select(Conversation).where(Conversation.id.in_({c.conversation_id for _, c in rows if c.conversation_id})))).all()}
+    return {"items": [{**esc_mod.summary(e), "call": call_summary(c), **await _channel(s, convs.get(c.conversation_id))} for e, c in rows]}
+
+
+async def _channel(s: AsyncSession, conv: Conversation | None) -> dict:
+    """API-23: `channel_state` for a WhatsApp conversation, nothing for any other kind."""
+    state = await whatsapp.channel_state(s, conv)
+    return {"channel_state": state} if state else {}
 
 
 @router.get("/{escalation_id}")
@@ -56,7 +63,7 @@ async def detail(escalation_id: str, tenant_id: str = Depends(current_tenant), s
     return {
         **esc_mod.summary(esc), "call": call_summary(call) if call else None,
         "human_thread": bool(conv and conversations.is_human_thread(conv)),  # HMC: the console shows the Conversation panel
-        "conversation_status": conv.status if conv else None,
+        "conversation_status": conv.status if conv else None, **await _channel(s, conv),
         "events": [{"seq": e.seq, "at": e.at.isoformat(), "kind": e.kind, "text": e.text, "data": e.data} for e in events],
     }
 

@@ -382,7 +382,8 @@ async def score(s: AsyncSession, call: Call, *, config: dict[str, Any] | None = 
     if config is None:
         version = await s.get(AgentVersion, call.agent_version_id)
         config = (version.config if version else None) or {}
-    events = list((await s.scalars(select(CallEvent).where(CallEvent.call_id == call.id).order_by(CallEvent.seq))).all())
+    events = [e for e in (await s.scalars(select(CallEvent).where(CallEvent.call_id == call.id).order_by(CallEvent.seq))).all()
+              if not (e.data or {}).get("on_human_leg")]  # TEL-24: the scorecard judges the AI only, never the transcribed human leg
     feedback = await s.scalar(select(CallFeedback).where(CallFeedback.call_id == call.id))
     esc = await s.scalar(select(Escalation).where(Escalation.call_id == call.id))
     analysis = await s.scalar(select(CallAnalysis).where(CallAnalysis.call_id == call.id))

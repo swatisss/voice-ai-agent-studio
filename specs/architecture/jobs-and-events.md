@@ -15,6 +15,7 @@ Table `jobs` ([/data/data-model.md](/data/data-model.md)). One worker task runs 
 |---|---|---|
 | `analyze_call` | `{call_id}` | [/architecture/fleet-learning.md](/architecture/fleet-learning.md) §1–2 |
 | `score_call` | `{call_id}` (dedupe `score_call:{call_id}`, `score_call:{call_id}:2` after re-analysis, `score_call:{call_id}:r{n}` on rescore) | [/architecture/call-scoring.md](/architecture/call-scoring.md) |
+| `transcribe_handover` | `{recording_id}` (dedupe `transcribe_handover:{recording_id}`) | [/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md) (CP-0051) |
 | `extract_memory` | `{call_id}` (dedupe `extract_memory:{call_id}`) | [/architecture/agent-memory.md](/architecture/agent-memory.md) |
 | `purge_memory` | `{}` (daily, dedupe `purge_memory:{date}`) | [/architecture/agent-memory.md](/architecture/agent-memory.md) |
 | `draft_fix` | `{cluster_id}` | fleet learning §4 |

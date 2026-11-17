@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from voiceai import contact, media_room
+from voiceai import contact, media_room, whatsapp
 from voiceai.config import get_settings
 from voiceai.db import get_session
 from voiceai.events import bus
@@ -58,6 +58,8 @@ async def healthz(s: AsyncSession = Depends(get_session)) -> dict:
             "openai": g.provider_configured("openai"),
             "deepgram": bool(settings.deepgram_api_key),
             "twilio": bool(settings.twilio_auth_token),
+            "whatsapp": await whatsapp.health(s),  # WA-15: credentials and a sender row, no network call
+            "twilio_voice_sdk": bool(settings.twilio_api_key_sid and settings.twilio_api_key_secret),  # API key configured, no network call
         },
         "public_api": bool(settings.public_api_secret),  # DEP-05: connect tokens can be minted
         "router": _router_health(),  # RTE-11: configured, no network call

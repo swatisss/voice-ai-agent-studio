@@ -11,6 +11,19 @@ agent's audio to a WAV file. Run it with the API's environment (it needs httpx a
 
 The API needs TWILIO_AUTH_TOKEN and PUBLIC_BASE_URL (for a local run: http://localhost:8000) in apps/api/.env, the
 number mapped to an agent (`uv run voiceai phone add`), and the provider keys the agent's pipeline uses.
+
+Handover mode (/architecture/phone-warm-handover.md, CP-0051) replays Twilio's handover callbacks for an escalated call whose
+agent uses `conference` mode, with no network beyond the API itself: the specialist leg ringing, the conference join of the
+specialist, a completed two-channel recording and the end of the conference. The `transcribe_handover` job then needs a
+recording Twilio actually holds, so against a real server only the events up to the recording row are produced:
+
+    cd apps/api && uv run python ../../scripts/fake_twilio.py --handover <call_id> [--leg CA...]
+
+WhatsApp mode (/architecture/whatsapp-channel.md, CP-0052) posts signed inbound messages and delivery receipts to a running API,
+no network beyond the API itself. The reply to the user goes out through Twilio's REST API, so without credentials it is only logged:
+
+    cd apps/api && uv run python ../../scripts/fake_twilio.py --whatsapp "What is my excess?" [--wa-user whatsapp:+447700900123]
+    cd apps/api && uv run python ../../scripts/fake_twilio.py --whatsapp-receipt SM... --state delivered
 """
 from __future__ import annotations
 
@@ -69,10 +82,54 @@ def mulaw_from_wav(path: Path | None) -> bytes:
     return audioop.lin2ulaw(frames, width)
 
 
+async def replay_handover(args: argparse.Namespace, token: str, public: str) -> int:
+    """CP-0051: signed handover callbacks for one call: specialist ringing, joined, a two-channel recording, end of conference."""
+    steps = [
+        ("specialist", {"CallSid": args.leg, "CallStatus": "ringing"}),
+        ("conference", {"StatusCallbackEvent": "participant-join", "ParticipantLabel": "specialist", "CallSid": args.leg}),
+        ("recording", {"RecordingSid": "REfake" + str(int(time.time())), "RecordingStatus": "completed", "RecordingChannels": "2",
+                       "RecordingDuration": "20", "CallSid": args.leg}),
+        ("conference", {"StatusCallbackEvent": "conference-end"}),
+    ]
+    async with httpx.AsyncClient(timeout=20) as client:
+        for kind, params in steps:
+            path = f"/api/telephony/twilio/handover/{kind}/{args.handover}"
+            sig = signature(token, public + path, params)
+            r = await client.post(args.base.rstrip("/") + path, data=params, headers={"X-Twilio-Signature": sig})
+            print(f"{kind} {params.get('StatusCallbackEvent') or params.get('CallStatus') or params.get('RecordingStatus')} -> HTTP {r.status_code}")
+            if r.status_code != 200:
+                print(r.text)
+                return 1
+    print("open the call in the Calls page: Specialist call appears once the recording is transcribed")
+    return 0
+
+
+async def replay_whatsapp(args: argparse.Namespace, token: str, public: str) -> int:
+    """CP-0052: one signed inbound WhatsApp message, or one signed delivery receipt (From is the sender, To the user)."""
+    if args.whatsapp_receipt:
+        path = "/api/channels/twilio/whatsapp/status"
+        params = {"MessageSid": args.whatsapp_receipt, "MessageStatus": args.state, "From": args.wa_sender, "To": args.wa_user}
+    else:
+        path = "/api/channels/twilio/whatsapp/inbound"
+        params = {"MessageSid": "SMfake" + str(int(time.time() * 1000)), "From": args.wa_user, "To": args.wa_sender, "Body": args.whatsapp,
+                  "NumMedia": "0", "ProfileName": "Fake User"}
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(args.base.rstrip("/") + path, data=params, headers={"X-Twilio-Signature": signature(token, public + path, params)})
+    print(f"{path} -> HTTP {r.status_code}")
+    return 0 if r.status_code == 200 else 1
+
+
 async def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--base", default="http://localhost:8000", help="where the API listens")
-    p.add_argument("--to", required=True, help="the dialled number, as mapped with `voiceai phone add`")
+    p.add_argument("--to", default=None, help="the dialled number, as mapped with `voiceai phone add`")
+    p.add_argument("--handover", metavar="CALL_ID", default=None, help="replay the handover callbacks of this call instead of placing a call")
+    p.add_argument("--leg", default="CAfakeleg1", help="the specialist leg's CallSid used by --handover")
+    p.add_argument("--whatsapp", metavar="TEXT", default=None, help="post this WhatsApp message from --wa-user to --wa-sender")
+    p.add_argument("--whatsapp-receipt", metavar="MESSAGE_SID", default=None, help="post a delivery receipt for this message")
+    p.add_argument("--state", default="delivered", help="receipt status for --whatsapp-receipt (sent, delivered, read, failed)")
+    p.add_argument("--wa-user", default="whatsapp:+447700900123", help="the WhatsApp user (a made-up number)")
+    p.add_argument("--wa-sender", default="whatsapp:+14155238886", help="the sender as mapped with `voiceai whatsapp add`")
     p.add_argument("--from", dest="caller", default="+15550009999")
     p.add_argument("--wav", type=Path, default=None, help="caller audio; default: a one second tone")
     p.add_argument("--ivr", action="append", default=[], metavar="NAME=VALUE", help="IVR context, sent as ivr_<name>")
@@ -87,6 +144,13 @@ async def main() -> int:
         print("set TWILIO_AUTH_TOKEN in apps/api/.env (any value works locally) or pass --auth-token")
         return 2
     public = (args.public_base or dotenv("PUBLIC_BASE_URL") or args.base).rstrip("/")
+    if args.whatsapp or args.whatsapp_receipt:
+        return await replay_whatsapp(args, token, public)
+    if args.handover:
+        return await replay_handover(args, token, public)
+    if not args.to:
+        print("--to is required (or use --handover CALL_ID)")
+        return 2
     path = "/api/telephony/twilio/voice"
     query = "&".join(f"ivr_{kv.split('=', 1)[0]}={kv.split('=', 1)[1]}" for kv in args.ivr if "=" in kv)
     params = {"CallSid": "CAfake" + str(int(time.time())), "From": args.caller, "To": args.to, "CallStatus": "ringing"}

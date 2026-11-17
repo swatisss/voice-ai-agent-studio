@@ -19,7 +19,7 @@ from voiceai.knowledge.ingest import create_doc
 from voiceai.knowledge.search import search as kb_search
 from voiceai.llm.gateway import gateway
 from voiceai.models import (
-    Agent, AgentVersion, Call, CallAnalysis, CallFeedback, Cluster, ClusterComment, Escalation, EvalRun, EvalScenario, FixProposal, KnowledgeDoc, Skill, Tool,
+    Agent, AgentVersion, Call, CallAnalysis, CallEvent, CallFeedback, Cluster, ClusterComment, Escalation, EvalRun, EvalScenario, FixProposal, KnowledgeDoc, Skill, Tool,
 )
 from voiceai.schemas import FixDraft, SkillDef, ToolDef
 
@@ -54,8 +54,10 @@ async def cluster_evidence(s: AsyncSession, cluster_id: str, limit: int = 10) ->
         .order_by(Call.started_at.desc())
         .limit(limit)
     )).all()
+    humans = await _human_portions(s, [a.call_id for a, *_ in rows])
     return [
         {
+            "human_portion": humans.get(a.call_id, ""),  # TEL-24: what the person said on the phone handover
             "call_id": a.call_id, "date": c.started_at.isoformat(), "caller_goal": a.caller_goal, "gap_summary": a.gap_summary,
             "resolution_note": (e.resolution_note if e else "") or "", "caller_ref": c.caller_ref,  # FL-09: never the AI's own summary
             "verified": bool(c.caller_ref), "root_cause": a.root_cause, "outcome": a.outcome,
@@ -63,6 +65,20 @@ async def cluster_evidence(s: AsyncSession, cluster_id: str, limit: int = 10) ->
         }
         for a, e, c, f in rows
     ]
+
+
+async def _human_portions(s: AsyncSession, call_ids: list[str]) -> dict[str, str]:
+    """TEL-24: per call, the specialist's transcribed lines joined and cut at 600 characters."""
+    from voiceai.handover_transcribe import human_portion
+
+    if not call_ids:
+        return {}
+    rows = (await s.scalars(select(CallEvent).where(CallEvent.call_id.in_(call_ids), CallEvent.kind == "human")
+                            .order_by(CallEvent.call_id, CallEvent.seq))).all()
+    by_call: dict[str, list[CallEvent]] = {}
+    for e in rows:
+        by_call.setdefault(e.call_id, []).append(e)
+    return {cid: text for cid, evs in by_call.items() if (text := human_portion(evs))}
 
 
 DERIVED_SCENARIOS = 2
@@ -127,7 +143,9 @@ async def draft(s: AsyncSession, tenant_id: str, cluster: Cluster, origin: str =
     prompt = prompts.render(
         "fix-draft",
         cluster_name=cluster.name, cluster_description=cluster.description, root_cause=cluster.root_cause,
-        evidence="\n".join([*(f"- Goal: {e['caller_goal']} | Gap: {e['gap_summary']} | Specialist: {e['resolution_note'] or '(no note)'}" for e in evidence),
+        evidence="\n".join([*(line for e in evidence for line in (
+                                 f"- Goal: {e['caller_goal']} | Gap: {e['gap_summary']} | Specialist: {e['resolution_note'] or '(no note)'}",
+                                 *([f"- Human portion (specialist): {e['human_portion']}"] if e.get("human_portion") else []))),
                              *([f"- Reviewer's answer for all of these callers: {cluster.human_answer}"] if cluster.human_answer else []),
                              *(f"- Specialist comment ({c.author}): {c.text}" for c in comments)]),
         attached_articles="\n\n".join(f"[{d.id}] {d.title}\n{d.content[:3000]}" for d in attached) or "(none)",

@@ -79,7 +79,7 @@ The snapshot carries `persona` (resolved, with `id` when from the library), `voi
 
 ```json
 "voice": { "pipeline": "realtime", "realtime": { "voice": null }, "turn_detection": { ... } },
-"telephony": { "transfer_to": "+15557654321" }
+"telephony": { "transfer_to": "+15557654321", "handover": { "mode": "dial", "record": false, "ring_seconds": 30, "browser": false, "brief": true } }
 ```
 
 | Field | Rules |
@@ -87,6 +87,7 @@ The snapshot carries `persona` (resolved, with `id` when from the library), `voi
 | `voice.pipeline` | `cascade` (default when absent) or `realtime` ([/architecture/realtime-voice.md](/architecture/realtime-voice.md)); anything else → 422; a value the tenant's `allowed_pipelines` does not contain → 422 `pipeline_not_allowed` ([/architecture/tenant-settings.md](/architecture/tenant-settings.md), MT-06) |
 | `voice.realtime.voice` | `null` (the `speech` role's first voice) or one of the voices the role lists; the persona's Deepgram voice is ignored in realtime mode; an unknown voice → 422 |
 | `telephony.transfer_to` | `null` or an E.164 number (`^\+[1-9][0-9]{6,14}$`) or a `sip:` URI; where a live phone call is redirected after a hand-off ([/architecture/telephony.md](/architecture/telephony.md)); anything else → 422 |
+| `telephony.handover` | Optional object: `mode` (`dial` default, or `conference`), `record` (bool, default false), `ring_seconds` (5 to 120, default 30), `browser` (bool, default false: also ring Ready specialists' browsers), `brief` (bool, default true); `conference` needs an E.164 `transfer_to` or `browser: true` (422 `handover_needs_destination`); anything else invalid → 422 ([/architecture/phone-warm-handover.md](/architecture/phone-warm-handover.md), TEL-14) |
 
 # Mode and outbound settings
 

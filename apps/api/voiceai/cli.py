@@ -103,6 +103,49 @@ async def _phone(args: argparse.Namespace) -> None:
         print(f"{e164} -> {agent.name} ({args.tenant})")
 
 
+async def _whatsapp(args: argparse.Namespace) -> None:
+    """WA-01: the CLI mirror of /api/whatsapp-senders."""
+    from sqlalchemy import select
+
+    from voiceai import db, whatsapp
+    from voiceai.models import Agent, WhatsappSender
+
+    db.configure()
+    await db.init_db()
+    async with db.sessionmaker()() as s:
+        if args.wa_cmd == "list":
+            rows = (await s.execute(select(WhatsappSender, Agent.name).outerjoin(Agent, Agent.id == WhatsappSender.agent_id).order_by(WhatsappSender.address))).all()
+            for r, name in rows:
+                print(f"{r.address}  {r.tenant_id}  {r.mode}  {'front desk' if r.target == 'front_desk' else name or r.agent_id}  {r.label or ''}".rstrip())
+            if not rows:
+                print("no WhatsApp senders")
+            return
+        address = args.address.strip()
+        if not whatsapp.ADDRESS_RE.fullmatch(address):
+            sys.exit(f"{address!r} is not a WhatsApp address such as whatsapp:+14155238886")
+        if args.wa_cmd == "remove":
+            row = await s.scalar(select(WhatsappSender).where(WhatsappSender.address == address))
+            if row is None:
+                sys.exit(f"{address} is not mapped")
+            await s.delete(row)
+            await s.commit()
+            print(f"removed {address}")
+            return
+        agent = None
+        if not args.front_desk:
+            if not args.agent:
+                sys.exit("give --front-desk or --agent <name or id>")
+            agent = await s.scalar(select(Agent).where(Agent.tenant_id == args.tenant, (Agent.id == args.agent) | (Agent.name == args.agent)))
+            if agent is None:
+                sys.exit(f"no agent {args.agent!r} in {args.tenant}")
+        if await s.scalar(select(WhatsappSender.id).where(WhatsappSender.address == address)):
+            sys.exit(f"{address} is already routed")
+        s.add(WhatsappSender(tenant_id=args.tenant, address=address, mode="production" if args.production else "sandbox",
+                             target="agent" if agent else "front_desk", agent_id=agent.id if agent else None, label=args.label))
+        await s.commit()
+        print(f"{address} -> {agent.name if agent else 'front desk'} ({args.tenant}, {'production' if args.production else 'sandbox'})")
+
+
 async def _eval_scenarios(args: argparse.Namespace) -> None:
     from sqlalchemy import select
 
@@ -155,11 +198,24 @@ def main(argv: list[str] | None = None) -> None:
     ph_sub.add_parser("list", help="list routed numbers")
     pr = ph_sub.add_parser("remove", help="stop routing a number")
     pr.add_argument("e164")
+    wa = sub.add_parser("whatsapp", help="route WhatsApp senders to agents or the front desk (/architecture/whatsapp-channel.md)")
+    wa_sub = wa.add_subparsers(dest="wa_cmd", required=True)
+    wa_add = wa_sub.add_parser("add", help="route a WhatsApp address")
+    wa_add.add_argument("address", help="e.g. whatsapp:+14155238886 (the Twilio sandbox)")
+    target = wa_add.add_mutually_exclusive_group()
+    target.add_argument("--front-desk", action="store_true", help="the supervisor picks the agent")
+    target.add_argument("--agent", default=None, help="agent name or id")
+    wa_add.add_argument("--production", action="store_true", help="a production sender (default: sandbox)")
+    wa_add.add_argument("--tenant", default="northgate-health")
+    wa_add.add_argument("--label", default=None)
+    wa_sub.add_parser("list", help="list WhatsApp senders")
+    wa_rm = wa_sub.add_parser("remove", help="stop routing a WhatsApp address")
+    wa_rm.add_argument("address")
     args = p.parse_args(argv)
     if args.cmd == "serve":
         _serve(args)
         return
-    handler = {"seed": _seed, "reindex": _reindex, "chat": _chat, "eval-scenarios": _eval_scenarios, "phone": _phone}[args.cmd]
+    handler = {"seed": _seed, "reindex": _reindex, "chat": _chat, "eval-scenarios": _eval_scenarios, "phone": _phone, "whatsapp": _whatsapp}[args.cmd]
     asyncio.run(handler(args))
 
 

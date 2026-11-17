@@ -3,10 +3,12 @@
 
 import { Bell, BellOff, ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DeskPhone } from "@/components/desk-phone";
 import { PacketCard } from "@/components/packet";
 import { useTenant } from "@/components/shell";
 import { Transcript } from "@/components/transcript";
 import { VoicePanel, VoiceStrip } from "@/components/voice-panel";
+import { composerNote, DeliveryMark, WhatsappStatus } from "@/components/whatsapp-panel";
 import { Badge, Button, Card, cx, EmptyState, Field, Input, Select, Spinner, Tabs, Textarea, useToast } from "@/components/ui";
 import { api, ApiError, type Escalation, useApi, useEvents } from "@/lib/api";
 import { useMe } from "@/lib/auth";
@@ -129,6 +131,7 @@ export default function ConsolePage() {
           <Button variant="ghost" onClick={() => setChime(!chime)} aria-label="Toggle chime">{chime ? <Bell size={16} /> : <BellOff size={16} />}</Button>
         </div>
       </div>
+      {session.user?.role !== "reviewer" && <DeskPhone items={data?.items ?? []} onSelect={setSelected} onChanged={reload} />}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-2">
           <Tabs<Queue> value={queue} onChange={setQueue} tabs={[{ id: "waiting", label: `Waiting (${counts.waiting})` }, { id: "mine", label: "Mine" }, { id: "resolved", label: "Resolved today" }]} />
@@ -160,21 +163,23 @@ export default function ConsolePage() {
               </Card>
               {detail.human_thread && (
                 <Card title="Conversation" actions={<Badge tone={detail.conversation_status === "ended" ? "neutral" : "ok"}>{detail.conversation_status === "ended" ? "Ended" : "Live chat"}</Badge>}>
+                  {detail.channel_state && <WhatsappStatus state={detail.channel_state} />}
                   <ul className="max-h-80 space-y-2 overflow-y-auto" aria-live="polite" data-testid="conversation-thread">
                     {detail.events.filter((x: any) => ["user", "assistant", "human"].includes(x.kind) && x.text).map((x: any) => (
                       <li key={x.seq} className={cx("flex", x.kind === "human" ? "justify-end" : "justify-start")}>
                         <div className={cx("max-w-[80%] rounded-xl px-3 py-2 text-sm", x.kind === "human" ? "bg-accent text-white" : x.kind === "user" ? "bg-neutral-soft" : "border border-line bg-panel")}>
                           <div className="text-[11px] opacity-70">{x.kind === "human" ? (x.data?.author ?? "You") : x.kind === "user" ? "Customer" : "Virtual assistant"}</div>
                           {x.text}
+                          {x.kind === "human" && detail.channel_state && <DeliveryMark delivery={x.data?.delivery} />}
                         </div>
                       </li>
                     ))}
                   </ul>
                   <form className="mt-3 flex gap-2" onSubmit={(ev) => { ev.preventDefault(); sendReply(); }}>
                     <Input className="flex-1" value={reply} maxLength={2000} onChange={(ev) => setReply(ev.target.value)} aria-label="Reply to the customer"
-                      disabled={detail.status !== "accepted" || detail.conversation_status === "ended"}
-                      placeholder={detail.status === "waiting" ? "Accept to reply" : detail.status === "accepted" && detail.conversation_status !== "ended" ? "Type a reply" : "This conversation is closed"} />
-                    <Button variant="primary" type="submit" disabled={detail.status !== "accepted" || detail.conversation_status === "ended" || !reply.trim() || sending}>Send</Button>
+                      disabled={detail.status !== "accepted" || detail.conversation_status === "ended" || !!composerNote(detail.channel_state)}
+                      placeholder={composerNote(detail.channel_state) ?? (detail.status === "waiting" ? "Accept to reply" : detail.status === "accepted" && detail.conversation_status !== "ended" ? "Type a reply" : "This conversation is closed")} />
+                    <Button variant="primary" type="submit" disabled={detail.status !== "accepted" || detail.conversation_status === "ended" || !!composerNote(detail.channel_state) || !reply.trim() || sending}>Send</Button>
                   </form>
                 </Card>
               )}

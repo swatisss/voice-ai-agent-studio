@@ -117,7 +117,7 @@ ADMIN_ONLY: list[tuple[tuple[str, ...], re.Pattern[str]]] = [(m, re.compile(p)) 
     (_W, r"^/api/scenarios/[^/]+$"),
     (_W, r"^/api/knowledge/(?!search$).*$"),
     (_W, r"^/api/tenant-settings(/.*)?$"),
-    (_W, r"^/api/(api-keys|webhooks|phone-numbers)(/.*)?$"),
+    (_W, r"^/api/(api-keys|webhooks|phone-numbers|whatsapp-senders)(/.*)?$"),
     (("POST",), r"^/api/members/[^/]+/memory/(erase|[^/]+/restore)$"),
 ]]
 
@@ -127,7 +127,7 @@ def admin_only(method: str, path: str) -> bool:
 
 
 def _guarded(path: str) -> bool:
-    return path.startswith("/api/") and not path.startswith(("/api/auth/", "/api/telephony/"))
+    return path.startswith("/api/") and not path.startswith(("/api/auth/", "/api/telephony/", "/api/channels/twilio/"))
 
 
 def _cookie(scope: Scope) -> str | None:

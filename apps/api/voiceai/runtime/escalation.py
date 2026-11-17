@@ -245,4 +245,7 @@ async def resolve(s: AsyncSession, tenant_id: str, escalation_id: str, dispositi
         await jobs.enqueue(s, tenant_id, "analyze_call", {"call_id": esc.call_id}, dedupe_key=f"analyze_call:{esc.call_id}:2")
     await s.commit()
     bus.publish(tenant_id, "console", "escalation.updated", summary(esc))
+    from voiceai import conversations
+
+    await conversations.escalation_resolved(tenant_id, esc.call_id)  # HMC-05: an API text conversation ends with it
     return esc

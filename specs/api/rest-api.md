@@ -174,7 +174,8 @@ The specialist role reaches only the requests listed in [/architecture/agent-des
 | GET | `/api/escalations` | query `status?` → `{items: [escalation + call summary]}` |
 | GET | `/api/escalations/{id}` | escalation + call events |
 | POST | `/api/escalations/{id}/accept` | `{assignee}` → escalation; 409 unless `waiting` |
-| POST | `/api/escalations/{id}/resolve` | `{disposition, resolution_note}` → escalation; 409 unless `accepted`; on a call in a media room it also closes the room and ends the call `human_ended` |
+| POST | `/api/escalations/{id}/resolve` | `{disposition, resolution_note}` → escalation; 409 unless `accepted`; on a call in a media room it also closes the room and ends the call `human_ended`; also ends an API text conversation (`human_resolved`) |
+| POST | `/api/escalations/{id}/messages` | `{text}` (1–2000) → `{seq, speaker: "human", text, at}` (201); 409 `not_accepted`, `wrong_channel` or `conversation_ended` ([/architecture/human-message-channel.md](/architecture/human-message-channel.md)) |
 | POST | `/api/escalations/{id}/voice/join` | `{}` → `{url, token, room, expires_at}`; accepts the escalation for the signed-in specialist; 409 `not_voice` / `not_waiting` / `already_taken`, 503 `livekit_unavailable` |
 | GET | `/api/escalations/{id}/voice` | → `{state, room, joined_at, specialist}`; 404 for a call without a media room |
 
@@ -244,3 +245,4 @@ The specialist role reaches only the requests listed in [/architecture/agent-des
 - **API-14** — Given `POST /api/knowledge/sources` for the fixture site, then the response is 202 with `status: indexing` and exactly one `sync_knowledge_source` job is queued; `GET /api/knowledge/sources/{id}` shows `page_count` rising until `ready`; a second `POST …/sync` while the first runs answers 409 `sync_in_progress`; another tenant gets 404.
 - **LKH-20** — Given LiveKit configured and a `waiting` voice escalation, then `POST /api/escalations/{id}/voice/join` returns `{url, token, room, expires_at}` and the escalation is `accepted`; a second call is 409 `already_taken`, an escalation without a media room 409 `not_voice`, an ended call 409 `not_waiting`; `POST /api/calls` with `transport: "livekit"` returns `connect` and `/healthz` agrees (LKH-01).
 - **API-13** — Given `PUT /api/tenant-settings/front-desk` with a default member agent that is internal, a pipeline the tenant does not allow, or `max_clarifications: 3`, then the response is 422 and nothing changes; `GET` on a tenant without settings returns the defaults.
+- **API-17** — Given an accepted escalation of an API text conversation, when `POST /api/escalations/{id}/messages` is sent with `{text}`, then the response is 201 with the stored line, the line appears in `GET /api/escalations/{id}` events as a `human` event, and the same call before accept is 409 `not_accepted` (HMC-03, HMC-04).

@@ -15,6 +15,8 @@
 * [Realtime voice](realtime-voice.md) - The optional OpenAI speech-to-speech pipeline per agent: streaming, latency, shared runtime, trade-offs
 * [Languages](languages.md) - English and Hindi with switching mid-call on realtime agents; Hindi safety phrases, English tool arguments and knowledge queries
 * [Contact tools](contact-tools.md) - Email (Brevo), SMS and message calls (Twilio) on every agent: registered contact after verification or a confirmed address, masked records, outbox, no delivery from simulations
+* [Human message channel](human-message-channel.md) - Text conversations stay open after an escalation: customer lines for the human, specialist replies from the console, a polling endpoint, resolve ends the conversation
+* [External chat app](external-chat-app.md) - The separate customer chat on :3100: server routes that hold a member key and use only the public API
 * [Escalation](escalation.md) - Triggers, categories, groundwork packet, human console lifecycle
 * [Fleet learning](fleet-learning.md) - Call analysis, gap clustering, impact, fix drafting, approval
 * [Evaluation](evaluation.md) - Simulated callers, judge, baseline vs candidate, regression scenarios

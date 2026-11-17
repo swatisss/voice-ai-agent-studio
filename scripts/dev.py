@@ -8,6 +8,7 @@ Spec: /build/dev-launcher.md
     python scripts/dev.py --fake             # no LLM keys: scripted fake LLM, hash embeddings, separate database
     python scripts/dev.py --check            # pre-flight checks only
     python scripts/dev.py --no-mock          # without the dental demo mock (scripts/demo/dental_mock.py on :8766)
+    python scripts/dev.py --chat             # also the external customer chat app on :3100 (apps/chat, CP-0049)
 
 Ctrl+C stops everything. Stdlib only (Python 3.9+). On Windows without a `python` command: py -3 scripts/dev.py
 """
@@ -30,8 +31,10 @@ from typing import Callable, TextIO
 ROOT = Path(__file__).resolve().parent.parent
 API_DIR = ROOT / "apps" / "api"
 WEB_DIR = ROOT / "apps" / "web"
+CHAT_DIR = ROOT / "apps" / "chat"
+CHAT_PORT = 3100
 KEYS = ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "DEEPGRAM_API_KEY")
-COLORS = {"dev": "33", "api": "36", "web": "35", "mock": "32"}  # yellow, cyan, magenta, green
+COLORS = {"dev": "33", "api": "36", "web": "35", "mock": "32", "chat": "34"}  # yellow, cyan, magenta, green
 MOCK_SCRIPT = ROOT / "scripts" / "demo" / "dental_mock.py"
 MOCK_PORT = 8766
 GRACE_SECONDS = 5.0
@@ -118,7 +121,7 @@ def make_plan(args: argparse.Namespace, uv: list[str], npm: str, environ: dict[s
             pre.append(Service("web", [npm, "run", "build"], WEB_DIR, {"NEXT_PUBLIC_API_BASE": "", "NEXT_TELEMETRY_DISABLED": "1"}))
         api = Service("api", serve, API_DIR, api_env)
         plan = Plan(pre, [api], {"api": f"{api_url}/healthz"}, api_url)
-        return with_mock(plan, args, start_mock)
+        return with_chat(with_mock(plan, args, start_mock), args, npm, api_url)
 
     if not args.no_reload:
         serve.append("--reload")
@@ -127,7 +130,57 @@ def make_plan(args: argparse.Namespace, uv: list[str], npm: str, environ: dict[s
     web = Service("web", [npm, "run", "dev", "--", "-p", str(args.web_port)], WEB_DIR,
                   {"NEXT_PUBLIC_API_BASE": api_url, "NEXT_TELEMETRY_DISABLED": "1"})
     web_url = f"http://localhost:{args.web_port}"
-    return with_mock(Plan([], [api, web], {"api": f"{api_url}/healthz", "web": f"{web_url}/"}, web_url), args, start_mock)
+    return with_chat(with_mock(Plan([], [api, web], {"api": f"{api_url}/healthz", "web": f"{web_url}/"}, web_url), args, start_mock), args, npm, api_url)
+
+
+def with_chat(plan: Plan, args: argparse.Namespace, npm: str, api_url: str) -> Plan:
+    """DEV-18: the external chat app beside the web app and the API; its own port, its own key (apps/chat/.env.local)."""
+    if getattr(args, "chat", False):
+        port = getattr(args, "chat_port", CHAT_PORT)
+        plan.services.append(Service("chat", [npm, "run", "dev", "--", "-p", str(port)], CHAT_DIR,
+                                     {"VOICEAI_API_URL": api_url, "NEXT_TELEMETRY_DISABLED": "1"}))
+        plan.ready["chat"] = f"http://localhost:{port}/"
+    return plan
+
+
+def chat_key_needed(chat_dir: Path = CHAT_DIR, environ: dict[str, str] | None = None) -> bool:
+    """DEV-18: an existing key (file or environment) is never overwritten."""
+    environ = os.environ if environ is None else environ
+    return not (environ.get("VOICEAI_API_KEY") or read_dotenv(chat_dir / ".env.local").get("VOICEAI_API_KEY"))
+
+
+def provision_chat_key(api_url: str, chat_dir: Path, say: Callable[[str], None], tenant: str = "northgate-health",
+                       wait_s: float = 240.0) -> bool:
+    """Once the API answers, create a `member` key named `chat-app` through the Studio API and write apps/chat/.env.local."""
+    import json
+
+    deadline = time.time() + wait_s
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(f"{api_url}/healthz", timeout=2) as r:
+                if r.status == 200:
+                    break
+        except Exception:  # noqa: BLE001
+            time.sleep(1.5)
+    else:
+        say("chat: the API did not answer in time; create a member key in Studio (Settings, API keys) and put it in apps/chat/.env.local")
+        return False
+    if not chat_key_needed(chat_dir):
+        return True
+    try:
+        req = urllib.request.Request(f"{api_url}/api/api-keys", method="POST", headers={"Content-Type": "application/json", "X-Tenant-Id": tenant},
+                                     data=json.dumps({"name": "chat-app", "scope": "member"}).encode())
+        with urllib.request.urlopen(req, timeout=10) as r:
+            key = json.loads(r.read())["key"]
+    except Exception as exc:  # noqa: BLE001 - sign-in on, or the name is taken: tell the owner what to do
+        say(f"chat: could not create the chat key ({type(exc).__name__}). Create a member key in Studio (Settings, API keys), "
+            "put it in apps/chat/.env.local as VOICEAI_API_KEY=..., and reload the chat page")
+        return False
+    env_file = chat_dir / ".env.local"
+    existing = env_file.read_text(encoding="utf-8") if env_file.exists() else ""
+    env_file.write_text(existing.rstrip("\n") + ("\n" if existing.strip() else "") + f"VOICEAI_API_KEY={key}\nVOICEAI_TENANT_ID={tenant}\n", encoding="utf-8")
+    say("chat: created the chat-app API key and wrote apps/chat/.env.local; reload the chat page if it shows the setup panel")
+    return True
 
 
 def with_mock(plan: Plan, args: argparse.Namespace, start_mock: bool | None) -> Plan:
@@ -188,6 +241,13 @@ def preflight(
         flag = "--api-port" if port == args.api_port else "--web-port"
         if in_use(port):
             errors.append(f"port {port} is already in use (another dev server running?). Stop it or pass {flag} <free port>")
+
+    if getattr(args, "chat", False):  # DEV-18
+        chat_port = getattr(args, "chat_port", CHAT_PORT)
+        if not (root / "apps" / "chat" / "node_modules").exists():
+            errors.append("chat dependencies are not installed (apps/chat/node_modules missing); run: cd apps/chat && npm install")
+        if in_use(chat_port):
+            errors.append(f"port {chat_port} is already in use. Stop it or pass --chat-port <free port>")
 
     _, mock_warning = mock_decision(args, in_use, health or mock_health)  # DEV-13: never an error
     if mock_warning:
@@ -345,6 +405,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--web-port", type=int, default=3000)
     ap.add_argument("--mock-port", type=int, default=MOCK_PORT, help="port of the dental demo mock (default 8766, where the kit's tools call it)")
     ap.add_argument("--no-mock", action="store_true", help="do not start the dental demo mock")
+    ap.add_argument("--chat", action="store_true", help="also start the external customer chat app (apps/chat) on --chat-port")
+    ap.add_argument("--chat-port", type=int, default=CHAT_PORT, help="port of the chat app (default 3100)")
     ap.add_argument("--no-reload", action="store_true", help="run the API without auto-reload")
     ap.add_argument("--fake", action="store_true", help="no LLM keys: fake LLM, hash embeddings, separate database (apps/api/data/fake.db)")
     ap.add_argument("--install", action="store_true", help="run scripts/setup.py --install first")
@@ -395,6 +457,9 @@ def main(argv: list[str] | None = None) -> int:
     for svc in plan.services:
         printer.line("dev", f"{svc.name}: {shown(svc.cmd)}")
     printer.line("dev", "starting; first API start seeds the demo data (about a minute). Ctrl+C stops everything.")
+    if args.chat and chat_key_needed():
+        api_url = f"http://localhost:{args.api_port}"
+        threading.Thread(target=provision_chat_key, args=(api_url, CHAT_DIR, lambda m: printer.line("chat", m)), daemon=True).start()
     outcome = supervise(plan.services, printer, plan.ready, plan.open_url)
     if outcome.interrupted:
         printer.line("dev", "stopped.")

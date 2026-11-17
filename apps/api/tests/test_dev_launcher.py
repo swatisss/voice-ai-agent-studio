@@ -1,6 +1,6 @@
 """scripts/dev.py: plan building, pre-flight, prefixed output and process-tree shutdown.
 
-Covers: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-12, DEV-13, DEV-14
+Covers: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-12, DEV-13, DEV-14, DEV-18
 """
 from __future__ import annotations
 
@@ -70,6 +70,64 @@ def test_single_origin_plan_builds_then_serves_api_only():
     assert [s.name for s in plan.services] == ["api", "mock"] and "--reload" not in plan.services[0].cmd
     assert plan.open_url == "http://localhost:8000"
     assert dev.make_plan(ns(single_origin=True, skip_build=True), ["uv"], "npm", environ={}).pre == []
+
+
+def test_chat_flag_adds_the_chat_service_in_parallel():
+    """Covers: DEV-18"""
+    plan = dev.make_plan(ns(chat=True), ["uv"], "npm", environ={})
+    assert [s.name for s in plan.services][:3] == ["api", "web", "mock"] and plan.services[-1].name == "chat"
+    chat = plan.services[-1]
+    assert chat.cmd == ["npm", "run", "dev", "--", "-p", "3100"] and chat.cwd == dev.CHAT_DIR
+    assert chat.env["VOICEAI_API_URL"] == "http://localhost:8000" and plan.ready["chat"] == "http://localhost:3100/"
+    assert "-p" in chat.cmd and "3000" not in chat.cmd  # a port of its own, beside web :3000 and the API :8000
+    custom = dev.make_plan(ns(chat=True, chat_port=3200, single_origin=True, skip_build=True), ["uv"], "npm", environ={})
+    assert custom.services[-1].cmd[-1] == "3200"
+    assert "chat" not in [s.name for s in dev.make_plan(ns(), ["uv"], "npm", environ={}).services]
+
+
+def test_chat_preflight_reports_a_missing_install_and_a_busy_port(tmp_path):
+    """Covers: DEV-18"""
+    repo = _repo(tmp_path)
+    errors, _, _ = dev.preflight(ns(chat=True), ["uv"], "npm", environ={}, root=repo, in_use=lambda p: p == 3100, health=lambda p: True)
+    assert any("apps/chat/node_modules" in e for e in errors) and any("3100" in e and "--chat-port" in e for e in errors)
+    (repo / "apps" / "chat" / "node_modules").mkdir(parents=True)
+    errors, _, _ = dev.preflight(ns(chat=True), ["uv"], "npm", environ={}, root=repo, in_use=lambda p: False, health=lambda p: True)
+    assert not any("chat" in e for e in errors)
+    errors, _, _ = dev.preflight(ns(), ["uv"], "npm", environ={}, root=_repo(tmp_path / "other"), in_use=lambda p: False, health=lambda p: True)
+    assert not any("chat" in e for e in errors)  # without --chat the pre-flight is unchanged
+
+
+def test_an_existing_chat_key_is_never_overwritten(tmp_path):
+    """Covers: DEV-18"""
+    assert dev.chat_key_needed(tmp_path, environ={}) is True
+    (tmp_path / ".env.local").write_text("VOICEAI_API_KEY=vak_existing\n", encoding="utf-8")
+    assert dev.chat_key_needed(tmp_path, environ={}) is False
+    (tmp_path / ".env.local").write_text("", encoding="utf-8")
+    assert dev.chat_key_needed(tmp_path, environ={"VOICEAI_API_KEY": "vak_env"}) is False
+    # the provisioner returns without a request when a key exists: no API is listening on this port
+    (tmp_path / ".env.local").write_text("VOICEAI_API_KEY=vak_existing\n", encoding="utf-8")
+    import http.server, threading as th  # noqa: E401, PLC0415
+
+    class Health(http.server.BaseHTTPRequestHandler):
+        posts: list[str] = []
+
+        def do_GET(self):  # noqa: ANN202, N802
+            self.send_response(200); self.end_headers(); self.wfile.write(b"{}")
+
+        def do_POST(self):  # noqa: ANN202, N802
+            Health.posts.append(self.path); self.send_response(500); self.end_headers()
+
+        def log_message(self, *a):  # noqa: ANN002, ANN202
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), Health)
+    th.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        said: list[str] = []
+        assert dev.provision_chat_key(f"http://127.0.0.1:{srv.server_port}", tmp_path, said.append, wait_s=5) is True
+        assert Health.posts == [] and (tmp_path / ".env.local").read_text(encoding="utf-8") == "VOICEAI_API_KEY=vak_existing\n"
+    finally:
+        srv.shutdown()
 
 
 # ---------------------------------------------------------------- supervision

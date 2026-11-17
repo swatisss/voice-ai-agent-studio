@@ -68,6 +68,14 @@ async def detail(conversation_id: str, include: str | None = None, client: Clien
     return await conversations.view(s, conv, include_transcript=include == "transcript")
 
 
+@router.get("/conversations/{conversation_id}/messages")
+async def thread(conversation_id: str, cursor: str | None = None, client: Client = Depends(api_client),
+                 s: AsyncSession = Depends(get_session)) -> dict:
+    """PUB-12, HMC-02: the visible thread after a cursor, with the escalation state."""
+    conv = await conversations.get(s, client.tenant_id, conversation_id, source="api")
+    return await conversations.thread(s, conv, cursor)
+
+
 # ---------------------------------------------------------------- sockets (token-authenticated, PUB-07, PUB-08)
 async def _accept(websocket: WebSocket, conversation_id: str, transport: str) -> tuple[Conversation, Call | None] | None:
     """Accept the socket, then check the connect token; close 4401 / 4404 before any pipeline starts."""

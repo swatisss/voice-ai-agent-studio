@@ -32,14 +32,15 @@ REPO_REQUIRED = ("title", "description", "status")
 LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 ACCEPT_RE = re.compile(r"^\s*-\s+\*\*(?:~~)?([A-Z]{2,5}-\d{2,3})(?:~~)?\*\*")
 COVERS_RE = re.compile(r"\b([A-Z]{2,5}-\d{2,3})\b")
-CODE_DIRS = ("apps/api/tests", "apps/web")
-LOCK_FILES = {"apps/api/uv.lock", "apps/web/package-lock.json"}
+CODE_DIRS = ("apps/api/tests", "apps/web", "apps/chat/tests")
+LOCK_FILES = {"apps/api/uv.lock", "apps/web/package-lock.json", "apps/chat/package-lock.json"}
 TEST_PREFIX = "apps/api/tests/"
+CHAT_TEST_PREFIX = "apps/chat/tests/"
 
 
 def is_behavior_path(path: str) -> bool:
     """Code whose change can alter behavior: apps/ minus tests and lock files (SDD-01)."""
-    return path.startswith("apps/") and not path.startswith(TEST_PREFIX) and path not in LOCK_FILES
+    return path.startswith("apps/") and not path.startswith((TEST_PREFIX, CHAT_TEST_PREFIX)) and path not in LOCK_FILES
 
 
 def strip_code(text: str) -> str:

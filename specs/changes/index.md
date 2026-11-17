@@ -1,5 +1,6 @@
 # Change proposals
 
+* [CP-0053 One start for everything](cp-0053-one-start-for-everything.md) - python scripts/dev.py alone starts web, API, mock and the chat app, signs in with local demo passwords, and re-seeds the demo data when the seed changed
 * [CP-0050 Live voice handover on a hosted LiveKit Cloud room](cp-0050-livekit-live-handover.md) - A customer talks to the AI in the browser; on escalation a specialist on another machine takes the voice call in Agent Desk (the AI leaves); both human voices become call events for the learning loop
 * [CP-0052 WhatsApp via Twilio](cp-0052-whatsapp-via-twilio.md) - WhatsApp (sandbox first) as a text channel: the AI answers, escalation to Agent Desk over the human message channel, the 24-hour window with a follow-up template, opt-out, Hindi voice notes, the user's address kept in one column
 * [CP-0051 Twilio phone warm handover](cp-0051-twilio-phone-warm-handover.md) - An escalated call becomes a Twilio conference: the specialist's Indian phone or browser is rung and briefed, bridged warm and recorded on two channels; a batch transcription writes the human portion into the call for the learning loop

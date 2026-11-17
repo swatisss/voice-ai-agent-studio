@@ -8,13 +8,18 @@ Spec: /build/dev-launcher.md
     python scripts/dev.py --fake             # no LLM keys: scripted fake LLM, hash embeddings, separate database
     python scripts/dev.py --check            # pre-flight checks only
     python scripts/dev.py --no-mock          # without the dental demo mock (scripts/demo/dental_mock.py on :8766)
-    python scripts/dev.py --chat             # also the external customer chat app on :3100 (apps/chat, CP-0049)
+    python scripts/dev.py --no-chat          # without the external customer chat app (on :3100 by default, CP-0049)
+    python scripts/dev.py --reset            # re-seed the demo data first (otherwise only when the seed changed, CP-0053)
+    python scripts/dev.py --no-login         # no demo Studio passwords: sign-in stays off
 
 Ctrl+C stops everything. Stdlib only (Python 3.9+). On Windows without a `python` command: py -3 scripts/dev.py
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
+import http.cookiejar
+import json
 import os
 import shutil
 import signal
@@ -49,12 +54,58 @@ class Service:
     env: dict[str, str] = field(default_factory=dict)
 
 
+DEMO_LOGINS = [  # CP-0053: local only; the API listens on 127.0.0.1 and nothing but this launcher sets them
+    ("admin@echomind.test", "STUDIO_ADMIN_PASSWORD", "admin-demo-pass", "Admin"),
+    ("reviewer@echomind.test", "STUDIO_REVIEWER_PASSWORD", "reviewer-demo-pass", "Reviewer"),
+    ("specialist@echomind.test", "STUDIO_SPECIALIST_PASSWORD", "specialist-demo-pass", "Agent Desk specialist"),
+]
+STUDIO_SETTINGS = [name for _, name, _, _ in DEMO_LOGINS]
+
+
+def login_defaults(args: argparse.Namespace, environ: dict[str, str], dotenv: dict[str, str]) -> dict[str, str]:
+    """DEV-19: the demo passwords, only when none of the three is set anywhere (empty = unset) and not --no-login."""
+    if getattr(args, "no_login", False):
+        return {}
+    if any((environ.get(n) or dotenv.get(n) or "").strip() for n in STUDIO_SETTINGS):
+        return {}
+    return {name: pw for _, name, pw, _ in DEMO_LOGINS}
+
+
+def admin_password(applied: dict[str, str], environ: dict[str, str], dotenv: dict[str, str]) -> str | None:
+    """The admin password the API will use, or None when sign-in is off (DEV-22)."""
+    return (applied.get("STUDIO_ADMIN_PASSWORD") or environ.get("STUDIO_ADMIN_PASSWORD") or dotenv.get("STUDIO_ADMIN_PASSWORD") or "").strip() or None
+
+
+def seed_digest(api_dir: Path = API_DIR, root: Path = ROOT) -> str:
+    """DEV-21: a hash of what the demo data is made from (the seed code and the demo-data specs)."""
+    h = hashlib.sha256()
+    files = sorted((api_dir / "voiceai" / "seed").glob("*.py")) + sorted((root / "specs" / "demo-data").rglob("*.md"))
+    for f in files:
+        h.update(f.relative_to(root).as_posix().encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()
+
+
+def seed_stamp_path(database_url: str, api_dir: Path = API_DIR) -> Path:
+    return api_dir / "data" / f"seed-stamp-{hashlib.sha256(database_url.encode()).hexdigest()[:8]}.txt"
+
+
+def seed_needed(args: argparse.Namespace, stamp: Path, digest: str) -> bool:
+    if getattr(args, "no_reseed", False):
+        return False
+    if getattr(args, "reset", False):
+        return True
+    return not stamp.exists() or stamp.read_text(encoding="utf-8").strip() != digest
+
+
 @dataclass
 class Plan:
     pre: list[Service]          # one-shot steps run to completion first (web build)
     services: list[Service]     # long-running processes
     ready: dict[str, str]       # name -> URL polled until it answers
     open_url: str               # where the user should go
+    applied_logins: dict[str, str] = field(default_factory=dict)  # demo passwords the launcher gave the API (CP-0053)
+    stamp: tuple[Path, str] | None = None                          # written after the `seed` step succeeds
 
 
 def shown(cmd: list[str]) -> str:
@@ -105,9 +156,13 @@ def mock_decision(args: argparse.Namespace, in_use: Callable[[int], bool], healt
 
 
 def make_plan(args: argparse.Namespace, uv: list[str], npm: str, environ: dict[str, str] | None = None,
-              start_mock: bool | None = None) -> Plan:
+              start_mock: bool | None = None, dotenv: dict[str, str] | None = None, api_dir: Path = API_DIR,
+              chat_dir: Path = CHAT_DIR) -> Plan:
     environ = os.environ if environ is None else environ
+    dotenv = read_dotenv(api_dir / ".env") if dotenv is None else dotenv
     api_env = {"PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+    logins = login_defaults(args, environ, dotenv)  # DEV-19
+    api_env.update(logins)
     if args.fake:  # DEV-06: fake mode never touches the real database
         api_env.update(LLM_FAKE="1", EMBEDDINGS_PROVIDER="hash")
         if "DATABASE_URL" not in environ:
@@ -120,8 +175,8 @@ def make_plan(args: argparse.Namespace, uv: list[str], npm: str, environ: dict[s
         if not args.skip_build:
             pre.append(Service("web", [npm, "run", "build"], WEB_DIR, {"NEXT_PUBLIC_API_BASE": "", "NEXT_TELEMETRY_DISABLED": "1"}))
         api = Service("api", serve, API_DIR, api_env)
-        plan = Plan(pre, [api], {"api": f"{api_url}/healthz"}, api_url)
-        return with_chat(with_mock(plan, args, start_mock), args, npm, api_url)
+        plan = Plan(pre, [api], {"api": f"{api_url}/healthz"}, api_url, applied_logins=logins)
+        return finish(with_chat(with_mock(plan, args, start_mock), args, npm, api_url, chat_dir), args, uv, api_env, environ, dotenv, api_dir)
 
     if not args.no_reload:
         serve.append("--reload")
@@ -130,12 +185,27 @@ def make_plan(args: argparse.Namespace, uv: list[str], npm: str, environ: dict[s
     web = Service("web", [npm, "run", "dev", "--", "-p", str(args.web_port)], WEB_DIR,
                   {"NEXT_PUBLIC_API_BASE": api_url, "NEXT_TELEMETRY_DISABLED": "1"})
     web_url = f"http://localhost:{args.web_port}"
-    return with_chat(with_mock(Plan([], [api, web], {"api": f"{api_url}/healthz", "web": f"{web_url}/"}, web_url), args, start_mock), args, npm, api_url)
+    plan = Plan([], [api, web], {"api": f"{api_url}/healthz", "web": f"{web_url}/"}, web_url, applied_logins=logins)
+    return finish(with_chat(with_mock(plan, args, start_mock), args, npm, api_url, chat_dir), args, uv, api_env, environ, dotenv, api_dir)
 
 
-def with_chat(plan: Plan, args: argparse.Namespace, npm: str, api_url: str) -> Plan:
-    """DEV-18: the external chat app beside the web app and the API; its own port, its own key (apps/chat/.env.local)."""
-    if getattr(args, "chat", False):
+def finish(plan: Plan, args: argparse.Namespace, uv: list[str], api_env: dict[str, str], environ: dict[str, str],
+           dotenv: dict[str, str], api_dir: Path) -> Plan:
+    """DEV-21: the one-time seed step in front of everything else when the demo data is missing, stale or --reset."""
+    url = api_env.get("DATABASE_URL") or environ.get("DATABASE_URL") or dotenv.get("DATABASE_URL") or "default"
+    digest = seed_digest(api_dir, api_dir.parent.parent) if not getattr(args, "no_reseed", False) else ""
+    stamp = seed_stamp_path(url, api_dir)
+    if digest and seed_needed(args, stamp, digest):
+        plan.pre.insert(0, Service("seed", [*uv, "run", "voiceai", "seed", "--reset"], api_dir, dict(api_env)))
+        plan.stamp = (stamp, digest)
+    return plan
+
+
+def with_chat(plan: Plan, args: argparse.Namespace, npm: str, api_url: str, chat_dir: Path = CHAT_DIR) -> Plan:
+    """DEV-18, DEV-20: the external chat app beside the web app and the API (on by default); its own port and key."""
+    if not getattr(args, "no_chat", False):
+        if not (chat_dir / "node_modules").exists():
+            plan.pre.append(Service("chat-install", [npm, "install", "--no-audit", "--no-fund"], chat_dir, {"NEXT_TELEMETRY_DISABLED": "1"}))
         port = getattr(args, "chat_port", CHAT_PORT)
         plan.services.append(Service("chat", [npm, "run", "dev", "--", "-p", str(port)], CHAT_DIR,
                                      {"VOICEAI_API_URL": api_url, "NEXT_TELEMETRY_DISABLED": "1"}))
@@ -150,10 +220,9 @@ def chat_key_needed(chat_dir: Path = CHAT_DIR, environ: dict[str, str] | None = 
 
 
 def provision_chat_key(api_url: str, chat_dir: Path, say: Callable[[str], None], tenant: str = "northgate-health",
-                       wait_s: float = 240.0) -> bool:
-    """Once the API answers, create a `member` key named `chat-app` through the Studio API and write apps/chat/.env.local."""
-    import json
-
+                       wait_s: float = 240.0, admin_pw: str | None = None) -> bool:
+    """Once the API answers, create a `member` key named `chat-app` through the Studio API (signing in as admin when
+    sign-in is on, DEV-22) and write apps/chat/.env.local."""
     deadline = time.time() + wait_s
     while time.time() < deadline:
         try:
@@ -168,9 +237,14 @@ def provision_chat_key(api_url: str, chat_dir: Path, say: Callable[[str], None],
     if not chat_key_needed(chat_dir):
         return True
     try:
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        if admin_pw:
+            login = urllib.request.Request(f"{api_url}/api/auth/login", method="POST", headers={"Content-Type": "application/json"},
+                                           data=json.dumps({"email": "admin@echomind.test", "password": admin_pw}).encode())
+            opener.open(login, timeout=10).read()
         req = urllib.request.Request(f"{api_url}/api/api-keys", method="POST", headers={"Content-Type": "application/json", "X-Tenant-Id": tenant},
                                      data=json.dumps({"name": "chat-app", "scope": "member"}).encode())
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with opener.open(req, timeout=10) as r:
             key = json.loads(r.read())["key"]
     except Exception as exc:  # noqa: BLE001 - sign-in on, or the name is taken: tell the owner what to do
         say(f"chat: could not create the chat key ({type(exc).__name__}). Create a member key in Studio (Settings, API keys), "
@@ -242,10 +316,8 @@ def preflight(
         if in_use(port):
             errors.append(f"port {port} is already in use (another dev server running?). Stop it or pass {flag} <free port>")
 
-    if getattr(args, "chat", False):  # DEV-18
+    if not getattr(args, "no_chat", False):  # DEV-18: a busy port is an error; missing dependencies are installed by the plan (DEV-20)
         chat_port = getattr(args, "chat_port", CHAT_PORT)
-        if not (root / "apps" / "chat" / "node_modules").exists():
-            errors.append("chat dependencies are not installed (apps/chat/node_modules missing); run: cd apps/chat && npm install")
         if in_use(chat_port):
             errors.append(f"port {chat_port} is already in use. Stop it or pass --chat-port <free port>")
 
@@ -264,6 +336,17 @@ def preflight(
     if not status["DEEPGRAM_API_KEY"]:
         warnings.append("no DEEPGRAM_API_KEY: the Talk tab is disabled; use Type on the Test call page")
     return errors, warnings, status
+
+
+def banner(args: argparse.Namespace, plan: Plan) -> list[str]:
+    """DEV-23: where to go and who to sign in as; passwords are printed only when the launcher chose them."""
+    lines = [f"Studio: {plan.open_url}"]
+    if not getattr(args, "no_chat", False):
+        lines.append(f"Customer chat: http://localhost:{getattr(args, 'chat_port', CHAT_PORT)}")
+    if plan.applied_logins:
+        lines.append("Demo sign-in (local only; set your own STUDIO_*_PASSWORD in apps/api/.env to change):")
+        lines += [f"  {role}: {email} / {plan.applied_logins[name]}" for email, name, _, role in DEMO_LOGINS]
+    return lines
 
 
 # ------------------------------------------------------------------ output
@@ -405,7 +488,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--web-port", type=int, default=3000)
     ap.add_argument("--mock-port", type=int, default=MOCK_PORT, help="port of the dental demo mock (default 8766, where the kit's tools call it)")
     ap.add_argument("--no-mock", action="store_true", help="do not start the dental demo mock")
-    ap.add_argument("--chat", action="store_true", help="also start the external customer chat app (apps/chat) on --chat-port")
+    ap.add_argument("--chat", action="store_true", help="start the external customer chat app (on by default; kept for old habits)")
+    ap.add_argument("--no-chat", action="store_true", help="do not start the external customer chat app (apps/chat)")
+    ap.add_argument("--no-login", action="store_true", help="do not give the API demo Studio passwords: sign-in stays off")
+    ap.add_argument("--reset", action="store_true", help="re-seed the demo data (voiceai seed --reset) before starting")
+    ap.add_argument("--no-reseed", action="store_true", help="never re-seed, even when the seed changed")
     ap.add_argument("--chat-port", type=int, default=CHAT_PORT, help="port of the chat app (default 3100)")
     ap.add_argument("--no-reload", action="store_true", help="run the API without auto-reload")
     ap.add_argument("--fake", action="store_true", help="no LLM keys: fake LLM, hash embeddings, separate database (apps/api/data/fake.db)")
@@ -454,12 +541,19 @@ def main(argv: list[str] | None = None) -> int:
         if outcome.code != 0:
             printer.line("dev", f"{step.name} step failed (exit {outcome.code}); not starting the servers")
             return outcome.code
+        if step.name == "seed" and plan.stamp:  # DEV-21: only after the seed succeeded
+            plan.stamp[0].parent.mkdir(parents=True, exist_ok=True)
+            plan.stamp[0].write_text(plan.stamp[1] + "\n", encoding="utf-8")
+    for line in banner(args, plan):  # DEV-23
+        printer.line("dev", line)
     for svc in plan.services:
         printer.line("dev", f"{svc.name}: {shown(svc.cmd)}")
     printer.line("dev", "starting; first API start seeds the demo data (about a minute). Ctrl+C stops everything.")
-    if args.chat and chat_key_needed():
+    if not args.no_chat and chat_key_needed():
         api_url = f"http://localhost:{args.api_port}"
-        threading.Thread(target=provision_chat_key, args=(api_url, CHAT_DIR, lambda m: printer.line("chat", m)), daemon=True).start()
+        pw = admin_password(plan.applied_logins, dict(os.environ), read_dotenv(API_DIR / ".env"))
+        threading.Thread(target=provision_chat_key, args=(api_url, CHAT_DIR, lambda m: printer.line("chat", m)),
+                         kwargs={"admin_pw": pw}, daemon=True).start()
     outcome = supervise(plan.services, printer, plan.ready, plan.open_url)
     if outcome.interrupted:
         printer.line("dev", "stopped.")

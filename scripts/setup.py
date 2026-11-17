@@ -109,6 +109,8 @@ def main() -> int:
             run([*uv, "sync"], ROOT / "apps" / "api")
         if npm:
             run([npm, "ci", "--no-audit", "--no-fund"], ROOT / "apps" / "web")
+            if (ROOT / "apps" / "chat" / "package-lock.json").exists():  # CP-0053: the customer chat app too
+                run([npm, "ci", "--no-audit", "--no-fund"], ROOT / "apps" / "chat")
         if not uv and not npm:
             print("  nothing to install: uv and npm are both missing")
 

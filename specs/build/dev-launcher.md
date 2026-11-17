@@ -10,7 +10,7 @@ generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-10-06T00:00:00Z" }
 # Usage
 
 ```bash
-python scripts/dev.py                    # dev mode: web :3000 (hot reload) + API :8000 (auto-reload)
+python scripts/dev.py                    # dev mode: web :3000 (hot reload) + API :8000 (auto-reload) + chat :3100 + demo logins + seed when changed
 python scripts/dev.py --single-origin    # build the web export, serve everything from the API on :8000
 python scripts/dev.py --fake             # no LLM keys: scripted fake LLM, hash embeddings, separate database
 python scripts/dev.py --check            # pre-flight checks only
@@ -24,7 +24,9 @@ Windows without a `python` command: `py -3 scripts/dev.py`. Stdlib only (Python 
 | `--skip-build` | With `--single-origin`: reuse an existing `apps/web/out`. |
 | `--api-port N`, `--web-port N` | Default 8000 and 3000. |
 | `--mock-port N` | Port of the dental demo mock, default 8766 (the dental kit's tools call `http://127.0.0.1:8766`). |
-| `--chat` | Also start the external chat app on :3100 (`--chat-port N`) with `VOICEAI_API_URL`; on first run, once the API answers, create a `member` key named `chat-app` through the Studio API and write it to `apps/chat/.env.local` ([CP-0049](/changes/cp-0049-external-chat-app.md)). |
+| `--no-chat` | Do not start the external chat app. It is **on by default** on :3100 (`--chat-port N`, `--chat` is accepted and does nothing extra) with `VOICEAI_API_URL`; if `apps/chat/node_modules` is missing it is installed first; on first run, once the API answers, a `member` key named `chat-app` is created (signing in as admin when sign-in is on) and written to `apps/chat/.env.local` ([CP-0049](/changes/cp-0049-external-chat-app.md), [CP-0053](/changes/cp-0053-one-start-for-everything.md)). |
+| `--no-login` | Do not give the API demo Studio passwords. Without it, and when none of the three `STUDIO_*_PASSWORD` settings is set in the environment or `apps/api/.env` (empty = unset), the API process gets `admin-demo-pass`, `reviewer-demo-pass` and `specialist-demo-pass`; the launcher prints the accounts. A password you set is never overridden. Local only: the API listens on 127.0.0.1. |
+| `--reset` | Re-seed the demo data (`voiceai seed --reset`) before starting. Without it the launcher re-seeds once when the seed changed (below); `--no-reseed` never re-seeds. |
 | `--no-mock` | Do not start the dental demo mock ([CP-0038](/changes/cp-0038-one-start-for-demo-mock-and-docker.md)). |
 | `--no-reload` | Run the API without auto-reload. |
 | `--fake` | `LLM_FAKE=1`, `EMBEDDINGS_PROVIDER=hash`, and `DATABASE_URL` defaulting to `apps/api/data/fake.db` so hash embeddings never mix with the real database. |
@@ -46,7 +48,8 @@ Windows without a `python` command: `py -3 scripts/dev.py`. Stdlib only (Python 
 4. **Output**: stdout and stderr of every process are merged, decoded as UTF-8, and printed line by line with a padded, colored tag (`[api]`, `[web]`, `[mock]`, `[dev]` for the launcher). Child processes run unbuffered with UTF-8 so logs stream live on Windows consoles. Color is off when output is not a terminal or `NO_COLOR` is set.
 5. **Readiness**: `/healthz` of the API and `/` of the web server are polled; each prints `<name> ready` once, then `READY - open <url>` when all are up. The first API start seeds the demo data and may take about a minute.
 6. **Shutdown**: Ctrl+C, SIGTERM (and Ctrl+Break on Windows) stop every service's whole process tree (process group on POSIX, `taskkill /T` on Windows) and exit 0. If any service exits on its own, all others are stopped and the launcher exits with that service's exit code (1 if it was signalled).
-7. **Docker**: when the voice pipeline cannot load on the machine (for example Windows Application Control blocks its native libraries), [scripts/docker_stack.py](/build/docker-stack.md) runs the same app and mock in one container.
+7. **One start** ([CP-0053](/changes/cp-0053-one-start-for-everything.md)). Before the servers, in order: a `chat-install` step (`npm install` in `apps/chat`) when its `node_modules` is missing; a `seed` step (`uv run voiceai seed --reset` in `apps/api`, with the API's database settings) when `--reset` is given, or when the seed stamp is missing or different and `--no-reseed` is not given. The stamp is `apps/api/data/seed-stamp-<8 hex of the database URL>.txt` holding a SHA-256 over `apps/api/voiceai/seed/*.py` and `specs/demo-data/**`; it is written only after the seed step exits 0. Before the first output of the servers the launcher prints the three accounts (email and password) when it set the defaults, and the Studio and chat URLs.
+8. **Docker**: when the voice pipeline cannot load on the machine (for example Windows Application Control blocks its native libraries), [scripts/docker_stack.py](/build/docker-stack.md) runs the same app and mock in one container.
 
 # Acceptance
 
@@ -59,4 +62,9 @@ Windows without a `python` command: `py -3 scripts/dev.py`. Stdlib only (Python 
 - **DEV-13** — Given the mock port already answers `GET /dental/health`, when pre-flight runs, then there is no error and the plan has no `mock` service (the running one is reused); given the port is held by something else, then pre-flight warns that the dental tools will fail and the plan has no `mock` service; neither case exits 1.
 - **DEV-14** — Given a mock already answering on the mock port, when `demo_kits.py dental` builds the kit, then it starts no mock of its own and the dental tools' URLs use that port.
 - **DEV-06** — Given keys in `.env` and the environment, when pre-flight runs, then the key status lists OpenRouter, OpenAI and Deepgram, key warnings follow the rules above (either key alone raises no LLM warning and no `LLM_ROLE_*` advice) and no key value is ever printed; given `--fake`, the LLM warning is skipped and `DATABASE_URL` defaults to `fake.db` unless already set.
-- **DEV-18** — Given `--chat`, when the plan is built, then it has a `chat` service running `npm run dev` in `apps/chat` on port 3100 (or `--chat-port`) in parallel with web :3000 and the API :8000, pre-flight reports a busy chat port, and an existing `apps/chat/.env.local` key is never overwritten; without `--chat` the plan is unchanged.
+- **DEV-18** — Given the default flags (or `--chat`), when the plan is built, then it has a `chat` service running `npm run dev` in `apps/chat` on port 3100 (or `--chat-port`) in parallel with web :3000 and the API :8000, pre-flight reports a busy chat port, and an existing `apps/chat/.env.local` key is never overwritten; given `--no-chat` the plan has no `chat` service.
+- **DEV-19** — Given no Studio password in the environment or `.env` (an empty value is unset), when the plan is built, then the `api` service environment has the three demo passwords; given any one of the three set to a non-empty value, or `--no-login`, then none is added and a password you set is never replaced.
+- **DEV-20** — Given `apps/chat/node_modules` missing, when the plan is built, then it has a `chat-install` pre step running `npm install` in `apps/chat` before the servers; given it present, no such step; given `--no-chat`, none.
+- **DEV-21** — Given no seed stamp, a stamp that differs from the hash of the seed sources, or `--reset`, then the plan has a `seed` pre step `voiceai seed --reset` in `apps/api` and the stamp is written only after it succeeds; given a matching stamp, or `--no-reseed`, there is no seed step and the stamp is untouched.
+- **DEV-22** — Given sign-in on and the admin password known (the defaults or the environment), when the chat key is provisioned, then the launcher signs in as `admin@echomind.test`, sends the session cookie with the key request and writes the key to `apps/chat/.env.local`; with sign-in off no login is attempted; an existing key is never replaced.
+- **DEV-23** — Given the defaults were applied, when the launcher starts, then it prints each account with its email and password and the Studio and chat URLs; given passwords of your own, it prints the emails and URLs and no password.

@@ -1,6 +1,6 @@
 """scripts/dev.py: plan building, pre-flight, prefixed output and process-tree shutdown.
 
-Covers: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-12, DEV-13, DEV-14, DEV-18
+Covers: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-12, DEV-13, DEV-14, DEV-18, DEV-19, DEV-20, DEV-21, DEV-22, DEV-23
 """
 from __future__ import annotations
 
@@ -32,7 +32,8 @@ dev = _load()
 
 
 def ns(**kw) -> argparse.Namespace:  # noqa: ANN003
-    base = dict(single_origin=False, skip_build=False, api_port=8000, web_port=3000, no_reload=False, fake=False, install=False, check=False)
+    base = dict(single_origin=False, skip_build=False, api_port=8000, web_port=3000, no_reload=False, fake=False, install=False, check=False,
+                no_chat=True, no_login=True, reset=False, no_reseed=True)  # the older tests opt out of the CP-0053 defaults
     return argparse.Namespace(**{**base, **kw})
 
 
@@ -72,62 +73,175 @@ def test_single_origin_plan_builds_then_serves_api_only():
     assert dev.make_plan(ns(single_origin=True, skip_build=True), ["uv"], "npm", environ={}).pre == []
 
 
-def test_chat_flag_adds_the_chat_service_in_parallel():
+def test_chat_is_on_by_default_and_runs_in_parallel(tmp_path):
     """Covers: DEV-18"""
-    plan = dev.make_plan(ns(chat=True), ["uv"], "npm", environ={})
+    (tmp_path / "node_modules").mkdir()
+    plan = dev.make_plan(ns(no_chat=False), ["uv"], "npm", environ={}, dotenv={}, chat_dir=tmp_path)
     assert [s.name for s in plan.services][:3] == ["api", "web", "mock"] and plan.services[-1].name == "chat"
     chat = plan.services[-1]
-    assert chat.cmd == ["npm", "run", "dev", "--", "-p", "3100"] and chat.cwd == dev.CHAT_DIR
+    assert chat.cmd == ["npm", "run", "dev", "--", "-p", "3100"]
     assert chat.env["VOICEAI_API_URL"] == "http://localhost:8000" and plan.ready["chat"] == "http://localhost:3100/"
-    assert "-p" in chat.cmd and "3000" not in chat.cmd  # a port of its own, beside web :3000 and the API :8000
-    custom = dev.make_plan(ns(chat=True, chat_port=3200, single_origin=True, skip_build=True), ["uv"], "npm", environ={})
+    custom = dev.make_plan(ns(no_chat=False, chat_port=3200, single_origin=True, skip_build=True), ["uv"], "npm", environ={}, dotenv={}, chat_dir=tmp_path)
     assert custom.services[-1].cmd[-1] == "3200"
-    assert "chat" not in [s.name for s in dev.make_plan(ns(), ["uv"], "npm", environ={}).services]
+    assert "chat" not in [s.name for s in dev.make_plan(ns(no_chat=True), ["uv"], "npm", environ={}, dotenv={}).services]
 
 
-def test_chat_preflight_reports_a_missing_install_and_a_busy_port(tmp_path):
+def test_chat_preflight_reports_a_busy_port_only(tmp_path):
     """Covers: DEV-18"""
     repo = _repo(tmp_path)
-    errors, _, _ = dev.preflight(ns(chat=True), ["uv"], "npm", environ={}, root=repo, in_use=lambda p: p == 3100, health=lambda p: True)
-    assert any("apps/chat/node_modules" in e for e in errors) and any("3100" in e and "--chat-port" in e for e in errors)
-    (repo / "apps" / "chat" / "node_modules").mkdir(parents=True)
-    errors, _, _ = dev.preflight(ns(chat=True), ["uv"], "npm", environ={}, root=repo, in_use=lambda p: False, health=lambda p: True)
-    assert not any("chat" in e for e in errors)
-    errors, _, _ = dev.preflight(ns(), ["uv"], "npm", environ={}, root=_repo(tmp_path / "other"), in_use=lambda p: False, health=lambda p: True)
-    assert not any("chat" in e for e in errors)  # without --chat the pre-flight is unchanged
+    errors, _, _ = dev.preflight(ns(no_chat=False), ["uv"], "npm", environ={}, root=repo, in_use=lambda p: p == 3100, health=lambda p: True)
+    assert any("3100" in e and "--chat-port" in e for e in errors)
+    errors, _, _ = dev.preflight(ns(no_chat=False), ["uv"], "npm", environ={}, root=repo, in_use=lambda p: False, health=lambda p: True)
+    assert not any("chat" in e for e in errors)  # missing chat dependencies are installed by the plan, not an error (DEV-20)
+    errors, _, _ = dev.preflight(ns(no_chat=True), ["uv"], "npm", environ={}, root=repo, in_use=lambda p: p == 3100, health=lambda p: True)
+    assert not any("3100" in e for e in errors)
 
 
-def test_an_existing_chat_key_is_never_overwritten(tmp_path):
-    """Covers: DEV-18"""
-    assert dev.chat_key_needed(tmp_path, environ={}) is True
-    (tmp_path / ".env.local").write_text("VOICEAI_API_KEY=vak_existing\n", encoding="utf-8")
-    assert dev.chat_key_needed(tmp_path, environ={}) is False
-    (tmp_path / ".env.local").write_text("", encoding="utf-8")
-    assert dev.chat_key_needed(tmp_path, environ={"VOICEAI_API_KEY": "vak_env"}) is False
-    # the provisioner returns without a request when a key exists: no API is listening on this port
-    (tmp_path / ".env.local").write_text("VOICEAI_API_KEY=vak_existing\n", encoding="utf-8")
-    import http.server, threading as th  # noqa: E401, PLC0415
+def test_demo_passwords_only_when_none_is_set():
+    """Covers: DEV-19"""
+    names = ["STUDIO_ADMIN_PASSWORD", "STUDIO_REVIEWER_PASSWORD", "STUDIO_SPECIALIST_PASSWORD"]
+    plan = dev.make_plan(ns(no_login=False), ["uv"], "npm", environ={}, dotenv={})
+    api = plan.services[0]
+    assert [api.env[n] for n in names] == ["admin-demo-pass", "reviewer-demo-pass", "specialist-demo-pass"] and plan.applied_logins
+    empty = dev.make_plan(ns(no_login=False), ["uv"], "npm", environ={}, dotenv={n: "" for n in names})  # `.env.example` leaves them empty
+    assert empty.services[0].env["STUDIO_ADMIN_PASSWORD"] == "admin-demo-pass"
+    for environ, dotenv in (({"STUDIO_REVIEWER_PASSWORD": "mine"}, {}), ({}, {"STUDIO_SPECIALIST_PASSWORD": "mine"})):
+        own = dev.make_plan(ns(no_login=False), ["uv"], "npm", environ=environ, dotenv=dotenv)
+        assert not any(n in own.services[0].env for n in names) and own.applied_logins == {}  # yours is never replaced, none added
+    off = dev.make_plan(ns(no_login=True), ["uv"], "npm", environ={}, dotenv={})
+    assert not any(n in off.services[0].env for n in names)
 
-    class Health(http.server.BaseHTTPRequestHandler):
-        posts: list[str] = []
+
+def test_chat_install_step_only_when_dependencies_are_missing(tmp_path):
+    """Covers: DEV-20"""
+    plan = dev.make_plan(ns(no_chat=False), ["uv"], "npm", environ={}, dotenv={}, chat_dir=tmp_path)
+    assert [s.name for s in plan.pre] == ["chat-install"] and plan.pre[0].cmd[:2] == ["npm", "install"] and plan.pre[0].cwd == tmp_path
+    (tmp_path / "node_modules").mkdir()
+    assert dev.make_plan(ns(no_chat=False), ["uv"], "npm", environ={}, dotenv={}, chat_dir=tmp_path).pre == []
+    assert dev.make_plan(ns(no_chat=True), ["uv"], "npm", environ={}, dotenv={}, chat_dir=tmp_path / "none").pre == []
+
+
+def _api_dir(tmp: Path) -> Path:
+    api = tmp / "apps" / "api"
+    (api / "voiceai" / "seed").mkdir(parents=True)
+    (api / "voiceai" / "seed" / "loader.py").write_text("SEED = 1\n", encoding="utf-8")
+    (tmp / "specs" / "demo-data").mkdir(parents=True)
+    (tmp / "specs" / "demo-data" / "members.md").write_text("Sarah\n", encoding="utf-8")
+    return api
+
+
+def test_seed_step_follows_the_stamp(tmp_path):
+    """Covers: DEV-21"""
+    api = _api_dir(tmp_path)
+    args = ns(no_reseed=False)
+    first = dev.make_plan(args, ["uv"], "npm", environ={}, dotenv={}, api_dir=api)
+    assert [s.name for s in first.pre] == ["seed"] and first.pre[0].cmd == ["uv", "run", "voiceai", "seed", "--reset"] and first.pre[0].cwd == api
+    stamp, digest = first.stamp
+    assert stamp.parent == api / "data" and stamp.name.startswith("seed-stamp-") and not stamp.exists()  # written only after the step succeeds
+    stamp.parent.mkdir()
+    stamp.write_text(digest + "\n", encoding="utf-8")
+    assert dev.make_plan(args, ["uv"], "npm", environ={}, dotenv={}, api_dir=api).pre == []  # a matching stamp keeps your data
+    (api / "voiceai" / "seed" / "loader.py").write_text("SEED = 2\n", encoding="utf-8")
+    assert [s.name for s in dev.make_plan(args, ["uv"], "npm", environ={}, dotenv={}, api_dir=api).pre] == ["seed"]  # the seed changed
+    stamp.write_text(dev.seed_digest(api, tmp_path) + "\n", encoding="utf-8")
+    assert [s.name for s in dev.make_plan(ns(no_reseed=False, reset=True), ["uv"], "npm", environ={}, dotenv={}, api_dir=api).pre] == ["seed"]  # --reset
+    assert dev.make_plan(ns(no_reseed=True, reset=True), ["uv"], "npm", environ={}, dotenv={}, api_dir=api).pre == []  # --no-reseed wins
+    fake = dev.make_plan(args, ["uv"], "npm", environ={"DATABASE_URL": "sqlite:///x/fake.db"}, dotenv={}, api_dir=api)
+    assert fake.pre[0].env["PYTHONUTF8"] == "1" and fake.stamp[0] != stamp  # another database has its own stamp
+
+
+def _serve(handler_cls):  # noqa: ANN001, ANN202
+    import http.server
+    import threading as th
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), handler_cls)
+    th.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def _platform(sign_in: bool):  # noqa: ANN202
+    import http.server
+
+    class Platform(http.server.BaseHTTPRequestHandler):
+        seen: list[tuple[str, str, str]] = []
+
+        def _send(self, code: int, body: bytes = b"{}", cookie: str | None = None) -> None:
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            if cookie:
+                self.send_header("Set-Cookie", cookie)
+            self.end_headers()
+            self.wfile.write(body)
 
         def do_GET(self):  # noqa: ANN202, N802
-            self.send_response(200); self.end_headers(); self.wfile.write(b"{}")
+            self._send(200)
 
         def do_POST(self):  # noqa: ANN202, N802
-            Health.posts.append(self.path); self.send_response(500); self.end_headers()
+            size = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(size).decode()
+            Platform.seen.append((self.path, self.headers.get("Cookie") or "", body))
+            if self.path == "/api/auth/login":
+                ok = "right-pass" in body
+                self._send(200 if ok else 401, cookie="studio_session=abc; Path=/" if ok else None)
+            elif self.path == "/api/api-keys":
+                if sign_in and "studio_session=abc" not in (self.headers.get("Cookie") or ""):
+                    self._send(401, b'{"error": "login_required"}')
+                else:
+                    self._send(201, b'{"key": "vak_new"}')
 
         def log_message(self, *a):  # noqa: ANN002, ANN202
             pass
 
-    srv = http.server.HTTPServer(("127.0.0.1", 0), Health)
-    th.Thread(target=srv.serve_forever, daemon=True).start()
+    return Platform
+
+
+def test_the_chat_key_is_created_through_the_admin_login(tmp_path):
+    """Covers: DEV-22"""
+    Platform = _platform(sign_in=True)
+    srv = _serve(Platform)
     try:
         said: list[str] = []
-        assert dev.provision_chat_key(f"http://127.0.0.1:{srv.server_port}", tmp_path, said.append, wait_s=5) is True
-        assert Health.posts == [] and (tmp_path / ".env.local").read_text(encoding="utf-8") == "VOICEAI_API_KEY=vak_existing\n"
+        assert dev.provision_chat_key(f"http://127.0.0.1:{srv.server_port}", tmp_path, said.append, wait_s=5, admin_pw="right-pass") is True
+        assert [p for p, _, _ in Platform.seen] == ["/api/auth/login", "/api/api-keys"]
+        assert "studio_session=abc" in Platform.seen[1][1] and "admin@echomind.test" in Platform.seen[0][2]
+        assert "VOICEAI_API_KEY=vak_new" in (tmp_path / ".env.local").read_text(encoding="utf-8")
+        Platform.seen.clear()
+        assert dev.provision_chat_key(f"http://127.0.0.1:{srv.server_port}", tmp_path, said.append, wait_s=5, admin_pw="right-pass") is True
+        assert Platform.seen == []  # an existing key is never replaced and nothing is requested
     finally:
         srv.shutdown()
+
+
+def test_no_login_is_attempted_when_sign_in_is_off(tmp_path):
+    """Covers: DEV-22"""
+    Platform = _platform(sign_in=False)
+    srv = _serve(Platform)
+    try:
+        assert dev.provision_chat_key(f"http://127.0.0.1:{srv.server_port}", tmp_path, lambda m: None, wait_s=5, admin_pw=None) is True
+        assert [p for p, _, _ in Platform.seen] == ["/api/api-keys"]
+        wrong = tmp_path / "other"
+        wrong.mkdir()
+        said: list[str] = []
+        assert dev.provision_chat_key(f"http://127.0.0.1:{srv.server_port}", wrong, said.append, wait_s=5, admin_pw="wrong") is False
+        assert any("Create a member key in Studio" in m for m in said) and not (wrong / ".env.local").exists()
+    finally:
+        srv.shutdown()
+    assert dev.admin_password({}, {}, {}) is None
+    assert dev.admin_password({"STUDIO_ADMIN_PASSWORD": "a"}, {"STUDIO_ADMIN_PASSWORD": "b"}, {}) == "a"
+    assert dev.admin_password({}, {}, {"STUDIO_ADMIN_PASSWORD": "d"}) == "d"
+
+
+def test_banner_shows_passwords_only_when_the_launcher_chose_them():
+    """Covers: DEV-23"""
+    applied = dev.make_plan(ns(no_login=False, no_chat=False), ["uv"], "npm", environ={}, dotenv={}, chat_dir=REPO / "apps" / "chat")
+    lines = dev.banner(ns(no_login=False, no_chat=False), applied)
+    text = "\n".join(lines)
+    assert "Studio: http://localhost:3000" in text and "Customer chat: http://localhost:3100" in text
+    for email, pw in (("admin@echomind.test", "admin-demo-pass"), ("reviewer@echomind.test", "reviewer-demo-pass"), ("specialist@echomind.test", "specialist-demo-pass")):
+        assert f"{email} / {pw}" in text
+    own = dev.make_plan(ns(no_login=False, no_chat=True), ["uv"], "npm", environ={"STUDIO_ADMIN_PASSWORD": "mine"}, dotenv={})
+    quiet = "\n".join(dev.banner(ns(no_chat=True), own))
+    assert "mine" not in quiet and "demo-pass" not in quiet and "Customer chat" not in quiet and "Studio:" in quiet
 
 
 # ---------------------------------------------------------------- supervision

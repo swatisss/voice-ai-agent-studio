@@ -346,6 +346,23 @@ function VoiceTab({ draft, update }: TabProps) {
             <Input value={draft.telephony?.transfer_to ?? ""} placeholder="+15557654321" onChange={(e) => update(["telephony"], { ...(draft.telephony ?? {}), transfer_to: e.target.value || null })} />
           </Field>
         </div>
+        {(() => {  // CP-0051: warm handover (/architecture/phone-warm-handover.md)
+          const h = draft.telephony?.handover ?? { mode: "dial", record: false, ring_seconds: 30, browser: false, brief: true };
+          const setH = (patch: Record<string, unknown>) => update(["telephony"], { ...(draft.telephony ?? {}), handover: { ...h, ...patch } });
+          return (
+            <div className="mt-4 grid max-w-3xl gap-3 sm:grid-cols-2" data-testid="handover-settings">
+              <Field label="Handover" hint="Dial transfers the call as it is. Conference rings the person, speaks a short brief and bridges the call.">
+                <Select value={h.mode} onChange={(e) => setH({ mode: e.target.value })}><option value="dial">Dial (cold transfer)</option><option value="conference">Conference (warm handover)</option></Select>
+              </Field>
+              <Field label="Ring seconds" hint="5 to 120">
+                <Input type="number" min={5} max={120} value={h.ring_seconds} onChange={(e) => setH({ ring_seconds: Number(e.target.value) })} />
+              </Field>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={h.record} onChange={(e) => setH({ record: e.target.checked })} />Record the handover and transcribe it for learning</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={h.browser} onChange={(e) => setH({ browser: e.target.checked })} />Also ring Ready specialists' browsers</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={h.brief} onChange={(e) => setH({ brief: e.target.checked })} />Speak a short brief to the person first</label>
+            </div>
+          );
+        })()}
       </Card>
       <Card title="Turn detection">
         <p className="mb-4 max-w-3xl text-sm text-muted">Decide when the agent starts replying. These are the agent's defaults and are versioned when you publish; on the Test call page you can compare modes and change them live during a call{realtime ? " (cascade calls only)" : ""}.</p>

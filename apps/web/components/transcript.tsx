@@ -16,9 +16,29 @@ export function Transcript({ events, showTools = true, highlightSeq }: { events:
   const hl = (seq: number) => (seq === highlightSeq ? "rounded-2xl ring-[3px] ring-accent ring-offset-2" : "");
   const results = new Map<string, CallEvent>();
   for (const e of events) if (e.kind === "tool_result") results.set(e.data?.tool_call_id ?? `${e.data?.name}-${e.seq}`, e);
+  const firstHuman = events.find((e) => e.data?.on_human_leg)?.seq;  // UI-93: the transcribed specialist call
+  const mixed = events.some((e) => e.data?.on_human_leg && e.data?.speaker === "mixed");
   return (
     <div className="space-y-2">
       {events.map((e) => {
+        if (e.data?.on_human_leg) {
+          const human = e.kind === "human";
+          return (
+            <div key={e.seq} id={`seq-${e.seq}`} className={cx("scroll-mt-24", hl(e.seq))}>
+              {e.seq === firstHuman && (
+                <div className="my-2 flex items-center gap-2 text-xs font-medium text-muted" role="separator">
+                  <span className="h-px flex-1 bg-line" />Specialist call{mixed ? " (mixed)" : ""}<span className="h-px flex-1 bg-line" />
+                </div>
+              )}
+              <div className={cx("flex", human ? "justify-start" : "justify-end")}>
+                <div className={cx("max-w-[75%] rounded-2xl px-3 py-2 text-sm", human ? "bg-neutral-soft" : "bg-accent text-on-accent")}>
+                  <div className="text-[11px] opacity-70">{human ? (e.data?.speaker === "mixed" ? "Specialist call (mixed)" : e.data?.author ?? "Specialist") : "Caller"}</div>
+                  {e.text}
+                </div>
+              </div>
+            </div>
+          );
+        }
         if (e.kind === "user") {
           return (
             <div key={e.seq} id={`seq-${e.seq}`} className={cx("flex scroll-mt-24 justify-end", hl(e.seq))}>

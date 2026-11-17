@@ -2,7 +2,7 @@
 type: Component Spec
 title: Phone warm handover
 description: "A phone call escalated to a person becomes a Twilio conference: the caller waits, the specialist's phone or browser is rung and briefed, both are bridged and recorded on two channels, and after the call a batch transcription writes the human portion into the call's events for the learning loop."
-status: draft
+status: stable
 tags: [architecture, telephony, twilio, escalation, handover, recording, transcription]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

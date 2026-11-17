@@ -2,7 +2,7 @@
 type: Change Proposal
 title: CP-0051 Twilio phone warm handover with a recorded, transcribed human leg
 description: An escalated phone call becomes a Twilio conference - the specialist's Indian phone or browser is rung and briefed, bridged warm, recorded on two channels - and a batch transcription writes the human portion into the call's events so the learning loop learns from what the person said.
-status: draft
+status: stable
 cp_state: accepted
 tags: [telephony, twilio, escalation, handover, india, learning]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
@@ -67,3 +67,13 @@ New: TEL-14 to TEL-27, DESK-12, ES-14 (shared with CP-0052), UI-91 to UI-93, DM-
 # Out of scope
 
 * The AI staying in the conference to introduce the parties; live captions of the human leg; returning the caller to the AI after the human; outbound AI calls; an Indian carrier or Indian number (a later adapter CP); Sarvam (needs an ADR); LiveKit (CP-0050); routing among several specialists by skill or availability beyond Ready presence.
+
+# Implementation status (2026-11-17)
+
+`cp_state` stays `accepted`: the code is built and tested on fakes, but task 2 (spikes) and TEL-27 need a paid Twilio account.
+
+* **Done and tested** (`apps/api/tests/test_phone_handover.py`, Twilio REST on an httpx MockTransport, signatures with the real algorithm and a test token, fake `Transcriber`, temp SQLite): task 3 (TEL-14 to TEL-26, DM-21; `/healthz` flag, settings, `fake_twilio.py --handover`), task 4 (`voiceai/voice/transcribe.py`: `Transcriber`, Deepgram pre-recorded, `FakeTranscriber`), task 6. Task 5 (web: phone control, banner, call bar, Specialist call section, handover settings in the agent builder) passes type check and build; UI-91 to UI-93 are in `scripts/acceptance-baseline.txt` because they need a browser and the Twilio Voice SDK.
+* **Not done**: task 2, spikes S1 to S5 and S9 (no Twilio account); TEL-27 (by hand).
+* **Unverified Twilio points, implemented as documented, no fallback switch**: inbound from India to a US number; whether the open media stream yields to a REST `Twiml` update; whether `Calls.create` accepts `client:` (the `<Dial><Client>` TwiML route is **not** built); dual-channel conference recordings (the job requests `RequestedChannels=2` and retries with 1 on a 400, and a mono recording is labelled `mixed`); callback field and event names (`participant-join` and `join` are both accepted; the specialist's `<Conference>` carries the same `statusCallback`, duplicates are idempotent); whether browser-leg `customParameters` carry `call_id` (the banner falls back to the newest waiting escalation); the recording delete call.
+* **Choices the spec left open**: the desk identity is `desk-` plus the account email with non-alphanumerics replaced by `_` (accounts have no ids); a recording with no `TWILIO_API_KEY_SID` gets a `failed` row (`no_api_key`) and a `system` event; a handover with nobody to ring (no `transfer_to`, no Ready browser) leaves a `handover_failed` event and does not move the caller; the recording is fetched from the Recordings API by `RecordingSid`, never from the callback's `RecordingUrl`.
+* **Carrier adapter seam**: ADR-0013's adapter registry (TEL-13) is not in the code; `on_phone_end` in `voiceai/telephony.py` dispatches to `voiceai/handover.py` directly, so telephony.md stays `draft`.

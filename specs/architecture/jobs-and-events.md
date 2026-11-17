@@ -2,7 +2,7 @@
 type: Component Spec
 title: Jobs and events
 description: The database-backed background job queue and the in-process event bus streamed to the browser as server-sent events.
-status: draft
+status: stable
 tags: [architecture, jobs, events, sse]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

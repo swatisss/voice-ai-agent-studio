@@ -3,6 +3,7 @@
 
 import { Bell, BellOff, ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DeskPhone } from "@/components/desk-phone";
 import { PacketCard } from "@/components/packet";
 import { useTenant } from "@/components/shell";
 import { Transcript } from "@/components/transcript";
@@ -128,6 +129,7 @@ export default function ConsolePage() {
           <Button variant="ghost" onClick={() => setChime(!chime)} aria-label="Toggle chime">{chime ? <Bell size={16} /> : <BellOff size={16} />}</Button>
         </div>
       </div>
+      {session.user?.role !== "reviewer" && <DeskPhone items={data?.items ?? []} onSelect={setSelected} onChanged={reload} />}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-2">
           <Tabs<Queue> value={queue} onChange={setQueue} tabs={[{ id: "waiting", label: `Waiting (${counts.waiting})` }, { id: "mine", label: "Mine" }, { id: "resolved", label: "Resolved today" }]} />

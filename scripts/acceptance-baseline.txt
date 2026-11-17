@@ -184,3 +184,10 @@ UI-85
 UI-86
 # CP-0049: CHAT-05 (reload resumes the thread) is client behaviour in components/chat.tsx with no browser test; the server side (poll after a cursor) is covered by CHAT-04.
 CHAT-05
+
+# CP-0051 phone warm handover. UI-91..UI-93 are the browser phone and the call-detail section (Twilio Voice SDK: needs a browser and a paid account):
+# type check and build pass; the API behind them is covered by TEL-17, TEL-22 and TEL-25. TEL-27 is the end-to-end call on a paid Twilio account (spikes S1-S5).
+UI-91
+UI-92
+UI-93
+TEL-27

@@ -11,6 +11,13 @@ agent's audio to a WAV file. Run it with the API's environment (it needs httpx a
 
 The API needs TWILIO_AUTH_TOKEN and PUBLIC_BASE_URL (for a local run: http://localhost:8000) in apps/api/.env, the
 number mapped to an agent (`uv run voiceai phone add`), and the provider keys the agent's pipeline uses.
+
+Handover mode (/architecture/phone-warm-handover.md, CP-0051) replays Twilio's handover callbacks for an escalated call whose
+agent uses `conference` mode, with no network beyond the API itself: the specialist leg ringing, the conference join of the
+specialist, a completed two-channel recording and the end of the conference. The `transcribe_handover` job then needs a
+recording Twilio actually holds, so against a real server only the events up to the recording row are produced:
+
+    cd apps/api && uv run python ../../scripts/fake_twilio.py --handover <call_id> [--leg CA...]
 """
 from __future__ import annotations
 
@@ -69,10 +76,34 @@ def mulaw_from_wav(path: Path | None) -> bytes:
     return audioop.lin2ulaw(frames, width)
 
 
+async def replay_handover(args: argparse.Namespace, token: str, public: str) -> int:
+    """CP-0051: signed handover callbacks for one call: specialist ringing, joined, a two-channel recording, end of conference."""
+    steps = [
+        ("specialist", {"CallSid": args.leg, "CallStatus": "ringing"}),
+        ("conference", {"StatusCallbackEvent": "participant-join", "ParticipantLabel": "specialist", "CallSid": args.leg}),
+        ("recording", {"RecordingSid": "REfake" + str(int(time.time())), "RecordingStatus": "completed", "RecordingChannels": "2",
+                       "RecordingDuration": "20", "CallSid": args.leg}),
+        ("conference", {"StatusCallbackEvent": "conference-end"}),
+    ]
+    async with httpx.AsyncClient(timeout=20) as client:
+        for kind, params in steps:
+            path = f"/api/telephony/twilio/handover/{kind}/{args.handover}"
+            sig = signature(token, public + path, params)
+            r = await client.post(args.base.rstrip("/") + path, data=params, headers={"X-Twilio-Signature": sig})
+            print(f"{kind} {params.get('StatusCallbackEvent') or params.get('CallStatus') or params.get('RecordingStatus')} -> HTTP {r.status_code}")
+            if r.status_code != 200:
+                print(r.text)
+                return 1
+    print("open the call in the Calls page: Specialist call appears once the recording is transcribed")
+    return 0
+
+
 async def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--base", default="http://localhost:8000", help="where the API listens")
-    p.add_argument("--to", required=True, help="the dialled number, as mapped with `voiceai phone add`")
+    p.add_argument("--to", default=None, help="the dialled number, as mapped with `voiceai phone add`")
+    p.add_argument("--handover", metavar="CALL_ID", default=None, help="replay the handover callbacks of this call instead of placing a call")
+    p.add_argument("--leg", default="CAfakeleg1", help="the specialist leg's CallSid used by --handover")
     p.add_argument("--from", dest="caller", default="+15550009999")
     p.add_argument("--wav", type=Path, default=None, help="caller audio; default: a one second tone")
     p.add_argument("--ivr", action="append", default=[], metavar="NAME=VALUE", help="IVR context, sent as ivr_<name>")
@@ -87,6 +118,11 @@ async def main() -> int:
         print("set TWILIO_AUTH_TOKEN in apps/api/.env (any value works locally) or pass --auth-token")
         return 2
     public = (args.public_base or dotenv("PUBLIC_BASE_URL") or args.base).rstrip("/")
+    if args.handover:
+        return await replay_handover(args, token, public)
+    if not args.to:
+        print("--to is required (or use --handover CALL_ID)")
+        return 2
     path = "/api/telephony/twilio/voice"
     query = "&".join(f"ivr_{kv.split('=', 1)[0]}={kv.split('=', 1)[1]}" for kv in args.ivr if "=" in kv)
     params = {"CallSid": "CAfake" + str(int(time.time())), "From": args.caller, "To": args.to, "CallStatus": "ringing"}

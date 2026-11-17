@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Run the whole stack (web app, API and the dental demo mock) in one local Docker container.
+"""Run the whole stack (web app, API, dental demo mock and the customer chat app) in local Docker containers.
 
 Spec: /build/docker-stack.md
 
     python scripts/docker_stack.py start              # build voiceai:local and run it on http://localhost:8080
     python scripts/docker_stack.py start --skip-build # reuse the last image
     python scripts/docker_stack.py start --port 9090  # another host port
+    python scripts/docker_stack.py start --no-chat    # without the customer chat app (also --no-login, --reset, --no-reseed, --chat-port)
     python scripts/docker_stack.py status | logs [-f] [-n 100] | stop
 
 Use it where the voice pipeline cannot load on the machine itself (for example Windows Application Control blocking its
 native libraries): a Linux container is not subject to that policy. The container uses the local database
-(apps/api/data) and the keys in apps/api/.env, so stop `dev.py` first. Stdlib only; needs Docker with its engine running.
+(apps/api/data) and the keys in apps/api/.env, so stop `dev.py` first. One command does everything (CP-0054): the chat app
+in its own container, demo logins when no Studio password is set, the demo data re-seeded when the seed changed, and the chat
+key created through the admin login. Stdlib only; needs Docker with its engine running.
 """
 from __future__ import annotations
 
@@ -25,9 +28,17 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dev  # noqa: E402 - the login defaults, seed stamp and chat key of CP-0053, shared with the dev launcher
+
 API_DIR = ROOT / "apps" / "api"
+CHAT_DIR = ROOT / "apps" / "chat"
 IMAGE = "voiceai:local"
 CONTAINER = "voiceai-local"
+CHAT_IMAGE = "voiceai-chat:local"
+CHAT_CONTAINER = "voiceai-chat"
+CHAT_CONTAINER_PORT = 3100
+STAMP_KEY = "docker"  # one database (apps/api/data/voiceai.db) behind this launcher
 CONTAINER_PORT = 8080
 MOCK_PORT = 8766
 LOCAL_API = "http://127.0.0.1:8000/healthz"
@@ -62,14 +73,62 @@ def container_command(mock: bool) -> list[str]:
 def plan(args: argparse.Namespace, root: Path = ROOT) -> dict[str, object]:
     """What `start` runs (DEV-15). `env_file` is a placeholder for the temporary file written at start."""
     build = None if args.skip_build else ["docker", "build", "-f", str(root / "infra" / "Dockerfile"), "-t", IMAGE, str(root)]
+    data = f"{root / 'apps' / 'api' / 'data'}:/app/apps/api/data"
     run = [
         "docker", "run", "-d", "--name", CONTAINER,
         "-p", f"{args.port}:{CONTAINER_PORT}",
-        "-v", f"{root / 'apps' / 'api' / 'data'}:/app/apps/api/data",
+        "-v", data,
         "--env-file", "{env_file}",
         IMAGE, *container_command(not args.no_mock),
     ]
-    return {"build": build, "run": run, "env": read_dotenv(root / "apps" / "api" / ".env")}
+    env = read_dotenv(root / "apps" / "api" / ".env")
+    logins = dev.login_defaults(args, {}, env)  # DEV-26: demo passwords only when none of the three is set
+    env = {**env, **logins}
+    chat = not getattr(args, "no_chat", False)
+    chat_port = getattr(args, "chat_port", dev.CHAT_PORT)
+    chat_build = None if (args.skip_build or not chat) else [
+        "docker", "build", "-f", str(root / "apps" / "chat" / "Dockerfile"), "-t", CHAT_IMAGE, str(root / "apps" / "chat")]
+    chat_run = [
+        "docker", "run", "-d", "--name", CHAT_CONTAINER, "-p", f"{chat_port}:{CHAT_CONTAINER_PORT}",
+        "--add-host", "host.docker.internal:host-gateway", "--env-file", "{env_file}", CHAT_IMAGE] if chat else None
+    seed = None
+    if not getattr(args, "no_reseed", False):  # DEV-25: one-off container, before the API container opens the database
+        digest = dev.seed_digest(root / "apps" / "api", root)
+        stamp = dev.seed_stamp_path(STAMP_KEY, root / "apps" / "api")
+        if dev.seed_needed(args, stamp, digest):
+            seed = {"run": ["docker", "run", "--rm", "-v", data, "--env-file", "{env_file}", IMAGE,
+                            "sh", "-c", "uv run --no-sync voiceai seed --reset"], "stamp": (stamp, digest)}
+    return {"build": build, "run": run, "env": env, "logins": logins, "chat_build": chat_build, "chat_run": chat_run,
+            "seed": seed, "chat_port": chat_port}
+
+
+def chat_env(args: argparse.Namespace, key: str, chat_dir: Path = CHAT_DIR) -> dict[str, str]:
+    """DEV-27: the chat container's settings (the key comes from apps/chat/.env.local)."""
+    local = dev.read_dotenv(chat_dir / ".env.local")
+    env = {"VOICEAI_API_URL": f"http://host.docker.internal:{args.port}", "VOICEAI_TENANT_ID": local.get("VOICEAI_TENANT_ID", "northgate-health"),
+           "VOICEAI_API_KEY": key}
+    if local.get("CHAT_BRAND_NAME"):
+        env["CHAT_BRAND_NAME"] = local["CHAT_BRAND_NAME"]
+    return env
+
+
+def ensure_chat_key(args: argparse.Namespace, chat_dir: Path, logins: dict[str, str], api_env: dict[str, str],
+                    say=print, wait_s: float = 20.0) -> str | None:  # noqa: ANN001
+    """DEV-27: the chat key from apps/chat/.env.local, created through the admin login when missing."""
+    if dev.chat_key_needed(chat_dir, environ={}):
+        pw = dev.admin_password(logins, {}, api_env)
+        if not dev.provision_chat_key(f"http://localhost:{args.port}", chat_dir, lambda m: say(f"[docker] {m}"), wait_s=wait_s, admin_pw=pw):
+            return None
+    return dev.read_dotenv(chat_dir / ".env.local").get("VOICEAI_API_KEY") or None
+
+
+def write_env_file(values: dict[str, str]) -> str:
+    fd, path = tempfile.mkstemp(prefix="voiceai-env-", suffix=".list")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        for k, v in values.items():
+            if "\n" not in v:
+                f.write(f"{k}={v}\n")
+    return path
 
 
 def docker(*cmd: str, capture: bool = True) -> subprocess.CompletedProcess[str]:
@@ -93,6 +152,20 @@ def running_port() -> int | None:
     return None
 
 
+def chat_running_port() -> int | None:
+    try:
+        out = docker("ps", "--filter", f"name=^{CHAT_CONTAINER}$", "--format", "{{.Ports}}").stdout.strip()
+    except OSError:
+        return None
+    for part in out.split(","):
+        if f"->{CHAT_CONTAINER_PORT}/tcp" in part and ":" in part:
+            try:
+                return int(part.split("->")[0].rsplit(":", 1)[1])
+            except ValueError:
+                pass
+    return None
+
+
 def answers(url: str, timeout: float = 1.5) -> bool:
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
@@ -108,7 +181,7 @@ def port_in_use(port: int) -> bool:
 
 
 def preflight(args: argparse.Namespace, *, root: Path = ROOT, engine_ok: bool | None = None, ours: int | None = -1,
-              local_api: bool | None = None, in_use: bool | None = None) -> list[str]:
+              local_api: bool | None = None, in_use: bool | None = None, chat_busy: bool | None = None) -> list[str]:
     """Errors that stop `start` (DEV-16). Arguments after `root` replace the live checks in tests."""
     errors: list[str] = []
     if engine_ok is None:
@@ -131,6 +204,11 @@ def preflight(args: argparse.Namespace, *, root: Path = ROOT, engine_ok: bool | 
         in_use = ours != args.port and port_in_use(args.port)
     if in_use:
         errors.append(f"port {args.port} is already in use. Free it or pass --port <free port>")
+    chat_port = getattr(args, "chat_port", dev.CHAT_PORT)
+    if not getattr(args, "no_chat", False):
+        busy = chat_busy if chat_busy is not None else (chat_running_port() != chat_port and port_in_use(chat_port))
+        if busy:
+            errors.append(f"port {chat_port} is already in use. Free it or pass --chat-port <free port> (or --no-chat)")
     return errors
 
 
@@ -141,19 +219,27 @@ def start(args: argparse.Namespace) -> int:
     if errors:
         return 1
     p = plan(args)
-    if p["build"]:
-        print(f"[docker] building {IMAGE} (the first build takes a few minutes)", flush=True)
-        if subprocess.run(p["build"]).returncode != 0:  # type: ignore[arg-type]
-            print("[docker] build failed; see the output above")
-            return 1
-    docker("rm", "-f", CONTAINER)
+    for label, key in (("", "build"), ("chat ", "chat_build")):
+        if p[key]:
+            print(f"[docker] building the {label}image (the first build takes a few minutes)", flush=True)
+            if subprocess.run(p[key]).returncode != 0:  # type: ignore[arg-type]
+                print(f"[docker] {label}build failed; see the output above")
+                return 1
+    docker("rm", "-f", CONTAINER, CHAT_CONTAINER)  # also frees the database before a seed
     env: dict[str, str] = p["env"]  # type: ignore[assignment]
-    fd, env_path = tempfile.mkstemp(prefix="voiceai-env-", suffix=".list")
+    logins: dict[str, str] = p["logins"]  # type: ignore[assignment]
+    env_path = write_env_file(env)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            for k, v in env.items():
-                if "\n" not in v:
-                    f.write(f"{k}={v}\n")
+        seed = p["seed"]
+        if seed:  # DEV-25: the demo data follows the seed; the stamp is written only after it succeeded
+            print("[docker] re-seeding the demo data (the seed changed, or --reset); one moment", flush=True)
+            result = subprocess.run([env_path if part == "{env_file}" else part for part in seed["run"]], capture_output=True, text=True)  # type: ignore[index]
+            if result.returncode != 0:
+                print(f"[docker] the seed failed: {(result.stderr or result.stdout).strip()[-800:]}")
+                return 1
+            stamp, digest = seed["stamp"]  # type: ignore[index]
+            stamp.parent.mkdir(parents=True, exist_ok=True)
+            stamp.write_text(digest + "\n", encoding="utf-8")
         run = [env_path if part == "{env_file}" else part for part in p["run"]]  # type: ignore[union-attr]
         result = subprocess.run(run, capture_output=True, text=True)
     finally:
@@ -165,16 +251,45 @@ def start(args: argparse.Namespace) -> int:
           + ("" if args.no_mock else f" and the dental demo mock on :{MOCK_PORT} inside it"), flush=True)
     url = f"http://localhost:{args.port}"
     deadline = time.time() + args.timeout
+    ready = False
     while time.time() < deadline:
         if answers(f"{url}/healthz", 3):
-            print(f"[docker] READY - open {url}")
-            return 0
+            ready = True
+            break
         if not running_port():
             break
         time.sleep(2)
-    print("[docker] the API did not become ready; last log lines:")
-    print(docker("logs", "--tail", "30", CONTAINER).stdout + docker("logs", "--tail", "30", CONTAINER).stderr)
-    return 1
+    if not ready:
+        print("[docker] the API did not become ready; last log lines:")
+        print(docker("logs", "--tail", "30", CONTAINER).stdout + docker("logs", "--tail", "30", CONTAINER).stderr)
+        return 1
+    lines = [f"Studio: {url}"]
+    if p["chat_run"]:
+        key = ensure_chat_key(args, CHAT_DIR, logins, env)
+        if not key:
+            print("[docker] the chat app was not started: no chat key (see above). Studio is ready.")
+        else:
+            chat_path = write_env_file(chat_env(args, key))
+            try:
+                result = subprocess.run([chat_path if part == "{env_file}" else part for part in p["chat_run"]], capture_output=True, text=True)  # type: ignore[union-attr]
+            finally:
+                os.unlink(chat_path)
+            chat_url = f"http://localhost:{p['chat_port']}"
+            if result.returncode != 0:
+                print(f"[docker] could not start the chat container: {result.stderr.strip()}")
+            else:
+                for _ in range(30):
+                    if answers(chat_url + "/", 3):
+                        break
+                    time.sleep(1)
+                lines.append(f"Customer chat: {chat_url}")
+    if logins:
+        lines.append("Demo sign-in (local only; set your own STUDIO_*_PASSWORD in apps/api/.env to change):")
+        lines += [f"  {role}: {email} / {logins[name]}" for email, name, _, role in dev.DEMO_LOGINS]
+    print("[docker] READY - open " + lines[0].split(": ", 1)[1])
+    for line in lines:
+        print(f"[docker] {line}")
+    return 0
 
 
 def status(_: argparse.Namespace) -> int:
@@ -184,11 +299,14 @@ def status(_: argparse.Namespace) -> int:
         return 1
     ok = answers(f"http://localhost:{port}/healthz", 3)
     print(f"[docker] {CONTAINER} running on http://localhost:{port}  healthz: {'ok' if ok else 'not answering'}")
+    chat = chat_running_port()
+    print(f"[docker] {CHAT_CONTAINER} " + (f"running on http://localhost:{chat}" if chat else "is not running"))
     return 0 if ok else 1
 
 
 def logs(args: argparse.Namespace) -> int:
-    cmd = ["docker", "logs", "--tail", str(args.n), *(["-f"] if args.follow else []), CONTAINER]
+    name = CHAT_CONTAINER if getattr(args, "service", "api") == "chat" else CONTAINER
+    cmd = ["docker", "logs", "--tail", str(args.n), *(["-f"] if args.follow else []), name]
     try:
         return subprocess.run(cmd).returncode
     except KeyboardInterrupt:
@@ -196,9 +314,9 @@ def logs(args: argparse.Namespace) -> int:
 
 
 def stop(_: argparse.Namespace) -> int:
-    r = docker("rm", "-f", CONTAINER)
-    print(f"[docker] {CONTAINER} removed" if r.returncode == 0 else f"[docker] {r.stderr.strip()}")
-    return 0 if r.returncode == 0 else 1
+    removed = [name for name in (CONTAINER, CHAT_CONTAINER) if docker("rm", "-f", name).returncode == 0]
+    print(f"[docker] removed: {', '.join(removed)}" if removed else "[docker] nothing was running")
+    return 0 if removed else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -209,11 +327,17 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--skip-build", action="store_true", help="reuse the last voiceai:local image")
     s.add_argument("--no-mock", action="store_true", help="do not start the dental demo mock in the container")
     s.add_argument("--force", action="store_true", help="start even while a local API runs on :8000")
+    s.add_argument("--no-chat", action="store_true", help="do not run the customer chat app")
+    s.add_argument("--chat-port", type=int, default=dev.CHAT_PORT, help="host port of the chat app (default 3100)")
+    s.add_argument("--no-login", action="store_true", help="do not give the API demo Studio passwords")
+    s.add_argument("--reset", action="store_true", help="re-seed the demo data before starting")
+    s.add_argument("--no-reseed", action="store_true", help="never re-seed, even when the seed changed")
     s.add_argument("--timeout", type=int, default=240, help="seconds to wait for /healthz")
     sub.add_parser("status", help="is it running, and healthy?")
     lg = sub.add_parser("logs", help="container logs")
     lg.add_argument("-n", type=int, default=100)
     lg.add_argument("-f", "--follow", action="store_true")
+    lg.add_argument("--service", choices=["api", "chat"], default="api", help="which container (default api)")
     sub.add_parser("stop", help="remove the container (the image and the database stay)")
     args = ap.parse_args(argv)
     return {"start": start, "status": status, "logs": logs, "stop": stop}[args.command](args)

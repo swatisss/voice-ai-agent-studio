@@ -1,6 +1,6 @@
 """scripts/docker_stack.py: the container plan and the refusal while a local API runs (no Docker needed).
 
-Covers: DEV-15, DEV-16
+Covers: DEV-15, DEV-16, DEV-24, DEV-25, DEV-26, DEV-27
 """
 from __future__ import annotations
 
@@ -24,7 +24,8 @@ ds = _load()
 
 
 def ns(**kw) -> argparse.Namespace:  # noqa: ANN003
-    return argparse.Namespace(**{"port": 8080, "skip_build": False, "no_mock": False, "force": False, "timeout": 5, **kw})
+    return argparse.Namespace(**{"port": 8080, "skip_build": False, "no_mock": False, "force": False, "timeout": 5,
+                                 "no_chat": True, "chat_port": 3100, "no_login": True, "reset": False, "no_reseed": True, **kw})  # older tests opt out of the CP-0054 defaults
 
 
 def _root(tmp: Path) -> Path:
@@ -62,3 +63,86 @@ def test_refuses_while_a_local_api_runs(tmp_path):
     assert ds.preflight(ns(force=True), root=root, engine_ok=True, ours=None, local_api=True, in_use=False) == []
     assert ds.preflight(ns(), root=root, engine_ok=False) and "Docker" in ds.preflight(ns(), root=root, engine_ok=False)[0]
     assert ds.preflight(ns(), root=root, engine_ok=True, ours=None, local_api=False, in_use=False) == []
+    busy = ds.preflight(ns(no_chat=False), root=root, engine_ok=True, ours=None, local_api=False, in_use=False, chat_busy=True)
+    assert len(busy) == 1 and "3100" in busy[0] and "--chat-port" in busy[0]
+
+
+def _seed_root(tmp: Path) -> Path:
+    root = _root(tmp)
+    (root / "apps" / "api" / "voiceai" / "seed").mkdir(parents=True)
+    (root / "apps" / "api" / "voiceai" / "seed" / "loader.py").write_text("SEED = 1\n", encoding="utf-8")
+    (root / "specs" / "demo-data").mkdir(parents=True)
+    (root / "specs" / "demo-data" / "members.md").write_text("Sarah\n", encoding="utf-8")
+    return root
+
+
+def test_plan_builds_and_runs_the_chat_container(tmp_path):
+    """Covers: DEV-24"""
+    root = _root(tmp_path)
+    p = ds.plan(ns(no_chat=False), root)
+    assert p["chat_build"] == ["docker", "build", "-f", str(root / "apps" / "chat" / "Dockerfile"), "-t", "voiceai-chat:local", str(root / "apps" / "chat")]
+    run = p["chat_run"]
+    assert run[:5] == ["docker", "run", "-d", "--name", "voiceai-chat"] and run[run.index("-p") + 1] == "3100:3100"
+    assert run[run.index("--add-host") + 1] == "host.docker.internal:host-gateway" and run[run.index("--env-file") + 1] == "{env_file}"
+    assert ds.plan(ns(no_chat=False, skip_build=True), root)["chat_build"] is None
+    assert ds.plan(ns(no_chat=False, chat_port=3200), root)["chat_run"][run.index("-p") + 1] == "3200:3100"
+    off = ds.plan(ns(no_chat=True), root)
+    assert off["chat_build"] is None and off["chat_run"] is None
+
+
+def test_seed_runs_once_in_a_one_off_container_before_the_api(tmp_path):
+    """Covers: DEV-25"""
+    root = _seed_root(tmp_path)
+    p = ds.plan(ns(no_reseed=False), root)
+    seed = p["seed"]
+    assert seed["run"][:3] == ["docker", "run", "--rm"] and seed["run"][-1] == "uv run --no-sync voiceai seed --reset"
+    assert f"{root / 'apps' / 'api' / 'data'}:/app/apps/api/data" in seed["run"] and "{env_file}" in seed["run"] and "voiceai:local" in seed["run"]
+    stamp, digest = seed["stamp"]
+    assert not stamp.exists()  # written by start() only after the seed container succeeds
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(digest + "\n", encoding="utf-8")
+    assert ds.plan(ns(no_reseed=False), root)["seed"] is None  # a matching stamp keeps the data
+    assert ds.plan(ns(no_reseed=False, reset=True), root)["seed"] is not None
+    assert ds.plan(ns(no_reseed=True, reset=True), root)["seed"] is None
+    (root / "apps" / "api" / "voiceai" / "seed" / "loader.py").write_text("SEED = 2\n", encoding="utf-8")
+    assert ds.plan(ns(no_reseed=False), root)["seed"] is not None  # the seed changed
+
+
+def test_demo_passwords_reach_the_api_container_only_when_none_is_set(tmp_path):
+    """Covers: DEV-26"""
+    root = _root(tmp_path)
+    names = ["STUDIO_ADMIN_PASSWORD", "STUDIO_REVIEWER_PASSWORD", "STUDIO_SPECIALIST_PASSWORD"]
+    given = ds.plan(ns(no_login=False), root)
+    assert [given["env"][n] for n in names] == ["admin-demo-pass", "reviewer-demo-pass", "specialist-demo-pass"] and given["logins"]
+    env_file = root / "apps" / "api" / ".env"
+    env_file.write_text(env_file.read_text(encoding="utf-8") + "STUDIO_ADMIN_PASSWORD=\nSTUDIO_REVIEWER_PASSWORD=mine\n", encoding="utf-8")
+    own = ds.plan(ns(no_login=False), root)
+    assert own["env"]["STUDIO_REVIEWER_PASSWORD"] == "mine" and own["logins"] == {} and "STUDIO_SPECIALIST_PASSWORD" not in own["env"]
+    assert ds.plan(ns(no_login=True), _root(tmp_path / "b"))["logins"] == {}
+
+
+def test_chat_key_comes_from_the_admin_login_and_reaches_the_chat_container(tmp_path):
+    """Covers: DEV-27"""
+    from tests.test_dev_launcher import _platform, _serve  # noqa: PLC0415
+
+    Platform = _platform(sign_in=True)
+    srv = _serve(Platform)
+    try:
+        chat_dir = tmp_path / "chat"
+        chat_dir.mkdir()
+        said: list[str] = []
+        args = ns(port=srv.server_port, no_chat=False)
+        logins = {"STUDIO_ADMIN_PASSWORD": "right-pass"}
+        key = ds.ensure_chat_key(args, chat_dir, logins, {}, say=said.append, wait_s=5)
+        assert key == "vak_new" and [p for p, _, _ in Platform.seen] == ["/api/auth/login", "/api/api-keys"]
+        Platform.seen.clear()
+        assert ds.ensure_chat_key(args, chat_dir, logins, {}, say=said.append, wait_s=5) == "vak_new" and Platform.seen == []  # nothing created twice
+        env = ds.chat_env(args, key, chat_dir)
+        assert env["VOICEAI_API_URL"] == f"http://host.docker.internal:{srv.server_port}" and env["VOICEAI_API_KEY"] == "vak_new"
+        assert env["VOICEAI_TENANT_ID"] == "northgate-health"
+        wrong = tmp_path / "wrong"
+        wrong.mkdir()
+        assert ds.ensure_chat_key(args, wrong, {"STUDIO_ADMIN_PASSWORD": "nope"}, {}, say=said.append, wait_s=5) is None
+    finally:
+        srv.shutdown()
+    assert ds.CHAT_CONTAINER == "voiceai-chat" and ds.CONTAINER == "voiceai-local"  # stop removes both names

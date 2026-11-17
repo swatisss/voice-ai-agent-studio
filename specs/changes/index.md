@@ -1,5 +1,6 @@
 # Change proposals
 
+* [CP-0054 One start in Docker too](cp-0054-one-start-in-docker.md) - docker_stack.py start also runs the chat app in its own container, applies the demo logins, re-seeds when the seed changed and creates the chat key
 * [CP-0053 One start for everything](cp-0053-one-start-for-everything.md) - python scripts/dev.py alone starts web, API, mock and the chat app, signs in with local demo passwords, and re-seeds the demo data when the seed changed
 * [CP-0050 Live voice handover on a hosted LiveKit Cloud room](cp-0050-livekit-live-handover.md) - A customer talks to the AI in the browser; on escalation a specialist on another machine takes the voice call in Agent Desk (the AI leaves); both human voices become call events for the learning loop
 * [CP-0052 WhatsApp via Twilio](cp-0052-whatsapp-via-twilio.md) - WhatsApp (sandbox first) as a text channel: the AI answers, escalation to Agent Desk over the human message channel, the 24-hour window with a follow-up template, opt-out, Hindi voice notes, the user's address kept in one column

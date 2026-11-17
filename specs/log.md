@@ -1,5 +1,8 @@
 # Directory Update Log
 
+## 2026-11-17 (CP-0054 accepted and implemented: one start in Docker too)
+* **Accepted** by the owner's request that the Docker launcher (the only one that runs on the owner's laptop, where Windows Application Control blocks `voiceai.exe` and `dev.py` fails at the seed step) starts the chat app in the same step. **Implemented**: `scripts/docker_stack.py` (chat container `voiceai-chat` on :3100, shared login defaults and seed stamp from `dev.py`, one-off seed container, chat key through the admin login), `apps/chat/Dockerfile`. **Spec edits**: [docker stack](build/docker-stack.md) (DEV-15 reworded, DEV-24..DEV-27). The first start after this change re-seeds once.
+
 ## 2026-11-17 (CP-0053 accepted and implemented: one start for everything)
 * **Accepted** by the owner's request that `python scripts/dev.py` alone does everything (only vendor keys in `.env`): chat app on :3100 by default, local demo Studio passwords, and a one-time re-seed when the seed changed. **Implemented** in `scripts/dev.py` (chat on by default with `--no-chat`, `--no-login`, `--reset`, `--no-reseed`; login defaults; seed stamp; chat key through the admin login; banner), `scripts/setup.py --install` (chat deps), `.env.example`; tests in `tests/test_dev_launcher.py` (36 passed with `test_setup_script.py` and `test_spec_check.py`). **Spec edits**: [dev launcher](build/dev-launcher.md) (DEV-18 reworded, DEV-19..DEV-23). **Not done here**: no real end-to-end `python scripts/dev.py` run on this machine (port 8000 was taken); the first start after this change re-seeds once.
 

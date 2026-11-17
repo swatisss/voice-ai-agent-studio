@@ -2,7 +2,7 @@
 type: Change Proposal
 title: CP-0052 WhatsApp via Twilio as a text channel with human handover
 description: WhatsApp (Twilio sandbox first, a production sender later) talks to the same agents, escalates to Agent Desk over the human message channel, respects the 24-hour window with a template for late replies, handles opt-out and Hindi voice notes, and keeps the user's address out of everything but one column.
-status: draft
+status: stable
 cp_state: accepted
 tags: [whatsapp, twilio, channels, escalation, privacy]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
@@ -61,3 +61,12 @@ New: WA-01 to WA-16, UI-94, UI-95, DM-20, API-20, API-23 (shared with CP-0051), 
 # Out of scope
 
 * Meta's Cloud API directly and the WhatsApp Business Calling API; marketing or business-initiated messages; rich messages (buttons, lists, carousels); images and documents understanding; outbound broadcasts; group chats; the external chat app (CP-0049).
+
+# Implementation status (2026-11-17)
+
+`cp_state` stays `accepted`: the code is built and tested on fakes, but task 2 (spikes S6 to S8) and WA-16 need a Twilio account and a phone.
+
+* **Done and tested** (`apps/api/tests/test_whatsapp.py`, 34 tests: Twilio REST on an httpx MockTransport, webhooks signed with the real algorithm and a test token, the repo's fake LLM, CP-0051's `FakeTranscriber`, temp SQLite, a fake pacing clock): task 3 (WA-01 to WA-15, DM-20, API-20, API-23, ES-14, DESK-12, HMC-04 widened to WhatsApp; `voiceai/whatsapp.py`, `voiceai/routes/whatsapp.py`, `voiceai whatsapp add|list|remove`, `/healthz` `providers.whatsapp`, settings, `mask.py` masks `whatsapp:+...`), task 5 (`scripts/fake_twilio.py --whatsapp` and `--whatsapp-receipt`). DM-01 now counts 43 tables. Task 4 (web: `components/whatsapp-panel.tsx` in the console) passes type check and build; UI-94 and UI-95 are in `scripts/acceptance-baseline.txt` (no browser click-through).
+* **Not done**: task 2, spikes S6 to S8 (no Twilio account); WA-16 (by hand, baselined).
+* **Unverified Twilio points, implemented as documented**: the receipt fields (`MessageSid`, `MessageStatus`, `ErrorCode`; `SmsSid` and `SmsStatus` also accepted) and the out-of-window error (code 63016 on a 400, which triggers the one template fallback on a production sender); the template is sent through the Messages API with `ContentSid` and `ContentVariables` `{"1": first name of the specialist}`, not a separate Content API call; a voice note is downloaded with HTTP Basic (account SID and token), its length is read from a WAV or an Ogg Opus header (any other format is limited by the 10 MB cap only) and the raw bytes go to the `Transcriber` (Deepgram detects the container; no transcoding is done, so a real Ogg Opus note may need ffmpeg if the provider refuses it); a payload with no usable `From` (a user with a username) is ignored with a warning; webhook retries are absorbed by the repeated-`MessageSid` check on the latest message only.
+* **Choices the spec left open**: the thread is created in the webhook request itself (so a retry is caught) and the turn runs in a background task, one message at a time per thread; `channel_state` also carries `address_last4` (for the console's `wa-...1234`); a stored specialist reply starts with `delivery: sending` and ends `sent`, `queued_template` or `failed` before the response returns; a failed send is shown, never retried; the persona's welcome already says it is a virtual assistant, so the disclosure line is added only when the first reply does not start with it; the idle sweep and the address retention run in the job worker's one-minute sweep; a conversation that ended for any reason makes the next message open a new one.

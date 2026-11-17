@@ -2,7 +2,7 @@
 type: Component Spec
 title: Agent Desk role
 description: A third sign-in role for call-centre specialists - the console, escalated calls with masked details, escalation patterns they can comment on (feeding the learning loop), and read-only knowledge, agent settings and member memory; everything else is refused by the API; identifiers are masked in what they see and in application logs.
-status: draft
+status: stable
 tags: [architecture, auth, roles, console, learning, privacy]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

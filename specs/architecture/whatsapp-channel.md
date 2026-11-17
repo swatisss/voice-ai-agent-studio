@@ -2,7 +2,7 @@
 type: Component Spec
 title: WhatsApp channel (Twilio)
 description: "WhatsApp through Twilio as a text channel into the platform - sandbox first, a production sender later - with the AI answering, escalation to Agent Desk over the human message channel, the 24-hour window with a template for late replies, opt-out, and voice notes transcribed."
-status: draft
+status: stable
 tags: [architecture, whatsapp, twilio, channels, escalation, privacy]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

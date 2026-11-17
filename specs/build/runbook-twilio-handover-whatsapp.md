@@ -2,7 +2,7 @@
 type: Runbook
 title: Twilio handover and WhatsApp runbook
 description: What the owner does in the Twilio console and in apps/api/.env to get a phone call from India answered by the AI and handed warm to a person in India, and WhatsApp (sandbox first) with human handover, plus the demo script and the first-session spikes.
-status: draft
+status: stable
 tags: [build, runbook, telephony, twilio, whatsapp, handover, india]
 generated: { by: "claude-code/claude-sonnet-5-5", at: "2026-11-16T00:00:00Z" }
 ---

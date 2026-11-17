@@ -3,7 +3,7 @@
 Twilio REST runs on an httpx MockTransport, callbacks are signed with the real X-Twilio-Signature algorithm and a test token,
 the transcriber is a fake, the database is temp SQLite. No network, no credentials.
 
-Covers: TEL-14, TEL-15, TEL-16, TEL-17, TEL-18, TEL-19, TEL-20, TEL-21, TEL-22, TEL-23, TEL-24, TEL-25, TEL-26, DM-21
+Covers: TEL-14, TEL-15, TEL-16, TEL-17, TEL-18, TEL-19, TEL-20, TEL-21, TEL-22, TEL-23, TEL-24, TEL-25, TEL-26, DM-21, API-21, API-22
 """
 from __future__ import annotations
 
@@ -568,7 +568,7 @@ async def test_human_portion_reaches_analysis_evidence_and_not_the_scorecard(cli
 
 # ---------------------------------------------------------------- TEL-25
 async def test_desk_phone_token_and_presence(client, seeded, twilio, signin):
-    """Covers: TEL-25"""
+    """Covers: TEL-25, API-22"""
     signin()
     await _login(client, "specialist")
     token = await client.post("/api/desk/phone-token")
@@ -604,7 +604,7 @@ async def test_desk_phone_token_and_presence(client, seeded, twilio, signin):
 
 
 async def test_phone_token_is_unavailable_without_the_api_key(client, seeded, monkeypatch):
-    """Covers: TEL-25"""
+    """Covers: TEL-25, API-22"""
     monkeypatch.setenv("TWILIO_API_KEY_SID", "")
     get_settings.cache_clear()
     r = await client.post("/api/desk/phone-token", headers=H)
@@ -640,3 +640,10 @@ async def test_new_tables_and_unique_recording_sid(database):
     assert not {"audio", "media", "recording_url", "url"} & cols  # metadata only
     assert {"recording_sid", "channel_map", "status", "error", "transcribed_at", "deleted_at"} <= cols
     assert CallRecording.__table__.c.recording_sid.unique
+
+
+async def test_no_endpoint_returns_a_recording_url_or_media(client, seeded, twilio):
+    """Covers: API-21"""
+    call_id, _, _ = await recorded(client, seeded, twilio)
+    body = (await client.get(f"/api/calls/{call_id}", headers=H)).text + (await client.get("/api/calls", headers=H)).text
+    assert "api.twilio.com" not in body and "RecordingUrl" not in body and ".wav" not in body and ".mp3" not in body

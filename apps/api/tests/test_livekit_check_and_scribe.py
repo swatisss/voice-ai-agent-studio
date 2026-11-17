@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -23,8 +24,10 @@ VALUES = {"LIVEKIT_URL": "wss://example.livekit.cloud", "LIVEKIT_API_KEY": "APIk
 def check(monkeypatch):  # noqa: ANN001, ANN201
     spec = importlib.util.spec_from_file_location("livekit_check", SCRIPT)
     mod = importlib.util.module_from_spec(spec)
+    sys.modules["livekit_check"] = mod  # dataclasses resolve annotations through sys.modules
     spec.loader.exec_module(mod)
     yield mod
+    sys.modules.pop("livekit_check", None)
     for k in VALUES:
         monkeypatch.delenv(k, raising=False)
     get_settings.cache_clear()

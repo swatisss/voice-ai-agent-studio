@@ -177,10 +177,12 @@ ROOMS: dict[str, RoomState] = {}
 _tasks: set[asyncio.Task[None]] = set()
 
 
-def _spawn(coro: Any) -> asyncio.Task[None]:  # noqa: ANN401
+def _spawn(coro: Any, settle: bool = False) -> asyncio.Task[None]:  # noqa: ANN401
+    """Start background work; only `settle=True` work (the AI's join) is awaited by `settle()`, never a clock."""
     task = asyncio.create_task(coro)
-    _tasks.add(task)
-    task.add_done_callback(_tasks.discard)
+    if settle:
+        _tasks.add(task)
+        task.add_done_callback(_tasks.discard)
     return task
 
 
@@ -206,7 +208,7 @@ async def open_call(session: Any) -> dict[str, Any]:  # noqa: ANN401
     connect = connect_info("customer", room)
     state = RoomState(call_id, tenant_id, room, session)
     ROOMS[call_id] = state
-    state.tasks["join"] = _spawn(_join_ai(state))
+    state.tasks["join"] = _spawn(_join_ai(state), settle=True)
     state.tasks["max"] = _spawn(_max_clock(state))
     return connect
 

@@ -2,7 +2,7 @@
 type: Decision Record
 title: Tech stack
 description: Languages, frameworks, providers and the version policy for the platform; the single reference for dependencies.
-status: draft
+status: stable
 tags: [architecture, stack, dependencies]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-10-06T00:00:00Z" }
 ---

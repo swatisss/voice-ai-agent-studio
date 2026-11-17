@@ -87,7 +87,7 @@ class CallEnder:
     async def __call__(self, reason: str) -> None:
         self.serializer.end_reason = reason
         await self.session.end(reason)
-        if not self.session.state.ended and getattr(self.session, "in_room", False):  # LKH-17: kept open for a specialist
+        if getattr(self.session, "in_room", False) and not self.session.state.ended:  # LKH-17: kept open for a specialist
             return
         if isinstance(self.serializer, WebRTCControl) and self.task:  # WRTC-04: `end` before the connection closes
             await self.task.queue_frame(OutputTransportMessageUrgentFrame(message={"type": "end", "reason": reason}))

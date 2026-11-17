@@ -176,3 +176,11 @@ UI-79
 UI-80
 UI-81
 UI-82
+
+# CP-0049 external chat app. UI-83..UI-86 are web pages (no browser tests): type check and build pass; the routes behind them are covered by CHAT-01..06 and HMC-01..08.
+UI-83
+UI-84
+UI-85
+UI-86
+# CP-0049: CHAT-05 (reload resumes the thread) is client behaviour in components/chat.tsx with no browser test; the server side (poll after a cursor) is covered by CHAT-04.
+CHAT-05

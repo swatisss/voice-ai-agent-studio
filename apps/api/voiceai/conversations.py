@@ -5,6 +5,7 @@ Spec: /api/public-api.md, /api/rest-api.md (Conversations), /architecture/superv
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
@@ -494,6 +495,9 @@ async def message(conv: Conversation, text: str, app: Any) -> dict[str, Any]:
     from voiceai.runtime.session import AgentSession
 
     _check_text_turn(conv)
+    if conv.status == "escalated" and is_human_thread(conv):  # HMC-01: the line is for the specialist, no model runs
+        await human_line(conv, text)
+        return await turn_result(conv.id, conv.tenant_id, [])
     if not conv.current_call_id:  # still at the front desk
         return await routed_text_turn(conv.id, conv.tenant_id, text, app)
     call = await _current(conv)
@@ -532,6 +536,10 @@ async def stream_message(conv: Conversation, text: str, app: Any) -> AsyncIterat
     from voiceai.runtime.session import AgentSession
 
     _check_text_turn(conv)
+    if conv.status == "escalated" and is_human_thread(conv):  # HMC-01
+        await human_line(conv, text)
+        yield sse("turn.done", await turn_result(conv.id, conv.tenant_id, []))
+        return
     if not conv.current_call_id:  # the routing turn is answered whole, then streamed one delta per message
         result = await routed_text_turn(conv.id, conv.tenant_id, text, app)
         for m in result["messages"]:
@@ -566,6 +574,11 @@ async def end(conv: Conversation, app: Any) -> dict[str, Any]:
     """Idempotent: ends the current segment with reason `hangup` (PUB-05)."""
     from voiceai.runtime.session import AgentSession
 
+    if conv.status == "escalated" and is_human_thread(conv):  # HMC-06: the customer leaves while a specialist may be writing
+        await finish_human_thread(conv.tenant_id, conv.id, "caller_left")
+        async with sessionmaker()() as s:
+            fresh = await get(s, conv.tenant_id, conv.id)
+            return {"status": fresh.status, "outcome": fresh.outcome}
     if conv.status != "ended" and not conv.current_call_id:  # ended at the front desk: no segment
         await front_desk_ended(conv.tenant_id, conv.id, "hangup")
     if conv.status != "ended" and conv.current_call_id:
@@ -692,6 +705,147 @@ async def front_desk_ended(tenant_id: str, conv_id: str, reason: str) -> None:
         await s.commit()
 
 
+# ---------------------------------------------------------------- human message channel (/architecture/human-message-channel.md)
+def is_human_thread(conv: Conversation) -> bool:
+    """HMC: only API text conversations continue with a person after an escalation."""
+    return conv.source == "api" and conv.channel == "text"
+
+
+async def _escalated_call(s: AsyncSession, conv: Conversation) -> tuple[Call, Escalation] | None:
+    row = (await s.execute(select(Call, Escalation).join(Escalation, Escalation.call_id == Call.id)
+                           .where(Call.conversation_id == conv.id, Call.tenant_id == conv.tenant_id)
+                           .order_by(Call.segment.desc()))).first()
+    return (row[0], row[1]) if row else None
+
+
+async def _add_event(s: AsyncSession, call: Call, kind: str, text: str, data: dict[str, Any]) -> CallEvent:
+    seq = (await s.scalar(select(func.max(CallEvent.seq)).where(CallEvent.call_id == call.id))) or 0
+    ev = CallEvent(tenant_id=call.tenant_id, call_id=call.id, seq=seq + 1, kind=kind, text=text, data=data)
+    s.add(ev)
+    await s.flush()
+    return ev
+
+
+async def human_line(conv: Conversation, text: str) -> None:
+    """HMC-01: a customer line after the hand-off, stored for the specialist."""
+    from voiceai.events import bus
+
+    async with sessionmaker()() as s:
+        found = await _escalated_call(s, conv)
+        if found is None:
+            raise ApiError(409, "conversation_ended", "This conversation has ended")
+        call, esc = found
+        ev = await _add_event(s, call, "user", text.strip(), {"to_human": True})
+        await s.commit()
+        seq, escalation_id = ev.seq, esc.id
+    bus.publish(conv.tenant_id, "console", "escalation.message", {"escalation_id": escalation_id, "seq": seq, "speaker": "caller"})
+
+
+async def human_reply(s: AsyncSession, tenant_id: str, escalation_id: str, text: str, author: str) -> dict[str, Any]:
+    """HMC-03, HMC-04: a specialist's typed reply to the customer of an accepted escalation."""
+    from voiceai.events import bus
+    from voiceai.runtime import escalation as esc_mod
+
+    esc = await esc_mod.get_owned(s, tenant_id, escalation_id)
+    call = await s.get(Call, esc.call_id)
+    conv = await s.get(Conversation, call.conversation_id) if call and call.conversation_id else None
+    if conv is None or not is_human_thread(conv):
+        raise ApiError(409, "wrong_channel", "Replies can only be typed to a text conversation from the public API")
+    if conv.status == "ended":
+        raise ApiError(409, "conversation_ended", "This conversation has ended")
+    if esc.status != "accepted":
+        raise ApiError(409, "not_accepted", "Accept the escalation before replying")
+    body = (text or "").strip()
+    if not 1 <= len(body) <= 2000:
+        raise ApiError(422, "invalid_message", "A reply must be 1 to 2000 characters")
+    ev = await _add_event(s, call, "human", body, {"author": author or esc.assignee or "Specialist"})
+    await s.commit()
+    bus.publish(tenant_id, "console", "escalation.message", {"escalation_id": esc.id, "seq": ev.seq, "speaker": "human"})
+    return {"seq": ev.seq, "speaker": "human", "text": body, "at": ev.at.isoformat()}
+
+
+async def finish_human_thread(tenant_id: str, conv_id: str, reason: str) -> None:
+    """HMC-05, HMC-06: the thread is over (the specialist resolved it, or the customer left)."""
+    from voiceai.events import bus
+
+    async with sessionmaker()() as s:
+        conv = await s.get(Conversation, conv_id)
+        if conv is None or conv.status == "ended":
+            return
+        calls = await _segments(s, conv)
+        conv.status, conv.outcome, conv.end_reason, conv.ended_at = "ended", "escalated", reason, utcnow()
+        await webhooks.emit(s, conv, "conversation.ended", {
+            "status": "ended", "outcome": "escalated", "end_reason": reason,
+            "segments": [{"call_id": c.id, "agent_id": c.agent_id, "outcome": c.outcome} for c in calls]})
+        await s.commit()
+    bus.publish(tenant_id, f"conversation:{conv_id}", "conversation.ended",
+                {"conversation_id": conv_id, "status": "ended", "outcome": "escalated", "end_reason": reason})
+
+
+async def escalation_resolved(tenant_id: str, call_id: str) -> None:
+    """HMC-05: resolving the escalation ends its API text conversation."""
+    async with sessionmaker()() as s:
+        call = await s.get(Call, call_id)
+        conv = await s.get(Conversation, call.conversation_id) if call and call.conversation_id else None
+        if conv is None or not is_human_thread(conv) or conv.status != "escalated":
+            return
+        conv_id = conv.id
+    await finish_human_thread(tenant_id, conv_id, "human_resolved")
+
+
+def _cursor(segment: int, seq: int) -> str:
+    return base64.urlsafe_b64encode(f"{segment}:{seq}".encode()).decode().rstrip("=")
+
+
+def _parse_cursor(cursor: str | None) -> tuple[int, int]:
+    if not cursor:
+        return (0, 0)
+    try:
+        seg, seq = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode().split(":")
+        return (int(seg), int(seq))
+    except Exception as exc:  # noqa: BLE001
+        raise ApiError(422, "invalid_cursor", "The cursor is not valid") from exc
+
+
+async def thread(s: AsyncSession, conv: Conversation, cursor: str | None) -> dict[str, Any]:
+    """HMC-02: the visible lines after the cursor, with the conversation's escalation state.
+
+    The front desk's lines (greeting, clarifying questions) are segment 0, read from the conversation; the copies the routed
+    segment keeps of them are skipped. Every item carries `id`, its own cursor, so a client can drop duplicates.
+    """
+    after = _parse_cursor(cursor)
+    calls = await _segments(s, conv)
+    items: list[dict[str, Any]] = []
+    last = after
+
+    def add(segment: int, seq: int, speaker: str, text: str, at: str, data: dict[str, Any] | None = None) -> None:
+        nonlocal last
+        if not text or (segment, seq) <= after:
+            return
+        item: dict[str, Any] = {"id": _cursor(segment, seq), "speaker": speaker, "text": text, "at": at}
+        if speaker == "human":
+            item["author"] = str((data or {}).get("author") or "").split(" ")[0] or "Specialist"
+        items.append(item)
+        last = max(last, (segment, seq))
+
+    for n, e in enumerate((conv.settings or {}).get("front_desk_events") or [], 1):
+        add(0, n, "caller" if e.get("kind") == "user" else "front_desk", e.get("text") or "", conv.started_at.isoformat())
+    for c in calls:
+        events = (await s.scalars(select(CallEvent).where(CallEvent.call_id == c.id, CallEvent.kind.in_(("user", "assistant", "human")))
+                                  .order_by(CallEvent.seq))).all()
+        for e in events:
+            if (e.data or {}).get("front_desk"):
+                continue
+            speaker = "caller" if e.kind == "user" else "human" if e.kind == "human" else "agent"
+            add(c.segment, e.seq, speaker, e.text or "", e.at.isoformat(), e.data)
+    esc = await _escalation_of(s, conv)
+    if esc:
+        row = await s.get(Escalation, esc["id"])
+        accepted = row is not None and row.status != "waiting"
+        esc["assignee"] = ((row.assignee or "").split(" ")[0] or None) if accepted else None
+    return {"status": conv.status, "escalation": esc, "items": items, "cursor": _cursor(*last) if last != (0, 0) else None}
+
+
 # ---------------------------------------------------------------- lifecycle hooks (called by the runtime and jobs)
 async def segment_ended(tenant_id: str, call_id: str) -> None:
     """A segment ended: the conversation ends with it, unless the conversation moved on to another segment."""
@@ -702,6 +856,9 @@ async def segment_ended(tenant_id: str, call_id: str) -> None:
         conv = await s.get(Conversation, call.conversation_id)
         if conv is None or conv.status == "ended" or conv.current_call_id != call.id:
             return
+        if is_human_thread(conv) and call.end_reason == "handoff" and await s.scalar(
+                select(Escalation.id).where(Escalation.call_id == call.id, Escalation.status != "resolved")):
+            return  # HMC: a text conversation stays open for the specialist; resolve or the customer ends it
         conv.status, conv.outcome, conv.end_reason, conv.ended_at = "ended", call.outcome, call.end_reason, utcnow()
         segments = await _segments(s, conv)
         await webhooks.emit(s, conv, "conversation.ended", {

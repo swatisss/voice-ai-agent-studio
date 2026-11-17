@@ -20,7 +20,7 @@ ALLOWED: list[tuple[tuple[str, ...], re.Pattern[str]]] = [(m, re.compile(p)) for
     (("GET",), r"^/api/tenants$"),
     (("GET",), r"^/api/events$"),
     (("GET",), r"^/api/escalations(/" + _ID + r")?$"),
-    (("POST",), r"^/api/escalations/" + _ID + r"/(accept|resolve)$"),
+    (("POST",), r"^/api/escalations/" + _ID + r"/(accept|resolve|messages)$"),
     (("GET",), r"^/api/calls(/" + _ID + r")?$"),
     (("GET",), r"^/api/insights/clusters(/" + _ID + r")?$"),
     (("GET", "POST"), r"^/api/insights/clusters/" + _ID + r"/comments$"),
